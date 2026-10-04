@@ -37,8 +37,9 @@ function sheetUI() {
     '<p class="hint">Open your Roll20 sheet inside the tabletop (disable separate pop-out windows), then scan it. Import is read-only: Embetterment never modifies Roll20 attributes. Some 2024/Beacon fields are not exposed.</p>'+
     '<div class="row">'+button('① Scan open sheets','scanSheets','','primary')+button('② Sync selected','syncSheet')+'</div>'+
     (options.length?'<label class="field">Open sheet<select data-sheet-pick>'+options.map((sheet,i)=>
-      '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+'</option>').join('')+'</select></label>':
-      '<p class="hint">No sheets scanned yet.</p>')+
+      '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+' · '+int(sheet.readableFields)+' readable fields</option>').join('')+'</select></label>'+
+      '<p class="hint">Found '+options.length+' candidate sheet(s). '+int(options[RB.selectedSheet||0]?.readableFields)+' named attributes accessible in the selected sheet. Click <strong>Sync selected</strong> to import. For the 2024 sheet, try Advanced Tools → Attributes if the count is zero.</p>':
+      '<p class="hint">No sheets scanned yet. Start by opening your character sheet and clicking Scan open sheets.</p>')+
     '<label><input type="checkbox" data-sheet-auto '+(link?.auto?'checked':'')+'> Refresh while the linked sheet is open (every 12 seconds)</label>'+
     '<p class="hint">Local notes, macros, equipment, and custom spells are preserved. Imported data is a local copy.</p></div>'+
     '<div class="card"><h3>Import coverage</h3>'+
