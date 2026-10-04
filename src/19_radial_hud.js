@@ -188,8 +188,8 @@
  // The game canvas is the preferred visible boundary. Do not enlarge a
  // ring into Roll20's sidebar or beyond the browser window.
  function radialViewportBounds(){
-   const width=Math.max(1,Number(window.innerWidth)||Number(innerWidth)||1280);
-   const height=Math.max(1,Number(window.innerHeight)||Number(innerHeight)||800);
+   const width=Math.max(1,Number(window.innerWidth)||1280);
+   const height=Math.max(1,Number(window.innerHeight)||800);
    const view={left:0,top:0,right:width,bottom:height,width,height};
    const canvas=document.querySelector?.('#editor-wrapper, #finalcanvas, .canvas-container');
    const rect=canvas?.getBoundingClientRect?.();

@@ -210,7 +210,7 @@ test('uncluttered wheel keeps its original 520px size',()=>{
 test('crowded detailed attacks may expand the wheel while retaining complete names',()=>{
   const {r}=env(),p=r.profile();
   p.attacks=Array.from({length:10},(_,i)=>({
-    id:'knife'+i,name:'Throwing Dagger '+(i+1),
+    id:'knife'+i,name:'Throwing Dagger Special Model '+(i+1),
     toHit:'+7',damage:'1d4+4',range:'20/60 ft',command:''
   }));
   r.RB.radial.path=['attack','all'];
@@ -241,7 +241,7 @@ test('ring expansion never exceeds available Roll20 tabletop area',()=>{
   const wheel={style:{left:'',top:'',scale:'',setProperty(key,v){if(key==='--wheel-scale')this.scale=v;}}};
   r.RB.shadow.querySelector=id=>id==='#rbe-radial-wheel'?wheel:null;
   r.radialPosition();
-  const s=Number(wheel.style.scale),cx=Number(wheel.style.left),cy=Number(wheel.style.top);
+  const s=Number(wheel.style.scale),cx=Number.parseFloat(wheel.style.left),cy=Number.parseFloat(wheel.style.top);
   assert.ok(cx-layout.diameter*s/2>=-1);
   assert.ok(cx+layout.diameter*s/2<=700+1);
   assert.ok(cy-(layout.outer+45)*s>=-1);
