@@ -18,7 +18,7 @@ function createHarness(doc){
    localStorage:{getItem(k){return values.get(k)||null},setItem(k,v){values.set(k,v)}}
  };
  vm.createContext(context);
- vm.runInContext(program+'\nload();globalThis.it={readSheetFields,sheetReadBeaconAttributeRows,sheetHarvestBeaconRows,snapshotSheet,findSheetForms,scanSheets,syncSheet,profile,RB}',context);
+ vm.runInContext(program+'\nload();globalThis.it={readSheetFields,sheetReadBeaconAttributeRows,sheetHarvestBeaconRows,sheetFrozenScrollCover,snapshotSheet,findSheetForms,scanSheets,syncSheet,profile,RB}',context);
  return context.it;
 }
 function cell(value){
@@ -123,4 +123,75 @@ test('scrollable virtual attribute table yields rows throughout its entire list 
  assert.equal(scan.fields.weighttotal.current,'215.2');
  assert.equal(scan.fields.wtype.current,'');
  assert.equal(top,0);
+});
+
+test('frozen scroll cover preserves the visible sheet while removing its overlay afterward',()=>{
+ const h=createHarness();
+ let appended=null,removed=0;
+ const original={visibility:'visible'};
+ const style={
+  values:new Map(Object.entries(original)),
+  getPropertyValue(key){return this.values.get(key)||''},
+  getPropertyPriority(){return ''},
+  setProperty(key,value){this.values.set(key,value)},
+  removeProperty(key){this.values.delete(key)}
+ };
+ const makeCover=()=>({
+  style:{},setAttribute(){},appendChild(c){this.child=c},
+  remove(){removed++}
+ });
+ const doc={
+  createElement(){return makeCover()},
+  body:{appendChild(node){appended=node}}
+ };
+ const scroll={
+  ownerDocument:doc,style,scrollTop:80,
+  getBoundingClientRect(){return {left:25,top:50,width:490,height:300}},
+  cloneNode(){return {style:{},removeAttribute(){},querySelectorAll(){return []},scrollTop:0}}
+ };
+ const restore=h.sheetFrozenScrollCover(scroll);
+ assert.ok(appended,'A noninteractive snapshot covers the list');
+ assert.equal(appended.style.pointerEvents,undefined);
+ assert.equal(style.getPropertyValue('visibility'),'hidden');
+ restore();
+ assert.equal(style.getPropertyValue('visibility'),'visible');
+ assert.equal(removed,1);
+});
+test('sheet discovery starts silent scrolling preload; import can reuse all pages',async()=>{
+ let position=0;
+ const pages=[
+  [row('strength','-',18),row('dexterity','-',14)],
+  [row('wisdom','-',15),row('wisdom_bonus','-',2)],
+  [row('weighttotal','-',215.2),row('wtype','-', '')]
+ ];
+ const scroll={clientHeight:160,scrollHeight:480,
+  get scrollTop(){return position},
+  set scrollTop(v){position=Math.max(0,Math.min(320,v))}};
+ const sheet={
+  innerText:'NIER\\nAdvanced Tools\\nAttributes 6',
+  isConnected:true,
+  querySelector(sel){return sel==='[data-testid="character-name"]'?{textContent:'NIER'}:null},
+  getAttribute(){return null},closest(){return null},matches(){return false},
+  querySelectorAll(sel){
+   const index=Math.min(2,Math.floor(position/95));
+   if(sel.startsWith('tbody tr'))return pages[index];
+   if(sel.startsWith('span,div,p'))return pages[index].flatMap(r=>r.children);
+   if(sel.startsWith('span,div,td'))return pages[index].flatMap(r=>r.children);
+   return [];
+  }
+ };
+ for(const page of pages)for(const r of page)for(const c of r.children)
+   c.parentElement={parentElement:scroll,children:[c]};
+ const doc={querySelectorAll(sel){return sel.includes('form.charsheet')?[sheet]:[]}};
+ const h=createHarness(doc);
+ h.scanSheets();
+ const warm=h.RB.sheetWarm;
+ assert.ok(warm?.promise,'A sheet scan should initiate background traversal');
+ const scan=await warm.promise;
+ assert.equal(Object.keys(scan.fields).length,6);
+ assert.equal(scan.fields.weighttotal.current,'215.2');
+ assert.equal(scan.fields.wisdom.current,'15');
+ assert.equal(scan.full,true);
+ assert.equal(position,0,'Restores the previous visual position');
+ assert.equal(h.RB.sheetWarm.scan.fields.wtype.current,'');
 });
