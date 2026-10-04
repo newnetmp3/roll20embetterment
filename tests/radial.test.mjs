@@ -22,7 +22,7 @@ function env(){
     localStorage:{getItem(k){return saved.get(k)||null},setItem(k,v){saved.set(k,v)}}
   };
   vm.createContext(scope);vm.runInContext(script,scope);
-  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML};",scope);
+  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition};",scope);
   return {r:scope.r,sent,field,doc};
 }
 test('rings progressively contract the original circle and grow concentric choices',()=>{
@@ -93,4 +93,52 @@ test('modern DOM token anchor uses token bounds and rejects full-canvas overlays
 });
 test('HUD without accessible token offers pin controls, not a guessed coordinate',()=>{
   const {r}=env();assert.match(r.radialHTML(),/Pin to token/);assert.equal(r.RB.radial.anchor,null);
+});
+
+test('footer follows outer radius as choices expand and collapse',()=>{
+  const {r}=env();
+  r.RB.radial.anchor={x:640,y:450};
+  r.RB.radial.source='manual';
+  const p=r.profile();
+  p.attacks=[{id:'blade',name:'Blade',command:'/roll 1d20'}];
+  const paths=[[],['attack'],['attack','all'],['attack','all','a:blade']];
+  for(let i=0;i<paths.length;i++){
+    r.RB.radial.path=paths[i];
+    assert.equal(r.radialTreeRings().length,i+1);
+    const outer=[112,157,201,238][i];
+    assert.equal(r.radialOuterRadius(i+1),outer);
+    const rendered=r.radialHTML();
+    assert.ok(rendered.includes('--rbe-outer-radius:'+outer+'px'));
+    assert.match(rendered,/class="rbe-wheel-footer"><div class="rbe-wheel-toolbar">/);
+    assert.match(rendered,/class="rbe-wheel-info">/);
+  }
+  r.RB.radial.path.pop();
+  assert.match(r.radialHTML(),/--rbe-outer-radius:201px/);
+});
+test('footer is outside the last ring, not fixed over ring segments',()=>{
+  const css=readFileSync(join(root,'src','19_radial_hud.js'),'utf8');
+  assert.match(css,/\.rbe-wheel-footer\{[^}]*top:calc\(50% \+ var\(--rbe-outer-radius,112px\) \+ 12px\)/);
+  assert.doesNotMatch(css,/\.rbe-wheel-toolbar\{[^}]*bottom:/);
+  assert.doesNotMatch(css,/\.rbe-wheel-info\{[^}]*bottom:/);
+});
+
+test('positioning reserves toolbar space near the bottom of the viewport',()=>{
+  const {r}=env();
+  const wheel={style:{left:'',top:'',scale:'',setProperty(key,value){if(key==='--wheel-scale')this.scale=value;}}};
+  const tether={setAttribute(){}};
+  r.RB.shadow.querySelector=selector=>selector==='#rbe-radial-wheel'?wheel:selector==='#rbe-tether-path'?tether:null;
+  r.RB.radial.manual={x:640,y:890};
+  r.RB.radial.lastPresence=true;
+  r.profile().attacks=[{id:'blade',name:'Blade',command:'/roll 1d20'}];
+  r.RB.radial.path=[];
+  r.radialPosition();
+  const rootCenter=Number.parseFloat(wheel.style.top);
+  const rootScale=Number.parseFloat(wheel.style.scale);
+  assert.ok(rootCenter+(112+95)*rootScale<=900);
+  r.RB.radial.path=['attack','all','a:blade'];
+  r.radialPosition();
+  const expandedCenter=Number.parseFloat(wheel.style.top);
+  const expandedScale=Number.parseFloat(wheel.style.scale);
+  assert.ok(expandedCenter<rootCenter,'Expand rings: lift the wheel to preserve footer clearance');
+  assert.ok(expandedCenter+(238+95)*expandedScale<=900);
 });
