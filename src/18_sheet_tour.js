@@ -115,14 +115,14 @@ async function sheetTourFrameScan() {
             await gather(label+' / '+sheetTourLabel(child));
           }
         }finally{
-          if(selected?.isConnected!==false&&!sheetTourActive(selected)){
+          if(selected&&selected.isConnected!==false&&!sheetTourActive(selected)){
             selected.click?.();await sheetTourDelay(130);
           }
         }
       }
     }
   }finally{
-    if(original?.isConnected!==false&&!sheetTourActive(original)){
+    if(original&&original.isConnected!==false&&!sheetTourActive(original)){
       original.click?.();await sheetTourDelay(180);
     }
   }
@@ -217,7 +217,7 @@ async function sheetTourStart() {
     toast(RB.sheetTourStatus);
     console.warn('[roll20 Embetterment] Full sheet tour',err);
   }finally{
-    if(original?.isConnected!==false&&!sheetTourActive(original)){
+    if(original&&original.isConnected!==false&&!sheetTourActive(original)){
       original.click?.();await sheetTourDelay(180);
     }
     RB.sheetTourBusy=false;
