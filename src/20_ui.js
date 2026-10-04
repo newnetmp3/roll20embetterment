@@ -66,6 +66,7 @@ function homeUI() {
   const p=profile(),s=p.stats;
   return `<div class="stack"><div class="row between"><h2>${html(p.name)} — Player HUD <span class="pill">${p.sheetLink?'sheet-linked · local copy':'local tracking'}</span></h2>${button('⚙ Profiles','profiles')}</div>
   <div class="card"><div class="row between"><strong>Character-sheet import</strong>${button(p.sheetLink?'View linked sheet':'Import character sheet','tab','data-value="Sheet"','primary')}</div><p class="hint">Open your D&amp;D 5E sheet inside Roll20, then scan and sync from the Sheet tab.</p></div>
+  ${RB.state.settings.theme==='bg3'? `<div class="rbe-hero" role="group" aria-label="Adventurer profile"><div class="rbe-hero-seal" aria-hidden="true">✦</div><div class="rbe-hero-copy"><div class="rbe-eyebrow">THE ADVENTURER</div><div class="rbe-hero-name">${html(p.name)}</div><div class="rbe-hero-meta">Level ${int(s.level)} ${html(p.sheetDetails?.class||'Adventurer')}${p.sheetDetails?.race?' · '+html(p.sheetDetails.race):''}</div><span class="pill">${p.sheetLink?'Sheet-linked · read only':'Local character record'}</span></div></div>` : ''}
   <div class="card"><div class="row between"><strong>Hit Points <span class="stat">${int(s.hp)} / ${int(s.maxHp)}</span></strong><span class="hint">Temp: ${int(s.tempHp)} • AC ${int(s.ac)} • Speed ${int(s.speed)} ft</span></div>${progress(s.hp,s.maxHp)}
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
    <div class="row"><input id="rbe-hp-adjust" type="number" value="5" class="mini" min="1" aria-label="HP adjustment">${button('− Damage','damage')} ${button('+ Heal','heal')} ${button('+ Temp HP','addTemp')}</div>
@@ -133,7 +134,7 @@ function chatUI() {
 }
 function settingsUI() {
   const s=RB.state.settings,p=profile();
-  return `<div class="stack"><div class="card"><h2>Settings</h2><div class="row"><label class="field">Theme<select data-setting="theme"><option value="midnight" ${s.theme==='midnight'?'selected':''}>Midnight</option><option value="violet" ${s.theme==='violet'?'selected':''}>Arcane Violet</option><option value="parchment" ${s.theme==='parchment'?'selected':''}>Parchment</option></select></label><label class="field">UI size<select data-setting="scale"><option value="0.85" ${s.scale==.85?'selected':''}>Compact</option><option value="1" ${s.scale==1?'selected':''}>Normal</option><option value="1.15" ${s.scale==1.15?'selected':''}>Large</option></select></label></div>
+  return `<div class="stack"><div class="card"><h2>Settings</h2><div class="row"><label class="field">Theme<select data-setting="theme"><option value="bg3" ${s.theme==='bg3'?'selected':''}>Baldurian • Dark Fantasy (default)</option><option value="midnight" ${s.theme==='midnight'?'selected':''}>Midnight</option><option value="violet" ${s.theme==='violet'?'selected':''}>Arcane Violet</option><option value="parchment" ${s.theme==='parchment'?'selected':''}>Parchment</option></select></label><label class="field">UI size<select data-setting="scale"><option value="0.85" ${s.scale==.85?'selected':''}>Compact</option><option value="1" ${s.scale==1?'selected':''}>Normal</option><option value="1.15" ${s.scale==1.15?'selected':''}>Large</option></select></label></div>
   ${[['showBar','Show the bottom action bar'],['showHud','Show compact HP HUD'],['showFab','Show Embetterment launcher'],['hotkeys','Enable 1–8 keyboard action slots'],['reducedMotion','Reduced animation']].map(([key,label])=>`<div><label><input type="checkbox" data-setting="${key}" ${s[key]?'checked':''}> ${label}</label></div>`).join('')}
   <p class="hint">Shortcuts: Alt+Shift+E opens the panel; Alt+Shift+K opens the command palette. Both are ignored while typing except the palette shortcut.</p></div>
   <div class="card"><h3>Panel width</h3><label class="field">Width <input data-panel-width type="range" min="360" max="920" step="20" value="${RB.state.ui.panelWidth||520}"></label><p class="hint">You can also drag the panel by its title bar.</p></div>
@@ -167,29 +168,55 @@ function modalUI() {
   if (RB.modal!=='copy') return '';
   return `<div id="rbe-copy-modal"><div class="dialog"><div class="row between"><h3>Paste into Roll20 chat</h3>${button('✕','closeModal')}</div><p>Roll20's chat input was not found, so the command was not sent.</p><textarea id="rbe-fallback-command" rows="4" readonly>${html(RB.pendingCommand||'')}</textarea><div class="row">${button('Copy command','copyCommand','', 'primary')}${button('Close','closeModal')}</div></div></div>`;
 }
+
 function barUI() {
-  const p=profile();
+  const p=profile(), fantasy=RB.state.settings.theme==='bg3';
   if (!RB.state.settings.showBar) return '';
-  return `<div id="rbe-bar" title="Click to run a Roll20 macro or spell">${p.macrosSlots.map((v,i)=>{
-    const m=v.startsWith('macro:')?RB.state.macros.find(m=>m.id===v.slice(6)):null;
-    const s=v.startsWith('spell:')?p.spells.find(s=>s.id===v.slice(6)):null;
-    const a=v.startsWith('attack:')?(p.attacks||[]).find(a=>a.id===v.slice(7)):null;
-    const name=m?.name || s?.name || a?.name || 'Empty';
-    return `<button class="barslot" data-action="slot" data-index="${i}" title="${html(name)}"><div class="index">${i+1}</div>${html(short(name,15))}</button>`;
-  }).join('')}</div>`;
+  return `<div id="rbe-bar" aria-label="Quick action bar" title="Click to use a configured Roll20 macro, attack or spell">
+    ${fantasy?'<div class="rbe-hotbar-label" aria-hidden="true"><span>⚔</span>Quick<br>Actions</div>':''}
+    ${p.macrosSlots.map((v,i)=>{
+      const m=v.startsWith('macro:')?RB.state.macros.find(m=>m.id===v.slice(6)):null;
+      const sp=v.startsWith('spell:')?p.spells.find(s=>s.id===v.slice(6)):null;
+      const a=v.startsWith('attack:')?(p.attacks||[]).find(a=>a.id===v.slice(7)):null;
+      const name=m?.name || sp?.name || a?.name || 'Empty';
+      const glyph=sp?'✧':a?'⚔':m?'⚄':'◇';
+      return `<button class="barslot ${v?'is-filled':'is-empty'}" data-action="slot" data-index="${i}" title="${html(name)}" aria-label="Quick slot ${i+1}: ${html(name)}">${fantasy?`<span class="rbe-slot-glyph" aria-hidden="true">${glyph}</span>`:''}<span class="rbe-slot-title">${html(short(name,15))}</span><span class="index">${i+1}</span></button>`;
+    }).join('')}
+  </div>`;
 }
 function hudUI() {
   const p=profile(),s=p.stats;
   if (!RB.state.settings.showHud) return '';
-  return `<div id="rbe-hud" title="Local HP tracker, not synced with Roll20"><div class="row between"><strong>${html(short(p.name,25))}</strong><span class="pill">AC ${int(s.ac)}</span><span class="pill">Temp ${int(s.tempHp)}</span></div>${progress(s.hp,s.maxHp)}<div class="row between"><strong>♥ ${int(s.hp)}/${int(s.maxHp)}</strong><span class="hint">${p.concentration?'◎ '+html(short(p.concentration,25)):'No concentration'}</span>${button('Open','open','', 'small')}</div></div>`;
+  return `<div id="rbe-hud" title="Personal stat tracker; values may be refreshed from an open character sheet" role="complementary" aria-label="Character status">
+    <div class="row between"><strong class="rbe-hud-name">${html(short(p.name,25))}</strong><span class="pill">AC ${int(s.ac)}</span><span class="pill">Temp ${int(s.tempHp)}</span></div>
+    ${progress(s.hp,s.maxHp)}
+    <div class="row between"><strong>♥ ${int(s.hp)}/${int(s.maxHp)} HP</strong><span class="hint">${p.concentration?'◎ '+html(short(p.concentration,25)):'No concentration'}</span>${button('Open','open','', 'small')}</div>
+  </div>`;
 }
+function themeHeading(tab) {
+  const sections={
+    Home:['The Adventurer','Character overview and combat resources','♜'],
+    Sheet:['Character Archive','Read-only Roll20 sheet linking and import','✥'],
+    Rolls:['Dice & Destiny','Ability checks, saving throws and skills','⚄'],
+    Macros:['Combat Arsenal','Custom commands and quick action slots','⚔'],
+    Spells:['The Spellbook','Prepared magic and spellcasting resources','✧'],
+    Inventory:['The Traveller’s Pack','Equipment, coin and carried treasures','◆'],
+    Journal:['Chronicle & Quests','Notes, objectives and session history','✎'],
+    Chat:['Tavern Whispers','Conversation and rolls within the tabletop','☷'],
+    Reference:['Adventurer’s Codex','Rules and battlefield reminders','❖'],
+    Settings:['Companion Settings','Theme, profiles, accessibility and privacy','⚙']
+  };
+  const [title,description,glyph]=sections[tab]||sections.Home;
+  return `<div class="rbe-section-heading"><div><h2>${html(title)}</h2><small>${html(description)}</small></div><span class="rbe-section-mark" aria-hidden="true">${glyph}</span></div>`;
+}
+const THEME_TAB_GLYPHS={Home:'♜',Sheet:'✥',Rolls:'⚄',Macros:'⚔',Spells:'✧',Inventory:'◆',Journal:'✎',Chat:'☷',Reference:'❖',Settings:'⚙'};
 function render() {
   if (!RB.shadow || !RB.state) return;
   const s=RB.state.settings; RB.root.style.setProperty('--scale',s.scale); RB.root.setAttribute('data-theme',s.theme); RB.root.setAttribute('data-reduced-motion',String(!!s.reducedMotion));
   const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
   const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI};
-  RB.shadow.innerHTML=`<style>${STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
-  ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header"><strong>⚔ roll20 Embetterment</strong><div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}">${t}</button>`).join('')}</nav><div id="rbe-body">${(panels[RB.tab]||homeUI)()}</div></section>`:''}
+  RB.shadow.innerHTML=`<style>${STYLE}${BG3_STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
+  ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header">${s.theme==='bg3'?'<span class="rbe-header-crest" aria-hidden="true">✥</span><span class="rbe-header-copy"><strong>roll20 <em>Embetterment</em></strong><span class="rbe-header-sub">Adventurer’s Companion</span></span>':'<strong>⚔ roll20 Embetterment</strong>'}<div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}" title="${html(t)}">${s.theme==='bg3'?`<span class="rbe-nav-glyph" aria-hidden="true">${THEME_TAB_GLYPHS[t]}</span><span class="rbe-nav-label">${html(t)}</span>`:html(t)}</button>`).join('')}</nav><div id="rbe-body">${s.theme==='bg3'?themeHeading(RB.tab):''}${(panels[RB.tab]||homeUI)()}</div></section>`:''}
   ${paletteUI()}${modalUI()}<div id="rbe-toast" role="status" hidden></div>`;
   RB.panel=RB.shadow.querySelector('#rbe-panel');
   const u=RB.state.ui;
