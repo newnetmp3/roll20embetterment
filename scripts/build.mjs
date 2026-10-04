@@ -6,7 +6,7 @@ if(sourceFiles.length<4) throw new Error('Missing source modules');
 const header = `// ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      1.0.1
+// @version      1.1.0
 // @description  Player-first D&D 5E HUD, action bar, macros, spells, quick rolls, inventory, notes, chat filters, and command palette.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
