@@ -120,6 +120,7 @@ function onChange(e) {
     save();render();
   } else if(el.matches('[data-toggle]')){p[el.dataset.toggle]=el.checked;save();render();}
   else if(el.matches('[data-death]')){p.death[el.dataset.death]=el.checked?int(el.dataset.count):int(el.dataset.count)-1;save();render();}
+  else if(el.matches('[data-panel-width]')){RB.state.ui.panelWidth=clamp(el.value,360,920);save();render();}
   else if(el.matches('[data-slot]')){p.macrosSlots[clamp(el.dataset.slot,0,7)]=el.value;save();render();}
   else if(el.matches('[data-slot-max]')){const i=clamp(el.dataset.slotMax,1,9);p.spellSlots[i]=clamp(el.value,0,99);p.usedSlots[i]=Math.min(p.usedSlots[i],p.spellSlots[i]);save();render();}
   else if(el.matches('[data-slot-used]')){const i=clamp(el.dataset.slotUsed,1,9);p.usedSlots[i]=clamp(el.value,0,p.spellSlots[i]);save();render();}
@@ -147,14 +148,15 @@ function onInput(e) {
 }
 function onKeyDown(e) {
   if(e.key==='Escape' && (RB.paletteOpen||RB.modal)){RB.paletteOpen=false;RB.modal=null;render();return;}
-  const editing=e.target.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]');
+  const origin=e.composedPath?.()[0] || e.target;
+  const editing=origin?.closest?.('input,textarea,select,[contenteditable="true"],[role="textbox"]');
   if(e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyE'){
     e.preventDefault();RB.visible=!RB.visible;render();return;
   }
   if(e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyK'){
     e.preventDefault();RB.paletteOpen=!RB.paletteOpen;RB.paletteSelection=0;RB.paletteQuery='';render();getInput('palette-input')?.focus();return;
   }
-  if(RB.paletteOpen && e.target.id==='rbe-palette-input'){
+  if(RB.paletteOpen && origin?.id==='rbe-palette-input'){
     const options=paletteEntries().filter(x=>x.name.toLowerCase().includes((RB.paletteQuery||'').toLowerCase())).slice(0,30);
     if(e.key==='ArrowDown'){e.preventDefault();RB.paletteSelection=Math.min(options.length-1,RB.paletteSelection+1);highlightPalette();}
     if(e.key==='ArrowUp'){e.preventDefault();RB.paletteSelection=Math.max(0,RB.paletteSelection-1);highlightPalette();}
