@@ -51,41 +51,143 @@ function sheetReadBeaconAttributeRows(scope) {
 }
 function sheetScrollableAttributeContainer(scope) {
   if(!scope?.querySelectorAll)return null;
-  const leaves=Array.from(scope.querySelectorAll('span,div,td,[role="cell"]')||[]).slice(0,14000);
-  for(const el of leaves){
-    const name=sheetAttributeKey(sheetVisibleText(el),true);
-    if(!name || Array.from(el.children||[]).some(child=>sheetVisibleText(child)===name))continue;
-    let p=el.parentElement;
-    for(let depth=0;p&&depth<11;depth++,p=p.parentElement){
-      if(typeof p.scrollHeight!=='number'||typeof p.clientHeight!=='number')continue;
-      if(p.clientHeight>=120 && p.scrollHeight>p.clientHeight+32 && p.scrollHeight<1500000)return p;
+  // Some Beacon lists put the scrollbar on a parent of the visible row,
+  // not on the element containing the values themselves.
+  const sources=[
+    ...Array.from(scope.querySelectorAll('tbody tr,[role="row"],[data-testid*="attribute-row"],[class*="attribute-row"]')||[]),
+    ...Array.from(scope.querySelectorAll('span,div,td,label,[role="cell"]')||[])
+  ].slice(0,16000);
+  let best=null,highest=-Infinity;
+  for(const source of sources){
+    const label=sheetVisibleText(source);
+    // Use visible attribute rows rather than a generic dialog's scroll area.
+    if(!sheetAttributeKey(label,true) &&
+       !sheetAttributeRow(source,true) &&
+       !Array.from(source.children||[]).some(el=>sheetAttributeKey(sheetVisibleText(el),true)))continue;
+    let node=source;
+    for(let depth=0;node&&depth<13;depth++,node=node.parentElement){
+      if(node===scope?.ownerDocument?.body)break;
+      const height=Number(node.clientHeight),total=Number(node.scrollHeight);
+      if(!(height>=65&&total>height+18&&total<2500000))continue;
+      let overflow='';
+      try{overflow=node.ownerDocument?.defaultView?.getComputedStyle?.(node)?.overflowY||'';}catch{}
+      const isScroll=/auto|scroll|overlay/i.test(overflow);
+      const score=(isScroll?100:0)+Math.min(25,Math.log2(total/height)*6)-depth*4;
+      if(score>highest){highest=score;best=node;}
+      // A close, explicitly scrollable ancestor is more reliable than a
+      // distant modal containing multiple scrollable panels.
+      if(isScroll)break;
     }
   }
-  return null;
+  // Avoid touching Roll20's whole tabletop/page when no attribute scroller
+  // can be reliably identified.
+  return best;
+}
+function sheetExpectedAttributeCount(scope) {
+  const text=sheetVisibleText(scope).slice(0,55000);
+  const matches=[...text.matchAll(/\bAttributes\s*(?:\(|:)?\s*(\d{2,4})\b/gi)].map(m=>Number(m[1]));
+  return matches.find(n=>n>0&&n<=6000)||0;
+}
+function sheetFrozenScrollCover(scroll) {
+  // Clone only the user's already visible portion into a noninteractive
+  // overlay. React can render virtual rows underneath without a visible
+  // scroll animation. It is discarded immediately after the scan.
+  const doc=scroll?.ownerDocument,rect=scroll?.getBoundingClientRect?.();
+  if(!doc?.body?.appendChild||!doc.createElement||!scroll.cloneNode||!rect||rect.width<40||rect.height<50)return ()=>{};
+  let cover=null,original='',priority='';
+  try{
+    const clone=scroll.cloneNode(true);
+    clone.removeAttribute?.('id');
+    clone.querySelectorAll?.('script,iframe,[id]')?.forEach(el=>{
+      if(el.matches?.('script,iframe'))el.remove();
+      else el.removeAttribute('id');
+    });
+    cover=doc.createElement('div');
+    cover.setAttribute?.('aria-hidden','true');
+    cover.style.cssText='position:fixed;z-index:2147483000;pointer-events:none;overflow:hidden;isolation:isolate;';
+    Object.assign(cover.style,{left:rect.left+'px',top:rect.top+'px',
+      width:rect.width+'px',height:rect.height+'px'});
+    clone.style.width='100%';clone.style.height='100%';
+    clone.style.maxWidth='none';clone.style.maxHeight='none';
+    clone.style.pointerEvents='none';clone.style.overflow='hidden';
+    cover.appendChild(clone);
+    doc.body.appendChild(cover);
+    if(Number.isFinite(scroll.scrollTop))clone.scrollTop=scroll.scrollTop;
+    original=scroll.style?.getPropertyValue?.('visibility')||'';
+    priority=scroll.style?.getPropertyPriority?.('visibility')||'';
+    scroll.style?.setProperty?.('visibility','hidden','important');
+    return ()=>{
+      if(original)scroll.style?.setProperty?.('visibility',original,priority);
+      else scroll.style?.removeProperty?.('visibility');
+      cover.remove?.();
+    };
+  }catch(err){
+    if(original)scroll.style?.setProperty?.('visibility',original,priority);
+    else scroll.style?.removeProperty?.('visibility');
+    cover?.remove?.();
+    return ()=>{};
+  }
+}
+function sheetSetScrollTop(element,value) {
+  element.scrollTop=value;
+  // Some virtual list implementations use explicit scroll listeners.
+  // Assignment normally emits scroll, so avoid duplicate synthetic events.
 }
 async function sheetHarvestBeaconRows(scope,notify) {
-  const result=readSheetFields(scope);
-  const scroll=sheetScrollableAttributeContainer(scope);
-  if(!scroll)return {fields:result,scannedPages:1,full:false};
-  const original=scroll.scrollTop,step=Math.max(65,Math.floor(scroll.clientHeight*0.67));
-  let steps=0,hitBottom=false;
-  const pause=()=>new Promise(resolve=>setTimeout(resolve,55));
-  try {
-    scroll.scrollTop=0;await pause();
-    for(let i=0;i<160;i++){
-      Object.assign(result,readSheetFields(scope));
-      steps++;
-      if(notify&&i%15===0)notify(Object.keys(result).length);
-      if(scroll.scrollTop+scroll.clientHeight>=scroll.scrollHeight-3){hitBottom=true;break;}
-      const before=scroll.scrollTop;
-      scroll.scrollTop=Math.min(scroll.scrollHeight-scroll.clientHeight,before+step);
-      await pause();
-      if(scroll.scrollTop<=before)break;
+  const result=readSheetFields(scope),scroll=sheetScrollableAttributeContainer(scope);
+  if(!scroll)return {fields:result,scannedPages:1,full:false,expected:sheetExpectedAttributeCount(scope)};
+  const expected=sheetExpectedAttributeCount(scope);
+  const original=Number(scroll.scrollTop)||0;
+  const freeze=sheetFrozenScrollCover(scroll);
+  const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  const collect=()=>Object.assign(result,readSheetFields(scope));
+  const step=Math.max(45,Math.floor(scroll.clientHeight*.58));
+  let scannedPages=0,full=false,atBottom=0;
+  let previousNames='',still=0;
+  const started=Date.now();
+  try{
+    sheetSetScrollTop(scroll,0);
+    await pause(110);
+    for(let i=0;i<320&&Date.now()-started<35000;i++){
+      collect();
+      scannedPages++;
+      const names=Object.keys(result).sort().join('|');
+      still=names===previousNames?still+1:0;
+      previousNames=names;
+      if(notify&&i%22===0)notify(Object.keys(result).length);
+      const bottom=Math.max(0,scroll.scrollHeight-scroll.clientHeight);
+      if(expected&&Object.keys(result).length>=expected){full=true;break;}
+      if(scroll.scrollTop>=bottom-3){
+        // Lazy loading may increase scrollHeight only after a render/network
+        // tick; wait and re-check instead of stopping at the first "bottom".
+        atBottom++;
+        await pause(atBottom===1?350:300);
+        collect();
+        const updatedBottom=Math.max(0,scroll.scrollHeight-scroll.clientHeight);
+        if(scroll.scrollTop>=updatedBottom-3&&atBottom>=5){
+          full=!expected||Object.keys(result).length>=expected;
+          break;
+        }
+        if(updatedBottom>scroll.scrollTop+3){atBottom=0;continue;}
+      }else atBottom=0;
+      const old=scroll.scrollTop;
+      sheetSetScrollTop(scroll,Math.min(bottom,old+step));
+      await pause(120);
+      collect();
+      if(scroll.scrollTop<=old&&bottom>old){
+        // Frameworks can defer a scroll operation until the next frame.
+        await pause(220);
+        if(scroll.scrollTop<=old)break;
+      }
+      if(still>9){await pause(280);still=0;}
     }
-  }finally {
-    scroll.scrollTop=original;
+  }finally{
+    // Always restore Roll20's scroll position and unfreeze the visible list,
+    // even if a scan throws or the user closes a sheet mid-import.
+    try{sheetSetScrollTop(scroll,original);}finally{freeze();}
   }
-  return {fields:result,scannedPages:steps,full:hitBottom};
+  collect();
+  return {fields:result,scannedPages,full,expected};
 }
 function sheetFormCandidates(root){
   if(!root?.querySelectorAll)return [];
