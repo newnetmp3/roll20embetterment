@@ -42,6 +42,36 @@ function readSheetFields(scope){
   }
   return result;
 }
+// Prefer an actual character-name label rather than generic dialog titles. 2024
+// Beacon layouts can place the title outside the sheet's inner form.
+function readVisibleSheetName(node,parent){
+  const usable=value=>{
+    const name=sheetText(value,120).replace(/\s+/g,' ').trim();
+    return name.length>0 && name.length<=100 &&
+      !/^(open character sheet|character sheet|character|sheet|bio & info|advanced tools|attributes|actions|combat|spells)$/i.test(name);
+  };
+  const selectors=[
+    '[name="attr_character_name"]','[name="attr_charactername"]',
+    '[data-testid="character-name"]','[data-testid*="characterName"]',
+    '[data-testid*="character-name"]','.charactername',
+    '[class*="character-name"]','[class*="characterName"]',
+    '.ui-dialog-title','[role="dialog"] header h1','[role="dialog"] header h2'
+  ];
+  const contexts=[node,parent,parent?.parentElement,parent?.parentElement?.parentElement];
+  try {
+    const frame=node?.ownerDocument?.defaultView?.frameElement;
+    if(frame)contexts.push(frame.closest?.('.ui-dialog,[role="dialog"]')||frame.parentElement);
+  }catch{/* cross-origin frame labels are not available */}
+  for(const selector of selectors){
+    for(const root of contexts){
+      const el=root?.matches?.(selector)?root:root?.querySelector?.(selector);
+      const value=el?.value||el?.textContent||el?.getAttribute?.('title');
+      if(usable(value))return sheetText(value,100).replace(/\s+/g,' ').trim();
+    }
+  }
+  const accessibleName=parent?.getAttribute?.('aria-label')||node?.getAttribute?.('aria-label');
+  return usable(accessibleName)?sheetText(accessibleName,100):'Open character sheet';
+}
 function findSheetForms(doc=document){
   const options=[],seen=new Set();
   function inspect(root,level=0){
@@ -53,10 +83,10 @@ function findSheetForms(doc=document){
       const fields=node.querySelectorAll?.('[name^="attr_"],[data-attribute]')||[];
       if(fields.length<3&&(node.querySelectorAll?.('[aria-label],[data-testid]')?.length||0)<5)continue;
       const parent=node.closest?.('.ui-dialog,.characterdialog,[data-character-id]')||node;
-      const name=sheetText(parent.querySelector?.('.ui-dialog-title,.charactername,[data-testid="character-name"]')?.textContent||
-        node.querySelector?.('[name="attr_character_name"],[name="attr_charactername"]')?.value||
-        parent.getAttribute?.('aria-label')||'Open character sheet',120);
-      options.push({id:parent.getAttribute?.('data-character-id')||'open-'+(options.length+1),name,root:node,kind:'Visible Roll20 sheet'});
+      const name=readVisibleSheetName(node,parent);
+      const readableFields=Object.keys(readSheetFields(node)).length;
+      options.push({id:parent.getAttribute?.('data-character-id')||'open-'+(options.length+1),
+        name,root:node,readableFields,kind:'Visible Roll20 sheet'});
     }
     for(const frame of Array.from(root.querySelectorAll?.('iframe')||[]).slice(0,30)){
       try{if(frame.contentDocument?.body)inspect(frame.contentDocument,level+1);}catch{/* cross-origin inaccessible */}
