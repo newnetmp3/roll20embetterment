@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      1.0.1
+// @version      1.1.0
 // @description  Player-first D&D 5E HUD, action bar, macros, spells, quick rolls, inventory, notes, chat filters, and command palette.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -18,7 +18,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '1.0.1',
+  version: '1.1.0',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -48,6 +48,7 @@ const baseMacros = () => [
 function newProfile(name='Adventurer') {
   return {id:uid(), name, stats:{hp:10,maxHp:10,tempHp:0,ac:10,speed:30,init:0,proficiency:2,level:1},
     abilityMods:{str:0,dex:0,con:0,int:0,wis:0,cha:0}, skillBonuses:{}, saveBonuses:{},
+    abilityScores:{},sheetDetails:{},sheetLink:null,attacks:[],features:[],proficiencies:[],tools:[],
     spellSlots:[0,0,0,0,0,0,0,0,0,0], usedSlots:[0,0,0,0,0,0,0,0,0,0],
     spells:[], inventory:[], macrosSlots:['macro:d20','macro:adv','macro:dis','macro:initiative','macro:damage','macro:perception','macro:save','macro:whisper'],
     resources:[{id:uid(),name:'Hit Dice',current:1,max:1,reset:'long'}],
@@ -69,7 +70,10 @@ function normalizeProfile(p) {
   cleaned.id = String(p.id || d.id).slice(0,100);
   cleaned.name = String(p.name || d.name).slice(0,100);
   for (const key of ['stats','abilityMods','skillBonuses','saveBonuses','currency','death']) cleaned[key] = {...d[key], ...(p[key] && typeof p[key] === 'object' && !Array.isArray(p[key]) ? p[key] : {})};
-  for (const key of ['spells','inventory','resources','quests','conditions','sessionLog','macrosSlots','spellSlots','usedSlots']) cleaned[key] = Array.isArray(p[key]) ? p[key].slice(0,key === 'sessionLog' ? 500 : 200) : d[key];
+  for (const key of ['spells','inventory','resources','quests','conditions','sessionLog','macrosSlots','spellSlots','usedSlots','attacks','features','proficiencies','tools']) cleaned[key] = Array.isArray(p[key]) ? p[key].slice(0,key === 'sessionLog' ? 500 : 200) : d[key];
+  cleaned.abilityScores={...d.abilityScores,...(p.abilityScores||{})};
+  cleaned.sheetDetails={...d.sheetDetails,...(p.sheetDetails||{})};
+  cleaned.sheetLink=p.sheetLink && typeof p.sheetLink==='object'?p.sheetLink:null;
   cleaned.notes = String(p.notes || '').slice(0,100000);
   cleaned.concentration = String(p.concentration || '').slice(0,300);
   cleaned.macrosSlots = [...cleaned.macrosSlots.slice(0,8),...Array(8).fill('')].slice(0,8);
@@ -158,6 +162,10 @@ function executeSlot(slot) {
     const m=RB.state.macros.find(m=>m.id===v.slice(6));
     if (!m) return toast('Macro no longer exists; edit this slot.');
     if (sendToRoll20(m.command)) record('Used macro: '+m.name);
+  } else if (v.startsWith('attack:')) {
+    const atk=(p.attacks||[]).find(x=>x.id===v.slice(7));
+    if(atk?.command){if(sendToRoll20(atk.command))record('Attack: '+atk.name);}
+    else toast('No accessible Roll20 action button for this attack.');
   } else if (v.startsWith('spell:')) {
     const s=p.spells.find(s=>s.id===v.slice(6));
     if (!s) return toast('Spell no longer exists.');
@@ -268,6 +276,230 @@ function clearChatFilter() {
   if (RB.chatNode) RB.chatNode.querySelectorAll('[data-rbe-hidden]').forEach(n=>n.removeAttribute('data-rbe-hidden'));
 }
 
+// ===== 15_sheet_link.js =====
+// Character-sheet importer. Reads ONLY the currently open player-accessible DOM.
+const sheetFull={str:'strength',dex:'dexterity',con:'constitution',int:'intelligence',wis:'wisdom',cha:'charisma'};
+const sheetSlug=value=>String(value??'').replace(/[^A-Za-z0-9_$-]/g,'').slice(0,100);
+const sheetText=(value,n=3000)=>String(value??'').trim().slice(0,n);
+const sheetNum=v=>v===null||v===undefined||String(v).trim()===''?null:(Number.isFinite(Number(v))?Number(v):null);
+const sheetOn=v=>['1','on','true','yes','checked','✓'].includes(String(v??'').trim().toLowerCase());
+function sheetAttributes(input){
+  const out={};
+  if(Array.isArray(input)){
+    for(const obj of input.slice(0,6000))if(obj&&typeof obj.name==='string'&&obj.name.length<160)
+      out[obj.name.replace(/^attr_/,'')]={current:sheetText(obj.current??obj.value,10000),max:sheetText(obj.max,1000)};
+  }else if(input&&typeof input==='object'){
+    for(const [name,val] of Object.entries(input).slice(0,6000))if(name.length<160)
+      out[name.replace(/^attr_/,'')]=val&&typeof val==='object'&&!Array.isArray(val)
+        ?{current:sheetText(val.current??val.value,10000),max:sheetText(val.max,1000)}:{current:sheetText(val,10000),max:''};
+  }
+  return out;
+}
+function readSheetFields(scope){
+  const result={};
+  if(!scope?.querySelectorAll)return result;
+  for(const el of Array.from(scope.querySelectorAll('input,textarea,select,[data-attribute]')).slice(0,6000)){
+    const name=el.getAttribute?.('name')||el.getAttribute?.('data-attribute')||'';
+    const alias=sheetText(el.getAttribute?.('aria-label')||el.getAttribute?.('data-testid'),100).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+    const known=/^(?:character_name|hp|hit_points|hit_points_current|hit_points_max|temporary_hit_points|ac|armor_class|speed|movement_speed|walking_speed|initiative_bonus|proficiency_bonus|level|class|race|species|background|alignment|spell_save_dc|spell_attack_bonus|passive_perception|(?:strength|dexterity|constitution|intelligence|wisdom|charisma)(?:_score|_bonus|_mod|_save_bonus)?|(?:acrobatics|animal_handling|arcana|athletics|deception|history|insight|intimidation|investigation|medicine|nature|perception|performance|persuasion|religion|sleight_of_hand|stealth|survival)_bonus)$/;
+    if(!name.startsWith('attr_')&&!el.hasAttribute?.('data-attribute')&&!known.test(alias))continue;
+    if(el.type==='radio'&&!el.checked)continue;
+    let key=(name.startsWith('attr_')||el.hasAttribute?.('data-attribute')?name:alias).replace(/^attr_/,'');
+    if(!key.startsWith('repeating_')){
+      const row=el.closest?.('.repitem,[data-reprowid],[data-rowid]');
+      const section=row?.closest?.('fieldset[class*="repeating_"],.repcontainer[class*="repeating_"]');
+      const sec=String(section?.className||'').match(/(?:^|\s)repeating_([\w-]+)/)?.[1];
+      if(row&&sec){
+        const siblings=Array.from(row.parentElement?.querySelectorAll?.(':scope > .repitem')||[]);
+        const id=sheetSlug(row.getAttribute?.('data-reprowid')||row.getAttribute?.('data-rowid')||row.id||('$'+Math.max(0,siblings.indexOf(row))));
+        if(id)key='repeating_'+sec+'_'+id+'_'+key;
+      }
+    }
+    if(!key||key.length>160)continue;
+    const v=el.type==='checkbox'?(el.checked?'1':'0'):('value'in el?el.value:el.textContent);
+    result[key]={current:sheetText(v,10000),max:result[key]?.max||''};
+  }
+  return result;
+}
+function findSheetForms(doc=document){
+  const options=[],seen=new Set();
+  function inspect(root,level=0){
+    if(!root||level>2||seen.has(root))return;
+    seen.add(root);
+    const nodes=Array.from(root.querySelectorAll?.('form.charsheet,.charsheet,.sheetform,[data-testid*="character-sheet"],.characterdialog,[class*="character-sheet"],.ui-dialog:has(.sheetform),[data-sheet-id]')||[]);
+    for(const node of nodes.slice(0,45)){
+      if(node.closest?.('#roll20-embetterment-host'))continue;
+      const fields=node.querySelectorAll?.('[name^="attr_"],[data-attribute]')||[];
+      if(fields.length<3&&(node.querySelectorAll?.('[aria-label],[data-testid]')?.length||0)<5)continue;
+      const parent=node.closest?.('.ui-dialog,.characterdialog,[data-character-id]')||node;
+      const name=sheetText(parent.querySelector?.('.ui-dialog-title,.charactername,[data-testid="character-name"]')?.textContent||
+        node.querySelector?.('[name="attr_character_name"],[name="attr_charactername"]')?.value||
+        parent.getAttribute?.('aria-label')||'Open character sheet',120);
+      options.push({id:parent.getAttribute?.('data-character-id')||'open-'+(options.length+1),name,root:node,kind:'Visible Roll20 sheet'});
+    }
+    for(const frame of Array.from(root.querySelectorAll?.('iframe')||[]).slice(0,30)){
+      try{if(frame.contentDocument?.body)inspect(frame.contentDocument,level+1);}catch{/* cross-origin inaccessible */}
+    }
+  }
+  inspect(doc);
+  return options.filter((x,i)=>!options.some((y,j)=>i!==j&&x.root!==y.root&&x.root.contains?.(y.root))).slice(0,25);
+}
+function snapshotSheet(input,label='Character'){
+  const attrs=sheetAttributes(input),values=Object.fromEntries(Object.entries(attrs).map(([key,val])=>[key.toLowerCase(),val]));
+  const pick=(...names)=>names.map(k=>values[k.toLowerCase()]?.current).find(v=>v!==undefined&&v!=='');
+  const number=(...names)=>sheetNum(pick(...names));
+  const snap={name:sheetText(pick('character_name','charactername','name')||label,100),attrs,edition:'Named/visible attributes',
+    stats:{},abilityMods:{},abilityScores:{},saveBonuses:{},skillBonuses:{},spellSlots:{},usedSlots:{},currency:{},details:{},
+    spells:[],attacks:[],inventory:[],features:[],resources:[],proficiencies:[],tools:[],
+    coverage:{attributes:Object.keys(attrs).length,mapped:0,unmapped:[]}};
+  const fields={hp:['hp','hit_points','hit_points_current','current_hp'],maxHp:['hp_max','hit_points_max','max_hp'],
+    tempHp:['hp_temp','temporary_hit_points','temp_hp'],ac:['ac','armor_class'],speed:['speed','walking_speed','movement_speed'],
+    init:['initiative_bonus','init_bonus'],proficiency:['pb','proficiency_bonus'],level:['level','character_level','base_level']};
+  for(const [k,names] of Object.entries(fields)){const n=number(...names);if(n!==null)snap.stats[k]=n;}
+  if(snap.stats.maxHp===undefined){const max=sheetNum(values.hp?.max||values.hit_points?.max);if(max!==null)snap.stats.maxHp=max;}
+  for(const [abbr,long] of Object.entries(sheetFull)){
+    const s=number(long,long+'_score',abbr+'_score');
+    const m=number(long+'_mod',long+'_bonus',abbr+'_mod');
+    const sv=number(long+'_save_bonus',long+'_saving_throw_bonus',abbr+'_save_bonus');
+    if(s!==null)snap.abilityScores[abbr]=s;
+    if(m!==null)snap.abilityMods[abbr]=m;
+    if(sv!==null)snap.saveBonuses[abbr]=sv;
+  }
+  for(const skill of skillNames){
+    const slug=skill.toLowerCase().replaceAll(' ','_');
+    const v=number(slug+'_bonus',slug+'_mod');
+    if(v!==null)snap.skillBonuses[skill]=v;
+  }
+  for(const k of ['cp','sp','ep','gp','pp']){const v=number(k,k+'_coins');if(v!==null)snap.currency[k]=v;}
+  const details={class:['class','class_name','classes'],subclass:['subclass'],race:['race','species','ancestry'],
+    background:['background'],alignment:['alignment'],experience:['experience','xp'],
+    hitDice:['hit_dice'],hitDieType:['hitdietype'],spellSaveDC:['spell_save_dc','spell_dc'],
+    spellAttack:['spell_attack_bonus','spell_attack_mod'],passivePerception:['passive_wisdom','passive_perception'],
+    passiveInsight:['passive_insight'],passiveInvestigation:['passive_investigation'],size:['size'],languages:['languages'],
+    personality:['personality_traits'],ideals:['ideals'],bonds:['bonds'],flaws:['flaws']};
+  for(const [k,names] of Object.entries(details)){const val=pick(...names);if(val!==undefined)snap.details[k]=sheetText(val);}
+  const insp=pick('inspiration','heroic_inspiration');if(insp!==undefined)snap.inspiration=sheetOn(insp);
+  for(let n=1;n<=9;n++){
+    const max=number('lvl'+n+'_slots_total','level_'+n+'_spell_slots_total','spell_slots_'+n+'_max');
+    const left=number('lvl'+n+'_slots_expended','level_'+n+'_spell_slots_remaining','spell_slots_'+n+'_remaining');
+    if(max!==null){snap.spellSlots[n]=max;if(left!==null)snap.usedSlots[n]=Math.max(0,max-left);}
+  }
+  const rows=new Map();
+  for(const [key,record] of Object.entries(attrs)){
+    const m=key.match(/^repeating_(spell-cantrip|spell-[1-9]|spell-npc|inventory|attack|traits|proficiencies|tool|resource|npcaction|npcbonusaction|npcreaction)_([^_]+)_(.+)$/i);
+    if(!m)continue;
+    const section=m[1].toLowerCase(),id=m[2],field=m[3].toLowerCase(),rowkey=section+'/'+id;
+    if(!rows.has(rowkey))rows.set(rowkey,{section,id,fields:{},maxes:{}});
+    rows.get(rowkey).fields[field]=record.current;
+    if(record.max)rows.get(rowkey).maxes[field]=record.max;
+  }
+  for(const row of rows.values()){
+    const f=row.fields,base={id:'sheet:'+row.section+'/'+row.id,origin:'sheet'},valid=/^[A-Za-z0-9_$-]{1,100}$/.test(row.id);
+    if(row.section.startsWith('spell')){
+      const name=sheetText(f.spellname||f.spellname_base||f.name,120);if(!name)continue;
+      const level=row.section==='spell-cantrip'?0:Number(row.section.match(/\d+/)?.[0]||0);
+      const notes=[f.spelldescription,f.spellathigherlevels].filter(Boolean).map(x=>sheetText(x,1500)).join('\n');
+      snap.spells.push({...base,name,level,range:sheetText(f.spellrange,100),notes,
+        concentration:sheetOn(f.spellconcentration||f.spellconcentrationflag),
+        prepared:sheetOn(f.spellprepared||f.prep),ritual:sheetOn(f.spellritual||f.spellritualflag),
+        school:sheetText(f.spellschool,80),castTime:sheetText(f.spellcastingtime,80),duration:sheetText(f.spellduration,100),
+        materials:sheetText(f.spellcomp_materials,400),
+        components:['v','s','m'].filter(x=>sheetOn(f['spellcomp_'+x])).join(',').toUpperCase(),
+        command:valid&&row.section!=='spell-npc'?'%{selected|repeating_'+row.section+'_'+row.id+'_spell}':''});
+    }else if(row.section==='inventory'){
+      const name=sheetText(f.itemname,120);if(!name)continue;
+      snap.inventory.push({...base,name,qty:Math.max(0,sheetNum(f.itemcount)??1),weight:Math.max(0,sheetNum(f.itemweight)??0),
+        equipped:sheetOn(f.equipped),description:sheetText(f.itemcontent,2000),properties:sheetText(f.itemproperties,800),category:'Sheet'});
+    }else if(['attack','npcaction','npcbonusaction','npcreaction'].includes(row.section)){
+      const name=sheetText(f.atkname||f.name,120);if(!name)continue;
+      snap.attacks.push({...base,name,toHit:sheetText(f.atkbonus||f.attack_tohit,80),
+        damage:sheetText(f.dmgbase||f.attack_damage||f.dmg1base,160),damageType:sheetText(f.dmgtype||f.attack_damagetype,120),
+        range:sheetText(f.atkrange||f.attack_range,100),description:sheetText(f.description,1600),
+        command:valid?'%{selected|repeating_'+row.section+'_'+row.id+'_'+(row.section==='attack'?'attack':'npc_action')+'}':''});
+    }else if(row.section==='traits'){
+      const name=sheetText(f.name,120);
+      if(name)snap.features.push({...base,name,description:sheetText(f.description,4000),source:sheetText(f.source,120)});
+    }else if(['proficiencies','tool'].includes(row.section)){
+      const name=sheetText(f.name||f.prof_name||f.toolname,120);
+      if(name)snap[row.section==='tool'?'tools':'proficiencies'].push({...base,name,description:sheetText(f.description,1200)});
+    }else if(row.section==='resource'){
+      for(const side of ['left','right']){
+        const name=sheetText(f['resource_'+side+'_name'],120);if(!name)continue;
+        snap.resources.push({...base,id:base.id+':'+side,name,current:sheetNum(f['resource_'+side])??0,
+          max:sheetNum(row.maxes['resource_'+side]||f['resource_'+side+'_max'])??0,reset:'manual'});
+      }
+    }
+  }
+  for(const key of ['class_resource','other_resource']){
+    const name=sheetText(pick(key+'_name'),120);
+    if(name)snap.resources.push({id:'sheet:'+key,origin:'sheet',name,current:number(key)??0,max:number(key+'_max')??sheetNum(values[key]?.max)??0,reset:'manual'});
+  }
+  snap.edition=Object.keys(attrs).some(k=>k.startsWith('repeating_spell-')||k==='pb')?'2014 / legacy':'2024 / visible attributes';
+  const known=new Set(Object.values(fields).flat().concat(Object.values(details).flat(),['inspiration','heroic_inspiration','hp_max','hp','cp','sp','ep','gp','pp'],
+    ...Object.values(sheetFull).map(long=>[long,long+'_score',long+'_mod',long+'_bonus',long+'_save_bonus',long+'_saving_throw_bonus']),
+    ...skillNames.map(n=>[n.toLowerCase().replaceAll(' ','_')+'_bonus',n.toLowerCase().replaceAll(' ','_')+'_mod'])));
+  const unknown=Object.keys(attrs).filter(k=>!known.has(k.toLowerCase())&&!k.startsWith('repeating_')&&!/^lvl[1-9]_slots_/.test(k));
+  snap.coverage.unmapped=unknown.slice(0,250);
+  snap.coverage.mapped=Object.keys(attrs).length-unknown.length;
+  return snap;
+}
+function mergeSheetList(previous,incoming){
+  const map=new Map((Array.isArray(previous)?previous:[]).map(item=>[item.id,item]));
+  for(const item of incoming.slice(0,200))map.set(item.id,item);
+  return Array.from(map.values()).slice(0,300);
+}
+function applySheetSnapshot(p,s){
+  if(!s||s.coverage.attributes<1)return false;
+  if(['Adventurer','New Adventurer'].includes(p.name)&&s.name)p.name=s.name;
+  for(const k of ['stats','abilityMods','skillBonuses','saveBonuses','currency'])Object.assign(p[k],s[k]);
+  p.abilityScores={...(p.abilityScores||{}),...s.abilityScores};
+  p.sheetDetails={...(p.sheetDetails||{}),...s.details};
+  if(s.inspiration!==undefined)p.inspiration=s.inspiration;
+  for(const [n,v] of Object.entries(s.spellSlots))p.spellSlots[+n]=clamp(v,0,99);
+  for(const [n,v] of Object.entries(s.usedSlots))p.usedSlots[+n]=clamp(v,0,p.spellSlots[+n]);
+  for(const k of ['spells','inventory','resources','attacks','features','proficiencies','tools']){
+    if(s[k].length||(p[k]||[]).some(x=>x.origin==='sheet'))p[k]=mergeSheetList(p[k],s[k]);
+  }
+  p.sheetLink={...(p.sheetLink||{}),name:s.name,edition:s.edition,lastSync:new Date().toISOString(),
+    coverage:s.coverage,counts:Object.fromEntries(['spells','inventory','resources','attacks','features','proficiencies','tools'].map(k=>[k,s[k].length]))};
+  return true;
+}
+function scanSheets(){
+  RB.openSheets=findSheetForms(document);
+  if(!RB.openSheets.length){toast('Open your sheet inside Roll20 (disable pop-out), then Scan again.');return;}
+  const current=profile().sheetLink?.name,idx=RB.openSheets.findIndex(x=>x.name===current);
+  RB.selectedSheet=idx>=0?idx:0;RB.sheetSignature=null;
+  render();toast('Found '+RB.openSheets.length+' open sheet(s).');
+}
+function syncSheet({quiet=false}={}){
+  const candidate=RB.openSheets?.[RB.selectedSheet||0];
+  if(!candidate){if(!quiet)toast('Scan for an open sheet first.');return false;}
+  if(candidate.root?.isConnected===false){if(!quiet)toast('Sheet closed; reopen and scan.');return false;}
+  const fields=readSheetFields(candidate.root),data=snapshotSheet(fields,candidate.name);
+  if(!data.coverage.attributes){if(!quiet)toast('No readable fields. Try Advanced Tools / Attributes.');return false;}
+  const signature=JSON.stringify(fields);
+  if(quiet&&signature===RB.sheetSignature)return true;
+  if(!applySheetSnapshot(profile(),data))return false;
+  candidate.name=data.name;profile().sheetLink.source=candidate.id;
+  RB.sheetSignature=signature;save();
+  if(!quiet){render();toast('Imported '+data.coverage.attributes+' accessible fields.');}
+  else if(RB.visible&&['Sheet','Home','Spells','Inventory','Rolls'].includes(RB.tab)){
+    const active=RB.shadow?.activeElement;
+    if(!active?.matches?.('input,textarea,select'))render();
+  }
+  return true;
+}
+function sheetAutoTick(){
+  const link=profile().sheetLink,candidate=RB.openSheets?.[RB.selectedSheet||0];
+  if(!link?.auto||!link.lastSync||!candidate)return;
+  if(link.source!==candidate.id&&link.name!==candidate.name)return;
+  syncSheet({quiet:true});
+}
+function parseSheetPaste(text){
+  const obj=JSON.parse(text);
+  return snapshotSheet(obj.attributes||obj,obj.characterName||obj.name||'Imported sheet');
+}
+
 // ===== 20_ui.js =====
 // Isolated player UI — all markup is inside a ShadowRoot.
 const STYLE = `
@@ -295,13 +527,51 @@ const STYLE = `
 const field = (label,path,value,opts={}) => `<label class="field ${opts.cls||''}">${html(label)}<input data-field="${html(path)}" type="${opts.type||'number'}" value="${html(value)}" ${opts.min!==undefined?'min="'+opts.min+'"':''} ${opts.max!==undefined?'max="'+opts.max+'"':''}></label>`;
 const button = (label,action,extra='',cls='') => `<button data-action="${html(action)}" ${extra} class="${cls}">${label}</button>`;
 const progress = (cur,max) => `<div class="hpbar"><span style="width:${max?Math.max(0,Math.min(100,cur/max*100)):0}%"></span></div>`;
+function sheetUI() {
+  const p=profile(),link=p.sheetLink,options=RB.openSheets||[];
+  const section=(title,items,description,withRoll=false)=>
+    '<div class="card"><h3>'+title+' ('+items.length+')</h3>'+
+    (items.length?'<div class="scroll">'+items.map(item=>
+      '<div class="list-entry"><div class="row"><strong class="grow">'+html(item.name)+'</strong>'+
+      (withRoll&&item.command?button('Roll','runSheetAction','data-id="'+html(item.id)+'"','small primary'):'')+
+      '</div><p class="hint">'+html(short(description(item),450))+'</p></div>').join('')+'</div>':
+      '<p class="hint">Nothing accessible in the last scan.</p>')+'</div>';
+  return '<div class="stack"><div class="card"><h2>Link character sheet</h2>'+
+    '<p class="hint">Open your Roll20 sheet inside the tabletop (disable separate pop-out windows), then scan it. Import is read-only: Embetterment never modifies Roll20 attributes. Some 2024/Beacon fields are not exposed.</p>'+
+    '<div class="row">'+button('① Scan open sheets','scanSheets','','primary')+button('② Sync selected','syncSheet')+'</div>'+
+    (options.length?'<label class="field">Open sheet<select data-sheet-pick>'+options.map((sheet,i)=>
+      '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+'</option>').join('')+'</select></label>':
+      '<p class="hint">No sheets scanned yet.</p>')+
+    '<label><input type="checkbox" data-sheet-auto '+(link?.auto?'checked':'')+'> Refresh while the linked sheet is open (every 12 seconds)</label>'+
+    '<p class="hint">Local notes, macros, equipment, and custom spells are preserved. Imported data is a local copy.</p></div>'+
+    '<div class="card"><h3>Import coverage</h3>'+
+    (link?'<strong>'+html(link.name||p.name)+'</strong> <span class="pill">'+html(link.edition||'Sheet')+'</span>'+
+      '<p class="hint">Last sync: '+html(link.lastSync?new Date(link.lastSync).toLocaleString():'Never')+
+      ' · '+int(link.coverage?.attributes)+' attributes found · '+int(link.coverage?.unmapped?.length)+' not mapped</p>'+
+      '<div class="row">'+Object.entries(link.counts||{}).map(([k,v])=>'<span class="pill">'+html(k)+' '+int(v)+'</span>').join('')+'</div>'+
+      '<p class="hint">Unmapped names: '+html(short((link.coverage?.unmapped||[]).join(', '),700)||'None')+'</p>':
+      '<p class="hint">Nothing linked yet.</p>')+
+    '<div class="row">'+button('Export visible fields','exportSheetFields')+button('Unlink','unlinkSheet')+'</div></div>'+
+    '<div class="card"><h3>Attribute JSON fallback</h3><p class="hint">For fields hidden by the 2024 sheet, paste a JSON object of named attributes or an array with name/current/max entries.</p>'+
+    '<textarea id="rbe-sheet-json" rows="3" placeholder="Paste sheet attribute JSON here"></textarea>'+
+    button('Import pasted attributes','pasteSheet')+'</div>'+
+    section('Attacks and actions',p.attacks||[],x=>[x.toHit&&'To hit '+x.toHit,x.damage&&'Damage '+x.damage,x.damageType,x.range,x.description].filter(Boolean).join(' · '),true)+
+    section('Class features and feats',p.features||[],x=>[x.source,x.description].filter(Boolean).join(' · '))+
+    section('Proficiencies',p.proficiencies||[],x=>x.description||'')+
+    section('Tools',p.tools||[],x=>x.description||'')+
+    '<div class="card"><h3>Character details</h3>'+
+    Object.entries(p.sheetDetails||{}).map(([k,v])=>'<div class="list-entry"><strong>'+html(k.replace(/([A-Z])/g,' $1'))+
+      '</strong><p class="hint">'+html(short(v,1200))+'</p></div>').join('')+
+    '</div><p class="hint">Spells and slots appear under Spells, equipment under Inventory, HP/resources under Home, and skills/saves under Rolls.</p></div>';
+}
+
 function homeUI() {
   const p=profile(),s=p.stats;
-  return `<div class="stack"><div class="row between"><h2>${html(p.name)} — Player HUD <span class="pill">local tracking</span></h2>${button('⚙ Profiles','profiles')}</div>
+  return `<div class="stack"><div class="row between"><h2>${html(p.name)} — Player HUD <span class="pill">${p.sheetLink?'sheet-linked · local copy':'local tracking'}</span></h2>${button('⚙ Profiles','profiles')}</div>
   <div class="card"><div class="row between"><strong>Hit Points <span class="stat">${int(s.hp)} / ${int(s.maxHp)}</span></strong><span class="hint">Temp: ${int(s.tempHp)} • AC ${int(s.ac)} • Speed ${int(s.speed)} ft</span></div>${progress(s.hp,s.maxHp)}
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
    <div class="row"><input id="rbe-hp-adjust" type="number" value="5" class="mini" min="1" aria-label="HP adjustment">${button('− Damage','damage')} ${button('+ Heal','heal')} ${button('+ Temp HP','addTemp')}</div>
-   <p class="hint">HUD HP is a personal tracker; it does not modify the actual Roll20 sheet or token bars.</p></div>
+   <p class="hint">HUD HP is a local copy. The Sheet tab can refresh it from Roll20; edits here never write back.</p></div>
   <div class="card"><h3>Turn assistant</h3><div class="row">${toggle('Action','actionUsed',p.actionUsed)}${toggle('Bonus action','bonusUsed',p.bonusUsed)}${toggle('Reaction','reactionUsed',p.reactionUsed)}${button('New turn ↻','newTurn')}</div>
    <div class="row">${field('Movement used (ft)','movementUsed',p.movementUsed,{cls:'narrow'})}<span class="muted">Remaining: <strong>${Math.max(0,int(s.speed)-int(p.movementUsed))} ft</strong></span></div>
    <div class="row">${button(p.inspiration?'★ Inspiration ON':'☆ Inspiration OFF','inspiration','',p.inspiration?'on':'')}${button('Short rest','shortRest')}${button('Long rest','longRest')}</div></div>
@@ -325,7 +595,7 @@ function rollsUI() {
 function macroUI() {
   const macros=[...RB.state.macros].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)||a.name.localeCompare(b.name));
   const p=profile(), edit=RB.editMacro && RB.state.macros.find(m=>m.id===RB.editMacro);
-  const slotOptions = [`<option value="">— Unassigned —</option>`, ...RB.state.macros.map(m=>`<option value="macro:${html(m.id)}">${html(m.name)}</option>`), ...p.spells.map(s=>`<option value="spell:${html(s.id)}">Spell: ${html(s.name)}</option>`)].join('');
+  const slotOptions = [`<option value="">— Unassigned —</option>`, ...RB.state.macros.map(m=>`<option value="macro:${html(m.id)}">${html(m.name)}</option>`), ...p.spells.map(s=>`<option value="spell:${html(s.id)}">Spell: ${html(s.name)}</option>`), ...((p.attacks||[]).filter(x=>x.command).map(a=>`<option value="attack:${html(a.id)}">Attack: ${html(a.name)}</option>`))].join('');
   return `<div class="stack"><div class="card"><h2>${edit?'Edit macro':'Add player macro'}</h2><div class="row"><label class="field">Name<input id="rbe-macro-name" maxlength="120" value="${html(edit?.name||'')}"></label><label class="field">Category<input id="rbe-macro-cat" maxlength="50" value="${html(edit?.category||'Custom')}"></label></div><label class="field">Roll20 chat command<textarea id="rbe-macro-command" rows="2" placeholder="/roll 1d20+5">${html(edit?.command||'')}</textarea></label><div class="row">${button(edit?'Save changes':'Add macro','saveMacro','', 'primary')}${edit?button('Cancel edit','cancelMacro'):''}</div>
   <p class="hint">Commands beginning with # call existing Roll20 macros, while %{selected|...} references character-sheet buttons. Commands run with your Roll20 chat permissions.</p></div>
   <div class="card"><h3>Action bar configuration</h3><div class="grid">${p.macrosSlots.map((v,i)=>`<label class="field">Slot ${i+1}<select data-slot="${i}">${slotOptions.replace(`value="${html(v)}"`,`value="${html(v)}" selected`)}</select></label>`).join('')}</div><p class="hint">Action-bar numbers 1–8 can be enabled under Settings (off by default so they won't conflict with Roll20 shortcuts).</p></div>
@@ -345,12 +615,12 @@ function spellsUI() {
 }
 function spellListHTML() {
   const p=profile(), q=(RB.spellSearch||'').toLowerCase();
-  return p.spells.filter(s=>(s.name+' '+s.notes).toLowerCase().includes(q)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).map(s=>`<div class="list-entry"><div class="row"><strong class="grow">${html(s.name)}</strong><span class="pill">${s.level?'Level '+s.level:'Cantrip'}</span>${s.concentration?'<span class="pill">Concentration</span>':''}${button('Cast','castSpell',`data-id="${html(s.id)}"`,'small primary')}${button('Edit','editSpell',`data-id="${html(s.id)}"`,'small')}${button('✕','deleteSpell',`data-id="${html(s.id)}"`,'small warn')}</div><p class="hint">${html(s.range||'')}${s.notes?' • '+html(short(s.notes,140)):''}</p></div>`).join('')||'<p class="hint">No spells yet. Add spells and optionally link their sheet macros.</p>';
+  return p.spells.filter(s=>(s.name+' '+(s.notes||'')).toLowerCase().includes(q)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).map(s=>`<div class="list-entry"><div class="row"><strong class="grow">${html(s.name)}</strong><span class="pill">${s.level?'Level '+s.level:'Cantrip'}</span>${s.concentration?'<span class="pill">Concentration</span>':''}${s.origin==='sheet'?'<span class="pill">Sheet</span>':''}${s.prepared?'<span class="pill">Prepared</span>':''}${button('Cast','castSpell',`data-id="${html(s.id)}"`,'small primary')}${button('Edit','editSpell',`data-id="${html(s.id)}"`,'small')}${button('✕','deleteSpell',`data-id="${html(s.id)}"`,'small warn')}</div><p class="hint">${html([s.range,s.castTime,s.duration,s.components,s.school].filter(Boolean).join(' · '))}${s.notes?' • '+html(short(s.notes,140)):''}</p></div>`).join('')||'<p class="hint">No spells yet. Add spells and optionally link their sheet macros.</p>';
 }
 function inventoryUI() {
   const p=profile(), weight=p.inventory.reduce((acc,x)=>acc+Math.max(0,Number(x.qty)||0)*Math.max(0,Number(x.weight)||0),0);
   return `<div class="stack"><div class="card"><h2>Inventory <span class="pill">${weight.toFixed(1)} lb</span></h2><div class="row"><label class="field">Item<input id="rbe-item-name" placeholder="Potion of Healing"></label><label class="field narrow">Quantity<input id="rbe-item-qty" type="number" value="1" min="1"></label><label class="field narrow">Weight each (lb)<input id="rbe-item-weight" type="number" value="0" min="0" step="0.1"></label></div><div class="row"><label class="field">Category<input id="rbe-item-cat" value="Gear"></label>${button('+ Add item','addItem','', 'primary')}</div>
-   <div class="table-scroll"><table><thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Wt</th><th></th></tr></thead><tbody>${p.inventory.map(x=>`<tr><td>${html(x.name)}</td><td>${html(x.category||'Gear')}</td><td><input class="mini" type="number" min="0" data-item-qty="${html(x.id)}" value="${x.qty}"></td><td>${Number(x.weight||0).toFixed(1)}</td><td>${button('✕','deleteItem',`data-id="${html(x.id)}"`,'small warn')}</td></tr>`).join('')}</tbody></table></div></div>
+   <div class="table-scroll"><table><thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Wt</th><th></th></tr></thead><tbody>${p.inventory.map(x=>`<tr><td>${html(x.name)} ${x.equipped?'✓':''}</td><td>${html(x.category||'Gear')}</td><td><input class="mini" type="number" min="0" data-item-qty="${html(x.id)}" value="${x.qty}"></td><td>${Number(x.weight||0).toFixed(1)}</td><td>${button('✕','deleteItem',`data-id="${html(x.id)}"`,'small warn')}</td></tr>`).join('')}</tbody></table></div></div>
   <div class="card"><h3>Coins</h3><div class="row">${['cp','sp','ep','gp','pp'].map(k=>field(k.toUpperCase(),'currency.'+k,p.currency[k],{cls:'narrow'})).join('')}</div></div></div>`;
 }
 function journalUI() {
@@ -382,10 +652,11 @@ function referenceUI() {
   <p class="hint">Convenience summary only. Your table's official rules edition and DM rulings take precedence.</p></div>`;
 }
 function paletteEntries() {
-  const tabs=['Home','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
+  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
   return [...tabs.map(t=>({name:'Open '+t,kind:'tab',value:t})),
     ...RB.state.macros.map(m=>({name:'Macro: '+m.name,kind:'macro',value:m.id})),
     ...profile().spells.map(s=>({name:'Spell: '+s.name,kind:'spell',value:s.id})),
+    ...(profile().attacks||[]).map(a=>({name:'Attack: '+a.name,kind:'attack',value:a.id})),
     ...skillNames.map(n=>({name:'Skill: '+n,kind:'skill',value:n})),
     ...abilities.map(n=>({name:'Save: '+n.toUpperCase(),kind:'save',value:n}))];
 }
@@ -404,7 +675,8 @@ function barUI() {
   return `<div id="rbe-bar" title="Click to run a Roll20 macro or spell">${p.macrosSlots.map((v,i)=>{
     const m=v.startsWith('macro:')?RB.state.macros.find(m=>m.id===v.slice(6)):null;
     const s=v.startsWith('spell:')?p.spells.find(s=>s.id===v.slice(6)):null;
-    const name=m?.name || s?.name || 'Empty';
+    const a=v.startsWith('attack:')?(p.attacks||[]).find(a=>a.id===v.slice(7)):null;
+    const name=m?.name || s?.name || a?.name || 'Empty';
     return `<button class="barslot" data-action="slot" data-index="${i}" title="${html(name)}"><div class="index">${i+1}</div>${html(short(name,15))}</button>`;
   }).join('')}</div>`;
 }
@@ -417,7 +689,7 @@ function render() {
   if (!RB.shadow || !RB.state) return;
   const s=RB.state.settings; RB.root.style.setProperty('--scale',s.scale); RB.root.setAttribute('data-theme',s.theme); RB.root.setAttribute('data-reduced-motion',String(!!s.reducedMotion));
   const tabs=['Home','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
-  const panels={Home:homeUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI};
+  const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI};
   RB.shadow.innerHTML=`<style>${STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
   ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header"><strong>⚔ roll20 Embetterment</strong><div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}">${t}</button>`).join('')}</nav><div id="rbe-body">${(panels[RB.tab]||homeUI)()}</div></section>`:''}
   ${paletteUI()}${modalUI()}<div id="rbe-toast" role="status" hidden></div>`;
@@ -464,6 +736,25 @@ function action(name, el) {
       const expression=getText('custom-dice');
       if(!/^\d{1,3}d\d{1,4}(?:\s*(?:k[hl]\d{1,2}|[+\-*/()]|\d|\s))*$/i.test(expression)) return toast('Enter a simple dice expression, such as 2d6+3.');
       sendToRoll20((name==='gmRoll'?'/gmroll ':'/roll ')+expression);break;
+    }
+    case 'scanSheets':scanSheets();break;
+    case 'syncSheet':syncSheet();break;
+    case 'unlinkSheet':if(confirm('Stop syncing? Imported entries remain until deleted.')){p.sheetLink=null;RB.sheetSignature=null;changedProfile();}break;
+    case 'pasteSheet':{
+      try{const snap=parseSheetPaste(getText('sheet-json'));if(!snap.coverage.attributes)throw Error('No named attributes found');
+        applySheetSnapshot(p,snap);p.sheetLink.auto=false;RB.sheetSignature=null;changedProfile();
+        toast('Imported '+snap.coverage.attributes+' pasted attributes.');
+      }catch(err){toast('Invalid sheet JSON: '+err.message);}break;
+    }
+    case 'exportSheetFields':{
+      const found=RB.openSheets?.[RB.selectedSheet||0];
+      if(!found){toast('Scan an open sheet first.');break;}
+      downloadText('roll20-visible-sheet-attributes.json',JSON.stringify(readSheetFields(found.root),null,2),'application/json');break;
+    }
+    case 'runSheetAction':{
+      const chosen=(p.attacks||[]).find(x=>x.id===id);
+      if(chosen?.command)sendToRoll20(chosen.command);
+      else toast('No accessible Roll20 attack button. Roll from the original character sheet.');break;
     }
     case 'slot':executeSlot(ix);break;
     case 'runMacro':runMacro(id);break;
@@ -514,7 +805,7 @@ function action(name, el) {
       const prefix=({sendText:'',sendEmote:'/em ',sendOOC:'/ooc ',sendWhisper:'/w gm '})[name];
       if(sendToRoll20(prefix+msg))getInput('chat-message').value='';break;
     }
-    case 'switchProfile':RB.state.current=getInput('profile-select').value;RB.editSpell=null;RB.editMacro=null;changedProfile();break;
+    case 'switchProfile':RB.state.current=getInput('profile-select').value;RB.editSpell=null;RB.editMacro=null;RB.openSheets=[];RB.sheetSignature=null;changedProfile();break;
     case 'newProfile':{const name=prompt('Name for new character profile?','New Adventurer');if(name?.trim()){const next=newProfile(name.trim().slice(0,100));RB.state.profiles.push(next);RB.state.current=next.id;changedProfile();}break;}
     case 'renameProfile':{const name=prompt('Rename current profile?',p.name);if(name?.trim()){p.name=name.trim().slice(0,100);changedProfile();}break;}
     case 'deleteProfile':if(RB.state.profiles.length===1)toast('Keep at least one profile.');else if(confirm('Delete '+p.name+' and all locally saved character data?')){RB.state.profiles=RB.state.profiles.filter(x=>x.id!==p.id);RB.state.current=RB.state.profiles[0].id;changedProfile();}break;
@@ -533,6 +824,7 @@ function navigatePalette(kind,id) {
   if(kind==='tab'){RB.tab=id;RB.state.ui.lastTab=id;RB.visible=true;save();render();}
   else if(kind==='macro') {runMacro(id);render();}
   else if(kind==='spell')useSpell(id);
+  else if(kind==='attack'){const a=(profile().attacks||[]).find(x=>x.id===id);if(a?.command)sendToRoll20(a.command);else toast('Sheet action button unavailable.');}
   else if(kind==='skill'||kind==='save') {quickRoll(kind,id);render();}
 }
 function onClick(e) {
@@ -550,6 +842,8 @@ function onChange(e) {
     save();render();
   } else if(el.matches('[data-toggle]')){p[el.dataset.toggle]=el.checked;save();render();}
   else if(el.matches('[data-death]')){p.death[el.dataset.death]=el.checked?int(el.dataset.count):int(el.dataset.count)-1;save();render();}
+  else if(el.matches('[data-sheet-pick]')){RB.selectedSheet=clamp(el.value,0,Math.max(0,(RB.openSheets||[]).length-1));RB.sheetSignature=null;save();render();}
+  else if(el.matches('[data-sheet-auto]')){p.sheetLink=p.sheetLink||{name:p.name};p.sheetLink.auto=el.checked;save();render();}
   else if(el.matches('[data-panel-width]')){RB.state.ui.panelWidth=clamp(el.value,360,920);save();render();}
   else if(el.matches('[data-slot]')){p.macrosSlots[clamp(el.dataset.slot,0,7)]=el.value;save();render();}
   else if(el.matches('[data-slot-max]')){const i=clamp(el.dataset.slotMax,1,9);p.spellSlots[i]=clamp(el.value,0,99);p.usedSlots[i]=Math.min(p.usedSlots[i],p.spellSlots[i]);save();render();}
@@ -631,6 +925,7 @@ function boot() {
   window.addEventListener('pointerup',onPointerUp);
   document.addEventListener('keydown',onKeyDown,true);
   window.addEventListener('beforeunload',save);
+  setInterval(sheetAutoTick,12000);
   RB.visible=!!RB.state.settings.alwaysOpen;render();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
