@@ -43,9 +43,9 @@ function onBeaconFrameMessage(event){
   // The window title, not a generic icon or panel heading, identifies the
   // character. Local file data still gets validated by snapshotSheet.
   pending.resolve({fields,visible,full:!!message.full,expected:Math.max(0,int(message.expected)),
-    scannedPages:Math.max(1,int(message.scannedPages)),at:Date.now()});
+    scannedPages:Math.max(1,int(message.scannedPages)),tabs:Array.isArray(message.tabs)?message.tabs.slice(0,48).map(x=>String(x).slice(0,100)):[],at:Date.now()});
 }
-function requestBeaconFrame(candidate,deep=false){
+function requestBeaconFrame(candidate,deep=false,options={}){
   return new Promise((resolve,reject)=>{
     const f=candidate?.frame;
     if(!f?.contentWindow)return reject(new Error('Character sheet iframe is no longer open'));
@@ -57,10 +57,10 @@ function requestBeaconFrame(candidate,deep=false){
     const timeout=setTimeout(()=>{
       rbeFramePending.delete(id);
       reject(new Error('No reply from the 2024 sheet reader. Reload Roll20 and allow Tampermonkey on advanced-sheets.production.roll20preflight.net.'));
-    },18000);
+    },options.tour?90000:18000);
     rbeFramePending.set(id,{frame:f,resolve,reject,timeout});
     try{
-      f.contentWindow.postMessage({bridge:RBE_BRIDGE_MARKER,type:'scan',id,deep:!!deep},RBE_BEACON_ORIGIN);
+      f.contentWindow.postMessage({bridge:RBE_BRIDGE_MARKER,type:'scan',id,deep:!!deep,tour:!!options.tour},RBE_BEACON_ORIGIN);
     }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
   });
 }
@@ -90,13 +90,13 @@ async function beaconFrameReadRequest(event){
     typeof message.id!=='string'||message.id.length>100)return;
   try{
     const scope=document.body;
-    const scan=message.deep?await sheetHarvestBeaconRows(scope):{
+    const scan=message.tour?await sheetTourFrameScan():(message.deep?await sheetHarvestBeaconRows(scope):{
       fields:readSheetFields(scope),full:false,expected:sheetExpectedAttributeCount(scope),scannedPages:1
-    };
-    const visible=beaconImportVisible(scope,'Open character sheet');
+    });
+    const visible=message.tour?scan.visible:beaconImportVisible(scope,'Open character sheet');
     const fields=Object.fromEntries(Object.entries(scan.fields).slice(0,6000));
     window.parent.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
-      fields,visible,full:scan.full,expected:scan.expected,scannedPages:scan.scannedPages},RBE_EDITOR_ORIGIN);
+      fields,visible,full:scan.full,expected:scan.expected,scannedPages:scan.scannedPages,tabs:scan.tabs||[]},RBE_EDITOR_ORIGIN);
   }catch(err){
     window.parent.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
       error:String(err.message||err).slice(0,160)},RBE_EDITOR_ORIGIN);

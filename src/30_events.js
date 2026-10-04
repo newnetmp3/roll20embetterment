@@ -41,7 +41,9 @@ function action(name, el) {
       if(!/^\d{1,3}d\d{1,4}(?:\s*(?:k[hl]\d{1,2}|[+\-*/()]|\d|\s))*$/i.test(expression)) return toast('Enter a simple dice expression, such as 2d6+3.');
       sendToRoll20((name==='gmRoll'?'/gmroll ':'/roll ')+expression);break;
     }
-    case 'scanSheets':scanSheets();break;
+    case 'scanSheets':scanSheets();if(!RB.openSheets?.length)sheetTourPromptOpen();break;
+    case 'sheetTourAll':sheetTourStart();break;
+    case 'sheetTourCancel':sheetTourCancel();break;
     case 'syncSheet':syncSheetDeep();break;
     case 'unlinkSheet':if(confirm('Stop syncing? Imported entries remain until deleted.')){p.sheetLink=null;RB.sheetSignature=null;changedProfile();}break;
     case 'pasteSheet':{

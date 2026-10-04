@@ -37,3 +37,6 @@ If **Scan open sheets** identifies Nier but **Import visible attributes** times 
 
 ## Expanding radial controls (2.1.1)
 The bottom **Back / Root / Pin / Sheet / Close** toolbar and action breadcrumb follow the outermost concentric circle, moving outward as selections expand and inward on Back/Root. The character label follows the upper edge of the active ring. Wheel scaling and vertical clamping include the controls so they remain visible at the bottom edge of the screen.
+
+## Guided full sheet import (2.2.0)
+Click **Sheet → Import all sheet tabs**. When your character sheet is closed, a prompt asks you to open it from Roll20's Journal; the importer watches for up to two minutes and starts automatically once the window opens. On D&D 2024 Jumpgate it visits Roll20's Character Sheet, Bio & Info and Advanced Tools → Attributes views, and safely navigates the iframe's available combat/spells/inventory/features sections. It collects the named values and visible sections, merges them, updates the local profile once, and restores the original selected tabs. Automatic clicks are limited to recognized tab navigation: no rolls, item use, cast, save or delete buttons. The actual 2024 iframe can expose fewer values than the sheet's internal data; the importer only reads rendered player-visible DOM. Some tab changes may be visible during scanning.
