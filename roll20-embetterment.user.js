@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.1.0
+// @version      2.1.1
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -18,7 +18,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.1.0',
+  version: '2.1.1',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -1154,9 +1154,10 @@ function startBeaconParentBridge(){
  #rbe-radial-wheel .rbe-core{fill:#10101723;stroke:#d2aa6c;stroke-width:2;stroke-dasharray:4 6;pointer-events:none}
  #rbe-radial-wheel .rbe-center{fill:#f7d999;stroke:#241916;stroke-width:1;font:600 12px Georgia,serif;pointer-events:none}
  #rbe-radial-wheel .rbe-tether-hub{fill:none;stroke:#ad9164;stroke-width:2;pointer-events:none}
- #rbe-radial-layer .rbe-wheel-title{position:absolute;left:50%;top:-18px;transform:translate(-50%,-50%);font:700 14px Georgia,serif;color:#f5d8a8;letter-spacing:1.8px;text-shadow:0 2px 8px black;white-space:nowrap}
- #rbe-radial-layer .rbe-wheel-info{position:absolute;bottom:17px;left:50%;transform:translateX(-50%);white-space:nowrap;max-width:500px;overflow:hidden;text-overflow:ellipsis;padding:5px 12px;background:#151115dc;border:1px solid #8d754b;border-radius:20px;color:#f0d6a7;font:12px Georgia,serif}
- #rbe-radial-layer .rbe-wheel-toolbar{pointer-events:auto;position:absolute;left:50%;bottom:51px;transform:translateX(-50%);display:flex;align-items:center;gap:4px;background:#19131be6;padding:5px;border:1px solid #91764b;border-radius:30px;white-space:nowrap}
+ #rbe-radial-layer .rbe-wheel-title{position:absolute;left:50%;top:calc(50% - var(--rbe-outer-radius,112px) - 22px);transform:translate(-50%,-50%);font:700 14px Georgia,serif;color:#f5d8a8;letter-spacing:1.8px;text-shadow:0 2px 8px black;white-space:nowrap}
+ #rbe-radial-layer .rbe-wheel-footer{position:absolute;left:50%;top:calc(50% + var(--rbe-outer-radius,112px) + 12px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:7px;max-width:520px;pointer-events:none}
+ #rbe-radial-layer .rbe-wheel-info{position:static;transform:none;white-space:nowrap;max-width:500px;overflow:hidden;text-overflow:ellipsis;padding:5px 12px;background:#151115dc;border:1px solid #8d754b;border-radius:20px;color:#f0d6a7;font:12px Georgia,serif;pointer-events:none}
+ #rbe-radial-layer .rbe-wheel-toolbar{pointer-events:auto;position:static;transform:none;display:flex;align-items:center;gap:4px;background:#19131be6;padding:5px;border:1px solid #91764b;border-radius:30px;white-space:nowrap}
  #rbe-radial-layer .rbe-wheel-toolbar button{border:0;background:transparent;color:#e6cb9d;font:600 12px system-ui;padding:4px 7px}
  #rbe-radial-layer .rbe-wheel-toolbar button:hover{background:#614a32}
  #rbe-radial-layer #rbe-radial-dock{position:fixed;bottom:15px;left:15px;display:flex;gap:6px;align-items:center;pointer-events:auto;background:#1c1720ec;border:2px ridge #a98956;border-radius:25px;box-shadow:0 4px 25px #000b;padding:6px}
@@ -1258,6 +1259,10 @@ function startBeaconParentBridge(){
    };
    return presets[Math.max(1,Math.min(4,count))];
  }
+ function radialOuterRadius(count){
+   const radii=radialRadii(count);
+   return radii[radii.length-1][1];
+ }
  function radialPoint(radius,deg){const a=deg*Math.PI/180;return {x:radius*Math.cos(a),y:radius*Math.sin(a)};}
  function radialSector(inner,outer,start,end){
    const p=radialPoint(outer,start),q=radialPoint(outer,end),r=radialPoint(inner,end),s=radialPoint(inner,start);
@@ -1297,13 +1302,14 @@ function startBeaconParentBridge(){
  function radialHTML(){
    const r=RB.radial,active=r.anchor&&r.open,p=profile();
    const trail=radialTreeRings(),parts=r.path.map((id,i)=>trail[i]?.find(x=>x.id===id)?.label||id);
+   const outerRadius=radialOuterRadius(trail.length);
    return `<div id="rbe-radial-layer"><svg id="rbe-token-tether" aria-hidden="true"><path id="rbe-tether-path" d=""></path></svg>
-    ${active?`<div id="rbe-radial-wheel" style="left:${Math.round(r.anchor.x)}px;top:${Math.round(r.anchor.y)}px">
+    ${active?`<div id="rbe-radial-wheel" style="left:${Math.round(r.anchor.x)}px;top:${Math.round(r.anchor.y)}px;--rbe-outer-radius:${outerRadius}px">
       <div class="rbe-wheel-title">${html(short(p.name,27))} · COMBAT</div>${radialWheelSVG()}
-      <div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
+      <div class="rbe-wheel-footer"><div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
       <button data-action="radialPanel" title="Open character sheet importer">▤ Sheet</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
-      <div class="rbe-wheel-info">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':' · selected token'}</div>
+      <div class="rbe-wheel-info">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':' · selected token'}</div></div>
      </div>`:''}
     ${!active?`<div id="rbe-radial-dock"><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
    </div>`;
@@ -1390,9 +1396,15 @@ function startBeaconParentBridge(){
    if(present!==r.lastPresence){r.lastPresence=present;render();}
    const wheel=RB.shadow.querySelector('#rbe-radial-wheel'),tether=RB.shadow.querySelector('#rbe-tether-path');
    if(!wheel||!r.anchor)return;
-   const scale=Math.max(.55,Math.min(1,(innerWidth-16)/545,(innerHeight-16)/585));
-   const margin=260*scale+5,cx=innerWidth<margin*2?innerWidth/2:Math.max(margin,Math.min(innerWidth-margin,r.anchor.x));
-   const cy=innerHeight<margin*2?innerHeight/2:Math.max(margin,Math.min(innerHeight-margin,r.anchor.y));
+   // Clamp the full wheel including its footer, not just the SVG.
+   const outer=radialOuterRadius(radialTreeRings().length);
+   const above=outer+45,below=outer+95;
+   const scale=Math.max(.4,Math.min(1,(innerWidth-16)/545,(innerHeight-16)/(above+below)));
+   const marginX=260*scale+5;
+   const cx=innerWidth<marginX*2?innerWidth/2:Math.max(marginX,Math.min(innerWidth-marginX,r.anchor.x));
+   const topLimit=above*scale+7,bottomLimit=below*scale+7;
+   const cy=innerHeight<topLimit+bottomLimit?innerHeight/2:
+     Math.max(topLimit,Math.min(innerHeight-bottomLimit,r.anchor.y));
    wheel.style.left=cx+'px';wheel.style.top=cy+'px';wheel.style.setProperty('--wheel-scale',String(scale));
    if(tether)tether.setAttribute('d',Math.hypot(cx-r.anchor.x,cy-r.anchor.y)>25?`M ${r.anchor.x} ${r.anchor.y} L ${cx} ${cy}`:'');
  }
