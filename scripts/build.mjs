@@ -6,7 +6,7 @@ if(sourceFiles.length<4) throw new Error('Missing source modules');
 const header = `// ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      1.2.1
+// @version      1.3.0
 // @description  BG3-inspired D&D 5E player companion, character-sheet import, combat HUD, action bar, spells, inventory, journal and dice.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
