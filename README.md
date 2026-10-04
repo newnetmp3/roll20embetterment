@@ -65,3 +65,19 @@ On a new feature branch, update source and run `npm run build`; commit the gener
 **First release / beta:** syntax and offline tests run in CI. Real Roll20 Jumpgate, both 5E sheets, and Chrome/Firefox/Tampermonkey compatibility still need in-game acceptance testing. Please report any broken selectors with the page type and browser in a GitHub issue.
 
 Not affiliated with or endorsed by Roll20.
+
+## Character-sheet integration (v1.1.0)
+
+The new **Sheet** tab imports as much data as Roll20 exposes to a player in the **open character sheet**. It does **not** require GM access, a Pro subscription, or any external service.
+
+1. Open your D&D 5E character sheet **inside the VTT window**. Disable Roll20's *pop out character sheets* preference first; a separate browser window cannot be inspected from the tabletop tab.
+2. Open Embetterment (Alt+Shift+E) and select **Sheet**.
+3. Click **Scan open sheets**, choose the correct sheet in the dropdown, and click **Sync selected**.
+4. Optional: enable **Refresh while linked sheet is open** (every 12 seconds). Rescans are read-only and pause when the sheet is not available.
+5. Use **Export visible fields** to inspect which raw attribute names Roll20 actually exposes.
+
+Supported named fields include HP/max/temp HP, AC, speed, initiative, level, proficiency bonus, ability scores/modifiers, saving throws, skills, currency, spell slots, class/species/background, passive skills, spell DC/attack, languages, and select character details. On compatible **2014/legacy** sheets, repeating sections additionally import **spells, attacks/actions, inventory, class traits/feats, tools/proficiencies, and class/other resources**. Imported spells appear in Spells, equipment in Inventory, and attacks in Sheet, the command palette, and configurable action-bar slots.
+
+**2024/Beacon limitation:** Roll20 intentionally exposes fewer attributes than the legacy sheet. The importer only captures named, browser-accessible controls; it does not invent the unseen spellbook, equipment, or attack values. You can paste an exported attribute-name JSON mapping into the fallback importer when available. Values absent from the current scan are **not zeroed**, and locally written notes, macros, homebrew spells, quests, and items remain intact.
+
+This integration **never modifies actual Roll20 character data**. Data is saved as a local copy in your browser. Attacks and spells with recognized Roll20 sheet commands may be launched from Embetterment, but those macros require the **correct linked token selected** on the tabletop. For unsupported 2024 actions, roll directly on your Roll20 sheet. Browser, 2024/legacy, and sheet-layout compatibility still require live testing on your account.
