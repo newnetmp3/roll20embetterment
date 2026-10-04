@@ -37,19 +37,19 @@ function sheetUI() {
     '<p class="hint">Open your Roll20 sheet inside the tabletop (disable separate pop-out windows), then scan it. Import is read-only: Embetterment never modifies Roll20 attributes. Some 2024/Beacon fields are not exposed.</p>'+
     '<div class="row">'+button('① Scan open sheets','scanSheets','','primary')+button('② Sync selected','syncSheet')+'</div>'+
     (options.length?'<label class="field">Open sheet<select data-sheet-pick>'+options.map((sheet,i)=>
-      '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+' · '+int(sheet.readableFields)+' readable fields</option>').join('')+'</select></label>'+
-      '<p class="hint">Found '+options.length+' candidate sheet(s). '+int(options[RB.selectedSheet||0]?.readableFields)+' named attributes accessible in the selected sheet. Click <strong>Sync selected</strong> to import. For the 2024 sheet, try Advanced Tools → Attributes if the count is zero.</p>':
+      '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+' · '+int(sheet.readableFields)+' named / '+int(sheet.visibleFields)+' visible</option>').join('')+'</select></label>'+
+      '<p class="hint">Found '+options.length+' candidate sheet(s). <strong>'+int(options[RB.selectedSheet||0]?.readableFields)+' named attributes</strong> and <strong>'+int(options[RB.selectedSheet||0]?.visibleFields)+' visible values</strong> detected. Click <strong>Sync selected</strong> to import. Switch between Combat, Spells and Inventory on the original sheet to reveal additional information, then sync again.</p>':
       '<p class="hint">No sheets scanned yet. Start by opening your character sheet and clicking Scan open sheets.</p>')+
     '<label><input type="checkbox" data-sheet-auto '+(link?.auto?'checked':'')+'> Refresh while the linked sheet is open (every 12 seconds)</label>'+
-    '<p class="hint">Local notes, macros, equipment, and custom spells are preserved. Imported data is a local copy.</p></div>'+
+    '<p class="hint">Local notes, macros, equipment, and custom spells are preserved. Imports are read-only local copies. Beacon fields only import when their values can be identified confidently.</p></div>'+
     '<div class="card"><h3>Import coverage</h3>'+
     (link?'<strong>'+html(link.name||p.name)+'</strong> <span class="pill">'+html(link.edition||'Sheet')+'</span>'+
       '<p class="hint">Last sync: '+html(link.lastSync?new Date(link.lastSync).toLocaleString():'Never')+
-      ' · '+int(link.coverage?.attributes)+' attributes found · '+int(link.coverage?.unmapped?.length)+' not mapped</p>'+
+      ' · '+int(link.coverage?.attributes)+' named attributes · '+int(link.coverage?.visibleFields)+' visible values · '+int(link.coverage?.unmapped?.length)+' not mapped</p>'+
       '<div class="row">'+Object.entries(link.counts||{}).map(([k,v])=>'<span class="pill">'+html(k)+' '+int(v)+'</span>').join('')+'</div>'+
       '<p class="hint">Unmapped names: '+html(short((link.coverage?.unmapped||[]).join(', '),700)||'None')+'</p>':
       '<p class="hint">Nothing linked yet.</p>')+
-    '<div class="row">'+button('Export visible fields','exportSheetFields')+button('Unlink','unlinkSheet')+'</div></div>'+
+    '<div class="row">'+button('Export named attributes','exportSheetFields')+button('Export scan report','exportSheetReport')+button('Unlink','unlinkSheet')+'</div></div>'+
     '<div class="card"><h3>Attribute JSON fallback</h3><p class="hint">For fields hidden by the 2024 sheet, paste a JSON object of named attributes or an array with name/current/max entries.</p>'+
     '<textarea id="rbe-sheet-json" rows="3" placeholder="Paste sheet attribute JSON here"></textarea>'+
     button('Import pasted attributes','pasteSheet')+'</div>'+
