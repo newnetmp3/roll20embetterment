@@ -20,7 +20,7 @@ function environment(query='?id=123'){
     confirm:()=>true,prompt:()=>null,window:{innerWidth:1200,innerHeight:900}
   };
   vm.createContext(scope);vm.runInContext(program,scope);
-  vm.runInContext('load(); RB.shadow={querySelector(){return null},querySelectorAll(){return []},innerHTML:""}; RB.root={style:{setProperty(){}},setAttribute(){}}; globalThis.h={RB,profile,makeRoll,quickRoll,sendToRoll20,executeSlot,applyDamage,rest,html,save,load,setValue,newProfile,render,notesMarkdown,baseMacros,action,rollsUI,homeUI,inventoryUI,spellListHTML,normalizeProfile,filterChatMessages}',scope);
+  vm.runInContext('load(); RB.shadow={querySelector(){return null},querySelectorAll(){return []},innerHTML:""}; RB.root={style:{setProperty(){}},setAttribute(){}}; globalThis.h={RB,profile,makeRoll,quickRoll,sendToRoll20,executeSlot,applyDamage,rest,html,save,load,setValue,newProfile,render,notesMarkdown,baseMacros,action,rollsUI,homeUI,inventoryUI,spellListHTML,normalizeProfile,filterChatMessages,onKeyDown}',scope);
   return {h:scope.h,scope,store,sent,toasts,setDraft(v){draft=v},getDraft(){return draft},setChatAvailable(v){allowed=v}};
 }
 test('initializes per-campaign key and a local profile with 8 action slots',()=>{const {h}=environment();assert.match(h.RB.key,/123$/);assert.equal(h.profile().macrosSlots.length,8);assert.equal(h.RB.state.profiles.length,1);});
@@ -38,3 +38,11 @@ test('normalizes malformed spell slot data and avoids excessive arrays',()=>{con
 test('session journal exports plain Markdown and quests',()=>{const {h}=environment();const p=h.profile();p.notes='A mysterious note';p.quests=[{id:'a',text:'Find the map',done:false}];assert.match(h.notesMarkdown(),/A mysterious note/);assert.match(h.notesMarkdown(),/- \[ \] Find the map/);});
 test('default templates and tabs render the expected feature panels',()=>{const {h}=environment();assert.match(h.homeUI(),/Concentration & conditions/);assert.match(h.rollsUI(),/Skill checks/);assert.match(h.inventoryUI(),/Coins/);assert.match(h.spellListHTML(),/No spells yet/);});
 test('stale chat filter marks non-matches without deleting messages',()=>{const {h}=environment();const m={textContent:'Hello party',classList:{contains(){return false}},querySelector(){return null},removeAttribute(){this.hidden=false},setAttribute(){this.hidden=true}};h.RB.state.settings.chatSearch='dragon';h.filterChatMessages({querySelectorAll(){return [m]}});assert.equal(m.hidden,true);h.RB.state.settings.chatSearch='';h.filterChatMessages({querySelectorAll(){return [m]}});assert.equal(m.hidden,false);});
+
+test('shadow-DOM inputs never trigger global action-bar hotkeys',()=>{
+  const e=environment();e.h.RB.state.settings.hotkeys=true;
+  const editable={id:'rbe-notes',closest(){return this}};
+  const shadowHost={closest(){return null}};
+  const ev={target:shadowHost,composedPath(){return [editable,shadowHost]},code:'Digit1',key:'1',altKey:false,shiftKey:false,metaKey:false,ctrlKey:false,preventDefault(){throw Error('Should not intercept typing')}};
+  e.h.onKeyDown(ev);assert.equal(e.sent.length,0);
+});
