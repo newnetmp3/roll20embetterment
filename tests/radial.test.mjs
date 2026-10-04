@@ -22,7 +22,7 @@ function env(){
     localStorage:{getItem(k){return saved.get(k)||null},setItem(k,v){saved.set(k,v)}}
   };
   vm.createContext(scope);vm.runInContext(script,scope);
-  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition};",scope);
+  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition,radialLabelLines,radialLabelRotation,radialLabelMarkup,radialVisiblePage};",scope);
   return {r:scope.r,sent,field,doc};
 }
 test('rings progressively contract the original circle and grow concentric choices',()=>{
@@ -141,4 +141,60 @@ test('positioning reserves toolbar space near the bottom of the viewport',()=>{
   const expandedScale=Number.parseFloat(wheel.style.scale);
   assert.ok(expandedCenter<rootCenter,'Expand rings: lift the wheel to preserve footer clearance');
   assert.ok(expandedCenter+(238+95)*expandedScale<=900);
+});
+
+test('weapon names wrap instead of being cut to six letters',()=>{
+  const {r}=env();
+  assert.deepEqual(Array.from(r.radialLabelLines('Throwing Dagger',14,3)),['Throwing','Dagger']);
+  assert.deepEqual(Array.from(r.radialLabelLines('Molotov Cocktail',14,3)),['Molotov','Cocktail']);
+  assert.deepEqual(Array.from(r.radialLabelLines('Handaxe',14,3)),['Handaxe']);
+  const svg=r.radialLabelMarkup({label:'Throwing Dagger',glyph:'⚔',subtitle:'+7 · 20 ft'},30,127,201,-90);
+  assert.match(svg,/>Throwing<\/text>/);
+  assert.match(svg,/>Dagger<\/text>/);
+  assert.match(svg,/rbe-option-meta/);
+  assert.doesNotMatch(svg,/>Throw\s*…|>Dagger\s*…/);
+});
+test('crowded weapon and spell rings paginate at most ten choices plus navigation',()=>{
+  const {r}=env(),p=r.profile();
+  p.attacks=Array.from({length:24},(_,i)=>({id:'dagger'+i,name:'Dagger '+(i+1),toHit:'+'+(3+i),damage:'1d4',range:'5 ft',command:'/roll 1d20'}));
+  r.RB.radial.path=['attack','all'];
+  let ring=r.radialTreeRings()[2];
+  assert.equal(ring.length,11);
+  assert.equal(ring.filter(x=>x.kind==='page').length,1);
+  assert.equal(ring[0].label,'Dagger 1');
+  assert.equal(ring.at(-1).label,'Next');
+  const svg=r.radialWheelSVG();
+  assert.match(svg,/Dagger/);
+  assert.match(svg,/aria-label="Dagger 1 · \+3 · 5 ft/);
+  assert.doesNotMatch(svg,/Dagg…/);
+  const index=ring.findIndex(x=>x.kind==='page');
+  r.radialPick(2,index);
+  ring=r.radialTreeRings()[2];
+  assert.equal(ring.length,12);
+  assert.equal(ring[0].label,'Dagger 11');
+  assert.equal(ring.at(-2).label,'Previous');
+  assert.equal(ring.at(-1).label,'Next');
+  assert.equal(r.RB.radial.path.join('/'),'attack/all','Paging must not expand another ring');
+  r.radialPick(2,ring.findIndex(x=>x.id==='page:prev'));
+  assert.equal(r.radialTreeRings()[2][0].label,'Dagger 1');
+  // Page state tracks a branch, not the whole HUD.
+  assert.equal(r.RB.radial.pages['attack/all'],0);
+});
+test('SVG text stays upright on both halves of the wheel',()=>{
+  const {r}=env();
+  for(const angle of [-90,-45,0,35,90,135,180,225]){
+    const rotation=r.radialLabelRotation(angle);
+    assert.ok(rotation>=-90&&rotation<=90,`Wedge at ${angle} rendered upside down`);
+  }
+});
+test('full name and distinguishing attack stats remain in accessible tooltip',()=>{
+  const {r}=env(),p=r.profile();
+  p.attacks=[{id:'throw',name:'Throwing Dagger',toHit:'+7',damage:'1d4+4',range:'20/60 ft',command:''},
+    {id:'dagger',name:'Dagger',toHit:'+5',damage:'1d4+2',range:'5 ft',command:''}];
+  r.RB.radial.path=['attack','all'];
+  const markup=r.radialWheelSVG();
+  assert.match(markup,/Throwing Dagger · \+7 · 20\/60 ft · \+7 · 1d4\+4 · 20\/60 ft/);
+  assert.match(markup,/rbe-option-name/);
+  assert.match(markup,/rbe-option-meta/);
+  assert.doesNotMatch(markup,/Throw …|Dagger…/);
 });

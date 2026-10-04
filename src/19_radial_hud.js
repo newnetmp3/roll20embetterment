@@ -187,7 +187,7 @@
  }
  function radialLabelRotation(angle){
    const deg=((angle+90)%360+360)%360;
-   return deg>90&&deg<270?deg-180:deg;
+   return deg>=90&&deg<=270?deg-180:deg;
  }
  function radialLabelMarkup(node,step,inner,outer,angle){
    const thickness=outer-inner,midRadius=(inner+outer)/2;
@@ -206,7 +206,7 @@
    const iconY=top+iconHeight-3;
    const nameBase=top+iconHeight+8;
    const names=lines.map((line,i)=>
-     `<text class="rbe-option-name" x="0" y="${(nameBase+i*gap).toFixed(1)}" font-size="${fontSize}" text-anchor="middle">${html(line)}</text>`).join('');
+     `<text class="rbe-option-name" x="0" y="${(nameBase+i*gap).toFixed(1)}" style="font-size:${fontSize}px" text-anchor="middle">${html(line)}</text>`).join('');
    const subtitle=wrappedMeta?`<text class="rbe-option-meta" x="0" y="${(nameBase+lines.length*gap-1).toFixed(1)}" text-anchor="middle">${html(wrappedMeta)}</text>`:'';
    return `<text x="0" y="${iconY.toFixed(1)}" text-anchor="middle"><tspan class="rbe-glyph" style="font-size:${thickness<47?15:20}px">${glyph}</tspan></text>${names}${subtitle}`;
  }
