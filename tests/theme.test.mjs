@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import {randomUUID} from 'node:crypto';
 
 const root=resolve(import.meta.dirname,'..');
-const modules=['00_core.js','10_roll20_bridge.js','15_sheet_link.js','16_beacon_visible.js','19_radial_hud.js','20_ui.js','25_bg3_theme.js','30_events.js'];
+const modules=['00_core.js','10_roll20_bridge.js','14_beacon_dom.js','15_sheet_link.js','16_beacon_visible.js','19_radial_hud.js','20_ui.js','25_bg3_theme.js','30_events.js'];
 const program=modules.map(x=>readFileSync(join(root,'src',x),'utf8')).join('\n')
   .replace(/if\(document\.readyState==='loading'\)document\.addEventListener\('DOMContentLoaded',boot,\{once:true\}\);else boot\(\);\s*$/,'');
 

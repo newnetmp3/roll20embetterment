@@ -15,16 +15,13 @@ function sheetAttributeKey(value,loose=false) {
 }
 function sheetAttributeRow(row,loose=false) {
   if(!row)return null;
-  const pieces=Array.from(row.children||[]).map(c=>sheetVisibleText(c)).filter(Boolean);
-  if(pieces.length<2||pieces.length>9)return null;
-  const pos=pieces.findIndex(t=>!!sheetAttributeKey(t,loose));
-  if(pos<0 || pos>1)return null;
-  const key=sheetAttributeKey(pieces[pos],loose);
-  const rest=pieces.slice(pos+1).filter(t=>!/^(?:locked|unlocked|edit|delete|save|cancel|🔒|🔓)$/i.test(t));
-  if(rest.length===0)return null;
-  // Name | Description | Value | (lock icon); the last readable column is value.
-  let value=rest[rest.length-1];
-  if(value==='-'&&rest.length===1)value='';
+  // Preserve empty cells. 2024 Advanced Tools renders Name | Description |
+  // Value | Lock, and filtering empties shifts descriptions into value slots.
+  const cells=Array.from(row.children||[]).map(c=>sheetVisibleText(c));
+  if(cells.length<3||cells.length>12)return null;
+  const pos=cells.findIndex((v,i)=>i<2&&!!sheetAttributeKey(v,loose));
+  if(pos<0||cells.length<=pos+2)return null;
+  const key=sheetAttributeKey(cells[pos],loose),value=cells[pos+2];
   if(value.length>10000)return null;
   return {key,value};
 }
@@ -40,13 +37,13 @@ function sheetReadBeaconAttributeRows(scope) {
   // Beacon's Advanced Tools can render rows as anonymous nested divs.
   const leaves=scope.querySelectorAll('span,div,p,td,label,[role="cell"]');
   for(const el of Array.from(leaves||[]).slice(0,16000)){
-    const name=sheetAttributeKey(sheetVisibleText(el));
+    const name=sheetAttributeKey(sheetVisibleText(el),true);
     if(!name)continue;
     if(Array.from(el.children||[]).some(child=>sheetVisibleText(child)===name))continue;
     let parent=el.parentElement;
     for(let depth=0;parent&&depth<5;depth++,parent=parent.parentElement){
       if(sheetVisibleText(parent).length>650)break;
-      const found=sheetAttributeRow(parent);
+      const found=sheetAttributeRow(parent,true);
       if(found&&found.key===name){out[name]={current:found.value,max:''};break;}
     }
   }
@@ -56,7 +53,7 @@ function sheetScrollableAttributeContainer(scope) {
   if(!scope?.querySelectorAll)return null;
   const leaves=Array.from(scope.querySelectorAll('span,div,td,[role="cell"]')||[]).slice(0,14000);
   for(const el of leaves){
-    const name=sheetAttributeKey(sheetVisibleText(el));
+    const name=sheetAttributeKey(sheetVisibleText(el),true);
     if(!name || Array.from(el.children||[]).some(child=>sheetVisibleText(child)===name))continue;
     let p=el.parentElement;
     for(let depth=0;p&&depth<11;depth++,p=p.parentElement){
