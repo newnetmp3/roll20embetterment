@@ -217,6 +217,7 @@ test('crowded detailed attacks may expand the wheel while retaining complete nam
   const layout=r.radialLayout();
   assert.ok(layout.factor>1,'Long crowded labels should request more physical space');
   assert.ok(layout.factor<=1.6);
+  r.RB.radial.anchor={x:640,y:450};
   const svg=r.radialWheelSVG();
   assert.ok(svg.includes('viewBox='));
   assert.match(svg,/Throwing/);
