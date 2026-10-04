@@ -66,12 +66,12 @@ On a new feature branch, update source and run `npm run build`; commit the gener
 
 Not affiliated with or endorsed by Roll20.
 
-## Character-sheet integration (v1.1.0)
+## Character-sheet integration (v1.1.1)
 
 The new **Sheet** tab imports as much data as Roll20 exposes to a player in the **open character sheet**. It does **not** require GM access, a Pro subscription, or any external service.
 
 1. Open your D&D 5E character sheet **inside the VTT window**. Disable Roll20's *pop out character sheets* preference first; a separate browser window cannot be inspected from the tabletop tab.
-2. Open Embetterment (Alt+Shift+E) and select **Sheet**.
+2. Open Embetterment (Alt+Shift+E), then click **Import character sheet** on Home or select the **Sheet** tab in the top navigation.
 3. Click **Scan open sheets**, choose the correct sheet in the dropdown, and click **Sync selected**.
 4. Optional: enable **Refresh while linked sheet is open** (every 12 seconds). Rescans are read-only and pause when the sheet is not available.
 5. Use **Export visible fields** to inspect which raw attribute names Roll20 actually exposes.
