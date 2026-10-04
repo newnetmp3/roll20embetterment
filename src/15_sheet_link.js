@@ -83,10 +83,12 @@ function findSheetForms(doc=document){
       const fields=node.querySelectorAll?.('[name^="attr_"],[data-attribute]')||[];
       if(fields.length<3&&(node.querySelectorAll?.('[aria-label],[data-testid]')?.length||0)<5)continue;
       const parent=node.closest?.('.ui-dialog,.characterdialog,[data-character-id]')||node;
-      const name=readVisibleSheetName(node,parent);
+      let name=readVisibleSheetName(node,parent);
       const readableFields=Object.keys(readSheetFields(node)).length;
+      const visible=beaconImportVisible(node,name);
+      if(/^(?:Open character sheet|Character Sheet)$/i.test(name)&&visible.name)name=visible.name;
       options.push({id:parent.getAttribute?.('data-character-id')||'open-'+(options.length+1),
-        name,root:node,readableFields,kind:'Visible Roll20 sheet'});
+        name,root:node,readableFields,visibleFields:visible.coverage.visibleFields,kind:'Visible Roll20 sheet'});
     }
     for(const frame of Array.from(root.querySelectorAll?.('iframe')||[]).slice(0,30)){
       try{if(frame.contentDocument?.body)inspect(frame.contentDocument,level+1);}catch{/* cross-origin inaccessible */}
@@ -200,7 +202,7 @@ function mergeSheetList(previous,incoming){
   return Array.from(map.values()).slice(0,300);
 }
 function applySheetSnapshot(p,s){
-  if(!s||s.coverage.attributes<1)return false;
+  if(!s||(s.coverage.attributes<1&&!(s.coverage.visibleFields>0)))return false;
   if(['Adventurer','New Adventurer'].includes(p.name)&&s.name)p.name=s.name;
   for(const k of ['stats','abilityMods','skillBonuses','saveBonuses','currency'])Object.assign(p[k],s[k]);
   p.abilityScores={...(p.abilityScores||{}),...s.abilityScores};
@@ -226,14 +228,20 @@ function syncSheet({quiet=false}={}){
   const candidate=RB.openSheets?.[RB.selectedSheet||0];
   if(!candidate){if(!quiet)toast('Scan for an open sheet first.');return false;}
   if(candidate.root?.isConnected===false){if(!quiet)toast('Sheet closed; reopen and scan.');return false;}
-  const fields=readSheetFields(candidate.root),data=snapshotSheet(fields,candidate.name);
-  if(!data.coverage.attributes){if(!quiet)toast('No readable fields. Try Advanced Tools / Attributes.');return false;}
-  const signature=JSON.stringify(fields);
+  const fields=readSheetFields(candidate.root);
+  const visual=beaconImportVisible(candidate.root,candidate.name);
+  const data=mergeBeaconSnapshot(snapshotSheet(fields,candidate.name),visual);
+  if(!data.coverage.attributes&&!data.coverage.visibleFields){
+    if(!quiet)toast('No readable fields. Open Character Sheet or Advanced Tools / Attributes, then scan again.');
+    return false;
+  }
+  const signature=JSON.stringify(fields)+'|'+visual.signature;
   if(quiet&&signature===RB.sheetSignature)return true;
   if(!applySheetSnapshot(profile(),data))return false;
-  candidate.name=data.name;profile().sheetLink.source=candidate.id;
+  candidate.name=data.name;candidate.readableFields=data.coverage.attributes;
+  candidate.visibleFields=data.coverage.visibleFields;profile().sheetLink.source=candidate.id;
   RB.sheetSignature=signature;save();
-  if(!quiet){render();toast('Imported '+data.coverage.attributes+' accessible fields.');}
+  if(!quiet){render();toast('Imported '+data.coverage.attributes+' named and '+data.coverage.visibleFields+' visible fields.');}
   else if(RB.visible&&['Sheet','Home','Spells','Inventory','Rolls'].includes(RB.tab)){
     const active=RB.shadow?.activeElement;
     if(!active?.matches?.('input,textarea,select'))render();
