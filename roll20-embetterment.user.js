@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.2.0
+// @version      2.2.1
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -18,7 +18,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.2.0',
+  version: '2.2.1',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -1370,15 +1370,17 @@ async function sheetTourStart() {
 // Concentric combat wheel. Roll20 data remains read-only; chat commands remain user initiated.
  const RADIAL_STYLE=String.raw`
  #rbe-radial-layer{position:fixed;inset:0;pointer-events:none;z-index:4;--gold:#e9c88d;--iron:#241c19}
- #rbe-radial-wheel{position:fixed;width:520px;height:520px;transform:translate(-50%,-50%) scale(var(--wheel-scale,1));transform-origin:center;pointer-events:none;filter:drop-shadow(0 12px 24px #000b)}
- #rbe-radial-wheel svg.rbe-wheel{width:520px;height:520px;overflow:visible;pointer-events:none}
+ #rbe-radial-wheel{position:fixed;width:var(--rbe-wheel-size,520px);height:var(--rbe-wheel-size,520px);transform:translate(-50%,-50%) scale(var(--wheel-scale,1));transform-origin:center;pointer-events:none;filter:drop-shadow(0 12px 24px #000b)}
+ #rbe-radial-wheel svg.rbe-wheel{width:100%;height:100%;overflow:visible;pointer-events:none}
  #rbe-radial-wheel .rbe-wedge{pointer-events:visiblePainted;cursor:pointer;outline:none;transition:opacity .17s,filter .17s}
  #rbe-radial-wheel .rbe-wedge path{fill:url(#rbe-wedge-metal);stroke:#947b53;stroke-width:1.4;transition:fill .18s,stroke .18s}
  #rbe-radial-wheel .rbe-wedge:hover path,#rbe-radial-wheel .rbe-wedge:focus-visible path{fill:#685239;stroke:#ffe5a7;stroke-width:2.5}
  #rbe-radial-wheel .rbe-wedge.is-selected path{fill:url(#rbe-wedge-selected);stroke:#ffe6a7;stroke-width:2.3}
  #rbe-radial-wheel .rbe-wedge.is-muted{opacity:.18}
  #rbe-radial-wheel .rbe-wedge.is-muted:hover,#rbe-radial-wheel .rbe-wedge.is-muted:focus-visible{opacity:.76}
- #rbe-radial-wheel .rbe-wedge text{fill:#f0d6a0;font:600 10px Georgia,'Times New Roman',serif;letter-spacing:.25px;paint-order:stroke;stroke:#1a1410;stroke-width:2px;stroke-linejoin:round;pointer-events:none}
+ #rbe-radial-wheel .rbe-wedge text{fill:#f0d6a0;font:600 10px Georgia,'Times New Roman',serif;letter-spacing:.05px;paint-order:stroke;stroke:#1a1410;stroke-width:2px;stroke-linejoin:round;pointer-events:none}
+ #rbe-radial-wheel .rbe-wedge .rbe-option-name{font-weight:700}
+ #rbe-radial-wheel .rbe-wedge .rbe-option-meta{font-size:8.5px;fill:#dbbd86;stroke-width:1.6px}
  #rbe-radial-wheel .rbe-wedge .rbe-glyph{font:24px Georgia,serif;stroke-width:1px;fill:#ffe2a4}
  #rbe-radial-wheel .rbe-wedge.is-muted text{fill:#9c876c}
  #rbe-radial-wheel .rbe-ring{animation:rbe-ring-bloom .21s ease-out both;transform-origin:center}
@@ -1400,28 +1402,31 @@ async function sheetTourStart() {
  :host([data-reduced-motion="true"]) #rbe-radial-wheel .rbe-ring{animation:none!important}
  @media(max-width:600px){#rbe-radial-layer .rbe-wheel-info{max-width:330px;font-size:10px}#rbe-radial-layer .rbe-wheel-toolbar button{font-size:11px;padding:4px 5px}}
  `;
- RB.radial={open:true,pin:false,path:[],anchor:null,manual:null,source:'none',lastPosition:'',lastPresence:false};
- const radialNode=(id,label,glyph,children=[],kind='',value='',detail='')=>({id,label,glyph,children,kind,value,detail});
+ RB.radial={open:true,pin:false,path:[],pages:{},anchor:null,manual:null,source:'none',lastPosition:'',lastPresence:false};
+ const radialNode=(id,label,glyph,children=[],kind='',value='',detail='',subtitle='')=>({id,label,glyph,children,kind,value,detail,subtitle});
  function radialAttackLeaves(attacks){
    return attacks.slice(0,32).map(a=>radialNode('a:'+a.id,a.name,'⚔',[
      radialNode('roll','Roll','⚄',[],'attack',a.id),
      radialNode('details','Details','⌕',[],'detail',a.id),
      radialNode('sheet','Sheet','▤',[],'panel','Sheet')
-   ],'', '',[a.toHit,a.damage,a.damageType].filter(Boolean).join(' · ')));
+   ],'', '',[a.toHit,a.damage,a.damageType,a.range].filter(Boolean).join(' · '),
+   [a.toHit,a.range||a.damage].filter(Boolean).join(' · ')));
  }
  function radialSpellLeaves(spells){
    return spells.slice(0,38).map(s=>radialNode('s:'+s.id,s.name,'✧',[
      radialNode('cast','Cast','✧',[],'spell',s.id),
      radialNode('info','Info','⌕',[],'spellInfo',s.id),
      ...(Number(s.level)>0?[radialNode('slot','Use slot','◈',[],'spendSlot',String(s.level))]:[])
-   ],'','',[s.castTime,s.range,s.duration].filter(Boolean).join(' · ')));
+   ],'','',[s.castTime,s.range,s.duration].filter(Boolean).join(' · '),
+   [Number(s.level)?'L'+s.level:'Cantrip',s.concentration?'Conc.':null,s.castTime].filter(Boolean).join(' · ')));
  }
  function radialItemLeaves(items){
    return items.slice(0,40).map(i=>radialNode('i:'+i.id,i.name,'◆',[
      radialNode('use','Announce','◈',[],'announceItem',i.id),
      radialNode('subtract','Use one','−',[],'consume',i.id),
      radialNode('inspect','Details','⌕',[],'itemInfo',i.id)
-   ],'','',String(i.qty??1)+' carried'));
+   ],'','',String(i.qty??1)+' carried',
+   '×'+String(i.qty??1)+(i.category?' · '+String(i.category):'')));
  }
  function radialCategories(){
    const p=profile(),attacks=p.attacks||[],spells=p.spells||[],items=p.inventory||[],features=p.features||[];
@@ -1500,31 +1505,149 @@ async function sheetTourStart() {
    const large=end-start>180?1:0;
    return `M ${p.x.toFixed(2)} ${p.y.toFixed(2)} A ${outer} ${outer} 0 ${large} 1 ${q.x.toFixed(2)} ${q.y.toFixed(2)} L ${r.x.toFixed(2)} ${r.y.toFixed(2)} A ${inner} ${inner} 0 ${large} 0 ${s.x.toFixed(2)} ${s.y.toFixed(2)} Z`;
  }
+ // More than a dozen wedges would force weapon names down to six letters.
+ // Page large lists instead, keeping the same selection path and ring depth.
+ const RADIAL_PAGE_SIZE=10;
+ function radialVisiblePage(items,key){
+   if(items.length<=12)return items;
+   const total=Math.ceil(items.length/RADIAL_PAGE_SIZE);
+   const page=Math.max(0,Math.min(total-1,Math.trunc(RB.radial.pages?.[key]||0)));
+   const result=items.slice(page*RADIAL_PAGE_SIZE,(page+1)*RADIAL_PAGE_SIZE);
+   const controls=[];
+   if(page>0)controls.push(radialNode('page:prev','Previous','‹',[],'page',key+':'+(page-1)));
+   if(page<total-1)controls.push(radialNode('page:next','Next','›',[],'page',key+':'+(page+1)));
+   return [...result,...controls];
+ }
  function radialTreeRings(){
-   const root=radialCategories(),rings=[root];let branch=root;
-   for(const id of RB.radial.path.slice(0,3)){
-     const node=branch.find(x=>x.id===id);
+   const root=radialCategories(),rings=[],path=RB.radial.path.slice(0,3);
+   let branch=root;
+   for(let depth=0;depth<=path.length;depth++){
+     rings.push(radialVisiblePage(branch,path.slice(0,depth).join('/')));
+     const node=branch.find(x=>x.id===path[depth]);
      if(!node?.children?.length)break;
-     rings.push(node.children);branch=node.children;
+     branch=node.children;
    }
    return rings;
  }
+ // Word-aware wrapping for SVG text: never trim a weapon name to six
+ // characters just because its parent ring contains many actions.
+ function radialLabelLines(raw,width,limit){
+   const words=String(raw??'').trim().replace(/\s+/g,' ').split(' ').filter(Boolean);
+   if(!words.length)return [''];
+   const lines=[];
+   for(let word of words){
+     while(word.length>width){
+       if(lines.length && lines[lines.length-1].length<width){
+         const free=width-lines[lines.length-1].length-1;
+         if(free>0){lines[lines.length-1]+=' '+word.slice(0,free);word=word.slice(free);}
+       }
+       if(word.length>width){lines.push(word.slice(0,width));word=word.slice(width);}
+     }
+     if(!word)continue;
+     if(lines.length&&lines[lines.length-1].length+1+word.length<=width)
+       lines[lines.length-1]+=' '+word;
+     else lines.push(word);
+   }
+   if(lines.length<=limit)return lines;
+   // Very long imports still retain the full text in SVG title and aria-label.
+   const result=lines.slice(0,limit);
+   result[limit-1]=result[limit-1].slice(0,Math.max(1,width-1))+'…';
+   return result;
+ }
+ // The game canvas is the preferred visible boundary. Do not enlarge a
+ // ring into Roll20's sidebar or beyond the browser window.
+ function radialViewportBounds(){
+   const width=Math.max(1,Number(window.innerWidth)||1280);
+   const height=Math.max(1,Number(window.innerHeight)||800);
+   const view={left:0,top:0,right:width,bottom:height,width,height};
+   const canvas=document.querySelector?.('#editor-wrapper, #finalcanvas, .canvas-container');
+   const rect=canvas?.getBoundingClientRect?.();
+   if(!rect||!Number.isFinite(rect.width)||!Number.isFinite(rect.height) ||
+      rect.width<320||rect.height<320)return view;
+   const left=Math.max(0,rect.left),right=Math.min(width,rect.right);
+   const top=Math.max(0,rect.top),bottom=Math.min(height,rect.bottom);
+   if(right-left<320||bottom-top<320)return view;
+   return {left,top,right,bottom,width:right-left,height:bottom-top};
+ }
+ function radialLabelsFit(items,inner,outer){
+   const step=360/Math.max(items.length,1),thickness=outer-inner;
+   const mid=(inner+outer)/2;
+   const width=Math.max(6,Math.min(22,Math.floor(
+     (2*mid*Math.sin(step*Math.PI/360)-12)/5.6)));
+   const linesAllowed=thickness<43?1:thickness<60?2:3;
+   return items.every(node=>{
+     const name=String(node.label||'');
+     const lines=radialLabelLines(name,width,linesAllowed);
+     if(lines.some(l=>l.endsWith('…')))return false;
+     if(name.split(/\s+/).some(word=>word.length>width))return false;
+     const meta=String(node.subtitle||'').trim();
+     if(!meta)return true;
+     // Keep actual hit bonus, damage, range and slot information visible
+     // when the ring is wide enough; do not enlarge tiny inner breadcrumbs.
+     if(thickness<50)return true;
+     if(thickness<63||lines.length>2)return false;
+     return !radialLabelLines(meta,width,1)[0].endsWith('…');
+   });
+ }
+ function radialLayout(){
+   const rings=radialTreeRings(),base=radialRadii(rings.length);
+   const bounds=radialViewportBounds();
+   const outer=base[base.length-1][1];
+   // Expansion is optional and only runs when a label or helpful subtitle
+   // would be cut off. No growth is attempted on a cramped tabletop.
+   const cap=Math.max(1,Math.min(1.6,
+     (bounds.width-16)/520,(bounds.height-156)/(2*outer)));
+   let factor=1;
+   for(let i=0;i<12;i++){
+     const fit=base.every(([inner,outer],index)=>
+       radialLabelsFit(rings[index],inner*factor,outer*factor));
+     if(fit||factor+0.05>cap+0.0001)break;
+     factor=Math.round((factor+0.05)*100)/100;
+   }
+   const radii=base.map(([a,b])=>[a*factor,b*factor]);
+   return {rings,radii,factor,diameter:520*factor,
+     outer:radii[radii.length-1][1],bounds};
+ }
+ function radialLabelRotation(angle){
+   const deg=((angle+90)%360+360)%360;
+   return deg>270?deg-360:deg>90?deg-180:deg;
+ }
+ function radialLabelMarkup(node,step,inner,outer,angle){
+   const thickness=outer-inner,midRadius=(inner+outer)/2;
+   const width=Math.max(6,Math.min(22,Math.floor((2*midRadius*Math.sin(step*Math.PI/360)-12)/5.6)));
+   const glyph=html(node.glyph||'✦');
+   // Contracted rings cannot hold text and an icon simultaneously.
+   if(thickness<34)return `<text x="0" y="5" text-anchor="middle"><tspan class="rbe-glyph" style="font-size:17px">${glyph}</tspan></text>`;
+   const lines=radialLabelLines(node.label,width,thickness<43?1:thickness<60?2:3);
+   const meta=thickness>=63&&lines.length<=2?String(node.subtitle||'').trim():'';
+   const wrappedMeta=meta?radialLabelLines(meta,width,1)[0]:'';
+   // Center the glyph + name lines + optional stat line within the band.
+   const gap=11,iconHeight=thickness<47?15:20,metaHeight=wrappedMeta?10:0;
+   const blockHeight=iconHeight+lines.length*gap+metaHeight;
+   const top=-blockHeight/2;
+   const fontSize=width<9?8.3:width<12?9:10;
+   const iconY=top+iconHeight-3;
+   const nameBase=top+iconHeight+8;
+   const names=lines.map((line,i)=>
+     `<text class="rbe-option-name" x="0" y="${(nameBase+i*gap).toFixed(1)}" style="font-size:${fontSize}px" text-anchor="middle">${html(line)}</text>`).join('');
+   const subtitle=wrappedMeta?`<text class="rbe-option-meta" x="0" y="${(nameBase+lines.length*gap-1).toFixed(1)}" text-anchor="middle">${html(wrappedMeta)}</text>`:'';
+   return `<text x="0" y="${iconY.toFixed(1)}" text-anchor="middle"><tspan class="rbe-glyph" style="font-size:${thickness<47?15:20}px">${glyph}</tspan></text>${names}${subtitle}`;
+ }
  function radialWheelSVG(){
-   const rings=radialTreeRings(),radius=radialRadii(rings.length);
+   const layout=radialLayout(),rings=layout.rings,radius=layout.radii;
    const content=rings.map((items,d)=>{
      const [inner,outer]=radius[d],step=360/Math.max(items.length,1);
      const nodes=items.map((node,i)=>{
        const chosen=RB.radial.path[d]===node.id,muted=RB.radial.path[d]&&!chosen,angle=-90+step*(i+.5);
        const gap=Math.min(2.4,step*.12),start=-90+i*step+gap,end=-90+(i+1)*step-gap;
-       const mid=radialPoint((inner+outer)*.5,angle);
-       const label=short(node.label,items.length>12?7:12);
-       const mini=outer-inner<32 || items.length>13, glyph=html(node.glyph||'✦');
-       return `<g class="rbe-wedge ${chosen?'is-selected':''} ${muted?'is-muted':''}" data-action="radialPick" data-depth="${d}" data-index="${i}" role="button" tabindex="0" aria-label="${html(node.label)}" aria-selected="${!!chosen}"><title>${html(node.label)}${node.detail?' — '+html(node.detail):''}</title><path d="${radialSector(inner,outer,start,end)}"></path><text x="${mid.x.toFixed(1)}" y="${(mid.y+(mini?4:-3)).toFixed(1)}" text-anchor="middle"><tspan class="rbe-glyph">${glyph}</tspan>${mini?'':`<tspan x="${mid.x.toFixed(1)}" dy="15">${html(label)}</tspan>`}</text></g>`;
+       const mid=radialPoint((inner+outer)*.5,angle),rotation=radialLabelRotation(angle);
+       const detail=[node.label,node.subtitle,node.detail].filter(Boolean).join(' · ');
+       return `<g class="rbe-wedge ${chosen?'is-selected':''} ${muted?'is-muted':''}" data-action="radialPick" data-depth="${d}" data-index="${i}" role="button" tabindex="0" aria-label="${html(detail)}" aria-selected="${!!chosen}"><title>${html(detail)}</title><path d="${radialSector(inner,outer,start,end)}"></path><g transform="translate(${mid.x.toFixed(1)} ${mid.y.toFixed(1)}) rotate(${rotation.toFixed(1)})">${radialLabelMarkup(node,step,inner,outer,angle)}</g></g>`;
      }).join('');
      return `<g class="rbe-ring" data-ring="${d}" style="animation-delay:${d*35}ms">${nodes}</g>`;
    }).join('');
    const p=profile(),hp=Number(p.stats.hp)||0,max=Number(p.stats.maxHp)||0;
-   return `<svg class="rbe-wheel" viewBox="-260 -260 520 520" aria-label="Concentric combat action menu" role="group">
+   return `<svg class="rbe-wheel" viewBox="${(-layout.diameter/2).toFixed(1)} ${(-layout.diameter/2).toFixed(1)} ${layout.diameter.toFixed(1)} ${layout.diameter.toFixed(1)}" aria-label="Concentric combat action menu" role="group">
      <defs><radialGradient id="rbe-wedge-metal"><stop stop-color="#53402b" offset="0"/><stop stop-color="#211a22" offset=".75"/><stop stop-color="#130f17" offset="1"/></radialGradient>
      <linearGradient id="rbe-wedge-selected"><stop stop-color="#b9914f"/><stop stop-color="#5c3a21" offset=".53"/><stop stop-color="#332332" offset="1"/></linearGradient></defs>
      <circle r="23" class="rbe-core"/><text class="rbe-center" x="0" y="4" text-anchor="middle">${Math.max(0,hp)}/${Math.max(0,max)}</text>
@@ -1532,10 +1655,10 @@ async function sheetTourStart() {
  }
  function radialHTML(){
    const r=RB.radial,active=r.anchor&&r.open,p=profile();
-   const trail=radialTreeRings(),parts=r.path.map((id,i)=>trail[i]?.find(x=>x.id===id)?.label||id);
-   const outerRadius=radialOuterRadius(trail.length);
+   const layout=radialLayout(),trail=layout.rings,parts=r.path.map((id,i)=>trail[i]?.find(x=>x.id===id)?.label||id);
+   const outerRadius=layout.outer;
    return `<div id="rbe-radial-layer"><svg id="rbe-token-tether" aria-hidden="true"><path id="rbe-tether-path" d=""></path></svg>
-    ${active?`<div id="rbe-radial-wheel" style="left:${Math.round(r.anchor.x)}px;top:${Math.round(r.anchor.y)}px;--rbe-outer-radius:${outerRadius}px">
+    ${active?`<div id="rbe-radial-wheel" style="left:${Math.round(r.anchor.x)}px;top:${Math.round(r.anchor.y)}px;--rbe-outer-radius:${outerRadius}px;--rbe-wheel-size:${layout.diameter}px">
       <div class="rbe-wheel-title">${html(short(p.name,27))} · COMBAT</div>${radialWheelSVG()}
       <div class="rbe-wheel-footer"><div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
@@ -1547,6 +1670,12 @@ async function sheetTourStart() {
  }
  function radialPick(depth,index){
    const rings=radialTreeRings(),node=rings[depth]?.[index];if(!node)return;
+   if(node.kind==='page'){
+     const pos=node.value.lastIndexOf(':');
+     const key=node.value.slice(0,pos),page=Number(node.value.slice(pos+1));
+     RB.radial.pages[key]=page;
+     render();radialPosition();return;
+   }
    if(node.children?.length){
      RB.radial.path=[...RB.radial.path.slice(0,depth),node.id];
      render();radialPosition();return;
@@ -1628,14 +1757,17 @@ async function sheetTourStart() {
    const wheel=RB.shadow.querySelector('#rbe-radial-wheel'),tether=RB.shadow.querySelector('#rbe-tether-path');
    if(!wheel||!r.anchor)return;
    // Clamp the full wheel including its footer, not just the SVG.
-   const outer=radialOuterRadius(radialTreeRings().length);
+   const layout=radialLayout(),outer=layout.outer,bounds=layout.bounds;
    const above=outer+45,below=outer+95;
-   const scale=Math.max(.4,Math.min(1,(innerWidth-16)/545,(innerHeight-16)/(above+below)));
-   const marginX=260*scale+5;
-   const cx=innerWidth<marginX*2?innerWidth/2:Math.max(marginX,Math.min(innerWidth-marginX,r.anchor.x));
-   const topLimit=above*scale+7,bottomLimit=below*scale+7;
-   const cy=innerHeight<topLimit+bottomLimit?innerHeight/2:
-     Math.max(topLimit,Math.min(innerHeight-bottomLimit,r.anchor.y));
+   const scale=Math.max(0.1,Math.min(1,
+     (bounds.width-12)/layout.diameter,
+     (bounds.height-12)/(above+below)));
+   const marginX=layout.diameter*scale/2+5;
+   const cx=bounds.width<marginX*2?(bounds.left+bounds.right)/2:
+     Math.max(bounds.left+marginX,Math.min(bounds.right-marginX,r.anchor.x));
+   const topLimit=above*scale+5,bottomLimit=below*scale+5;
+   const cy=bounds.height<topLimit+bottomLimit?(bounds.top+bounds.bottom)/2:
+     Math.max(bounds.top+topLimit,Math.min(bounds.bottom-bottomLimit,r.anchor.y));
    wheel.style.left=cx+'px';wheel.style.top=cy+'px';wheel.style.setProperty('--wheel-scale',String(scale));
    if(tether)tether.setAttribute('d',Math.hypot(cx-r.anchor.x,cy-r.anchor.y)>25?`M ${r.anchor.x} ${r.anchor.y} L ${cx} ${cy}`:'');
  }
