@@ -18,7 +18,7 @@ function createHarness(doc){
    localStorage:{getItem(k){return values.get(k)||null},setItem(k,v){values.set(k,v)}}
  };
  vm.createContext(context);
- vm.runInContext(program+'\nload();globalThis.it={readSheetFields,sheetReadBeaconAttributeRows,sheetHarvestBeaconRows,sheetFrozenScrollCover,snapshotSheet,findSheetForms,scanSheets,syncSheet,profile,RB}',context);
+ vm.runInContext(program+'\nload();globalThis.it={readSheetFields,sheetReadBeaconAttributeRows,sheetHarvestBeaconRows,sheetFrozenScrollCover,snapshotSheet,findSheetForms,sheetPrefetchAttributes,scanSheets,syncSheet,profile,RB}',context);
  return context.it;
 }
 function cell(value){
@@ -157,7 +157,7 @@ test('frozen scroll cover preserves the visible sheet while removing its overlay
  assert.equal(style.getPropertyValue('visibility'),'visible');
  assert.equal(removed,1);
 });
-test('sheet discovery starts silent scrolling preload; import can reuse all pages',async()=>{
+test('legacy inline attribute lists can still preload silently and reuse all pages',async()=>{
  let position=0;
  const pages=[
   [row('strength','-',18),row('dexterity','-',14)],
@@ -184,7 +184,7 @@ test('sheet discovery starts silent scrolling preload; import can reuse all page
    c.parentElement={parentElement:scroll,children:[c]};
  const doc={querySelectorAll(sel){return sel.includes('form.charsheet')?[sheet]:[]}};
  const h=createHarness(doc);
- h.scanSheets();
+ h.sheetPrefetchAttributes({root:sheet,readableFields:2,visibleFields:0});
  const warm=h.RB.sheetWarm;
  assert.ok(warm?.promise,'A sheet scan should initiate background traversal');
  const scan=await warm.promise;
