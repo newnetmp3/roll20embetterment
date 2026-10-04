@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import vm from 'node:vm';
 const root=resolve(import.meta.dirname,'..');
-const names=['00_core.js','10_roll20_bridge.js','15_sheet_link.js','20_ui.js','25_bg3_theme.js','30_events.js'];
+const names=['00_core.js','10_roll20_bridge.js','15_sheet_link.js','16_beacon_visible.js','20_ui.js','25_bg3_theme.js','30_events.js'];
 const source=names.map(name=>readFileSync(join(root,'src',name),'utf8')).join('\n')
  .replace(/if\(document\.readyState==='loading'\)document\.addEventListener\('DOMContentLoaded',boot,\{once:true\}\);else boot\(\);\s*$/,'');
 function env(){
@@ -119,7 +119,7 @@ test('sheet picker reports readable attribute count and sync instruction',()=>{
  const a=env();
  a.RB.openSheets=[{name:'Nier',readableFields:17}];
  const ui=a.sheetUI();
- assert.match(ui,/Nier · 17 readable fields/);
+ assert.match(ui,/Nier · 17 named \/ 0 visible/);
  assert.match(ui,/Sync selected/);
  assert.match(ui,/Advanced Tools/);
 });
