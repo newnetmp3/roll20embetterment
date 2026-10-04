@@ -10,6 +10,12 @@ function action(name, el) {
   const p=profile(), s=RB.state.settings;
   const id=el.dataset.id, v=el.dataset.value, ix=int(el.dataset.index);
   switch (name) {
+    case 'radialPick':radialPick(int(el.dataset.depth),int(el.dataset.index));break;
+    case 'radialBack':RB.radial.path.pop();render();radialPosition();break;
+    case 'radialHome':RB.radial.path=[];render();radialPosition();break;
+    case 'radialPin':RB.radial.pin=true;toast('Click the center of your token on the tabletop.');break;
+    case 'radialPanel':RB.tab='Sheet';RB.state.ui.lastTab='Sheet';RB.visible=true;render();break;
+    case 'radialToggle':RB.radial.open=!RB.radial.open;RB.radial.path=[];render();radialPosition();break;
     case 'open': case 'toggle': RB.visible=name==='open'?true:!RB.visible; render(); break;
     case 'close': RB.visible=false;render();break;
     case 'tab': RB.tab=v;RB.state.ui.lastTab=v;changedProfile();break;
@@ -190,10 +196,13 @@ function onInput(e) {
 // B, V, Z and other typed keys as tabletop commands. Never preventDefault.
 function keepEmbettermentKeysLocal(e) { e.stopPropagation(); }
 function onKeyDown(e) {
+  if(e.key==='Escape' && RB.radial?.path?.length){RB.radial.path.pop();render();radialPosition();return;}
   if(e.key==='Escape' && (RB.paletteOpen||RB.modal)){RB.paletteOpen=false;RB.modal=null;render();return;}
   const origin=e.composedPath?.()[0] || e.target;
   const editing=origin?.closest?.('input,textarea,select,[contenteditable="true"],[role="textbox"]');
   const insideEmbetterment=e.composedPath?.().includes(RB.root) || false;
+  if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyR'){e.preventDefault();RB.radial.open=!RB.radial.open;render();radialPosition();return;}
+  if(insideEmbetterment&&['Enter',' '].includes(e.key)&&origin?.dataset?.action==='radialPick'){e.preventDefault();radialPick(int(origin.dataset.depth),int(origin.dataset.index));return;}
   if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyE'){
     e.preventDefault();RB.visible=!RB.visible;render();return;
   }
@@ -241,6 +250,6 @@ function boot() {
   document.addEventListener('keydown',onKeyDown,true);
   window.addEventListener('beforeunload',save);
   setInterval(sheetAutoTick,12000);
-  RB.visible=!!RB.state.settings.alwaysOpen;render();
+  RB.visible=!!RB.state.settings.alwaysOpen;render();startRadialTracking();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();

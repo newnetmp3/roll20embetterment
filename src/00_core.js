@@ -1,7 +1,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '1.3.0',
+  version: '2.0.0',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -41,7 +41,7 @@ function newProfile(name='Adventurer') {
 }
 function initialState() {
   const p = newProfile();
-  return {schema:1, settings:{theme:'bg3',visualMigration:1,scale:1,hotkeys:false,showBar:true,showHud:true,showFab:true,chatSearch:'',chatKind:'all',reducedMotion:false,alwaysOpen:false},
+  return {schema:1, settings:{theme:'bg3',visualMigration:1,scale:1,hotkeys:false,showBar:false,showHud:false,showFab:false,chatSearch:'',chatKind:'all',reducedMotion:false,alwaysOpen:false,radialMigration:2},
     profiles:[p], current:p.id, macros:baseMacros(),
     ui:{panelX:null,panelY:null,panelWidth:520,lastTab:'Home',barCollapsed:false}};
 }
@@ -70,6 +70,8 @@ function load() {
     const stored = JSON.parse(localStorage.getItem(RB.key) || 'null');
     if (stored && stored.schema === 1) {
       d.settings = {...d.settings, ...stored.settings};
+      // V2 turns off the old overlay chrome once while retaining imported character data.
+      if(!stored.settings?.radialMigration){d.settings.showBar=false;d.settings.showHud=false;d.settings.showFab=false;d.settings.alwaysOpen=false;d.settings.radialMigration=2;}
       // Move the previous default to the new look once, without changing chosen alternate themes.
       if (!stored.settings?.visualMigration && stored.settings?.theme === 'midnight') d.settings.theme='bg3';
       d.ui = {...d.ui, ...stored.ui};
