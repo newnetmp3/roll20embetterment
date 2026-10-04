@@ -34,12 +34,14 @@ function sheetUI() {
       '</div><p class="hint">'+html(short(description(item),450))+'</p></div>').join('')+'</div>':
       '<p class="hint">Nothing accessible in the last scan.</p>')+'</div>';
   return '<div class="stack"><div class="card"><h2>Link character sheet</h2>'+
-    '<p class="hint">Open your Roll20 character sheet inside the tabletop. Use Character Sheet or Advanced Tools → Attributes, then Scan and Sync. Sync reads visible named fields and walks a scrollable Attributes list where available. Read-only; no Roll20 sheet values are modified.</p>'+
-    '<div class="row">'+button('① Scan open sheets','scanSheets','','primary')+button('② Import visible attributes','syncSheet')+'</div>'+
+    '<p class="hint">Import accessible character data in one run. Embetterment visits Character Sheet, Bio & Info, Advanced Tools → Attributes, and the available combat/spell sections, then restores the original tabs. Read-only; no rolls or sheet edits.</p>'+
+    '<div class="row">'+button('Import all sheet tabs','sheetTourAll','','primary')+button('Find open sheets','scanSheets')+button('② Import visible attributes','syncSheet')+'</div>'+
+    '<p id="rbe-sheet-tour-status" role="status" class="hint">'+html(RB.sheetTourStatus||'Ready to import.')+'</p>'+
+    (RB.sheetTourWaiting?'<div class="card"><strong>Open your character sheet in Roll20 now</strong><p class="hint">Open Journal → '+html(p.name)+' → Character Sheet. Embetterment will detect the sheet and automatically start importing its available tabs.</p>'+button('Cancel waiting','sheetTourCancel')+'</div>':'')+
     (options.length?'<label class="field">Open sheet<select data-sheet-pick>'+options.map((sheet,i)=>
       '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+' · '+int(sheet.readableFields)+' named / '+int(sheet.visibleFields)+' visible</option>').join('')+'</select></label>'+
       '<p class="hint">Found '+options.length+' candidate sheet(s). <strong>'+int(options[RB.selectedSheet||0]?.readableFields)+' named attributes</strong> and <strong>'+int(options[RB.selectedSheet||0]?.visibleFields)+' visible values</strong> detected. Scanning automatically gathers the full scrollable Attributes list behind a frozen view and restores your position. Click <strong>Import visible attributes</strong> to apply the gathered values locally. For attacks and spells not exposed as attributes, switch to Character Sheet → Combat / Spells, then scan again.</p>':
-      '<p class="hint">No sheets scanned yet. Start by opening your character sheet and clicking Scan open sheets.</p>')+
+      '<p class="hint">No sheets scanned yet. Click Import all sheet tabs to be prompted to open your character sheet.</p>')+
     '<label><input type="checkbox" data-sheet-auto '+(link?.auto?'checked':'')+'> Refresh while the linked sheet is open (every 12 seconds)</label>'+
     '<p class="hint">Local notes, macros, equipment, and custom spells are preserved. Imports are read-only local copies. Beacon fields only import when their values can be identified confidently.</p></div>'+
     '<div class="card"><h3>Import coverage</h3>'+
