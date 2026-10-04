@@ -35,6 +35,25 @@ function action(name, el) {
       if(!/^\d{1,3}d\d{1,4}(?:\s*(?:k[hl]\d{1,2}|[+\-*/()]|\d|\s))*$/i.test(expression)) return toast('Enter a simple dice expression, such as 2d6+3.');
       sendToRoll20((name==='gmRoll'?'/gmroll ':'/roll ')+expression);break;
     }
+    case 'scanSheets':scanSheets();break;
+    case 'syncSheet':syncSheet();break;
+    case 'unlinkSheet':if(confirm('Stop syncing? Imported entries remain until deleted.')){p.sheetLink=null;RB.sheetSignature=null;changedProfile();}break;
+    case 'pasteSheet':{
+      try{const snap=parseSheetPaste(getText('sheet-json'));if(!snap.coverage.attributes)throw Error('No named attributes found');
+        applySheetSnapshot(p,snap);p.sheetLink.auto=false;RB.sheetSignature=null;changedProfile();
+        toast('Imported '+snap.coverage.attributes+' pasted attributes.');
+      }catch(err){toast('Invalid sheet JSON: '+err.message);}break;
+    }
+    case 'exportSheetFields':{
+      const found=RB.openSheets?.[RB.selectedSheet||0];
+      if(!found){toast('Scan an open sheet first.');break;}
+      downloadText('roll20-visible-sheet-attributes.json',JSON.stringify(readSheetFields(found.root),null,2),'application/json');break;
+    }
+    case 'runSheetAction':{
+      const chosen=(p.attacks||[]).find(x=>x.id===id);
+      if(chosen?.command)sendToRoll20(chosen.command);
+      else toast('No accessible Roll20 attack button. Roll from the original character sheet.');break;
+    }
     case 'slot':executeSlot(ix);break;
     case 'runMacro':runMacro(id);break;
     case 'editMacro':RB.editMacro=id;render();break;
@@ -84,7 +103,7 @@ function action(name, el) {
       const prefix=({sendText:'',sendEmote:'/em ',sendOOC:'/ooc ',sendWhisper:'/w gm '})[name];
       if(sendToRoll20(prefix+msg))getInput('chat-message').value='';break;
     }
-    case 'switchProfile':RB.state.current=getInput('profile-select').value;RB.editSpell=null;RB.editMacro=null;changedProfile();break;
+    case 'switchProfile':RB.state.current=getInput('profile-select').value;RB.editSpell=null;RB.editMacro=null;RB.openSheets=[];RB.sheetSignature=null;changedProfile();break;
     case 'newProfile':{const name=prompt('Name for new character profile?','New Adventurer');if(name?.trim()){const next=newProfile(name.trim().slice(0,100));RB.state.profiles.push(next);RB.state.current=next.id;changedProfile();}break;}
     case 'renameProfile':{const name=prompt('Rename current profile?',p.name);if(name?.trim()){p.name=name.trim().slice(0,100);changedProfile();}break;}
     case 'deleteProfile':if(RB.state.profiles.length===1)toast('Keep at least one profile.');else if(confirm('Delete '+p.name+' and all locally saved character data?')){RB.state.profiles=RB.state.profiles.filter(x=>x.id!==p.id);RB.state.current=RB.state.profiles[0].id;changedProfile();}break;
@@ -103,6 +122,7 @@ function navigatePalette(kind,id) {
   if(kind==='tab'){RB.tab=id;RB.state.ui.lastTab=id;RB.visible=true;save();render();}
   else if(kind==='macro') {runMacro(id);render();}
   else if(kind==='spell')useSpell(id);
+  else if(kind==='attack'){const a=(profile().attacks||[]).find(x=>x.id===id);if(a?.command)sendToRoll20(a.command);else toast('Sheet action button unavailable.');}
   else if(kind==='skill'||kind==='save') {quickRoll(kind,id);render();}
 }
 function onClick(e) {
@@ -120,6 +140,8 @@ function onChange(e) {
     save();render();
   } else if(el.matches('[data-toggle]')){p[el.dataset.toggle]=el.checked;save();render();}
   else if(el.matches('[data-death]')){p.death[el.dataset.death]=el.checked?int(el.dataset.count):int(el.dataset.count)-1;save();render();}
+  else if(el.matches('[data-sheet-pick]')){RB.selectedSheet=clamp(el.value,0,Math.max(0,(RB.openSheets||[]).length-1));RB.sheetSignature=null;save();render();}
+  else if(el.matches('[data-sheet-auto]')){p.sheetLink=p.sheetLink||{name:p.name};p.sheetLink.auto=el.checked;save();render();}
   else if(el.matches('[data-panel-width]')){RB.state.ui.panelWidth=clamp(el.value,360,920);save();render();}
   else if(el.matches('[data-slot]')){p.macrosSlots[clamp(el.dataset.slot,0,7)]=el.value;save();render();}
   else if(el.matches('[data-slot-max]')){const i=clamp(el.dataset.slotMax,1,9);p.spellSlots[i]=clamp(el.value,0,99);p.usedSlots[i]=Math.min(p.usedSlots[i],p.spellSlots[i]);save();render();}
@@ -201,6 +223,7 @@ function boot() {
   window.addEventListener('pointerup',onPointerUp);
   document.addEventListener('keydown',onKeyDown,true);
   window.addEventListener('beforeunload',save);
+  setInterval(sheetAutoTick,12000);
   RB.visible=!!RB.state.settings.alwaysOpen;render();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
