@@ -10,7 +10,7 @@ function sheetVisibleText(el) {
 }
 function sheetAttributeKey(value,loose=false) {
   const key=String(value??'').trim().replace(/^attr_/i,'');
-  if(!SHEET_ATTRIBUTE_KEY.test(key)||/^(NAME|DESCRIPTION|VALUE|CURRENT|MAX|LOCK|LOCKED|ATTRIBUTES)$/i.test(key))return '';
+  if(!SHEET_ATTRIBUTE_KEY.test(key)||/^(NAME|DESCRIPTION|VALUE|CURRENT|MAX|LOCK|LOCKED|ATTRIBUTES|EDIT|DELETE|CANCEL|SAVE|PENCIL|UNLOCK)$/i.test(key))return '';
   return loose||key.includes('_')||key.includes('-')||SHEET_COMMON_KEYS.has(key.toLowerCase())?key:'';
 }
 function sheetAttributeRow(row,loose=false) {
