@@ -40,6 +40,9 @@ function readSheetFields(scope){
     const v=el.type==='checkbox'?(el.checked?'1':'0'):('value'in el?el.value:el.textContent);
     result[key]={current:sheetText(v,10000),max:result[key]?.max||''};
   }
+  // 2024/Beacon Advanced Tools displays text rows, not attr_* controls.
+  // Keep explicit 2014 fields authoritative when both adapters see a key.
+  for(const [key,entry] of Object.entries(sheetReadBeaconAttributeRows(scope)))if(!(key in result))result[key]=entry;
   return result;
 }
 // Prefer an actual character-name label rather than generic dialog titles. 2024
@@ -48,7 +51,7 @@ function readVisibleSheetName(node,parent){
   const usable=value=>{
     const name=sheetText(value,120).replace(/\s+/g,' ').trim();
     return name.length>0 && name.length<=100 &&
-      !/^(open character sheet|character sheet|character|sheet|bio & info|advanced tools|attributes|actions|combat|spells)$/i.test(name);
+      !/^(open character sheet|character sheet|character|sheet|bio & info|advanced tools|attributes|actions|combat|spells|pencil|edit|settings|character macros|new attribute)$/i.test(name);
   };
   const selectors=[
     '[name="attr_character_name"]','[name="attr_charactername"]',
@@ -75,27 +78,37 @@ function readVisibleSheetName(node,parent){
 function findSheetForms(doc=document){
   const options=[],seen=new Set();
   function inspect(root,level=0){
-    if(!root||level>2||seen.has(root))return;
+    if(!root||level>3||seen.has(root))return;
     seen.add(root);
-    const nodes=Array.from(root.querySelectorAll?.('form.charsheet,.charsheet,.sheetform,[data-testid*="character-sheet"],.characterdialog,[class*="character-sheet"],.ui-dialog:has(.sheetform),[data-sheet-id]')||[]);
-    for(const node of nodes.slice(0,45)){
+    for(const node of sheetFormCandidates(root)){
       if(node.closest?.('#roll20-embetterment-host'))continue;
-      const fields=node.querySelectorAll?.('[name^="attr_"],[data-attribute]')||[];
-      if(fields.length<3&&(node.querySelectorAll?.('[aria-label],[data-testid]')?.length||0)<5)continue;
-      const parent=node.closest?.('.ui-dialog,.characterdialog,[data-character-id]')||node;
-      let name=readVisibleSheetName(node,parent);
-      const readableFields=Object.keys(readSheetFields(node)).length;
-      const visible=beaconImportVisible(node,name);
-      if(/^(?:Open character sheet|Character Sheet)$/i.test(name)&&visible.name)name=visible.name;
-      options.push({id:parent.getAttribute?.('data-character-id')||'open-'+(options.length+1),
-        name,root:node,readableFields,visibleFields:visible.coverage.visibleFields,kind:'Visible Roll20 sheet'});
+      // Do not scan the entire editor body: it can mix chat, settings and
+      // the sheet into a fictitious character. Frame bodies are allowed.
+      if(level===0 && node===root.body)continue;
+      const parent=node.closest?.('.ui-dialog,.characterdialog,[data-character-id],[role="dialog"]')||node;
+      const nameGuess=readVisibleSheetName(node,parent);
+      const fields=readSheetFields(node);
+      const visible=beaconImportVisible(node,nameGuess);
+      const text=sheetVisibleText(node).slice(0,40000);
+      const name=sheetMeaningfulName(nameGuess)?nameGuess:visible.name;
+      const score=sheetCandidateScore(fields,visible,text,name,node);
+      if(score<0)continue; // Excludes empty "pencil" and unrelated dialogs.
+      options.push({
+        id:parent.getAttribute?.('data-character-id')||node.getAttribute?.('data-character-id')||'open-'+(options.length+1),
+        name:sheetMeaningfulName(name)?name:'Open character sheet',
+        root:node,readableFields:Object.keys(fields).length,
+        visibleFields:visible.coverage.visibleFields,kind:'Visible Roll20 sheet',score
+      });
     }
     for(const frame of Array.from(root.querySelectorAll?.('iframe')||[]).slice(0,30)){
-      try{if(frame.contentDocument?.body)inspect(frame.contentDocument,level+1);}catch{/* cross-origin inaccessible */}
+      try{if(frame.contentDocument?.body)inspect(frame.contentDocument,level+1);}catch{/* inaccessible frame */}
     }
   }
   inspect(doc);
-  return options.filter((x,i)=>!options.some((y,j)=>i!==j&&x.root!==y.root&&x.root.contains?.(y.root))).slice(0,25);
+  options.sort((a,b)=>b.score-a.score);
+  // Keep the most informative scope rather than the smallest nested div.
+  return options.filter((x,i)=>!options.slice(0,i).some(y=>
+    x.root===y.root||x.root.contains?.(y.root)||y.root.contains?.(x.root))).slice(0,25);
 }
 function snapshotSheet(input,label='Character'){
   const attrs=sheetAttributes(input),values=Object.fromEntries(Object.entries(attrs).map(([key,val])=>[key.toLowerCase(),val]));
@@ -224,11 +237,11 @@ function scanSheets(){
   RB.selectedSheet=idx>=0?idx:0;RB.sheetSignature=null;
   render();toast('Found '+RB.openSheets.length+' open sheet(s).');
 }
-function syncSheet({quiet=false}={}){
+function syncSheet({quiet=false,fieldsOverride=null}={}){
   const candidate=RB.openSheets?.[RB.selectedSheet||0];
   if(!candidate){if(!quiet)toast('Scan for an open sheet first.');return false;}
   if(candidate.root?.isConnected===false){if(!quiet)toast('Sheet closed; reopen and scan.');return false;}
-  const fields=readSheetFields(candidate.root);
+  const fields=fieldsOverride||readSheetFields(candidate.root);
   const visual=beaconImportVisible(candidate.root,candidate.name);
   const data=mergeBeaconSnapshot(snapshotSheet(fields,candidate.name),visual);
   if(!data.coverage.attributes&&!data.coverage.visibleFields){
@@ -247,6 +260,34 @@ function syncSheet({quiet=false}={}){
     if(!active?.matches?.('input,textarea,select'))render();
   }
   return true;
+}
+// Explicit sync scans scrollable virtualized Attributes rows in the visible
+// sheet. Automatic 12-second refresh remains non-scrolling and inexpensive.
+async function syncSheetDeep(){
+  if(RB.sheetDeepSync)return;
+  let candidate=RB.openSheets?.[RB.selectedSheet||0];
+  if(!candidate||candidate.root?.isConnected===false||(!candidate.readableFields&&!candidate.visibleFields)){
+    scanSheets();
+    candidate=RB.openSheets?.[RB.selectedSheet||0];
+  }
+  if(!candidate)return;
+  RB.sheetDeepSync=true;
+  toast('Reading visible character data and attribute rows…');
+  try {
+    const scan=await sheetHarvestBeaconRows(candidate.root,count=>{
+      if(count>0)toast('Collecting character attributes: '+count+' fields found…');
+    });
+    // Do not replace the selection if the user switched profiles meanwhile.
+    if(!RB.openSheets?.includes(candidate))return;
+    const ok=syncSheet({fieldsOverride:scan.fields});
+    if(ok)toast('Imported '+Object.keys(scan.fields).length+' named attributes'+
+      (scan.scannedPages>1?' across '+scan.scannedPages+' scroll positions':'')+
+      (scan.full?' (list reached end).':'.')+' Read-only local copy.');
+    else toast('No usable fields found. Open Character Sheet, or keep Advanced Tools → Attributes visible.');
+  }catch(err){
+    console.warn('[roll20 Embetterment] Advanced sheet sync failed',err);
+    toast('Character scan failed: '+String(err.message||err).slice(0,160));
+  }finally{RB.sheetDeepSync=false;}
 }
 function sheetAutoTick(){
   const link=profile().sheetLink,candidate=RB.openSheets?.[RB.selectedSheet||0];
