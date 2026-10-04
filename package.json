@@ -1,6 +1,6 @@
 {
   "name": "roll20-embetterment",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "A player-first D&D 5E Tampermonkey enhancement for Roll20",
