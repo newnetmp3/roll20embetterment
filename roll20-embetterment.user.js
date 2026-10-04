@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      1.0.0
+// @version      1.0.1
 // @description  Player-first D&D 5E HUD, action bar, macros, spells, quick rolls, inventory, notes, chat filters, and command palette.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -18,7 +18,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '1.0.0',
+  version: '1.0.1',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -576,10 +576,15 @@ function onInput(e) {
     const n=getInput('palette-results');if(n)n.innerHTML=choices.map((x,i)=>`<button class="palette-choice ${i===0?'on':''}" data-action="paletteGo" data-value="${html(x.kind)}" data-id="${html(x.value)}">${html(x.name)}</button>`).join('')||'<p class="hint">Nothing found.</p>';
   }
 }
+// Roll20 shortcuts are registered outside this ShadowRoot. Stop keyboard
+// events at the ShadowRoot, after inputs receive them, so Roll20 cannot treat
+// B, V, Z and other typed keys as tabletop commands. Never preventDefault.
+function keepEmbettermentKeysLocal(e) { e.stopPropagation(); }
 function onKeyDown(e) {
   if(e.key==='Escape' && (RB.paletteOpen||RB.modal)){RB.paletteOpen=false;RB.modal=null;render();return;}
   const origin=e.composedPath?.()[0] || e.target;
   const editing=origin?.closest?.('input,textarea,select,[contenteditable="true"],[role="textbox"]');
+  const insideEmbetterment=e.composedPath?.().includes(RB.root) || false;
   if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyE'){
     e.preventDefault();RB.visible=!RB.visible;render();return;
   }
@@ -593,7 +598,7 @@ function onKeyDown(e) {
     if(e.key==='Enter'){e.preventDefault();const selected=options[RB.paletteSelection];if(selected)navigatePalette(selected.kind,selected.value);}
     return;
   }
-  if(!editing&&RB.state.settings.hotkeys&&!e.altKey&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey && /^Digit[1-8]$/.test(e.code)){
+  if(!editing&&!insideEmbetterment&&RB.state.settings.hotkeys&&!e.altKey&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey && /^Digit[1-8]$/.test(e.code)){
     e.preventDefault();executeSlot(Number(e.code.slice(-1))-1);
   }
 }
@@ -620,6 +625,7 @@ function boot() {
   RB.shadow.addEventListener('click',onClick);
   RB.shadow.addEventListener('change',e=>{onSettingChange(e);if(!e.target.matches('[data-setting]'))onChange(e);});
   RB.shadow.addEventListener('input',onInput);
+  for (const type of ['keydown','keypress','keyup']) RB.shadow.addEventListener(type,keepEmbettermentKeysLocal);
   RB.shadow.addEventListener('pointerdown',onDragStart);
   window.addEventListener('pointermove',onPointerMove);
   window.addEventListener('pointerup',onPointerUp);
