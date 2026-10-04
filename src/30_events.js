@@ -49,6 +49,23 @@ function action(name, el) {
       if(!found){toast('Scan an open sheet first.');break;}
       downloadText('roll20-visible-sheet-attributes.json',JSON.stringify(readSheetFields(found.root),null,2),'application/json');break;
     }
+    case 'exportSheetReport':{
+      const found=RB.openSheets?.[RB.selectedSheet||0];
+      if(!found){toast('Scan an open character sheet first.');break;}
+      const named=readSheetFields(found.root),visible=beaconImportVisible(found.root,found.name);
+      // User-triggered local file only; never upload or automatically transmit.
+      downloadText('roll20-embetterment-local-sheet-scan.json',JSON.stringify({
+        guide:'Contains sheet text visible to you, including character details. Review before sharing.',
+        character:found.name,
+        namedAttributeNames:Object.keys(named),
+        visibleSections:visible.coverage.sections,
+        visibleFieldNames:visible.coverage.names,
+        extracted:{stats:visible.stats,abilityScores:visible.abilityScores,
+          abilityMods:visible.abilityMods,saveBonuses:visible.saveBonuses,
+          skillBonuses:visible.skillBonuses,resources:visible.resources,attacks:visible.attacks},
+        renderedText:beaconVisibleText(found.root).slice(0,18000)
+      },null,2),'application/json');break;
+    }
     case 'runSheetAction':{
       const chosen=(p.attacks||[]).find(x=>x.id===id);
       if(chosen?.command)sendToRoll20(chosen.command);
