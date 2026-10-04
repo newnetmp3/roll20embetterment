@@ -92,5 +92,5 @@ test('changing back to a classic theme removes decorated markup',()=>{
   const markup=spec.RB.shadow.innerHTML;
   assert.doesNotMatch(markup,/class="rbe-nav-glyph"/);
   assert.doesNotMatch(markup,/class="rbe-hero-seal"/);
-  assert.match(markup,/value="midnight" selected/);
+  assert.match(spec.settingsUI(),/value="midnight" selected/);
 });
