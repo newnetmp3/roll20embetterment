@@ -1370,8 +1370,8 @@ async function sheetTourStart() {
 // Concentric combat wheel. Roll20 data remains read-only; chat commands remain user initiated.
  const RADIAL_STYLE=String.raw`
  #rbe-radial-layer{position:fixed;inset:0;pointer-events:none;z-index:4;--gold:#e9c88d;--iron:#241c19}
- #rbe-radial-wheel{position:fixed;width:520px;height:520px;transform:translate(-50%,-50%) scale(var(--wheel-scale,1));transform-origin:center;pointer-events:none;filter:drop-shadow(0 12px 24px #000b)}
- #rbe-radial-wheel svg.rbe-wheel{width:520px;height:520px;overflow:visible;pointer-events:none}
+ #rbe-radial-wheel{position:fixed;width:var(--rbe-wheel-size,520px);height:var(--rbe-wheel-size,520px);transform:translate(-50%,-50%) scale(var(--wheel-scale,1));transform-origin:center;pointer-events:none;filter:drop-shadow(0 12px 24px #000b)}
+ #rbe-radial-wheel svg.rbe-wheel{width:100%;height:100%;overflow:visible;pointer-events:none}
  #rbe-radial-wheel .rbe-wedge{pointer-events:visiblePainted;cursor:pointer;outline:none;transition:opacity .17s,filter .17s}
  #rbe-radial-wheel .rbe-wedge path{fill:url(#rbe-wedge-metal);stroke:#947b53;stroke-width:1.4;transition:fill .18s,stroke .18s}
  #rbe-radial-wheel .rbe-wedge:hover path,#rbe-radial-wheel .rbe-wedge:focus-visible path{fill:#685239;stroke:#ffe5a7;stroke-width:2.5}
@@ -1532,7 +1532,7 @@ async function sheetTourStart() {
  // Word-aware wrapping for SVG text: never trim a weapon name to six
  // characters just because its parent ring contains many actions.
  function radialLabelLines(raw,width,limit){
-   const words=String(raw??'').trim().replace(/\\s+/g,' ').split(' ').filter(Boolean);
+   const words=String(raw??'').trim().replace(/\s+/g,' ').split(' ').filter(Boolean);
    if(!words.length)return [''];
    const lines=[];
    for(let word of words){
@@ -1554,9 +1554,63 @@ async function sheetTourStart() {
    result[limit-1]=result[limit-1].slice(0,Math.max(1,width-1))+'…';
    return result;
  }
+ // The game canvas is the preferred visible boundary. Do not enlarge a
+ // ring into Roll20's sidebar or beyond the browser window.
+ function radialViewportBounds(){
+   const width=Math.max(1,Number(window.innerWidth)||Number(innerWidth)||1280);
+   const height=Math.max(1,Number(window.innerHeight)||Number(innerHeight)||800);
+   const view={left:0,top:0,right:width,bottom:height,width,height};
+   const canvas=document.querySelector?.('#editor-wrapper, #finalcanvas, .canvas-container');
+   const rect=canvas?.getBoundingClientRect?.();
+   if(!rect||!Number.isFinite(rect.width)||!Number.isFinite(rect.height) ||
+      rect.width<320||rect.height<320)return view;
+   const left=Math.max(0,rect.left),right=Math.min(width,rect.right);
+   const top=Math.max(0,rect.top),bottom=Math.min(height,rect.bottom);
+   if(right-left<320||bottom-top<320)return view;
+   return {left,top,right,bottom,width:right-left,height:bottom-top};
+ }
+ function radialLabelsFit(items,inner,outer){
+   const step=360/Math.max(items.length,1),thickness=outer-inner;
+   const mid=(inner+outer)/2;
+   const width=Math.max(6,Math.min(22,Math.floor(
+     (2*mid*Math.sin(step*Math.PI/360)-12)/5.6)));
+   const linesAllowed=thickness<43?1:thickness<60?2:3;
+   return items.every(node=>{
+     const name=String(node.label||'');
+     const lines=radialLabelLines(name,width,linesAllowed);
+     if(lines.some(l=>l.endsWith('…')))return false;
+     if(name.split(/\s+/).some(word=>word.length>width))return false;
+     const meta=String(node.subtitle||'').trim();
+     if(!meta)return true;
+     // Keep actual hit bonus, damage, range and slot information visible
+     // when the ring is wide enough; do not enlarge tiny inner breadcrumbs.
+     if(thickness<50)return true;
+     if(thickness<63||lines.length>2)return false;
+     return !radialLabelLines(meta,width,1)[0].endsWith('…');
+   });
+ }
+ function radialLayout(){
+   const rings=radialTreeRings(),base=radialRadii(rings.length);
+   const bounds=radialViewportBounds();
+   const outer=base[base.length-1][1];
+   // Expansion is optional and only runs when a label or helpful subtitle
+   // would be cut off. No growth is attempted on a cramped tabletop.
+   const cap=Math.max(1,Math.min(1.6,
+     (bounds.width-16)/520,(bounds.height-156)/(2*outer)));
+   let factor=1;
+   for(let i=0;i<12;i++){
+     const fit=base.every(([inner,outer],index)=>
+       radialLabelsFit(rings[index],inner*factor,outer*factor));
+     if(fit||factor+0.05>cap+0.0001)break;
+     factor=Math.round((factor+0.05)*100)/100;
+   }
+   const radii=base.map(([a,b])=>[a*factor,b*factor]);
+   return {rings,radii,factor,diameter:520*factor,
+     outer:radii[radii.length-1][1],bounds};
+ }
  function radialLabelRotation(angle){
    const deg=((angle+90)%360+360)%360;
-   return deg>=90&&deg<=270?deg-180:deg;
+   return deg>270?deg-360:deg>90?deg-180:deg;
  }
  function radialLabelMarkup(node,step,inner,outer,angle){
    const thickness=outer-inner,midRadius=(inner+outer)/2;
@@ -1580,7 +1634,7 @@ async function sheetTourStart() {
    return `<text x="0" y="${iconY.toFixed(1)}" text-anchor="middle"><tspan class="rbe-glyph" style="font-size:${thickness<47?15:20}px">${glyph}</tspan></text>${names}${subtitle}`;
  }
  function radialWheelSVG(){
-   const rings=radialTreeRings(),radius=radialRadii(rings.length);
+   const layout=radialLayout(),rings=layout.rings,radius=layout.radii;
    const content=rings.map((items,d)=>{
      const [inner,outer]=radius[d],step=360/Math.max(items.length,1);
      const nodes=items.map((node,i)=>{
@@ -1593,7 +1647,7 @@ async function sheetTourStart() {
      return `<g class="rbe-ring" data-ring="${d}" style="animation-delay:${d*35}ms">${nodes}</g>`;
    }).join('');
    const p=profile(),hp=Number(p.stats.hp)||0,max=Number(p.stats.maxHp)||0;
-   return `<svg class="rbe-wheel" viewBox="-260 -260 520 520" aria-label="Concentric combat action menu" role="group">
+   return `<svg class="rbe-wheel" viewBox="${(-layout.diameter/2).toFixed(1)} ${(-layout.diameter/2).toFixed(1)} ${layout.diameter.toFixed(1)} ${layout.diameter.toFixed(1)}" aria-label="Concentric combat action menu" role="group">
      <defs><radialGradient id="rbe-wedge-metal"><stop stop-color="#53402b" offset="0"/><stop stop-color="#211a22" offset=".75"/><stop stop-color="#130f17" offset="1"/></radialGradient>
      <linearGradient id="rbe-wedge-selected"><stop stop-color="#b9914f"/><stop stop-color="#5c3a21" offset=".53"/><stop stop-color="#332332" offset="1"/></linearGradient></defs>
      <circle r="23" class="rbe-core"/><text class="rbe-center" x="0" y="4" text-anchor="middle">${Math.max(0,hp)}/${Math.max(0,max)}</text>
@@ -1601,10 +1655,10 @@ async function sheetTourStart() {
  }
  function radialHTML(){
    const r=RB.radial,active=r.anchor&&r.open,p=profile();
-   const trail=radialTreeRings(),parts=r.path.map((id,i)=>trail[i]?.find(x=>x.id===id)?.label||id);
-   const outerRadius=radialOuterRadius(trail.length);
+   const layout=radialLayout(),trail=layout.rings,parts=r.path.map((id,i)=>trail[i]?.find(x=>x.id===id)?.label||id);
+   const outerRadius=layout.outer;
    return `<div id="rbe-radial-layer"><svg id="rbe-token-tether" aria-hidden="true"><path id="rbe-tether-path" d=""></path></svg>
-    ${active?`<div id="rbe-radial-wheel" style="left:${Math.round(r.anchor.x)}px;top:${Math.round(r.anchor.y)}px;--rbe-outer-radius:${outerRadius}px">
+    ${active?`<div id="rbe-radial-wheel" style="left:${Math.round(r.anchor.x)}px;top:${Math.round(r.anchor.y)}px;--rbe-outer-radius:${outerRadius}px;--rbe-wheel-size:${layout.diameter}px">
       <div class="rbe-wheel-title">${html(short(p.name,27))} · COMBAT</div>${radialWheelSVG()}
       <div class="rbe-wheel-footer"><div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
@@ -1703,14 +1757,17 @@ async function sheetTourStart() {
    const wheel=RB.shadow.querySelector('#rbe-radial-wheel'),tether=RB.shadow.querySelector('#rbe-tether-path');
    if(!wheel||!r.anchor)return;
    // Clamp the full wheel including its footer, not just the SVG.
-   const outer=radialOuterRadius(radialTreeRings().length);
+   const layout=radialLayout(),outer=layout.outer,bounds=layout.bounds;
    const above=outer+45,below=outer+95;
-   const scale=Math.max(.4,Math.min(1,(innerWidth-16)/545,(innerHeight-16)/(above+below)));
-   const marginX=260*scale+5;
-   const cx=innerWidth<marginX*2?innerWidth/2:Math.max(marginX,Math.min(innerWidth-marginX,r.anchor.x));
-   const topLimit=above*scale+7,bottomLimit=below*scale+7;
-   const cy=innerHeight<topLimit+bottomLimit?innerHeight/2:
-     Math.max(topLimit,Math.min(innerHeight-bottomLimit,r.anchor.y));
+   const scale=Math.max(0.1,Math.min(1,
+     (bounds.width-12)/layout.diameter,
+     (bounds.height-12)/(above+below)));
+   const marginX=layout.diameter*scale/2+5;
+   const cx=bounds.width<marginX*2?(bounds.left+bounds.right)/2:
+     Math.max(bounds.left+marginX,Math.min(bounds.right-marginX,r.anchor.x));
+   const topLimit=above*scale+5,bottomLimit=below*scale+5;
+   const cy=bounds.height<topLimit+bottomLimit?(bounds.top+bounds.bottom)/2:
+     Math.max(bounds.top+topLimit,Math.min(bounds.bottom-bottomLimit,r.anchor.y));
    wheel.style.left=cx+'px';wheel.style.top=cy+'px';wheel.style.setProperty('--wheel-scale',String(scale));
    if(tether)tether.setAttribute('d',Math.hypot(cx-r.anchor.x,cy-r.anchor.y)>25?`M ${r.anchor.x} ${r.anchor.y} L ${cx} ${cy}`:'');
  }
