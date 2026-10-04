@@ -80,6 +80,17 @@ Not affiliated with or endorsed by Roll20.
 
 **All functionality remains player-first and read-only toward Roll20 game data.** Sheet imports, custom macros, saved profile data, storage keys, and the keyboard event isolation fix are preserved. Install or update using the same raw userscript URL above, then refresh the tabletop.
 
+## v1.3.0 — D&D 5E 2024 visible-sheet importer
+
+When the 2024/Beacon character sheet exposes **no traditional named attributes** (the Sheet selector used to show `0 readable fields`), Embetterment now attempts a **read-only import from the sheet text currently visible in your browser**.
+
+- Supported high-confidence patterns: current/max/temp HP, armor class, movement speed, level/class, ability scores/modifiers/saves, visible skill bonuses, named resource counters, and informational weapon/attack entries with visible to-hit and damage dice.
+- **Sheet → Scan open sheets** reports **named** and **visible** counts separately. Click **Sync selected** to merge recognized visible values into your locally saved character profile; no Roll20 game data is modified.
+- Since Beacon renders its sheet dynamically and some tabs are virtualized, only fields currently visible within the detected sheet can be scanned. To capture more values, visit the **Combat**, **Spells**, **Inventory**, or **Advanced Tools → Attributes** views in Roll20, then scan/sync again. The importer preserves previously imported entries and your manual content, rather than inventing values for inaccessible fields.
+- **Export scan report** creates a local JSON containing the visible character-sheet text and the parsed fields. **Review the file before sharing:** its text can include character notes or other information displayed on the sheet. Nothing is sent automatically.
+- The visible attack records are **information only**. Embetterment does not invent legacy attack macros for the Beacon sheet. Launch attacks from the original Roll20 sheet unless a valid Roll20 macro has been configured.
+- **Limitations:** This importer recognizes patterns; it does not have access to Beacon's internal character data. Exact compatibility with a particular 2024 sheet needs an in-game browser test. A zero count after this update means the script still cannot read usable text from that sheet view; export the scan report for diagnostics.
+
 ## v1.2.1 — in-game screenshot refinements
 
 - The **Sheet** selector now tries multiple accessible name labels on 2024/Beacon dialogs (including a name in the outer dialog when the actual sheet lives in a frame).
