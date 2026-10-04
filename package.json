@@ -1,0 +1,13 @@
+{
+  "name": "roll20-embetterment",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A player-first D&D 5E Tampermonkey enhancement for Roll20",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run build && npm test && node --check roll20-embetterment.user.js"
+  },
+  "engines": {"node": ">=20"}
+}
