@@ -53,12 +53,12 @@ function action(name, el) {
     case 'exportSheetFields':{
       const found=RB.openSheets?.[RB.selectedSheet||0];
       if(!found){toast('Scan an open sheet first.');break;}
-      downloadText('roll20-visible-sheet-attributes.json',JSON.stringify(readSheetFields(found.root),null,2),'application/json');break;
+      downloadText('roll20-visible-sheet-attributes.json',JSON.stringify(found.frame?RB.sheetWarm?.scan?.fields||{}:readSheetFields(found.root),null,2),'application/json');break;
     }
     case 'exportSheetReport':{
       const found=RB.openSheets?.[RB.selectedSheet||0];
       if(!found){toast('Scan an open character sheet first.');break;}
-      const named=readSheetFields(found.root),visible=beaconImportVisible(found.root,found.name);
+      const named=found.frame?RB.sheetWarm?.scan?.fields||{}:readSheetFields(found.root),visible=found.frame?RB.sheetWarm?.scan?.visible||beaconImportVisible({innerText:''},found.name):beaconImportVisible(found.root,found.name);
       // User-triggered local file only; never upload or automatically transmit.
       downloadText('roll20-embetterment-local-sheet-scan.json',JSON.stringify({
         guide:'Contains sheet text visible to you, including character details. Review before sharing.',
@@ -252,4 +252,9 @@ function boot() {
   setInterval(sheetAutoTick,12000);
   RB.visible=!!RB.state.settings.alwaysOpen;render();startRadialTracking();
 }
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+// Never install the combat HUD inside the external character-sheet iframe.
+const rbeStartup=isBeaconFrame()?startBeaconFrameReader:isRoll20Editor()?boot:null;
+if(rbeStartup){
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rbeStartup,{once:true});
+  else rbeStartup();
+}
