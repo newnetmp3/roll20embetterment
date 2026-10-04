@@ -20,7 +20,7 @@ function environment(query='?id=123'){
     confirm:()=>true,prompt:()=>null,window:{innerWidth:1200,innerHeight:900}
   };
   vm.createContext(scope);vm.runInContext(program,scope);
-  vm.runInContext('load(); RB.shadow={querySelector(){return null},querySelectorAll(){return []},innerHTML:""}; RB.root={style:{setProperty(){}},setAttribute(){}}; globalThis.h={RB,profile,makeRoll,quickRoll,sendToRoll20,executeSlot,applyDamage,rest,html,save,load,setValue,newProfile,render,notesMarkdown,baseMacros,action,rollsUI,homeUI,inventoryUI,spellListHTML,normalizeProfile,filterChatMessages,onKeyDown}',scope);
+  vm.runInContext('load(); RB.shadow={querySelector(){return null},querySelectorAll(){return []},innerHTML:""}; RB.root={style:{setProperty(){}},setAttribute(){}}; globalThis.h={RB,profile,makeRoll,quickRoll,sendToRoll20,executeSlot,applyDamage,rest,html,save,load,setValue,newProfile,render,notesMarkdown,baseMacros,action,rollsUI,homeUI,inventoryUI,spellListHTML,normalizeProfile,filterChatMessages,onKeyDown,keepEmbettermentKeysLocal}',scope);
   return {h:scope.h,scope,store,sent,toasts,setDraft(v){draft=v},getDraft(){return draft},setChatAvailable(v){allowed=v}};
 }
 test('initializes per-campaign key and a local profile with 8 action slots',()=>{const {h}=environment();assert.match(h.RB.key,/123$/);assert.equal(h.profile().macrosSlots.length,8);assert.equal(h.RB.state.profiles.length,1);});
@@ -45,4 +45,22 @@ test('shadow-DOM inputs never trigger global action-bar hotkeys',()=>{
   const shadowHost={closest(){return null}};
   const ev={target:shadowHost,composedPath(){return [editable,shadowHost]},code:'Digit1',key:'1',altKey:false,shiftKey:false,metaKey:false,ctrlKey:false,preventDefault(){throw Error('Should not intercept typing')}};
   e.h.onKeyDown(ev);assert.equal(e.sent.length,0);
+});
+
+test('B/V/Z keyboard events remain local without preventing text input',()=>{
+  const {h}=environment();
+  for(const key of ['b','v','z','B','V','Z','ArrowLeft','Backspace','Enter','1']){
+    for(const type of ['keydown','keypress','keyup']){
+      let stops=0;
+      h.keepEmbettermentKeysLocal({type,key,stopPropagation(){stops++;},preventDefault(){throw Error('Default typing should never be canceled');}});
+      assert.equal(stops,1,`Expected ${type} for ${key} to stop at the ShadowRoot`);
+    }
+  }
+});
+
+test('action hotkeys do not run when focus is on an Embetterment button',()=>{
+  const e=environment();e.h.RB.state.settings.hotkeys=true;
+  const button={closest(){return null}};
+  const event={target:e.h.RB.root,composedPath(){return [button,e.h.RB.shadow,e.h.RB.root]},code:'Digit1',key:'1',altKey:false,shiftKey:false,metaKey:false,ctrlKey:false,preventDefault(){throw Error('Must not run a hotkey in the panel')}};
+  e.h.onKeyDown(event);assert.equal(e.sent.length,0);
 });
