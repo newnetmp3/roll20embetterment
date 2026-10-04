@@ -13,7 +13,7 @@ function env(){
   setTimeout(){},clearTimeout(){},setInterval(){},window:{},document:{querySelectorAll(){return []}},
   localStorage:{getItem(k){return store.get(k)||null},setItem(k,v){store.set(k,v)}}};
  vm.createContext(scope);
- vm.runInContext(source+'\nload();globalThis.expose={RB,profile,snapshotSheet,applySheetSnapshot,readSheetFields,parseSheetPaste,syncSheet,sheetUI,render,homeUI};',scope);
+ vm.runInContext(source+'\nload();globalThis.expose={RB,profile,snapshotSheet,applySheetSnapshot,readSheetFields,parseSheetPaste,syncSheet,sheetUI,render,homeUI,readVisibleSheetName};',scope);
  return scope.expose;
 }
 const sample={character_name:'Thorin',class:'Paladin',level:'7',race:'Dwarf',hp:{current:'32',max:'56'},
@@ -93,4 +93,33 @@ test('Sheet tab is visible and Home has a direct import shortcut',()=>{
  assert.match(a.RB.shadow.innerHTML,/data-action="tab" data-value="Sheet"/);
  assert.match(a.homeUI(),/Import character sheet/);
  assert.match(a.homeUI(),/data-action="tab" data-value="Sheet"/);
+});
+
+test('2024 sheet header yields character name, not generic dialog title',()=>{
+ const a=env();
+ const parent={getAttribute(){return 'Open character sheet'},querySelector(sel){
+   if(sel==='.ui-dialog-title')return {textContent:'Open character sheet'};
+   return null;
+ }};
+ const node={querySelector(sel){
+   if(sel==='[data-testid="character-name"]')return {textContent:'NIER'};
+   return null;
+ }};
+ assert.equal(a.readVisibleSheetName(node,parent),'NIER');
+});
+test('character-name field takes priority over a generic dialog heading',()=>{
+ const a=env();
+ const node={querySelector(sel){
+  return sel==='[name="attr_character_name"]'?{value:'Violet'}:null;
+ }};
+ const parent={querySelector(){return {textContent:'Character Sheet'}}};
+ assert.equal(a.readVisibleSheetName(node,parent),'Violet');
+});
+test('sheet picker reports readable attribute count and sync instruction',()=>{
+ const a=env();
+ a.RB.openSheets=[{name:'Nier',readableFields:17}];
+ const ui=a.sheetUI();
+ assert.match(ui,/Nier · 17 readable fields/);
+ assert.match(ui,/Sync selected/);
+ assert.match(ui,/Advanced Tools/);
 });
