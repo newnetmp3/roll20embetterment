@@ -161,10 +161,13 @@ async function sheetHarvestBeaconRows(scope,notify) {
         // Lazy loading may increase scrollHeight only after a render/network
         // tick; wait and re-check instead of stopping at the first "bottom".
         atBottom++;
-        await pause(atBottom===1?350:250);
+        await pause(atBottom===1?350:300);
         collect();
         const updatedBottom=Math.max(0,scroll.scrollHeight-scroll.clientHeight);
-        if(scroll.scrollTop>=updatedBottom-3&&atBottom>=3){full=true;break;}
+        if(scroll.scrollTop>=updatedBottom-3&&atBottom>=5){
+          full=!expected||Object.keys(result).length>=expected;
+          break;
+        }
         if(updatedBottom>scroll.scrollTop+3){atBottom=0;continue;}
       }else atBottom=0;
       const old=scroll.scrollTop;
