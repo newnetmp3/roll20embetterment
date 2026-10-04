@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.0.2
+// @version      2.0.3
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -18,7 +18,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.0.2',
+  version: '2.0.3',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -334,6 +334,8 @@ function sheetReadBeaconAttributeRows(scope) {
 }
 function sheetScrollableAttributeContainer(scope) {
   if(!scope?.querySelectorAll)return null;
+  // Combat tabs contain unrelated scrollbars; only traverse actual Attributes.
+  if(!/\bAttributes\b/i.test(sheetVisibleText(scope).slice(0,35000)))return null;
   // Some Beacon lists put the scrollbar on a parent of the visible row,
   // not on the element containing the values themselves.
   const sources=[
@@ -472,13 +474,55 @@ async function sheetHarvestBeaconRows(scope,notify) {
   collect();
   return {fields:result,scannedPages,full,expected};
 }
+
+function sheetHasCharacterContent(text){
+  return /\bHIT\s*POINTS\b/i.test(text) && /\bABILITIES\b/i.test(text) &&
+    /\b(?:COMBAT|SKILLS|INITIATIVE|ARMOR\s*CLASS|SPEED)\b/i.test(text);
+}
+function sheetHasAttributesContent(text){
+  return /\bAdvanced Tools\b/i.test(text)&&/\bAttributes\b/i.test(text);
+}
+// Modern Roll20 Beacon uses generic React containers with no .charsheet.
+// Locate a leaf Character Sheet / Advanced Tools tab and climb only as far
+// as a container with unmistakable character-sheet content.
+function sheetModernCandidateNodes(root){
+  if(!root?.querySelectorAll)return [];
+  let anchors=[];
+  try{anchors=Array.from(root.querySelectorAll('button,[role="tab"],a,span,div,[data-testid]')||[]);}catch{return [];}
+  const found=[];
+  for(const el of anchors.slice(0,20000)){
+    const label=sheetVisibleText(el);
+    if(!/^(?:Character Sheet|Advanced Tools)$/i.test(label))continue;
+    if(Array.from(el.children||[]).some(c=>sheetVisibleText(c)===label))continue;
+    for(let p=el.parentElement,depth=0;p&&depth<18;depth++,p=p.parentElement){
+      if(p===root.body||p===root.documentElement)break;
+      if(p.closest?.('#roll20-embetterment-host'))break;
+      const text=sheetVisibleText(p);
+      if(text.length>90000)break;
+      if(sheetHasCharacterContent(text)||
+        (sheetHasAttributesContent(text)&&/\b(?:Character Sheet|Bio\s*&\s*Info)\b/i.test(text))){
+        found.push(p);break;
+      }
+    }
+  }
+  return found;
+}
 function sheetFormCandidates(root){
   if(!root?.querySelectorAll)return [];
   const selectors='form.charsheet,.charsheet,.sheetform,.characterdialog,[data-testid*="character-sheet"],[class*="character-sheet"],.ui-dialog,[role="dialog"],[aria-modal="true"],[data-sheet-id],[data-character-id]';
   let nodes=[];
-  try{nodes=Array.from(root.querySelectorAll(selectors)||[]);}catch{return nodes;}
+  try{nodes=Array.from(root.querySelectorAll(selectors)||[]);}catch{return [];}
+  nodes.push(...sheetModernCandidateNodes(root));
   if(root.nodeType===9&&root.body)nodes.push(root.body);
-  return Array.from(new Set(nodes)).slice(0,160);
+  return Array.from(new Set(nodes)).slice(0,180);
+}
+// A pencil/settings popup that exposes two incidental input values is not
+// the character sheet, and must never overwrite a linked character profile.
+function sheetCandidateIsCharacter(node,fields,visible,text){
+  const count=Object.keys(fields).length,recognized=visible.coverage?.visibleFields||0;
+  if(recognized>=2 || sheetHasCharacterContent(text))return true;
+  const meaningful=Object.keys(fields).filter(k=>/^(?:character_name|(?:hp|hit_points|armor_class|strength|dexterity|constitution|intelligence|wisdom|charisma)(?:_|$)|repeating_)/i.test(k)).length;
+  return count>=5&&(meaningful>=2||sheetHasAttributesContent(text));
 }
 function sheetMeaningfulName(name){
   return name&&!/^(?:Open character sheet|Character Sheet|pencil|edit|settings|attributes|advanced tools|character|sheet)$/i.test(name.trim());
@@ -490,6 +534,8 @@ function sheetCandidateScore(fields,visible,text,name,node) {
   const count=Object.keys(fields).length;
   if(count===0 && visible.coverage.visibleFields===0)return -1;
   let score=Math.min(count,400)*2+visible.coverage.visibleFields*9;
+  if(sheetHasCharacterContent(text))score+=220;
+  if(sheetHasAttributesContent(text))score+=100;
   if(sheetMeaningfulName(name))score+=55;
   if(sheetSheetHint(text))score+=30;
   if(/\bAdvanced Tools\b/i.test(text)&&/\bAttributes\b/i.test(text))score+=22;
@@ -572,6 +618,12 @@ function readVisibleSheetName(node,parent){
       if(usable(value))return sheetText(value,100).replace(/\s+/g,' ').trim();
     }
   }
+  // Beacon sometimes renders NIER as a plain hero label, not an input.
+  const heroLines=beaconVisibleText(node).split('\n').map(x=>x.trim()).filter(Boolean).slice(0,35);
+  for(const line of heroLines){
+    const match=line.match(/^([A-Z][a-zA-Z'’ -]{1,60})\s+(?:He\/Him|She\/Her|They\/Them)\b/);
+    if(match&&usable(match[1]))return match[1].trim();
+  }
   const accessibleName=parent?.getAttribute?.('aria-label')||node?.getAttribute?.('aria-label');
   return usable(accessibleName)?sheetText(accessibleName,100):'Open character sheet';
 }
@@ -592,7 +644,7 @@ function findSheetForms(doc=document){
       const text=sheetVisibleText(node).slice(0,40000);
       const name=sheetMeaningfulName(nameGuess)?nameGuess:visible.name;
       const score=sheetCandidateScore(fields,visible,text,name,node);
-      if(score<0)continue; // Excludes empty "pencil" and unrelated dialogs.
+      if(score<0||!sheetCandidateIsCharacter(node,fields,visible,text))continue;
       options.push({
         id:parent.getAttribute?.('data-character-id')||node.getAttribute?.('data-character-id')||'open-'+(options.length+1),
         name:sheetMeaningfulName(name)?name:'Open character sheet',
@@ -716,7 +768,7 @@ function mergeSheetList(previous,incoming){
 }
 function applySheetSnapshot(p,s){
   if(!s||(s.coverage.attributes<1&&!(s.coverage.visibleFields>0)))return false;
-  if(['Adventurer','New Adventurer'].includes(p.name)&&s.name)p.name=s.name;
+  if((['Adventurer','New Adventurer','pencil','Open character sheet'].includes(p.name)||!p.name)&&s.name&&sheetMeaningfulName(s.name))p.name=s.name;
   for(const k of ['stats','abilityMods','skillBonuses','saveBonuses','currency'])Object.assign(p[k],s[k]);
   p.abilityScores={...(p.abilityScores||{}),...s.abilityScores};
   p.sheetDetails={...(p.sheetDetails||{}),...s.details};
@@ -747,6 +799,11 @@ function syncSheet({quiet=false,fieldsOverride=null}={}){
   const fields=fieldsOverride || (cached?{...cached,...live}:live);
   const visual=beaconImportVisible(candidate.root,candidate.name);
   const data=mergeBeaconSnapshot(snapshotSheet(fields,candidate.name),visual);
+  if(!sheetCandidateIsCharacter(candidate.root,fields,visual,
+      sheetVisibleText(candidate.root).slice(0,40000))){
+    if(!quiet)toast('Not a character sheet. Open your character and scan again.');
+    return false;
+  }
   if(!data.coverage.attributes&&!data.coverage.visibleFields){
     if(!quiet)toast('No readable fields. Open Character Sheet or Advanced Tools / Attributes, then scan again.');
     return false;
@@ -855,7 +912,7 @@ function beaconImportVisible(scope,label='Open character sheet') {
   const lines=text.split('\n').map(x=>x.trim().replace(/\s+/g,' ')).filter(Boolean);
   if(/^(?:Open character sheet|Character Sheet)$/i.test(result.name)){
     const top=lines.slice(0,12).find(x=>/^[A-Za-z][\w '’.-]{1,55}(?:\s+He\/Him|\s+She\/Her|\s+They\/Them)?$/i.test(x)
-      && !/^(?:Public|Whisper|Advantage|Disadvantage|Automatic|Query|Combat|Spells|Sheet Settings|Character Sheet)$/i.test(x));
+      && !/^(?:pencil|Public|Whisper|Advantage|Disadvantage|Automatic|Query|Combat|Spells|Sheet Settings|Character Sheet)$/i.test(x));
     if(top)result.name=top.replace(/\s+(?:He\/Him|She\/Her|They\/Them)$/i,'');
   }
   const hp=beaconRegion(text,/\bHIT\s*POINTS\b/i,[/\bABILITIES\b/i,/\bAC\s*\/\s*SPEED\b/i],500);

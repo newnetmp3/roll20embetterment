@@ -51,6 +51,8 @@ function sheetReadBeaconAttributeRows(scope) {
 }
 function sheetScrollableAttributeContainer(scope) {
   if(!scope?.querySelectorAll)return null;
+  // Combat tabs contain unrelated scrollbars; only traverse actual Attributes.
+  if(!/\bAttributes\b/i.test(sheetVisibleText(scope).slice(0,35000)))return null;
   // Some Beacon lists put the scrollbar on a parent of the visible row,
   // not on the element containing the values themselves.
   const sources=[
@@ -189,13 +191,55 @@ async function sheetHarvestBeaconRows(scope,notify) {
   collect();
   return {fields:result,scannedPages,full,expected};
 }
+
+function sheetHasCharacterContent(text){
+  return /\bHIT\s*POINTS\b/i.test(text) && /\bABILITIES\b/i.test(text) &&
+    /\b(?:COMBAT|SKILLS|INITIATIVE|ARMOR\s*CLASS|SPEED)\b/i.test(text);
+}
+function sheetHasAttributesContent(text){
+  return /\bAdvanced Tools\b/i.test(text)&&/\bAttributes\b/i.test(text);
+}
+// Modern Roll20 Beacon uses generic React containers with no .charsheet.
+// Locate a leaf Character Sheet / Advanced Tools tab and climb only as far
+// as a container with unmistakable character-sheet content.
+function sheetModernCandidateNodes(root){
+  if(!root?.querySelectorAll)return [];
+  let anchors=[];
+  try{anchors=Array.from(root.querySelectorAll('button,[role="tab"],a,span,div,[data-testid]')||[]);}catch{return [];}
+  const found=[];
+  for(const el of anchors.slice(0,20000)){
+    const label=sheetVisibleText(el);
+    if(!/^(?:Character Sheet|Advanced Tools)$/i.test(label))continue;
+    if(Array.from(el.children||[]).some(c=>sheetVisibleText(c)===label))continue;
+    for(let p=el.parentElement,depth=0;p&&depth<18;depth++,p=p.parentElement){
+      if(p===root.body||p===root.documentElement)break;
+      if(p.closest?.('#roll20-embetterment-host'))break;
+      const text=sheetVisibleText(p);
+      if(text.length>90000)break;
+      if(sheetHasCharacterContent(text)||
+        (sheetHasAttributesContent(text)&&/\b(?:Character Sheet|Bio\s*&\s*Info)\b/i.test(text))){
+        found.push(p);break;
+      }
+    }
+  }
+  return found;
+}
 function sheetFormCandidates(root){
   if(!root?.querySelectorAll)return [];
   const selectors='form.charsheet,.charsheet,.sheetform,.characterdialog,[data-testid*="character-sheet"],[class*="character-sheet"],.ui-dialog,[role="dialog"],[aria-modal="true"],[data-sheet-id],[data-character-id]';
   let nodes=[];
-  try{nodes=Array.from(root.querySelectorAll(selectors)||[]);}catch{return nodes;}
+  try{nodes=Array.from(root.querySelectorAll(selectors)||[]);}catch{return [];}
+  nodes.push(...sheetModernCandidateNodes(root));
   if(root.nodeType===9&&root.body)nodes.push(root.body);
-  return Array.from(new Set(nodes)).slice(0,160);
+  return Array.from(new Set(nodes)).slice(0,180);
+}
+// A pencil/settings popup that exposes two incidental input values is not
+// the character sheet, and must never overwrite a linked character profile.
+function sheetCandidateIsCharacter(node,fields,visible,text){
+  const count=Object.keys(fields).length,recognized=visible.coverage?.visibleFields||0;
+  if(recognized>=2 || sheetHasCharacterContent(text))return true;
+  const meaningful=Object.keys(fields).filter(k=>/^(?:character_name|(?:hp|hit_points|armor_class|strength|dexterity|constitution|intelligence|wisdom|charisma)(?:_|$)|repeating_)/i.test(k)).length;
+  return count>=5&&(meaningful>=2||sheetHasAttributesContent(text));
 }
 function sheetMeaningfulName(name){
   return name&&!/^(?:Open character sheet|Character Sheet|pencil|edit|settings|attributes|advanced tools|character|sheet)$/i.test(name.trim());
@@ -207,6 +251,8 @@ function sheetCandidateScore(fields,visible,text,name,node) {
   const count=Object.keys(fields).length;
   if(count===0 && visible.coverage.visibleFields===0)return -1;
   let score=Math.min(count,400)*2+visible.coverage.visibleFields*9;
+  if(sheetHasCharacterContent(text))score+=220;
+  if(sheetHasAttributesContent(text))score+=100;
   if(sheetMeaningfulName(name))score+=55;
   if(sheetSheetHint(text))score+=30;
   if(/\bAdvanced Tools\b/i.test(text)&&/\bAttributes\b/i.test(text))score+=22;

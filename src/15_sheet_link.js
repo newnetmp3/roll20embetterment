@@ -72,6 +72,12 @@ function readVisibleSheetName(node,parent){
       if(usable(value))return sheetText(value,100).replace(/\s+/g,' ').trim();
     }
   }
+  // Beacon sometimes renders NIER as a plain hero label, not an input.
+  const heroLines=beaconVisibleText(node).split('\n').map(x=>x.trim()).filter(Boolean).slice(0,35);
+  for(const line of heroLines){
+    const match=line.match(/^([A-Z][a-zA-Z'’ -]{1,60})\s+(?:He\/Him|She\/Her|They\/Them)\b/);
+    if(match&&usable(match[1]))return match[1].trim();
+  }
   const accessibleName=parent?.getAttribute?.('aria-label')||node?.getAttribute?.('aria-label');
   return usable(accessibleName)?sheetText(accessibleName,100):'Open character sheet';
 }
@@ -92,7 +98,7 @@ function findSheetForms(doc=document){
       const text=sheetVisibleText(node).slice(0,40000);
       const name=sheetMeaningfulName(nameGuess)?nameGuess:visible.name;
       const score=sheetCandidateScore(fields,visible,text,name,node);
-      if(score<0)continue; // Excludes empty "pencil" and unrelated dialogs.
+      if(score<0||!sheetCandidateIsCharacter(node,fields,visible,text))continue;
       options.push({
         id:parent.getAttribute?.('data-character-id')||node.getAttribute?.('data-character-id')||'open-'+(options.length+1),
         name:sheetMeaningfulName(name)?name:'Open character sheet',
@@ -216,7 +222,7 @@ function mergeSheetList(previous,incoming){
 }
 function applySheetSnapshot(p,s){
   if(!s||(s.coverage.attributes<1&&!(s.coverage.visibleFields>0)))return false;
-  if(['Adventurer','New Adventurer'].includes(p.name)&&s.name)p.name=s.name;
+  if((['Adventurer','New Adventurer','pencil','Open character sheet'].includes(p.name)||!p.name)&&s.name&&sheetMeaningfulName(s.name))p.name=s.name;
   for(const k of ['stats','abilityMods','skillBonuses','saveBonuses','currency'])Object.assign(p[k],s[k]);
   p.abilityScores={...(p.abilityScores||{}),...s.abilityScores};
   p.sheetDetails={...(p.sheetDetails||{}),...s.details};
@@ -247,6 +253,11 @@ function syncSheet({quiet=false,fieldsOverride=null}={}){
   const fields=fieldsOverride || (cached?{...cached,...live}:live);
   const visual=beaconImportVisible(candidate.root,candidate.name);
   const data=mergeBeaconSnapshot(snapshotSheet(fields,candidate.name),visual);
+  if(!sheetCandidateIsCharacter(candidate.root,fields,visual,
+      sheetVisibleText(candidate.root).slice(0,40000))){
+    if(!quiet)toast('Not a character sheet. Open your character and scan again.');
+    return false;
+  }
   if(!data.coverage.attributes&&!data.coverage.visibleFields){
     if(!quiet)toast('No readable fields. Open Character Sheet or Advanced Tools / Attributes, then scan again.');
     return false;

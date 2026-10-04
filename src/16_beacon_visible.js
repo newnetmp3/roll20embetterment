@@ -24,7 +24,7 @@ function beaconImportVisible(scope,label='Open character sheet') {
   const lines=text.split('\n').map(x=>x.trim().replace(/\s+/g,' ')).filter(Boolean);
   if(/^(?:Open character sheet|Character Sheet)$/i.test(result.name)){
     const top=lines.slice(0,12).find(x=>/^[A-Za-z][\w '’.-]{1,55}(?:\s+He\/Him|\s+She\/Her|\s+They\/Them)?$/i.test(x)
-      && !/^(?:Public|Whisper|Advantage|Disadvantage|Automatic|Query|Combat|Spells|Sheet Settings|Character Sheet)$/i.test(x));
+      && !/^(?:pencil|Public|Whisper|Advantage|Disadvantage|Automatic|Query|Combat|Spells|Sheet Settings|Character Sheet)$/i.test(x));
     if(top)result.name=top.replace(/\s+(?:He\/Him|She\/Her|They\/Them)$/i,'');
   }
   const hp=beaconRegion(text,/\bHIT\s*POINTS\b/i,[/\bABILITIES\b/i,/\bAC\s*\/\s*SPEED\b/i],500);

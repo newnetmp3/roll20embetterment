@@ -29,3 +29,6 @@ The **Sheet → Scan open sheets → Import visible attributes** flow supports t
 
 ## Silent attribute preload (2.0.2)
 On **Scan open sheets**, the importer quietly traverses virtualized Advanced Tools attribute rows, allowing the UI to keep displaying the same content while the hidden list is visited. When finished it restores the previous scroll position and caches the fields. **Import visible attributes** applies that snapshot to your local profile and can rescan if stale. It stays within the accessible sheet DOM; no private Roll20 APIs are read. If a particular Roll20 version does not expose a scrollable element, it imports currently rendered rows only.
+
+## Beacon 2024 Character Sheet recognition (2.0.3)
+Detect modern Roll20 character windows from their visible Character Sheet / Advanced Tools tabs and combat stats instead of legacy class names. Reject pencil/settings dialogs with incidental fields, read visible character-sheet HP and other data even outside Advanced Tools, and repair a local profile name mistakenly imported as `pencil` after a verified real-sheet import. Background attribute scrolling runs only when the Attributes list is present.
