@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import {randomUUID} from 'node:crypto';
 
 const root=resolve(import.meta.dirname,'..');
-const modules=['00_core.js','10_roll20_bridge.js','15_sheet_link.js','16_beacon_visible.js','20_ui.js','25_bg3_theme.js','30_events.js'];
+const modules=['00_core.js','10_roll20_bridge.js','15_sheet_link.js','16_beacon_visible.js','19_radial_hud.js','20_ui.js','25_bg3_theme.js','30_events.js'];
 const program=modules.map(x=>readFileSync(join(root,'src',x),'utf8')).join('\n')
   .replace(/if\(document\.readyState==='loading'\)document\.addEventListener\('DOMContentLoaded',boot,\{once:true\}\);else boot\(\);\s*$/,'');
 
@@ -27,8 +27,10 @@ function environment(saved){
 test('new campaigns use BG3 dark fantasy as default',()=>{
   const {spec}=environment();
   assert.equal(spec.RB.state.settings.theme,'bg3');
-  assert.equal(spec.RB.version,'1.3.0');
+  assert.equal(spec.RB.version,'2.0.0');
   assert.match(spec.settingsUI(),/Baldurian • Dark Fantasy \(default\)/);
+  assert.equal(spec.RB.state.settings.showBar,false);
+  assert.equal(spec.RB.state.settings.showHud,false);
 });
 test('existing default Midnight migrates once without overwriting preferences',()=>{
   const base={schema:1,settings:{theme:'midnight'},profiles:[],ui:{},macros:[]};
@@ -53,6 +55,7 @@ test('render includes decorated navigation and the Sheet importer',()=>{
 });
 test('hotbar remains eight actionable accessible slots',()=>{
   const {spec}=environment();
+  spec.RB.state.settings.showBar=true;
   const markup=spec.barUI();
   assert.equal((markup.match(/class="barslot /g)||[]).length,8);
   assert.match(markup,/data-index="0"/);
@@ -62,6 +65,7 @@ test('hotbar remains eight actionable accessible slots',()=>{
 });
 test('HUD displays tracked HP and concentration in decorated theme',()=>{
   const {spec}=environment();
+  spec.RB.state.settings.showHud=true;
   assert.match(spec.hudUI(),/rbe-hud-name/);
   assert.match(spec.hudUI(),/10\/10 HP/);
 });
