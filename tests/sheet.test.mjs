@@ -13,7 +13,7 @@ function env(){
   setTimeout(){},clearTimeout(){},setInterval(){},window:{},document:{querySelectorAll(){return []}},
   localStorage:{getItem(k){return store.get(k)||null},setItem(k,v){store.set(k,v)}}};
  vm.createContext(scope);
- vm.runInContext(source+'\nload();globalThis.expose={RB,profile,snapshotSheet,applySheetSnapshot,readSheetFields,parseSheetPaste,syncSheet,sheetUI};',scope);
+ vm.runInContext(source+'\nload();globalThis.expose={RB,profile,snapshotSheet,applySheetSnapshot,readSheetFields,parseSheetPaste,syncSheet,sheetUI,render,homeUI};',scope);
  return scope.expose;
 }
 const sample={character_name:'Thorin',class:'Paladin',level:'7',race:'Dwarf',hp:{current:'32',max:'56'},
@@ -82,4 +82,15 @@ test('reads repeating field DOM without changing original inputs',()=>{
 test('a missing open sheet cannot silently replace player data',()=>{
  const a=env(),before=JSON.stringify(a.profile());
  assert.equal(a.syncSheet({quiet:true}),false);assert.equal(JSON.stringify(a.profile()),before);
+});
+
+test('Sheet tab is visible and Home has a direct import shortcut',()=>{
+ const a=env();
+ a.RB.shadow={innerHTML:'',querySelector(){return null}};
+ a.RB.root={style:{setProperty(){}},setAttribute(){}};
+ a.RB.visible=true;
+ a.render();
+ assert.match(a.RB.shadow.innerHTML,/data-action="tab" data-value="Sheet"/);
+ assert.match(a.homeUI(),/Import character sheet/);
+ assert.match(a.homeUI(),/data-action="tab" data-value="Sheet"/);
 });
