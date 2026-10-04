@@ -278,4 +278,78 @@ const BG3_STYLE = String.raw`
 @media(prefers-reduced-motion:reduce){
   :host([data-theme="bg3"]) *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
 }
+
+/* Distinctive panel treatments keep spellbooks, inventory and journals legible. */
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] #rbe-spell-results .list-entry{
+  position:relative;padding:12px 10px 12px 35px;
+  border:1px solid #5d4d62;margin:7px 0;border-radius:4px;
+  background:linear-gradient(110deg,#352c43aa,#251c25dd);
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] #rbe-spell-results .list-entry::before{
+  content:"✧";position:absolute;left:10px;top:12px;color:#b9a7f7;
+  font:21px Georgia,serif;text-shadow:0 0 7px #9278f7;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] #rbe-spell-results .pill{
+  border-color:#807098;background:#322b46;color:#e5d8fc;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] [data-slot-max],
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] [data-slot-used]{
+  background:radial-gradient(#3b2c49,#221b25);border-color:#8d759d;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Inventory"] .table-scroll{
+  border:2px ridge #a17f4b;background:#241c16;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Inventory"] .table-scroll tbody tr:hover td{
+  background:#50372a;color:#fff1cc;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Inventory"] .table-scroll td:first-child{
+  color:#f5d69d;font-family:Georgia,serif;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Inventory"] .card:last-child .field{
+  position:relative;padding:4px 6px;border:1px solid #715630;
+  background:#30231ac9;border-radius:3px;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Journal"] #rbe-notes{
+  color:#30251e;
+  background:repeating-linear-gradient(transparent 0,transparent 27px,#806b4933 28px),
+    linear-gradient(110deg,#bca98c,#ecdebe 15%,#e2d3ae 96%);
+  border:2px solid #b69866;
+  line-height:28px;padding:13px 17px;min-height:190px;
+  box-shadow:inset 6px 0 8px #94795655,inset 0 0 17px #806f5433;
+  font-family:Georgia,"Times New Roman",serif;font-size:1.02em;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Journal"] #rbe-notes::placeholder{
+  color:#78664e;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Journal"] .list-entry{
+  border-left:2px solid #bb9667;
+  padding-left:12px;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] .card:first-of-type{
+  border-color:#c09a5f;box-shadow:inset 0 0 0 1px #1a100c,0 0 13px #b58d4d24;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] [data-action="scanSheets"],
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] [data-action="syncSheet"]{
+  min-height:34px;font-family:Georgia,serif;letter-spacing:.02em;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Rolls"] [data-action="adv"].on{
+  background:linear-gradient(#58734b,#2d4735);border-color:#afc38b;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Rolls"] .table-scroll th:first-child,
+:host([data-theme="bg3"]) #rbe-body[data-panel="Macros"] #rbe-macro-results strong{
+  color:#eed19a;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Chat"] #rbe-chat-message{
+  border-left:3px solid #be9a63;min-height:95px;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Settings"] .card label{
+  line-height:1.6;
+}
+:host([data-theme="bg3"]) :is(#rbe-palette,#rbe-copy-modal) .dialog h3,
+:host([data-theme="bg3"]) #rbe-palette strong{
+  color:#f6d69e;font:small-caps 700 1.25em Georgia,serif;
+}
+:host([data-theme="bg3"]) #rbe-palette .palette-choice.on{
+  border-color:#ead099;background:#534132;
+}
 `;
