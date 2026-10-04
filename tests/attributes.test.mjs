@@ -18,7 +18,7 @@ function createHarness(doc){
    localStorage:{getItem(k){return values.get(k)||null},setItem(k,v){values.set(k,v)}}
  };
  vm.createContext(context);
- vm.runInContext(program+'\nload();globalThis.it={readSheetFields,sheetReadBeaconAttributeRows,sheetHarvestBeaconRows,sheetFrozenScrollCover,snapshotSheet,findSheetForms,scanSheets,syncSheet,profile,RB}',context);
+ vm.runInContext(program+'\nload();globalThis.it={readSheetFields,sheetReadBeaconAttributeRows,sheetHarvestBeaconRows,sheetFrozenScrollCover,snapshotSheet,findSheetForms,sheetModernCandidateNodes,sheetScrollableAttributeContainer,applySheetSnapshot,scanSheets,syncSheet,profile,RB}',context);
  return context.it;
 }
 function cell(value){
@@ -194,4 +194,74 @@ test('sheet discovery starts silent scrolling preload; import can reuse all page
  assert.equal(scan.full,true);
  assert.equal(position,0,'Restores the previous visual position');
  assert.equal(h.RB.sheetWarm.scan.fields.wtype.current,'');
+});
+
+
+function beaconFixture(){
+  const text=[
+    'NIER He/Him','Character Sheet','Bio & Info','Advanced Tools',
+    'Fighter 7 - Echo Knight','HIT POINTS','84 / 84','0','Current','Max','Temp',
+    'ABILITIES','STR','18','+4','+7','Mod','Save','DEX','14','+2','+2','Mod','Save',
+    'CON','15','+2','+5','Mod','Save','INT','12','+1','+1','Mod','Save',
+    'WIS','15','+2','+2','Mod','Save','CHA','10','+0','+0','Mod','Save',
+    'AC/SPEED','ARMOR CLASS','17','SPEED (ft)','55',
+    'SKILLS','Acrobatics','DEX +2','Arcana','INT +1',
+    'COMBAT','ATTACKS','Dagger','Melee','5 ft','+7 Attack','1d4+4'
+  ].join('\n');
+  const sheet={
+    innerText:text,isConnected:true,
+    matches(){return false},closest(){return null},getAttribute(){return null},
+    querySelector(selector){
+      if(selector==='[data-testid="character-name"]')return {textContent:'NIER'};
+      return null;
+    },
+    querySelectorAll(){return []}
+  };
+  const tab={innerText:'Character Sheet',children:[],parentElement:sheet};
+  const parent={innerText:'pencil',isConnected:true,matches(){return false},closest(){return null},
+    getAttribute(){return null},querySelector(){return null},
+    querySelectorAll(selector){
+      if(selector.startsWith('input,textarea,select'))return [
+        {type:'text',value:'1',getAttribute(k){return k==='name'?'attr_random':null},hasAttribute(){return false}},
+        {type:'text',value:'2',getAttribute(k){return k==='name'?'attr_other':null},hasAttribute(){return false}}
+      ];
+      return [];
+    }
+  };
+  const doc={
+    querySelectorAll(selector){
+      if(selector.startsWith('form.charsheet'))return [parent];
+      if(selector.startsWith('button,[role="tab"]'))return [tab];
+      if(selector==='iframe')return [];
+      return [];
+    }
+  };
+  return {doc,sheet,parent};
+}
+test('2024 Character Sheet is located via header even without legacy selectors',()=>{
+  const fixture=beaconFixture(),h=createHarness(fixture.doc);
+  const candidates=h.findSheetForms(fixture.doc);
+  assert.equal(candidates.length,1);
+  assert.equal(candidates[0].root,fixture.sheet);
+  assert.equal(candidates[0].name,'NIER');
+  assert.ok(candidates[0].visibleFields>=4);
+  assert.ok(!candidates.some(x=>x.name==='pencil'));
+});
+test('false pencil candidate is rejected and existing local stats are not overwritten',()=>{
+  const fixture=beaconFixture(),h=createHarness(fixture.doc);
+  assert.equal(h.findSheetForms({querySelectorAll(sel){
+    return sel.startsWith('form.charsheet')?[fixture.parent]:[];
+  }}).length,0);
+  const old=h.profile();old.name='pencil';old.stats.hp=10;
+  h.scanSheets();assert.equal(h.RB.openSheets.length,1);
+  assert.equal(h.syncSheet(),true);
+  assert.equal(old.name,'NIER');
+  assert.equal(old.stats.hp,84);
+  assert.equal(old.stats.maxHp,84);
+  assert.equal(old.stats.ac,17);
+  assert.equal(old.stats.speed,55);
+});
+test('Character Sheet combat panel is never mistaken for a scrollable Attributes list',()=>{
+  const fixture=beaconFixture(),h=createHarness(fixture.doc);
+  assert.equal(h.sheetScrollableAttributeContainer(fixture.sheet),null);
 });
