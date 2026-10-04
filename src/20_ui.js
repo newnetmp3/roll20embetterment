@@ -65,6 +65,7 @@ function sheetUI() {
 function homeUI() {
   const p=profile(),s=p.stats;
   return `<div class="stack"><div class="row between"><h2>${html(p.name)} — Player HUD <span class="pill">${p.sheetLink?'sheet-linked · local copy':'local tracking'}</span></h2>${button('⚙ Profiles','profiles')}</div>
+  <div class="card"><div class="row between"><strong>Character-sheet import</strong>${button(p.sheetLink?'View linked sheet':'Import character sheet','tab','data-value="Sheet"','primary')}</div><p class="hint">Open your D&amp;D 5E sheet inside Roll20, then scan and sync from the Sheet tab.</p></div>
   <div class="card"><div class="row between"><strong>Hit Points <span class="stat">${int(s.hp)} / ${int(s.maxHp)}</span></strong><span class="hint">Temp: ${int(s.tempHp)} • AC ${int(s.ac)} • Speed ${int(s.speed)} ft</span></div>${progress(s.hp,s.maxHp)}
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
    <div class="row"><input id="rbe-hp-adjust" type="number" value="5" class="mini" min="1" aria-label="HP adjustment">${button('− Damage','damage')} ${button('+ Heal','heal')} ${button('+ Temp HP','addTemp')}</div>
@@ -185,7 +186,7 @@ function hudUI() {
 function render() {
   if (!RB.shadow || !RB.state) return;
   const s=RB.state.settings; RB.root.style.setProperty('--scale',s.scale); RB.root.setAttribute('data-theme',s.theme); RB.root.setAttribute('data-reduced-motion',String(!!s.reducedMotion));
-  const tabs=['Home','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
+  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
   const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI};
   RB.shadow.innerHTML=`<style>${STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
   ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header"><strong>⚔ roll20 Embetterment</strong><div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}">${t}</button>`).join('')}</nav><div id="rbe-body">${(panels[RB.tab]||homeUI)()}</div></section>`:''}
