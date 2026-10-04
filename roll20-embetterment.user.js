@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      1.1.1
-// @description  Player-first D&D 5E HUD, action bar, macros, spells, quick rolls, inventory, notes, chat filters, and command palette.
+// @version      1.2.0
+// @description  BG3-inspired D&D 5E player companion, character-sheet import, combat HUD, action bar, spells, inventory, journal and dice.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
 // @match        https://app.roll20.net/editor
@@ -18,7 +18,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '1.1.1',
+  version: '1.2.0',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -58,7 +58,7 @@ function newProfile(name='Adventurer') {
 }
 function initialState() {
   const p = newProfile();
-  return {schema:1, settings:{theme:'midnight',scale:1,hotkeys:false,showBar:true,showHud:true,showFab:true,chatSearch:'',chatKind:'all',reducedMotion:false,alwaysOpen:false},
+  return {schema:1, settings:{theme:'bg3',visualMigration:1,scale:1,hotkeys:false,showBar:true,showHud:true,showFab:true,chatSearch:'',chatKind:'all',reducedMotion:false,alwaysOpen:false},
     profiles:[p], current:p.id, macros:baseMacros(),
     ui:{panelX:null,panelY:null,panelWidth:520,lastTab:'Home',barCollapsed:false}};
 }
@@ -87,6 +87,8 @@ function load() {
     const stored = JSON.parse(localStorage.getItem(RB.key) || 'null');
     if (stored && stored.schema === 1) {
       d.settings = {...d.settings, ...stored.settings};
+      // Move the previous default to the new look once, without changing chosen alternate themes.
+      if (!stored.settings?.visualMigration && stored.settings?.theme === 'midnight') d.settings.theme='bg3';
       d.ui = {...d.ui, ...stored.ui};
       d.macros = Array.isArray(stored.macros) ? stored.macros.slice(0,300).map(m=>({id:String(m.id||uid()),name:String(m.name||'Macro').slice(0,120),command:String(m.command||'').slice(0,3000),favorite:!!m.favorite,category:String(m.category||'Custom').slice(0,50)})) : d.macros;
       d.profiles = Array.isArray(stored.profiles) && stored.profiles.length ? stored.profiles.slice(0,30).map(normalizeProfile) : d.profiles;
@@ -569,6 +571,7 @@ function homeUI() {
   const p=profile(),s=p.stats;
   return `<div class="stack"><div class="row between"><h2>${html(p.name)} — Player HUD <span class="pill">${p.sheetLink?'sheet-linked · local copy':'local tracking'}</span></h2>${button('⚙ Profiles','profiles')}</div>
   <div class="card"><div class="row between"><strong>Character-sheet import</strong>${button(p.sheetLink?'View linked sheet':'Import character sheet','tab','data-value="Sheet"','primary')}</div><p class="hint">Open your D&amp;D 5E sheet inside Roll20, then scan and sync from the Sheet tab.</p></div>
+  ${RB.state.settings.theme==='bg3'? `<div class="rbe-hero" role="group" aria-label="Adventurer profile"><div class="rbe-hero-seal" aria-hidden="true">✦</div><div class="rbe-hero-copy"><div class="rbe-eyebrow">THE ADVENTURER</div><div class="rbe-hero-name">${html(p.name)}</div><div class="rbe-hero-meta">Level ${int(s.level)} ${html(p.sheetDetails?.class||'Adventurer')}${p.sheetDetails?.race?' · '+html(p.sheetDetails.race):''}</div><span class="pill">${p.sheetLink?'Sheet-linked · read only':'Local character record'}</span></div></div>` : ''}
   <div class="card"><div class="row between"><strong>Hit Points <span class="stat">${int(s.hp)} / ${int(s.maxHp)}</span></strong><span class="hint">Temp: ${int(s.tempHp)} • AC ${int(s.ac)} • Speed ${int(s.speed)} ft</span></div>${progress(s.hp,s.maxHp)}
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
    <div class="row"><input id="rbe-hp-adjust" type="number" value="5" class="mini" min="1" aria-label="HP adjustment">${button('− Damage','damage')} ${button('+ Heal','heal')} ${button('+ Temp HP','addTemp')}</div>
@@ -636,7 +639,7 @@ function chatUI() {
 }
 function settingsUI() {
   const s=RB.state.settings,p=profile();
-  return `<div class="stack"><div class="card"><h2>Settings</h2><div class="row"><label class="field">Theme<select data-setting="theme"><option value="midnight" ${s.theme==='midnight'?'selected':''}>Midnight</option><option value="violet" ${s.theme==='violet'?'selected':''}>Arcane Violet</option><option value="parchment" ${s.theme==='parchment'?'selected':''}>Parchment</option></select></label><label class="field">UI size<select data-setting="scale"><option value="0.85" ${s.scale==.85?'selected':''}>Compact</option><option value="1" ${s.scale==1?'selected':''}>Normal</option><option value="1.15" ${s.scale==1.15?'selected':''}>Large</option></select></label></div>
+  return `<div class="stack"><div class="card"><h2>Settings</h2><div class="row"><label class="field">Theme<select data-setting="theme"><option value="bg3" ${s.theme==='bg3'?'selected':''}>Baldurian • Dark Fantasy (default)</option><option value="midnight" ${s.theme==='midnight'?'selected':''}>Midnight</option><option value="violet" ${s.theme==='violet'?'selected':''}>Arcane Violet</option><option value="parchment" ${s.theme==='parchment'?'selected':''}>Parchment</option></select></label><label class="field">UI size<select data-setting="scale"><option value="0.85" ${s.scale==.85?'selected':''}>Compact</option><option value="1" ${s.scale==1?'selected':''}>Normal</option><option value="1.15" ${s.scale==1.15?'selected':''}>Large</option></select></label></div>
   ${[['showBar','Show the bottom action bar'],['showHud','Show compact HP HUD'],['showFab','Show Embetterment launcher'],['hotkeys','Enable 1–8 keyboard action slots'],['reducedMotion','Reduced animation']].map(([key,label])=>`<div><label><input type="checkbox" data-setting="${key}" ${s[key]?'checked':''}> ${label}</label></div>`).join('')}
   <p class="hint">Shortcuts: Alt+Shift+E opens the panel; Alt+Shift+K opens the command palette. Both are ignored while typing except the palette shortcut.</p></div>
   <div class="card"><h3>Panel width</h3><label class="field">Width <input data-panel-width type="range" min="360" max="920" step="20" value="${RB.state.ui.panelWidth||520}"></label><p class="hint">You can also drag the panel by its title bar.</p></div>
@@ -670,35 +673,418 @@ function modalUI() {
   if (RB.modal!=='copy') return '';
   return `<div id="rbe-copy-modal"><div class="dialog"><div class="row between"><h3>Paste into Roll20 chat</h3>${button('✕','closeModal')}</div><p>Roll20's chat input was not found, so the command was not sent.</p><textarea id="rbe-fallback-command" rows="4" readonly>${html(RB.pendingCommand||'')}</textarea><div class="row">${button('Copy command','copyCommand','', 'primary')}${button('Close','closeModal')}</div></div></div>`;
 }
+
 function barUI() {
-  const p=profile();
+  const p=profile(), fantasy=RB.state.settings.theme==='bg3';
   if (!RB.state.settings.showBar) return '';
-  return `<div id="rbe-bar" title="Click to run a Roll20 macro or spell">${p.macrosSlots.map((v,i)=>{
-    const m=v.startsWith('macro:')?RB.state.macros.find(m=>m.id===v.slice(6)):null;
-    const s=v.startsWith('spell:')?p.spells.find(s=>s.id===v.slice(6)):null;
-    const a=v.startsWith('attack:')?(p.attacks||[]).find(a=>a.id===v.slice(7)):null;
-    const name=m?.name || s?.name || a?.name || 'Empty';
-    return `<button class="barslot" data-action="slot" data-index="${i}" title="${html(name)}"><div class="index">${i+1}</div>${html(short(name,15))}</button>`;
-  }).join('')}</div>`;
+  return `<div id="rbe-bar" aria-label="Quick action bar" title="Click to use a configured Roll20 macro, attack or spell">
+    ${fantasy?'<div class="rbe-hotbar-label" aria-hidden="true"><span>⚔</span>Quick<br>Actions</div>':''}
+    ${p.macrosSlots.map((v,i)=>{
+      const m=v.startsWith('macro:')?RB.state.macros.find(m=>m.id===v.slice(6)):null;
+      const sp=v.startsWith('spell:')?p.spells.find(s=>s.id===v.slice(6)):null;
+      const a=v.startsWith('attack:')?(p.attacks||[]).find(a=>a.id===v.slice(7)):null;
+      const name=m?.name || sp?.name || a?.name || 'Empty';
+      const glyph=sp?'✧':a?'⚔':m?'⚄':'◇';
+      return `<button class="barslot ${v?'is-filled':'is-empty'}" data-action="slot" data-index="${i}" title="${html(name)}" aria-label="Quick slot ${i+1}: ${html(name)}">${fantasy?`<span class="rbe-slot-glyph" aria-hidden="true">${glyph}</span>`:''}<span class="rbe-slot-title">${html(short(name,15))}</span><span class="index">${i+1}</span></button>`;
+    }).join('')}
+  </div>`;
 }
 function hudUI() {
   const p=profile(),s=p.stats;
   if (!RB.state.settings.showHud) return '';
-  return `<div id="rbe-hud" title="Local HP tracker, not synced with Roll20"><div class="row between"><strong>${html(short(p.name,25))}</strong><span class="pill">AC ${int(s.ac)}</span><span class="pill">Temp ${int(s.tempHp)}</span></div>${progress(s.hp,s.maxHp)}<div class="row between"><strong>♥ ${int(s.hp)}/${int(s.maxHp)}</strong><span class="hint">${p.concentration?'◎ '+html(short(p.concentration,25)):'No concentration'}</span>${button('Open','open','', 'small')}</div></div>`;
+  return `<div id="rbe-hud" title="Personal stat tracker; values may be refreshed from an open character sheet" role="complementary" aria-label="Character status">
+    <div class="row between"><strong class="rbe-hud-name">${html(short(p.name,25))}</strong><span class="pill">AC ${int(s.ac)}</span><span class="pill">Temp ${int(s.tempHp)}</span></div>
+    ${progress(s.hp,s.maxHp)}
+    <div class="row between"><strong>♥ ${int(s.hp)}/${int(s.maxHp)} HP</strong><span class="hint">${p.concentration?'◎ '+html(short(p.concentration,25)):'No concentration'}</span>${button('Open','open','', 'small')}</div>
+  </div>`;
 }
+function themeHeading(tab) {
+  const sections={
+    Home:['The Adventurer','Character overview and combat resources','♜'],
+    Sheet:['Character Archive','Read-only Roll20 sheet linking and import','✥'],
+    Rolls:['Dice & Destiny','Ability checks, saving throws and skills','⚄'],
+    Macros:['Combat Arsenal','Custom commands and quick action slots','⚔'],
+    Spells:['The Spellbook','Prepared magic and spellcasting resources','✧'],
+    Inventory:['The Traveller’s Pack','Equipment, coin and carried treasures','◆'],
+    Journal:['Chronicle & Quests','Notes, objectives and session history','✎'],
+    Chat:['Tavern Whispers','Conversation and rolls within the tabletop','☷'],
+    Reference:['Adventurer’s Codex','Rules and battlefield reminders','❖'],
+    Settings:['Companion Settings','Theme, profiles, accessibility and privacy','⚙']
+  };
+  const [title,description,glyph]=sections[tab]||sections.Home;
+  return `<div class="rbe-section-heading"><div><h2>${html(title)}</h2><small>${html(description)}</small></div><span class="rbe-section-mark" aria-hidden="true">${glyph}</span></div>`;
+}
+const THEME_TAB_GLYPHS={Home:'♜',Sheet:'✥',Rolls:'⚄',Macros:'⚔',Spells:'✧',Inventory:'◆',Journal:'✎',Chat:'☷',Reference:'❖',Settings:'⚙'};
 function render() {
   if (!RB.shadow || !RB.state) return;
   const s=RB.state.settings; RB.root.style.setProperty('--scale',s.scale); RB.root.setAttribute('data-theme',s.theme); RB.root.setAttribute('data-reduced-motion',String(!!s.reducedMotion));
   const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
   const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI};
-  RB.shadow.innerHTML=`<style>${STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
-  ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header"><strong>⚔ roll20 Embetterment</strong><div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}">${t}</button>`).join('')}</nav><div id="rbe-body">${(panels[RB.tab]||homeUI)()}</div></section>`:''}
+  RB.shadow.innerHTML=`<style>${STYLE}${BG3_STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
+  ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header">${s.theme==='bg3'?'<span class="rbe-header-crest" aria-hidden="true">✥</span><span class="rbe-header-copy"><strong>roll20 <em>Embetterment</em></strong><span class="rbe-header-sub">Adventurer’s Companion</span></span>':'<strong>⚔ roll20 Embetterment</strong>'}<div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}" title="${html(t)}">${s.theme==='bg3'?`<span class="rbe-nav-glyph" aria-hidden="true">${THEME_TAB_GLYPHS[t]}</span><span class="rbe-nav-label">${html(t)}</span>`:html(t)}</button>`).join('')}</nav><div id="rbe-body" data-panel="${html(RB.tab)}">${s.theme==='bg3'?themeHeading(RB.tab):''}${(panels[RB.tab]||homeUI)()}</div></section>`:''}
   ${paletteUI()}${modalUI()}<div id="rbe-toast" role="status" hidden></div>`;
   RB.panel=RB.shadow.querySelector('#rbe-panel');
   const u=RB.state.ui;
   if (RB.panel) { RB.panel.style.setProperty('--panel-width',(clamp(u.panelWidth||520,360,920))+'px'); if (Number.isFinite(u.panelX)&&Number.isFinite(u.panelY)) {RB.panel.style.left=u.panelX+'px';RB.panel.style.top=u.panelY+'px';RB.panel.style.right='auto';RB.panel.style.bottom='auto';} }
   if (RB.tab==='Chat' && RB.visible) applyChatFilter();
 }
+
+// ===== 25_bg3_theme.js =====
+// A self-contained, original BG3-inspired theme; no external images, fonts or network requests.
+const BG3_STYLE = String.raw`
+/* Original, asset-free dark-fantasy treatment inspired by tabletop RPG interfaces.
+   Scoped exclusively to the BG3-inspired theme inside Embetterment's ShadowRoot. */
+:host([data-theme="bg3"]) {
+  --bg:#171212; --panel:#27201d; --raised:#392c25; --border:#7b6549;
+  --text:#f4ead6; --muted:#c4b59b; --accent:#e5c587; --green:#9ac8a0;
+  --red:#d87368; --shadow:0 24px 72px #050303e8,0 0 0 1px #090806;
+  --gold-dim:#95744b; --wine:#612f36; --inner:#17110f;
+  font-family:"Segoe UI",Arial,sans-serif;
+  color-scheme:dark;
+}
+:host([data-theme="bg3"]) #rbe-panel,
+:host([data-theme="bg3"]) #rbe-hud,
+:host([data-theme="bg3"]) #rbe-bar,
+:host([data-theme="bg3"]) #rbe-fab,
+:host([data-theme="bg3"]) #rbe-palette .dialog,
+:host([data-theme="bg3"]) #rbe-copy-modal .dialog {
+  background:radial-gradient(ellipse at 50% -5%,#49352b 0%,transparent 70%),linear-gradient(155deg,#302722,#1a1515 67%,#100e10);
+  border:1px solid #a1865f;
+  box-shadow:inset 0 0 0 1px #160f0b,inset 0 0 0 4px #a3834740,0 20px 55px #090406df,0 0 25px #ebbb6333;
+  color:var(--text);
+}
+:host([data-theme="bg3"]) #rbe-panel {
+  border-radius:9px;
+  min-height:340px;
+  max-height:min(83vh,850px);
+  isolation:isolate;
+}
+:host([data-theme="bg3"]) #rbe-panel::before,
+:host([data-theme="bg3"]) #rbe-panel::after {
+  content:"✦";pointer-events:none;position:absolute;z-index:5;color:#f5d69a;
+  text-shadow:0 1px 4px #000,0 0 12px #cf944f;font-size:13px;line-height:1;
+}
+:host([data-theme="bg3"]) #rbe-panel::before{top:3px;left:5px}
+:host([data-theme="bg3"]) #rbe-panel::after{top:3px;right:5px}
+:host([data-theme="bg3"]) #rbe-header{
+  background:linear-gradient(180deg,#533a30 0%,#302322 60%,#241b1b);
+  border-bottom:1px solid #ab8b59;
+  padding:14px 19px 13px;
+  min-height:74px;
+  box-shadow:inset 0 -3px 0 #100d0b,0 3px 14px #09060588;
+}
+:host([data-theme="bg3"]) .rbe-header-crest{
+  width:43px;height:43px;flex:0 0 43px;display:grid;place-items:center;
+  font-family:Georgia,serif;font-size:26px;color:#f4d79c;
+  background:radial-gradient(circle,#6d483b,#291d1b 72%);
+  border:2px double #bf945c;border-radius:50%;
+  box-shadow:inset 0 0 0 3px #2d1a16,0 2px 8px #0c0909;
+}
+:host([data-theme="bg3"]) .rbe-header-copy{display:flex;flex:1;flex-direction:column;min-width:0;gap:1px}
+:host([data-theme="bg3"]) #rbe-header strong{
+  font:small-caps 700 1.37em/1.08 Georgia,"Times New Roman",serif;
+  letter-spacing:.045em;color:#ffe5ab;
+  text-shadow:0 2px 4px #080505;
+}
+:host([data-theme="bg3"]) #rbe-header strong em{font-style:normal;color:#f2c77a}
+:host([data-theme="bg3"]) .rbe-header-sub{font-size:.67em;letter-spacing:.2em;text-transform:uppercase;color:#c2ad88}
+:host([data-theme="bg3"]) #rbe-header button{
+  min-width:32px;min-height:31px;
+  background:linear-gradient(#4b3a2d,#2b221f);
+  border:1px solid #957a51;
+}
+:host([data-theme="bg3"]) #rbe-tabs{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;
+  padding:11px 12px 10px;overflow:visible;
+  border-bottom:1px solid #886942;
+  background:linear-gradient(180deg,#1c1717,#29201d);
+  box-shadow:inset 0 -3px 0 #110d0c;
+}
+:host([data-theme="bg3"]) #rbe-tabs button{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  min-width:0;min-height:45px;padding:5px 2px;
+  border:1px solid #594431;border-bottom:2px solid #4f3c2b;border-radius:3px;
+  background:linear-gradient(#342923,#241c19);color:#cbbca3;
+  font-family:Georgia,serif;font-size:.81em;letter-spacing:.01em;
+  white-space:normal;overflow-wrap:anywhere;line-height:1.1;
+}
+:host([data-theme="bg3"]) #rbe-tabs .rbe-nav-glyph{
+  display:block;font-family:Georgia,serif;font-size:1.4em;
+  color:#bca17b;line-height:1.05;
+}
+:host([data-theme="bg3"]) #rbe-tabs button:is(:hover,:focus-visible),
+:host([data-theme="bg3"]) #rbe-tabs button.active{
+  color:#ffe9c2;border-color:#ccaa6a;border-bottom-color:#eec583;
+  background:radial-gradient(ellipse at top,#6d4835,#34231f 90%);
+  box-shadow:inset 0 0 11px #d9a56338,0 0 8px #e9bc6533;
+}
+:host([data-theme="bg3"]) #rbe-tabs button.active .rbe-nav-glyph{color:#f6d38c}
+:host([data-theme="bg3"]) #rbe-body{
+  position:relative;flex:1;min-height:155px;
+  background:repeating-linear-gradient(112deg,#4b34270a 0,#4b34270a 2px,transparent 2px,transparent 8px),
+    radial-gradient(ellipse at 50% 0,#46322755,transparent 65%);
+  padding:17px 18px 20px;scrollbar-width:thin;scrollbar-color:#8b704b #211a17;
+}
+:host([data-theme="bg3"]) #rbe-body::before{
+  content:"";position:sticky;display:block;top:-17px;margin:-17px -8px 12px;height:4px;
+  background:linear-gradient(90deg,transparent,#b38f5788,transparent);pointer-events:none;
+}
+:host([data-theme="bg3"]) .rbe-section-heading{
+  display:flex;justify-content:space-between;align-items:end;gap:10px;
+  border-bottom:1px solid #7a6142;
+  padding:4px 0 13px;margin-bottom:14px;position:relative;
+}
+:host([data-theme="bg3"]) .rbe-section-heading::after{
+  content:"✦";position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);
+  background:#261d1a;padding:0 7px;color:#e1bb7d;font-size:12px;
+}
+:host([data-theme="bg3"]) .rbe-section-heading h2{
+  color:#f3d49b;font:small-caps 700 1.35em/1.2 Georgia,serif;
+  letter-spacing:.085em;margin:0;
+}
+:host([data-theme="bg3"]) .rbe-section-heading small{
+  display:block;margin-top:2px;font-size:.76em;color:#c0af98;letter-spacing:.04em;
+}
+:host([data-theme="bg3"]) .rbe-section-heading .rbe-section-mark{font:23px/1 Georgia,serif;color:#c8a66d}
+:host([data-theme="bg3"]) h2,
+:host([data-theme="bg3"]) h3{font-family:Georgia,"Times New Roman",serif;font-variant:small-caps;letter-spacing:.05em}
+:host([data-theme="bg3"]) h2{color:#f9dca3;font-size:1.28em}
+:host([data-theme="bg3"]) h3{color:#edcb90;font-size:1.05em;margin-bottom:10px}
+:host([data-theme="bg3"]) .card{
+  position:relative;
+  background:linear-gradient(135deg,#392920ad,#281e1cee 48%,#1b1616ec);
+  border:1px solid #765b3d;border-radius:5px;padding:15px 14px;
+  box-shadow:inset 0 0 0 1px #0c0a09,inset 0 0 18px #2a120622,0 3px 10px #0a07064f;
+}
+:host([data-theme="bg3"]) .card::before{
+  content:"";position:absolute;left:8px;right:8px;top:3px;height:1px;
+  background:linear-gradient(90deg,transparent,#d9aa645b,transparent);
+  pointer-events:none;
+}
+:host([data-theme="bg3"]) .stack{gap:11px}
+:host([data-theme="bg3"]) .grid{gap:9px}
+:host([data-theme="bg3"]) .list-entry{
+  padding:10px 9px;border-top:1px solid #69533e;
+  background:linear-gradient(90deg,#9d724d0c,transparent);
+}
+:host([data-theme="bg3"]) .list-entry:first-child{border-top:0}
+:host([data-theme="bg3"]) .hint,
+:host([data-theme="bg3"]) .muted,
+:host([data-theme="bg3"]) label{color:#c5b8a0}
+:host([data-theme="bg3"]) .stat,
+:host([data-theme="bg3"]) .key{color:#f3cd8c}
+:host([data-theme="bg3"]) .pill{
+  display:inline-flex;align-items:center;gap:4px;
+  border-radius:4px;border:1px solid #967647;background:linear-gradient(#493626,#30241e);
+  color:#ead7af;font-size:.78em;padding:3px 8px;letter-spacing:.035em;
+}
+:host([data-theme="bg3"]) button{
+  background:linear-gradient(#534031,#30251f);
+  border:1px solid #997d54;border-radius:4px;
+  color:#f3e5c9;box-shadow:inset 0 1px #f7d5a21b,0 2px 3px #08070666;
+  text-shadow:0 1px #140e0b;
+  transition:background-color .16s,border-color .16s,box-shadow .16s,transform .16s;
+}
+:host([data-theme="bg3"]) button:hover{
+  background:linear-gradient(#725139,#42302a);border-color:#edc17d;
+  box-shadow:inset 0 1px #ffe3a53d,0 0 8px #d19a4844;filter:none;
+}
+:host([data-theme="bg3"]) button:active{transform:translateY(1px)}
+:host([data-theme="bg3"]) button.primary{
+  background:linear-gradient(#efd49a,#b58a4b);
+  border-color:#f9e1a7;color:#291a12;text-shadow:none;font-weight:700;
+}
+:host([data-theme="bg3"]) button.primary:hover{background:linear-gradient(#ffe7b0,#ce9b51)}
+:host([data-theme="bg3"]) button.on{
+  background:linear-gradient(#305d4c,#243b35);border-color:#87c6a1;
+}
+:host([data-theme="bg3"]) button.warn{color:#f2aea4}
+:host([data-theme="bg3"]) :is(input,textarea,select){
+  background:linear-gradient(180deg,#171210,#251b18);border:1px solid #826849;
+  color:#fff0d3;border-radius:4px;accent-color:#cda266;
+}
+:host([data-theme="bg3"]) :is(input,textarea,select)::placeholder{color:#aa997f}
+:host([data-theme="bg3"]) :is(input,textarea,select,button):focus-visible{
+  outline:2px solid #ffe0a1;outline-offset:2px;
+}
+:host([data-theme="bg3"]) select option{background:#241c19;color:#f4e8d1}
+:host([data-theme="bg3"]) :is(input,textarea)[readonly]{opacity:.9}
+:host([data-theme="bg3"]) .table-scroll{border:1px solid #684f35;border-radius:4px}
+:host([data-theme="bg3"]) .table-scroll th{
+  background:#392a23;color:#f2d09a;font-family:Georgia,serif;font-variant:small-caps;
+  letter-spacing:.05em;padding:10px 8px;
+}
+:host([data-theme="bg3"]) .table-scroll td{
+  padding:9px 7px;background:#221a19aa;border-color:#624e3b;
+}
+:host([data-theme="bg3"]) .table-scroll tbody tr:nth-child(even) td{background:#33251f9a}
+:host([data-theme="bg3"]) .note{
+  border:1px solid #715538;border-left:3px solid #b68a51;
+  background:linear-gradient(90deg,#473122,#231c18);border-radius:3px;
+  color:#e6d7bb;
+}
+:host([data-theme="bg3"]) .rbe-hero{
+  display:flex;align-items:center;gap:15px;padding:17px;
+  border:1px solid #bd925c;border-radius:6px;
+  background:radial-gradient(circle at 15% 50%,#75483b64,transparent 50%),linear-gradient(135deg,#45332b,#1c1717);
+  box-shadow:inset 0 0 0 2px #221813,0 3px 15px #070506aa;
+}
+:host([data-theme="bg3"]) .rbe-hero-seal{
+  flex:0 0 62px;width:62px;height:62px;display:grid;place-items:center;
+  border:2px solid #caa26c;border-radius:50%;
+  background:radial-gradient(#6f4a34,#251a19 75%);
+  color:#ffe1a3;font:35px Georgia,serif;
+  box-shadow:inset 0 0 0 4px #493120,0 0 12px #9b64394d;
+}
+:host([data-theme="bg3"]) .rbe-hero-copy{min-width:0;flex:1}
+:host([data-theme="bg3"]) .rbe-eyebrow{
+  color:#d1ae77;letter-spacing:.23em;text-transform:uppercase;font-size:.72em;font-weight:650;
+}
+:host([data-theme="bg3"]) .rbe-hero-name{
+  color:#ffe1ae;font:small-caps 700 1.58em Georgia,serif;
+  letter-spacing:.035em;margin:1px 0 4px;overflow-wrap:anywhere;
+}
+:host([data-theme="bg3"]) .rbe-hero-meta{font-size:.82em;color:#decaa6;line-height:1.4}
+:host([data-theme="bg3"]) .rbe-hero .pill{margin-top:4px}
+:host([data-theme="bg3"]) #rbe-hud{
+  border-radius:7px;max-width:min(340px,calc(100vw - 24px));min-width:230px;padding:11px 13px;
+}
+:host([data-theme="bg3"]) #rbe-hud .rbe-hud-name{font:small-caps 700 1.15em Georgia,serif;color:#f9d798}
+:host([data-theme="bg3"]) #rbe-hud .hpbar{
+  height:11px;background:#170e12;border:1px solid #8b5a49;border-radius:3px;overflow:hidden;
+}
+:host([data-theme="bg3"]) #rbe-hud .hpbar>span{
+  background:linear-gradient(180deg,#ee9788,#aa343e);
+  box-shadow:inset 0 2px 2px #ffb5a766,0 0 8px #9d343688;
+}
+:host([data-theme="bg3"]) #rbe-bar{
+  border-radius:8px;align-items:stretch;gap:5px;padding:8px 10px;
+  max-width:calc(100vw - 115px);
+}
+:host([data-theme="bg3"]) #rbe-bar .rbe-hotbar-label{
+  width:61px;min-width:61px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font:small-caps 700 .79em Georgia,serif;letter-spacing:.07em;color:#e0bd80;
+  border-right:1px solid #9c7950;padding-right:8px;margin-right:3px;
+}
+:host([data-theme="bg3"]) #rbe-bar .rbe-hotbar-label span{font-size:2em;line-height:1.2}
+:host([data-theme="bg3"]) #rbe-bar .barslot{
+  min-width:59px;max-width:102px;display:flex;align-items:center;
+  flex-direction:column;justify-content:center;gap:2px;
+  border:1px solid #bd925e;border-bottom:3px solid #7a5034;border-radius:4px;
+  padding:6px 5px 4px;background:radial-gradient(ellipse at top,#534031,#241c1b);
+}
+:host([data-theme="bg3"]) #rbe-bar .barslot.is-empty{opacity:.62}
+:host([data-theme="bg3"]) #rbe-bar .rbe-slot-glyph{font:25px/1 Georgia,serif;color:#efd39e;text-shadow:0 0 7px #e4b77d52}
+:host([data-theme="bg3"]) #rbe-bar .rbe-slot-title{font-size:.75em;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+:host([data-theme="bg3"]) #rbe-bar .barslot .index{
+  border-radius:3px;background:#190f12;padding:0 4px;font:700 .7em monospace;color:#e8c389;
+}
+:host([data-theme="bg3"]) #rbe-fab{
+  font:small-caps 700 1.07em Georgia,serif;letter-spacing:.04em;border-radius:50%;
+  width:58px;height:58px;padding:5px;display:grid;place-items:center;
+}
+:host([data-theme="bg3"]) #rbe-palette,
+:host([data-theme="bg3"]) #rbe-copy-modal{background:#080609c9;backdrop-filter:blur(3px)}
+:host([data-theme="bg3"]) :is(#rbe-palette,#rbe-copy-modal) .dialog{
+  border-radius:7px;padding:18px 20px;
+}
+:host([data-theme="bg3"]) #rbe-toast{
+  border:1px solid #d6ad77;border-radius:6px;background:#33241f;
+  color:#ffe5b8;box-shadow:0 8px 25px #080405;
+}
+@media(max-width:680px){
+  :host([data-theme="bg3"]) #rbe-panel{max-height:79vh;min-height:220px}
+  :host([data-theme="bg3"]) #rbe-header{padding:11px 13px;min-height:62px}
+  :host([data-theme="bg3"]) #rbe-header strong{font-size:1.05em}
+  :host([data-theme="bg3"]) .rbe-header-crest{width:34px;height:34px;flex-basis:34px;font-size:20px}
+  :host([data-theme="bg3"]) #rbe-tabs{padding:7px 6px;gap:3px}
+  :host([data-theme="bg3"]) #rbe-tabs button{font-size:.71em;min-height:39px;padding:3px 1px}
+  :host([data-theme="bg3"]) #rbe-body{padding:12px 10px}
+  :host([data-theme="bg3"]) .rbe-hero{gap:9px;padding:11px}
+  :host([data-theme="bg3"]) .rbe-hero-seal{width:43px;height:43px;flex-basis:43px;font-size:24px}
+  :host([data-theme="bg3"]) .rbe-hero-name{font-size:1.2em}
+  :host([data-theme="bg3"]) #rbe-bar{max-width:calc(100vw - 75px)}
+  :host([data-theme="bg3"]) #rbe-bar .rbe-hotbar-label{display:none}
+  :host([data-theme="bg3"]) #rbe-bar .barslot{min-width:54px}
+}
+@media(prefers-reduced-motion:reduce){
+  :host([data-theme="bg3"]) *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+}
+
+/* Distinctive panel treatments keep spellbooks, inventory and journals legible. */
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] #rbe-spell-results .list-entry{
+  position:relative;padding:12px 10px 12px 35px;
+  border:1px solid #5d4d62;margin:7px 0;border-radius:4px;
+  background:linear-gradient(110deg,#352c43aa,#251c25dd);
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] #rbe-spell-results .list-entry::before{
+  content:"✧";position:absolute;left:10px;top:12px;color:#b9a7f7;
+  font:21px Georgia,serif;text-shadow:0 0 7px #9278f7;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] #rbe-spell-results .pill{
+  border-color:#807098;background:#322b46;color:#e5d8fc;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] [data-slot-max],
+:host([data-theme="bg3"]) #rbe-body[data-panel="Spells"] [data-slot-used]{
+  background:radial-gradient(#3b2c49,#221b25);border-color:#8d759d;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Inventory"] .table-scroll{
+  border:2px ridge #a17f4b;background:#241c16;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Inventory"] .table-scroll tbody tr:hover td{
+  background:#50372a;color:#fff1cc;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Inventory"] .table-scroll td:first-child{
+  color:#f5d69d;font-family:Georgia,serif;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Inventory"] .card:last-child .field{
+  position:relative;padding:4px 6px;border:1px solid #715630;
+  background:#30231ac9;border-radius:3px;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Journal"] #rbe-notes{
+  color:#30251e;
+  background:repeating-linear-gradient(transparent 0,transparent 27px,#806b4933 28px),
+    linear-gradient(110deg,#bca98c,#ecdebe 15%,#e2d3ae 96%);
+  border:2px solid #b69866;
+  line-height:28px;padding:13px 17px;min-height:190px;
+  box-shadow:inset 6px 0 8px #94795655,inset 0 0 17px #806f5433;
+  font-family:Georgia,"Times New Roman",serif;font-size:1.02em;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Journal"] #rbe-notes::placeholder{
+  color:#78664e;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Journal"] .list-entry{
+  border-left:2px solid #bb9667;
+  padding-left:12px;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] .card:first-of-type{
+  border-color:#c09a5f;box-shadow:inset 0 0 0 1px #1a100c,0 0 13px #b58d4d24;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] [data-action="scanSheets"],
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] [data-action="syncSheet"]{
+  min-height:34px;font-family:Georgia,serif;letter-spacing:.02em;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Rolls"] [data-action="adv"].on{
+  background:linear-gradient(#58734b,#2d4735);border-color:#afc38b;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Rolls"] .table-scroll th:first-child,
+:host([data-theme="bg3"]) #rbe-body[data-panel="Macros"] #rbe-macro-results strong{
+  color:#eed19a;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Chat"] #rbe-chat-message{
+  border-left:3px solid #be9a63;min-height:95px;
+}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Settings"] .card label{
+  line-height:1.6;
+}
+:host([data-theme="bg3"]) :is(#rbe-palette,#rbe-copy-modal) .dialog h3,
+:host([data-theme="bg3"]) #rbe-palette strong{
+  color:#f6d69e;font:small-caps 700 1.25em Georgia,serif;
+}
+:host([data-theme="bg3"]) #rbe-palette .palette-choice.on{
+  border-color:#ead099;background:#534132;
+}
+`;
 
 // ===== 30_events.js =====
 // Event delegation and state changes; no Roll20 internal models are accessed.
