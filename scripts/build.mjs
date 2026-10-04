@@ -18,5 +18,5 @@ const header = `// ==UserScript==
 // @downloadURL  https://raw.githubusercontent.com/newnetmp3/roll20embetterment/main/roll20-embetterment.user.js
 // ==/UserScript==`;
 const code=sourceFiles.map(n=>'// ===== '+n+' =====\n'+readFileSync(join(root,'src',n),'utf8').trim()).join('\n\n');
-writeFileSync(join(root,'roll20-embetterment.user.js'),header+'\n\n(()=>{\n'+code+'\n})();\n');
+writeFileSync(join(root,'roll20-embetterment.user.js'),header+'\n\n(()=>{\n'+code+'\n})();');
 console.log('Built roll20-embetterment.user.js from',sourceFiles.join(', '));
