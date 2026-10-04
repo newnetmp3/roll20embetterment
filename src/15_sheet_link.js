@@ -236,12 +236,15 @@ function scanSheets(){
   const current=profile().sheetLink?.name,idx=RB.openSheets.findIndex(x=>x.name===current);
   RB.selectedSheet=idx>=0?idx:0;RB.sheetSignature=null;
   render();toast('Found '+RB.openSheets.length+' open sheet(s).');
+  sheetPrefetchAttributes(RB.openSheets[RB.selectedSheet||0]);
 }
 function syncSheet({quiet=false,fieldsOverride=null}={}){
   const candidate=RB.openSheets?.[RB.selectedSheet||0];
   if(!candidate){if(!quiet)toast('Scan for an open sheet first.');return false;}
   if(candidate.root?.isConnected===false){if(!quiet)toast('Sheet closed; reopen and scan.');return false;}
-  const fields=fieldsOverride||readSheetFields(candidate.root);
+  const live=readSheetFields(candidate.root);
+  const cached=RB.sheetWarm?.root===candidate.root?RB.sheetWarm?.scan?.fields:null;
+  const fields=fieldsOverride || (cached?{...cached,...live}:live);
   const visual=beaconImportVisible(candidate.root,candidate.name);
   const data=mergeBeaconSnapshot(snapshotSheet(fields,candidate.name),visual);
   if(!data.coverage.attributes&&!data.coverage.visibleFields){
@@ -261,8 +264,27 @@ function syncSheet({quiet=false,fieldsOverride=null}={}){
   }
   return true;
 }
-// Explicit sync scans scrollable virtualized Attributes rows in the visible
-// sheet. Automatic 12-second refresh remains non-scrolling and inexpensive.
+// Warm the virtualized attribute list without changing player data. The
+// explicit Import action uses the collected fields and can retry if needed.
+function sheetPrefetchAttributes(candidate){
+  if(!candidate?.root||!sheetScrollableAttributeContainer(candidate.root))return;
+  if(RB.sheetWarm?.root===candidate.root &&
+     (RB.sheetWarm.promise || Date.now()-(RB.sheetWarm.at||0)<20000))return;
+  const cache={root:candidate.root,at:0,promise:null,scan:null};
+  RB.sheetWarm=cache;
+  cache.promise=sheetHarvestBeaconRows(candidate.root).then(scan=>{
+    cache.scan=scan;cache.at=Date.now();
+    if(RB.sheetWarm!==cache)return scan;
+    candidate.readableFields=Math.max(candidate.readableFields||0,Object.keys(scan.fields).length);
+    if(RB.visible&&RB.tab==='Sheet'&&
+      !RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
+    return scan;
+  }).catch(err=>{
+    console.warn('[roll20 Embetterment] Background attribute scan',err);
+    if(RB.sheetWarm===cache)RB.sheetWarm=null;
+    return null;
+  }).finally(()=>{cache.promise=null;});
+}
 async function syncSheetDeep(){
   if(RB.sheetDeepSync)return;
   let candidate=RB.openSheets?.[RB.selectedSheet||0];
@@ -271,19 +293,25 @@ async function syncSheetDeep(){
     candidate=RB.openSheets?.[RB.selectedSheet||0];
   }
   if(!candidate)return;
+  const originalProfile=RB.state.current;
   RB.sheetDeepSync=true;
-  toast('Reading visible character data and attribute rows…');
-  try {
-    const scan=await sheetHarvestBeaconRows(candidate.root,count=>{
-      if(count>0)toast('Collecting character attributes: '+count+' fields found…');
-    });
-    // Do not replace the selection if the user switched profiles meanwhile.
-    if(!RB.openSheets?.includes(candidate))return;
-    const ok=syncSheet({fieldsOverride:scan.fields});
-    if(ok)toast('Imported '+Object.keys(scan.fields).length+' named attributes'+
-      (scan.scannedPages>1?' across '+scan.scannedPages+' scroll positions':'')+
-      (scan.full?' (list reached end).':'.')+' Read-only local copy.');
-    else toast('No usable fields found. Open Character Sheet, or keep Advanced Tools → Attributes visible.');
+  try{
+    // If background preloading is in progress, share it rather than visibly
+    // traversing the same list a second time.
+    const warmed=RB.sheetWarm?.root===candidate.root?RB.sheetWarm:null;
+    let scan=warmed?.promise?await warmed.promise:warmed?.scan;
+    if(!scan || Date.now()-(warmed?.at||0)>30000)
+      scan=await sheetHarvestBeaconRows(candidate.root);
+    if(!scan||!RB.openSheets?.includes(candidate)||RB.state.current!==originalProfile)return;
+    // Preserve cached rows hidden by virtualization while preferring fresh DOM
+    // values for any attributes currently rendered on the character sheet.
+    const fields={...scan.fields,...readSheetFields(candidate.root)};
+    const ok=syncSheet({fieldsOverride:fields});
+    if(ok){
+      RB.sheetWarm={root:candidate.root,scan:{...scan,fields},at:Date.now(),promise:null};
+      toast('Imported '+Object.keys(fields).length+' attributes'+
+        (scan.expected?' of '+scan.expected:'')+(scan.full?' (list complete).':' (available rows).'));
+    }else toast('No readable values yet. Keep Advanced Tools → Attributes open.');
   }catch(err){
     console.warn('[roll20 Embetterment] Advanced sheet sync failed',err);
     toast('Character scan failed: '+String(err.message||err).slice(0,160));

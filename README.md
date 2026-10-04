@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.0.1 — Concentric Combat HUD
+# roll20 Embetterment 2.0.2 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -24,5 +24,8 @@ The main interface is a **token-anchored, Baldur's Gate 3–inspired combat whee
 ## Legacy companion
 The earlier character sheets, rolls, macros, spells, inventory, reference, journal, chat and settings panels remain available from the ring or Alt+Shift+E, but the old floating HP HUD, hotbar and launcher are off by default after upgrading.
 
-## Roll20 2024 Attributes importer (2.0.1)
+## Roll20 2024 Attributes importer (2.0.2)
 The **Sheet → Scan open sheets → Import visible attributes** flow supports the current Advanced Tools attribute list, including rows without `attr_*` controls. It reads the Name and Value columns, preserves empty values, and, when available, scrolls through a virtualized list before restoring the position. It also rejects unrelated dialogs that contain no usable sheet fields. Only browser-visible, player-accessible DOM is read; private Roll20 state is not accessed. If the 2024 app changes its DOM again, use **Export scan report** and share only details you are comfortable sharing.
+
+## Silent attribute preload (2.0.2)
+On **Scan open sheets**, the importer quietly traverses virtualized Advanced Tools attribute rows, allowing the UI to keep displaying the same content while the hidden list is visited. When finished it restores the previous scroll position and caches the fields. **Import visible attributes** applies that snapshot to your local profile and can rescan if stale. It stays within the accessible sheet DOM; no private Roll20 APIs are read. If a particular Roll20 version does not expose a scrollable element, it imports currently rendered rows only.
