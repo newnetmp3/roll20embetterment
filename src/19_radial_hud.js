@@ -9,7 +9,9 @@
  #rbe-radial-wheel .rbe-wedge.is-selected path{fill:url(#rbe-wedge-selected);stroke:#ffe6a7;stroke-width:2.3}
  #rbe-radial-wheel .rbe-wedge.is-muted{opacity:.18}
  #rbe-radial-wheel .rbe-wedge.is-muted:hover,#rbe-radial-wheel .rbe-wedge.is-muted:focus-visible{opacity:.76}
- #rbe-radial-wheel .rbe-wedge text{fill:#f0d6a0;font:600 10px Georgia,'Times New Roman',serif;letter-spacing:.25px;paint-order:stroke;stroke:#1a1410;stroke-width:2px;stroke-linejoin:round;pointer-events:none}
+ #rbe-radial-wheel .rbe-wedge text{fill:#f0d6a0;font:600 10px Georgia,'Times New Roman',serif;letter-spacing:.05px;paint-order:stroke;stroke:#1a1410;stroke-width:2px;stroke-linejoin:round;pointer-events:none}
+ #rbe-radial-wheel .rbe-wedge .rbe-option-name{font-weight:700}
+ #rbe-radial-wheel .rbe-wedge .rbe-option-meta{font-size:8.5px;fill:#dbbd86;stroke-width:1.6px}
  #rbe-radial-wheel .rbe-wedge .rbe-glyph{font:24px Georgia,serif;stroke-width:1px;fill:#ffe2a4}
  #rbe-radial-wheel .rbe-wedge.is-muted text{fill:#9c876c}
  #rbe-radial-wheel .rbe-ring{animation:rbe-ring-bloom .21s ease-out both;transform-origin:center}
@@ -31,28 +33,31 @@
  :host([data-reduced-motion="true"]) #rbe-radial-wheel .rbe-ring{animation:none!important}
  @media(max-width:600px){#rbe-radial-layer .rbe-wheel-info{max-width:330px;font-size:10px}#rbe-radial-layer .rbe-wheel-toolbar button{font-size:11px;padding:4px 5px}}
  `;
- RB.radial={open:true,pin:false,path:[],anchor:null,manual:null,source:'none',lastPosition:'',lastPresence:false};
- const radialNode=(id,label,glyph,children=[],kind='',value='',detail='')=>({id,label,glyph,children,kind,value,detail});
+ RB.radial={open:true,pin:false,path:[],pages:{},anchor:null,manual:null,source:'none',lastPosition:'',lastPresence:false};
+ const radialNode=(id,label,glyph,children=[],kind='',value='',detail='',subtitle='')=>({id,label,glyph,children,kind,value,detail,subtitle});
  function radialAttackLeaves(attacks){
    return attacks.slice(0,32).map(a=>radialNode('a:'+a.id,a.name,'⚔',[
      radialNode('roll','Roll','⚄',[],'attack',a.id),
      radialNode('details','Details','⌕',[],'detail',a.id),
      radialNode('sheet','Sheet','▤',[],'panel','Sheet')
-   ],'', '',[a.toHit,a.damage,a.damageType].filter(Boolean).join(' · ')));
+   ],'', '',[a.toHit,a.damage,a.damageType,a.range].filter(Boolean).join(' · '),
+   [a.toHit,a.range||a.damage].filter(Boolean).join(' · ')));
  }
  function radialSpellLeaves(spells){
    return spells.slice(0,38).map(s=>radialNode('s:'+s.id,s.name,'✧',[
      radialNode('cast','Cast','✧',[],'spell',s.id),
      radialNode('info','Info','⌕',[],'spellInfo',s.id),
      ...(Number(s.level)>0?[radialNode('slot','Use slot','◈',[],'spendSlot',String(s.level))]:[])
-   ],'','',[s.castTime,s.range,s.duration].filter(Boolean).join(' · ')));
+   ],'','',[s.castTime,s.range,s.duration].filter(Boolean).join(' · '),
+   [Number(s.level)?'L'+s.level:'Cantrip',s.concentration?'Conc.':null,s.castTime].filter(Boolean).join(' · ')));
  }
  function radialItemLeaves(items){
    return items.slice(0,40).map(i=>radialNode('i:'+i.id,i.name,'◆',[
      radialNode('use','Announce','◈',[],'announceItem',i.id),
      radialNode('subtract','Use one','−',[],'consume',i.id),
      radialNode('inspect','Details','⌕',[],'itemInfo',i.id)
-   ],'','',String(i.qty??1)+' carried'));
+   ],'','',String(i.qty??1)+' carried',
+   '×'+String(i.qty??1)+(i.category?' · '+String(i.category):'')));
  }
  function radialCategories(){
    const p=profile(),attacks=p.attacks||[],spells=p.spells||[],items=p.inventory||[],features=p.features||[];
@@ -131,14 +136,79 @@
    const large=end-start>180?1:0;
    return `M ${p.x.toFixed(2)} ${p.y.toFixed(2)} A ${outer} ${outer} 0 ${large} 1 ${q.x.toFixed(2)} ${q.y.toFixed(2)} L ${r.x.toFixed(2)} ${r.y.toFixed(2)} A ${inner} ${inner} 0 ${large} 0 ${s.x.toFixed(2)} ${s.y.toFixed(2)} Z`;
  }
+ // More than a dozen wedges would force weapon names down to six letters.
+ // Page large lists instead, keeping the same selection path and ring depth.
+ const RADIAL_PAGE_SIZE=10;
+ function radialVisiblePage(items,key){
+   if(items.length<=12)return items;
+   const total=Math.ceil(items.length/RADIAL_PAGE_SIZE);
+   const page=Math.max(0,Math.min(total-1,Math.trunc(RB.radial.pages?.[key]||0)));
+   const result=items.slice(page*RADIAL_PAGE_SIZE,(page+1)*RADIAL_PAGE_SIZE);
+   const controls=[];
+   if(page>0)controls.push(radialNode('page:prev','Previous','‹',[],'page',key+':'+(page-1)));
+   if(page<total-1)controls.push(radialNode('page:next','Next','›',[],'page',key+':'+(page+1)));
+   return [...result,...controls];
+ }
  function radialTreeRings(){
-   const root=radialCategories(),rings=[root];let branch=root;
-   for(const id of RB.radial.path.slice(0,3)){
-     const node=branch.find(x=>x.id===id);
+   const root=radialCategories(),rings=[],path=RB.radial.path.slice(0,3);
+   let branch=root;
+   for(let depth=0;depth<=path.length;depth++){
+     rings.push(radialVisiblePage(branch,path.slice(0,depth).join('/')));
+     const node=branch.find(x=>x.id===path[depth]);
      if(!node?.children?.length)break;
-     rings.push(node.children);branch=node.children;
+     branch=node.children;
    }
    return rings;
+ }
+ // Word-aware wrapping for SVG text: never trim a weapon name to six
+ // characters just because its parent ring contains many actions.
+ function radialLabelLines(raw,width,limit){
+   const words=String(raw??'').trim().replace(/\\s+/g,' ').split(' ').filter(Boolean);
+   if(!words.length)return [''];
+   const lines=[];
+   for(let word of words){
+     while(word.length>width){
+       if(lines.length && lines[lines.length-1].length<width){
+         const free=width-lines[lines.length-1].length-1;
+         if(free>0){lines[lines.length-1]+=' '+word.slice(0,free);word=word.slice(free);}
+       }
+       if(word.length>width){lines.push(word.slice(0,width));word=word.slice(width);}
+     }
+     if(!word)continue;
+     if(lines.length&&lines[lines.length-1].length+1+word.length<=width)
+       lines[lines.length-1]+=' '+word;
+     else lines.push(word);
+   }
+   if(lines.length<=limit)return lines;
+   // Very long imports still retain the full text in SVG title and aria-label.
+   const result=lines.slice(0,limit);
+   result[limit-1]=result[limit-1].slice(0,Math.max(1,width-1))+'…';
+   return result;
+ }
+ function radialLabelRotation(angle){
+   const deg=((angle+90)%360+360)%360;
+   return deg>90&&deg<270?deg-180:deg;
+ }
+ function radialLabelMarkup(node,step,inner,outer,angle){
+   const thickness=outer-inner,midRadius=(inner+outer)/2;
+   const width=Math.max(6,Math.min(22,Math.floor((2*midRadius*Math.sin(step*Math.PI/360)-12)/5.6)));
+   const glyph=html(node.glyph||'✦');
+   // Contracted rings cannot hold text and an icon simultaneously.
+   if(thickness<34)return `<text x="0" y="5" text-anchor="middle"><tspan class="rbe-glyph" style="font-size:17px">${glyph}</tspan></text>`;
+   const lines=radialLabelLines(node.label,width,thickness<43?1:thickness<60?2:3);
+   const meta=thickness>=63&&lines.length<=2?String(node.subtitle||'').trim():'';
+   const wrappedMeta=meta?radialLabelLines(meta,width,1)[0]:'';
+   // Center the glyph + name lines + optional stat line within the band.
+   const gap=11,iconHeight=thickness<47?15:20,metaHeight=wrappedMeta?10:0;
+   const blockHeight=iconHeight+lines.length*gap+metaHeight;
+   const top=-blockHeight/2;
+   const fontSize=width<9?8.3:width<12?9:10;
+   const iconY=top+iconHeight-3;
+   const nameBase=top+iconHeight+8;
+   const names=lines.map((line,i)=>
+     `<text class="rbe-option-name" x="0" y="${(nameBase+i*gap).toFixed(1)}" font-size="${fontSize}" text-anchor="middle">${html(line)}</text>`).join('');
+   const subtitle=wrappedMeta?`<text class="rbe-option-meta" x="0" y="${(nameBase+lines.length*gap-1).toFixed(1)}" text-anchor="middle">${html(wrappedMeta)}</text>`:'';
+   return `<text x="0" y="${iconY.toFixed(1)}" text-anchor="middle"><tspan class="rbe-glyph" style="font-size:${thickness<47?15:20}px">${glyph}</tspan></text>${names}${subtitle}`;
  }
  function radialWheelSVG(){
    const rings=radialTreeRings(),radius=radialRadii(rings.length);
@@ -147,10 +217,9 @@
      const nodes=items.map((node,i)=>{
        const chosen=RB.radial.path[d]===node.id,muted=RB.radial.path[d]&&!chosen,angle=-90+step*(i+.5);
        const gap=Math.min(2.4,step*.12),start=-90+i*step+gap,end=-90+(i+1)*step-gap;
-       const mid=radialPoint((inner+outer)*.5,angle);
-       const label=short(node.label,items.length>12?7:12);
-       const mini=outer-inner<32 || items.length>13, glyph=html(node.glyph||'✦');
-       return `<g class="rbe-wedge ${chosen?'is-selected':''} ${muted?'is-muted':''}" data-action="radialPick" data-depth="${d}" data-index="${i}" role="button" tabindex="0" aria-label="${html(node.label)}" aria-selected="${!!chosen}"><title>${html(node.label)}${node.detail?' — '+html(node.detail):''}</title><path d="${radialSector(inner,outer,start,end)}"></path><text x="${mid.x.toFixed(1)}" y="${(mid.y+(mini?4:-3)).toFixed(1)}" text-anchor="middle"><tspan class="rbe-glyph">${glyph}</tspan>${mini?'':`<tspan x="${mid.x.toFixed(1)}" dy="15">${html(label)}</tspan>`}</text></g>`;
+       const mid=radialPoint((inner+outer)*.5,angle),rotation=radialLabelRotation(angle);
+       const detail=[node.label,node.subtitle,node.detail].filter(Boolean).join(' · ');
+       return `<g class="rbe-wedge ${chosen?'is-selected':''} ${muted?'is-muted':''}" data-action="radialPick" data-depth="${d}" data-index="${i}" role="button" tabindex="0" aria-label="${html(detail)}" aria-selected="${!!chosen}"><title>${html(detail)}</title><path d="${radialSector(inner,outer,start,end)}"></path><g transform="translate(${mid.x.toFixed(1)} ${mid.y.toFixed(1)}) rotate(${rotation.toFixed(1)})">${radialLabelMarkup(node,step,inner,outer,angle)}</g></g>`;
      }).join('');
      return `<g class="rbe-ring" data-ring="${d}" style="animation-delay:${d*35}ms">${nodes}</g>`;
    }).join('');
@@ -178,6 +247,12 @@
  }
  function radialPick(depth,index){
    const rings=radialTreeRings(),node=rings[depth]?.[index];if(!node)return;
+   if(node.kind==='page'){
+     const pos=node.value.lastIndexOf(':');
+     const key=node.value.slice(0,pos),page=Number(node.value.slice(pos+1));
+     RB.radial.pages[key]=page;
+     render();radialPosition();return;
+   }
    if(node.children?.length){
      RB.radial.path=[...RB.radial.path.slice(0,depth),node.id];
      render();radialPosition();return;
