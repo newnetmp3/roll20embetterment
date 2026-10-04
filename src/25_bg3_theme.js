@@ -352,4 +352,22 @@ const BG3_STYLE = String.raw`
 :host([data-theme="bg3"]) #rbe-palette .palette-choice.on{
   border-color:#ead099;background:#534132;
 }
+
+/* Screenshot-driven readability adjustment, especially beside a 2024 character sheet. */
+:host([data-theme="bg3"]) #rbe-panel{
+  font-size:calc(15px * var(--scale,1));line-height:1.5;
+}
+:host([data-theme="bg3"]) #rbe-body .hint{
+  font-size:.94em;line-height:1.53;color:#d0c2aa;
+}
+:host([data-theme="bg3"]) #rbe-body .card p{line-height:1.56}
+:host([data-theme="bg3"]) #rbe-body .card{padding:16px 15px}
+:host([data-theme="bg3"]) #rbe-body .card button{white-space:normal}
+:host([data-theme="bg3"]) #rbe-body select,
+:host([data-theme="bg3"]) #rbe-body input,
+:host([data-theme="bg3"]) #rbe-body textarea{font-size:1em}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] [data-action="scanSheets"],
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] [data-action="syncSheet"]{
+  min-height:39px;
+}
 `;
