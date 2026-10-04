@@ -20,7 +20,7 @@ A player-focused, no-dependency Tampermonkey userscript for **D&D 5E in Roll20**
 - **Journal**: searchable personal notes, quest checklist, timestamped activity log, Markdown export.
 - **Chat**: personal message search and rough category filtering, whispers/emotes/OOC shortcuts.
 - **Command palette**: find tabs, spells, macros, skills, saves with keyboard search.
-- **Customization**: three themes, scaling, draggable panel, show/hide toggles, multiple local character profiles, JSON backup/import, persistent campaign settings.
+- **Customization**: four themes including Baldurian dark fantasy (default), scaling, draggable panel, show/hide toggles, multiple local character profiles, JSON backup/import, persistent campaign settings.
 
 ## Important limitations
 
@@ -65,6 +65,20 @@ On a new feature branch, update source and run `npm run build`; commit the gener
 **First release / beta:** syntax and offline tests run in CI. Real Roll20 Jumpgate, both 5E sheets, and Chrome/Firefox/Tampermonkey compatibility still need in-game acceptance testing. Please report any broken selectors with the page type and browser in a GitHub issue.
 
 Not affiliated with or endorsed by Roll20.
+
+
+## Baldurian dark-fantasy makeover (v1.2.0)
+
+**Default appearance:** BG3-inspired `Baldurian • Dark Fantasy`, with an original obsidian / brass / parchment design. All artwork-like flourishes are made in CSS and basic Unicode glyphs; **no official Baldur's Gate 3 artwork, logos, game files, copyrighted textures, remote fonts or API requests** are used.
+
+- Ornate, framed companion panel, engraved brass navigation across **two compact rows** instead of a long horizontal scrolling list; the **Sheet** import tab remains visible.
+- Character banner with level, class, race/species when imported, and link status; compact combat HUD with prominent HP bar, AC and concentration.
+- Game-inspired eight-slot quick action bar with separate dice, spell and attack glyphs, numbered shortcuts, and accessible button labels.
+- Custom layouts and visuals for Rolls, Spells, Inventory, Journal, Sheet imports, Chat, Macros, Reference, and Settings, including tooltips, tables, search, buttons, and modal overlays.
+- Responsive layout with compact mobile styles; visible keyboard focus, user-controlled UI scaling, and reduced-motion support.
+- Previous **Midnight**, **Arcane Violet**, and **Parchment** themes remain available under Settings. Existing installations using the old *default* Midnight theme are switched to Baldurian **once**; deliberate Violet/Parchment choices stay as they are. You can switch back to Midnight.
+
+**All functionality remains player-first and read-only toward Roll20 game data.** Sheet imports, custom macros, saved profile data, storage keys, and the keyboard event isolation fix are preserved. Install or update using the same raw userscript URL above, then refresh the tabletop.
 
 ## Character-sheet integration (v1.1.1)
 
