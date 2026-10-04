@@ -1211,6 +1211,7 @@ function sheetTourAdd(acc,scan,label) {
   acc.expected=Math.max(acc.expected,scan.expected||0);
   if(scan.full)acc.full=true;
   if(label&&!acc.tabs.includes(label))acc.tabs.push(label);
+  for(const tab of scan.tabs||[])if(typeof tab==='string'&&!acc.tabs.includes(tab))acc.tabs.push(tab);
   return acc;
 }
 async function sheetTourCollect(scope,acc,label,deep=true) {
