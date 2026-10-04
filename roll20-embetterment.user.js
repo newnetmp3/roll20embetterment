@@ -580,7 +580,7 @@ function onKeyDown(e) {
   if(e.key==='Escape' && (RB.paletteOpen||RB.modal)){RB.paletteOpen=false;RB.modal=null;render();return;}
   const origin=e.composedPath?.()[0] || e.target;
   const editing=origin?.closest?.('input,textarea,select,[contenteditable="true"],[role="textbox"]');
-  if(e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyE'){
+  if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyE'){
     e.preventDefault();RB.visible=!RB.visible;render();return;
   }
   if(e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyK'){
