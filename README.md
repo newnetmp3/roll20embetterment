@@ -41,6 +41,8 @@ A player-focused, no-dependency Tampermonkey userscript for **D&D 5E in Roll20**
 | 1–8 | Optional action bar slots (Settings, off by default; ignored while typing) |
 | Escape | Close command palette or command-copy modal |
 
+**Keyboard isolation:** When typing in an Embetterment input, keydown, keypress, and keyup events stay within the Embetterment window. This prevents B, V, and Z from triggering Roll20 tabletop tools while editing journal notes, spells, macros, or other fields. Roll20 shortcuts remain available on the tabletop.
+
 ## Development
 
 The installed `.user.js` is generated from independent modules:
