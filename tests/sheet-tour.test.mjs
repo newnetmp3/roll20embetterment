@@ -22,7 +22,7 @@ function harness(doc){
   };
   vm.createContext(scope);
   vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourCancel,sheetTourPromptOpen,sheetUI};',scope);
-  return {api:scope.api,intervals,doc:page};
+  return {api:scope.api,intervals,doc:page,context:scope};
 }
 function tab(label,selected,change) {
   return {innerText:label,textContent:label,role:'tab',className:'sheet-tab',
@@ -103,4 +103,59 @@ test('tab controls and manual import remain accessible while the guided flow is 
   assert.match(markup,/data-action="scanSheets"/);
   assert.match(markup,/data-action="syncSheet"/);
   assert.match(markup,/id="rbe-sheet-tour-status"/);
+});
+
+test('outer Roll20 tabs are visited and original view restored before committing',async()=>{
+  const chosen={value:'Character Sheet'},history=[];
+  const frame={src:'https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/?embedded=0',
+    getAttribute(){return 'iframe_abc'},contentWindow:{postMessage(){}}};
+  const outer=['Character Sheet','Bio & Info','Advanced Tools'].map(n=>({
+    innerText:n,textContent:n,isConnected:true,
+    get parentElement(){return {className:chosen.value===n?'active':''}},
+    getAttribute(attr){return attr==='aria-selected'?(chosen.value===n?'true':'false'):null},
+    click(){chosen.value=n;history.push(n)}
+  }));
+  const attribute={innerText:'Attributes',textContent:'Attributes',disabled:false,click(){history.push('Attributes')}};
+  const rows={'Character Sheet':[field('hp',84)],
+    'Bio & Info':[field('background','Knight')],
+    'Advanced Tools':[field('wisdom',15)]};
+  const dialog={isConnected:true,
+    get innerText(){return chosen.value==='Advanced Tools'?'Advanced Tools Attributes':'Character Sheet '+chosen.value},
+    closest(){return null},contains(){return false},
+    querySelector(sel){
+      if(sel.startsWith('iframe#advanced'))return frame;
+      if(sel==='.asv__header__name')return {textContent:'Nier'};
+      return null;
+    },
+    querySelectorAll(sel){
+      if(sel==='.asv__header__nav__tabs_link')return outer;
+      if(sel.startsWith('input,textarea'))return rows[chosen.value];
+      if(sel==='button,[role="tab"]')return chosen.value==='Advanced Tools'?[attribute]:[];
+      return [];
+    }
+  };
+  const doc={querySelectorAll(sel){
+    if(sel==='.characterdialog')return [dialog];
+    return [];
+  }};
+  const {api,context}=harness(doc);
+  const mocked={fields:{hp:{current:'84',max:'84'}},
+    visible:{stats:{hp:84,maxHp:84},abilityScores:{},abilityMods:{},
+      saveBonuses:{},skillBonuses:{},spellSlots:{},usedSlots:{},
+      details:{},attacks:[],resources:[],
+      coverage:{visibleFields:1,names:['HP'],sections:['Combat']}},
+    scannedPages:3,tabs:['Combat','Spells','Inventory']};
+  vm.runInContext('requestBeaconFrame=async()=>('+JSON.stringify(mocked)+')',context);
+  await api.sheetTourStart();
+  const p=api.profile();
+  assert.equal(p.name,'Nier');
+  assert.equal(p.stats.hp,84);
+  assert.equal(p.abilityScores.wis,15);
+  assert.equal(p.sheetDetails.background,'Knight');
+  assert.equal(chosen.value,'Character Sheet');
+  assert.ok(history.includes('Bio & Info'));
+  assert.ok(history.includes('Advanced Tools'));
+  assert.ok(history.includes('Attributes'));
+  assert.ok(p.sheetLink.tabsVisited.includes('Spells'));
+  assert.equal(api.RB.sheetTourBusy,false);
 });

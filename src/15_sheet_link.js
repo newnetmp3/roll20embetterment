@@ -369,6 +369,8 @@ async function syncSheetDeep(){
   }finally{RB.sheetDeepSync=false;}
 }
 function sheetAutoTick(){
+  // Do not overwrite a multi-tab snapshot with a single-tab auto-refresh.
+  if(RB.sheetTourBusy)return;
   const link=profile().sheetLink,candidate=RB.openSheets?.[RB.selectedSheet||0];
   if(!link?.auto||!link.lastSync||!candidate)return;
   if(link.source!==candidate.id&&link.name!==candidate.name)return;
