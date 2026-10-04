@@ -111,7 +111,7 @@ function findSheetForms(doc=document){
       const text=sheetVisibleText(node).slice(0,40000);
       const count=Object.keys(fields).length;
       // Two incidental attributes cannot establish the presence of a sheet.
-      if(count<3 && visible.coverage.visibleFields<2)continue;
+      if(count<3 && visible.coverage.visibleFields<2 && !(count>=2&&/\bAdvanced Tools\b/i.test(text)&&/\bAttributes\b/i.test(text)))continue;
       const name=readVisibleSheetName(node,parent);
       const score=sheetCandidateScore(fields,visible,text,name,node);
       if(score<0)continue;

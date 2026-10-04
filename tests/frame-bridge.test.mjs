@@ -70,7 +70,7 @@ test('same-origin page has no permission to impersonate an open iframe',async()=
   const scan=await promise;
   assert.equal(scan.fields.hp.current,'84');
   assert.equal(h.beaconFrameSnapshot(candidate,scan),true);
-  const profile=h.RB.state.profiles[h.RB.state.current];
+  const profile=h.RB.state.profiles.find(p=>p.id===h.RB.state.current);
   assert.equal(profile.name,'Nier');
   assert.equal(profile.stats.hp,84);
   assert.equal(profile.stats.maxHp,84);
@@ -92,7 +92,7 @@ test('child reader ignores cross-origin messages not sent by app.roll20.net',asy
 test('erroneously imported pencil name is corrected using actual character window name',()=>{
   const {h}=harness(),f=sheetFixture();
   h.RB.openSheets=h.findSheetForms(f.doc);
-  const profile=h.RB.state.profiles[h.RB.state.current];
+  const profile=h.RB.state.profiles.find(p=>p.id===h.RB.state.current);
   profile.name='pencil';
   const scan={fields:{hp:{current:'84',max:'84'}},
     visible:{name:'NIER',stats:{hp:84,maxHp:84},abilityScores:{},abilityMods:{},
