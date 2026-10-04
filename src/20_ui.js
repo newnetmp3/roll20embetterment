@@ -24,13 +24,51 @@ const STYLE = `
 const field = (label,path,value,opts={}) => `<label class="field ${opts.cls||''}">${html(label)}<input data-field="${html(path)}" type="${opts.type||'number'}" value="${html(value)}" ${opts.min!==undefined?'min="'+opts.min+'"':''} ${opts.max!==undefined?'max="'+opts.max+'"':''}></label>`;
 const button = (label,action,extra='',cls='') => `<button data-action="${html(action)}" ${extra} class="${cls}">${label}</button>`;
 const progress = (cur,max) => `<div class="hpbar"><span style="width:${max?Math.max(0,Math.min(100,cur/max*100)):0}%"></span></div>`;
+function sheetUI() {
+  const p=profile(),link=p.sheetLink,options=RB.openSheets||[];
+  const section=(title,items,description,withRoll=false)=>
+    '<div class="card"><h3>'+title+' ('+items.length+')</h3>'+
+    (items.length?'<div class="scroll">'+items.map(item=>
+      '<div class="list-entry"><div class="row"><strong class="grow">'+html(item.name)+'</strong>'+
+      (withRoll&&item.command?button('Roll','runSheetAction','data-id="'+html(item.id)+'"','small primary'):'')+
+      '</div><p class="hint">'+html(short(description(item),450))+'</p></div>').join('')+'</div>':
+      '<p class="hint">Nothing accessible in the last scan.</p>')+'</div>';
+  return '<div class="stack"><div class="card"><h2>Link character sheet</h2>'+
+    '<p class="hint">Open your Roll20 sheet inside the tabletop (disable separate pop-out windows), then scan it. Import is read-only: Embetterment never modifies Roll20 attributes. Some 2024/Beacon fields are not exposed.</p>'+
+    '<div class="row">'+button('① Scan open sheets','scanSheets','','primary')+button('② Sync selected','syncSheet')+'</div>'+
+    (options.length?'<label class="field">Open sheet<select data-sheet-pick>'+options.map((sheet,i)=>
+      '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+'</option>').join('')+'</select></label>':
+      '<p class="hint">No sheets scanned yet.</p>')+
+    '<label><input type="checkbox" data-sheet-auto '+(link?.auto?'checked':'')+'> Refresh while the linked sheet is open (every 12 seconds)</label>'+
+    '<p class="hint">Local notes, macros, equipment, and custom spells are preserved. Imported data is a local copy.</p></div>'+
+    '<div class="card"><h3>Import coverage</h3>'+
+    (link?'<strong>'+html(link.name||p.name)+'</strong> <span class="pill">'+html(link.edition||'Sheet')+'</span>'+
+      '<p class="hint">Last sync: '+html(link.lastSync?new Date(link.lastSync).toLocaleString():'Never')+
+      ' · '+int(link.coverage?.attributes)+' attributes found · '+int(link.coverage?.unmapped?.length)+' not mapped</p>'+
+      '<div class="row">'+Object.entries(link.counts||{}).map(([k,v])=>'<span class="pill">'+html(k)+' '+int(v)+'</span>').join('')+'</div>'+
+      '<p class="hint">Unmapped names: '+html(short((link.coverage?.unmapped||[]).join(', '),700)||'None')+'</p>':
+      '<p class="hint">Nothing linked yet.</p>')+
+    '<div class="row">'+button('Export visible fields','exportSheetFields')+button('Unlink','unlinkSheet')+'</div></div>'+
+    '<div class="card"><h3>Attribute JSON fallback</h3><p class="hint">For fields hidden by the 2024 sheet, paste a JSON object of named attributes or an array with name/current/max entries.</p>'+
+    '<textarea id="rbe-sheet-json" rows="3" placeholder="Paste sheet attribute JSON here"></textarea>'+
+    button('Import pasted attributes','pasteSheet')+'</div>'+
+    section('Attacks and actions',p.attacks||[],x=>[x.toHit&&'To hit '+x.toHit,x.damage&&'Damage '+x.damage,x.damageType,x.range,x.description].filter(Boolean).join(' · '),true)+
+    section('Class features and feats',p.features||[],x=>[x.source,x.description].filter(Boolean).join(' · '))+
+    section('Proficiencies',p.proficiencies||[],x=>x.description||'')+
+    section('Tools',p.tools||[],x=>x.description||'')+
+    '<div class="card"><h3>Character details</h3>'+
+    Object.entries(p.sheetDetails||{}).map(([k,v])=>'<div class="list-entry"><strong>'+html(k.replace(/([A-Z])/g,' $1'))+
+      '</strong><p class="hint">'+html(short(v,1200))+'</p></div>').join('')+
+    '</div><p class="hint">Spells and slots appear under Spells, equipment under Inventory, HP/resources under Home, and skills/saves under Rolls.</p></div>';
+}
+
 function homeUI() {
   const p=profile(),s=p.stats;
-  return `<div class="stack"><div class="row between"><h2>${html(p.name)} — Player HUD <span class="pill">local tracking</span></h2>${button('⚙ Profiles','profiles')}</div>
+  return `<div class="stack"><div class="row between"><h2>${html(p.name)} — Player HUD <span class="pill">${p.sheetLink?'sheet-linked · local copy':'local tracking'}</span></h2>${button('⚙ Profiles','profiles')}</div>
   <div class="card"><div class="row between"><strong>Hit Points <span class="stat">${int(s.hp)} / ${int(s.maxHp)}</span></strong><span class="hint">Temp: ${int(s.tempHp)} • AC ${int(s.ac)} • Speed ${int(s.speed)} ft</span></div>${progress(s.hp,s.maxHp)}
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
    <div class="row"><input id="rbe-hp-adjust" type="number" value="5" class="mini" min="1" aria-label="HP adjustment">${button('− Damage','damage')} ${button('+ Heal','heal')} ${button('+ Temp HP','addTemp')}</div>
-   <p class="hint">HUD HP is a personal tracker; it does not modify the actual Roll20 sheet or token bars.</p></div>
+   <p class="hint">HUD HP is a local copy. The Sheet tab can refresh it from Roll20; edits here never write back.</p></div>
   <div class="card"><h3>Turn assistant</h3><div class="row">${toggle('Action','actionUsed',p.actionUsed)}${toggle('Bonus action','bonusUsed',p.bonusUsed)}${toggle('Reaction','reactionUsed',p.reactionUsed)}${button('New turn ↻','newTurn')}</div>
    <div class="row">${field('Movement used (ft)','movementUsed',p.movementUsed,{cls:'narrow'})}<span class="muted">Remaining: <strong>${Math.max(0,int(s.speed)-int(p.movementUsed))} ft</strong></span></div>
    <div class="row">${button(p.inspiration?'★ Inspiration ON':'☆ Inspiration OFF','inspiration','',p.inspiration?'on':'')}${button('Short rest','shortRest')}${button('Long rest','longRest')}</div></div>
@@ -54,7 +92,7 @@ function rollsUI() {
 function macroUI() {
   const macros=[...RB.state.macros].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)||a.name.localeCompare(b.name));
   const p=profile(), edit=RB.editMacro && RB.state.macros.find(m=>m.id===RB.editMacro);
-  const slotOptions = [`<option value="">— Unassigned —</option>`, ...RB.state.macros.map(m=>`<option value="macro:${html(m.id)}">${html(m.name)}</option>`), ...p.spells.map(s=>`<option value="spell:${html(s.id)}">Spell: ${html(s.name)}</option>`)].join('');
+  const slotOptions = [`<option value="">— Unassigned —</option>`, ...RB.state.macros.map(m=>`<option value="macro:${html(m.id)}">${html(m.name)}</option>`), ...p.spells.map(s=>`<option value="spell:${html(s.id)}">Spell: ${html(s.name)}</option>`), ...((p.attacks||[]).filter(x=>x.command).map(a=>`<option value="attack:${html(a.id)}">Attack: ${html(a.name)}</option>`))].join('');
   return `<div class="stack"><div class="card"><h2>${edit?'Edit macro':'Add player macro'}</h2><div class="row"><label class="field">Name<input id="rbe-macro-name" maxlength="120" value="${html(edit?.name||'')}"></label><label class="field">Category<input id="rbe-macro-cat" maxlength="50" value="${html(edit?.category||'Custom')}"></label></div><label class="field">Roll20 chat command<textarea id="rbe-macro-command" rows="2" placeholder="/roll 1d20+5">${html(edit?.command||'')}</textarea></label><div class="row">${button(edit?'Save changes':'Add macro','saveMacro','', 'primary')}${edit?button('Cancel edit','cancelMacro'):''}</div>
   <p class="hint">Commands beginning with # call existing Roll20 macros, while %{selected|...} references character-sheet buttons. Commands run with your Roll20 chat permissions.</p></div>
   <div class="card"><h3>Action bar configuration</h3><div class="grid">${p.macrosSlots.map((v,i)=>`<label class="field">Slot ${i+1}<select data-slot="${i}">${slotOptions.replace(`value="${html(v)}"`,`value="${html(v)}" selected`)}</select></label>`).join('')}</div><p class="hint">Action-bar numbers 1–8 can be enabled under Settings (off by default so they won't conflict with Roll20 shortcuts).</p></div>
@@ -74,12 +112,12 @@ function spellsUI() {
 }
 function spellListHTML() {
   const p=profile(), q=(RB.spellSearch||'').toLowerCase();
-  return p.spells.filter(s=>(s.name+' '+s.notes).toLowerCase().includes(q)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).map(s=>`<div class="list-entry"><div class="row"><strong class="grow">${html(s.name)}</strong><span class="pill">${s.level?'Level '+s.level:'Cantrip'}</span>${s.concentration?'<span class="pill">Concentration</span>':''}${button('Cast','castSpell',`data-id="${html(s.id)}"`,'small primary')}${button('Edit','editSpell',`data-id="${html(s.id)}"`,'small')}${button('✕','deleteSpell',`data-id="${html(s.id)}"`,'small warn')}</div><p class="hint">${html(s.range||'')}${s.notes?' • '+html(short(s.notes,140)):''}</p></div>`).join('')||'<p class="hint">No spells yet. Add spells and optionally link their sheet macros.</p>';
+  return p.spells.filter(s=>(s.name+' '+(s.notes||'')).toLowerCase().includes(q)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).map(s=>`<div class="list-entry"><div class="row"><strong class="grow">${html(s.name)}</strong><span class="pill">${s.level?'Level '+s.level:'Cantrip'}</span>${s.concentration?'<span class="pill">Concentration</span>':''}${s.origin==='sheet'?'<span class="pill">Sheet</span>':''}${s.prepared?'<span class="pill">Prepared</span>':''}${button('Cast','castSpell',`data-id="${html(s.id)}"`,'small primary')}${button('Edit','editSpell',`data-id="${html(s.id)}"`,'small')}${button('✕','deleteSpell',`data-id="${html(s.id)}"`,'small warn')}</div><p class="hint">${html([s.range,s.castTime,s.duration,s.components,s.school].filter(Boolean).join(' · '))}${s.notes?' • '+html(short(s.notes,140)):''}</p></div>`).join('')||'<p class="hint">No spells yet. Add spells and optionally link their sheet macros.</p>';
 }
 function inventoryUI() {
   const p=profile(), weight=p.inventory.reduce((acc,x)=>acc+Math.max(0,Number(x.qty)||0)*Math.max(0,Number(x.weight)||0),0);
   return `<div class="stack"><div class="card"><h2>Inventory <span class="pill">${weight.toFixed(1)} lb</span></h2><div class="row"><label class="field">Item<input id="rbe-item-name" placeholder="Potion of Healing"></label><label class="field narrow">Quantity<input id="rbe-item-qty" type="number" value="1" min="1"></label><label class="field narrow">Weight each (lb)<input id="rbe-item-weight" type="number" value="0" min="0" step="0.1"></label></div><div class="row"><label class="field">Category<input id="rbe-item-cat" value="Gear"></label>${button('+ Add item','addItem','', 'primary')}</div>
-   <div class="table-scroll"><table><thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Wt</th><th></th></tr></thead><tbody>${p.inventory.map(x=>`<tr><td>${html(x.name)}</td><td>${html(x.category||'Gear')}</td><td><input class="mini" type="number" min="0" data-item-qty="${html(x.id)}" value="${x.qty}"></td><td>${Number(x.weight||0).toFixed(1)}</td><td>${button('✕','deleteItem',`data-id="${html(x.id)}"`,'small warn')}</td></tr>`).join('')}</tbody></table></div></div>
+   <div class="table-scroll"><table><thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Wt</th><th></th></tr></thead><tbody>${p.inventory.map(x=>`<tr><td>${html(x.name)} ${x.equipped?'✓':''}</td><td>${html(x.category||'Gear')}</td><td><input class="mini" type="number" min="0" data-item-qty="${html(x.id)}" value="${x.qty}"></td><td>${Number(x.weight||0).toFixed(1)}</td><td>${button('✕','deleteItem',`data-id="${html(x.id)}"`,'small warn')}</td></tr>`).join('')}</tbody></table></div></div>
   <div class="card"><h3>Coins</h3><div class="row">${['cp','sp','ep','gp','pp'].map(k=>field(k.toUpperCase(),'currency.'+k,p.currency[k],{cls:'narrow'})).join('')}</div></div></div>`;
 }
 function journalUI() {
@@ -111,10 +149,11 @@ function referenceUI() {
   <p class="hint">Convenience summary only. Your table's official rules edition and DM rulings take precedence.</p></div>`;
 }
 function paletteEntries() {
-  const tabs=['Home','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
+  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
   return [...tabs.map(t=>({name:'Open '+t,kind:'tab',value:t})),
     ...RB.state.macros.map(m=>({name:'Macro: '+m.name,kind:'macro',value:m.id})),
     ...profile().spells.map(s=>({name:'Spell: '+s.name,kind:'spell',value:s.id})),
+    ...(profile().attacks||[]).map(a=>({name:'Attack: '+a.name,kind:'attack',value:a.id})),
     ...skillNames.map(n=>({name:'Skill: '+n,kind:'skill',value:n})),
     ...abilities.map(n=>({name:'Save: '+n.toUpperCase(),kind:'save',value:n}))];
 }
@@ -133,7 +172,8 @@ function barUI() {
   return `<div id="rbe-bar" title="Click to run a Roll20 macro or spell">${p.macrosSlots.map((v,i)=>{
     const m=v.startsWith('macro:')?RB.state.macros.find(m=>m.id===v.slice(6)):null;
     const s=v.startsWith('spell:')?p.spells.find(s=>s.id===v.slice(6)):null;
-    const name=m?.name || s?.name || 'Empty';
+    const a=v.startsWith('attack:')?(p.attacks||[]).find(a=>a.id===v.slice(7)):null;
+    const name=m?.name || s?.name || a?.name || 'Empty';
     return `<button class="barslot" data-action="slot" data-index="${i}" title="${html(name)}"><div class="index">${i+1}</div>${html(short(name,15))}</button>`;
   }).join('')}</div>`;
 }
@@ -146,7 +186,7 @@ function render() {
   if (!RB.shadow || !RB.state) return;
   const s=RB.state.settings; RB.root.style.setProperty('--scale',s.scale); RB.root.setAttribute('data-theme',s.theme); RB.root.setAttribute('data-reduced-motion',String(!!s.reducedMotion));
   const tabs=['Home','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
-  const panels={Home:homeUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI};
+  const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI};
   RB.shadow.innerHTML=`<style>${STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
   ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header"><strong>⚔ roll20 Embetterment</strong><div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}">${t}</button>`).join('')}</nav><div id="rbe-body">${(panels[RB.tab]||homeUI)()}</div></section>`:''}
   ${paletteUI()}${modalUI()}<div id="rbe-toast" role="status" hidden></div>`;
