@@ -49,6 +49,10 @@ function executeSlot(slot) {
     const m=RB.state.macros.find(m=>m.id===v.slice(6));
     if (!m) return toast('Macro no longer exists; edit this slot.');
     if (sendToRoll20(m.command)) record('Used macro: '+m.name);
+  } else if (v.startsWith('attack:')) {
+    const atk=(p.attacks||[]).find(x=>x.id===v.slice(7));
+    if(atk?.command){if(sendToRoll20(atk.command))record('Attack: '+atk.name);}
+    else toast('No accessible Roll20 action button for this attack.');
   } else if (v.startsWith('spell:')) {
     const s=p.spells.find(s=>s.id===v.slice(6));
     if (!s) return toast('Spell no longer exists.');
