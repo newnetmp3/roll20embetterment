@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      1.2.0
+// @version      1.2.1
 // @description  BG3-inspired D&D 5E player companion, character-sheet import, combat HUD, action bar, spells, inventory, journal and dice.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -18,7 +18,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '1.2.0',
+  version: '1.2.1',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -323,6 +323,36 @@ function readSheetFields(scope){
   }
   return result;
 }
+// Prefer an actual character-name label rather than generic dialog titles. 2024
+// Beacon layouts can place the title outside the sheet's inner form.
+function readVisibleSheetName(node,parent){
+  const usable=value=>{
+    const name=sheetText(value,120).replace(/\s+/g,' ').trim();
+    return name.length>0 && name.length<=100 &&
+      !/^(open character sheet|character sheet|character|sheet|bio & info|advanced tools|attributes|actions|combat|spells)$/i.test(name);
+  };
+  const selectors=[
+    '[name="attr_character_name"]','[name="attr_charactername"]',
+    '[data-testid="character-name"]','[data-testid*="characterName"]',
+    '[data-testid*="character-name"]','.charactername',
+    '[class*="character-name"]','[class*="characterName"]',
+    '.ui-dialog-title','[role="dialog"] header h1','[role="dialog"] header h2'
+  ];
+  const contexts=[node,parent,parent?.parentElement,parent?.parentElement?.parentElement];
+  try {
+    const frame=node?.ownerDocument?.defaultView?.frameElement;
+    if(frame)contexts.push(frame.closest?.('.ui-dialog,[role="dialog"]')||frame.parentElement);
+  }catch{/* cross-origin frame labels are not available */}
+  for(const selector of selectors){
+    for(const root of contexts){
+      const el=root?.matches?.(selector)?root:root?.querySelector?.(selector);
+      const value=el?.value||el?.textContent||el?.getAttribute?.('title');
+      if(usable(value))return sheetText(value,100).replace(/\s+/g,' ').trim();
+    }
+  }
+  const accessibleName=parent?.getAttribute?.('aria-label')||node?.getAttribute?.('aria-label');
+  return usable(accessibleName)?sheetText(accessibleName,100):'Open character sheet';
+}
 function findSheetForms(doc=document){
   const options=[],seen=new Set();
   function inspect(root,level=0){
@@ -334,10 +364,10 @@ function findSheetForms(doc=document){
       const fields=node.querySelectorAll?.('[name^="attr_"],[data-attribute]')||[];
       if(fields.length<3&&(node.querySelectorAll?.('[aria-label],[data-testid]')?.length||0)<5)continue;
       const parent=node.closest?.('.ui-dialog,.characterdialog,[data-character-id]')||node;
-      const name=sheetText(parent.querySelector?.('.ui-dialog-title,.charactername,[data-testid="character-name"]')?.textContent||
-        node.querySelector?.('[name="attr_character_name"],[name="attr_charactername"]')?.value||
-        parent.getAttribute?.('aria-label')||'Open character sheet',120);
-      options.push({id:parent.getAttribute?.('data-character-id')||'open-'+(options.length+1),name,root:node,kind:'Visible Roll20 sheet'});
+      const name=readVisibleSheetName(node,parent);
+      const readableFields=Object.keys(readSheetFields(node)).length;
+      options.push({id:parent.getAttribute?.('data-character-id')||'open-'+(options.length+1),
+        name,root:node,readableFields,kind:'Visible Roll20 sheet'});
     }
     for(const frame of Array.from(root.querySelectorAll?.('iframe')||[]).slice(0,30)){
       try{if(frame.contentDocument?.body)inspect(frame.contentDocument,level+1);}catch{/* cross-origin inaccessible */}
@@ -542,8 +572,9 @@ function sheetUI() {
     '<p class="hint">Open your Roll20 sheet inside the tabletop (disable separate pop-out windows), then scan it. Import is read-only: Embetterment never modifies Roll20 attributes. Some 2024/Beacon fields are not exposed.</p>'+
     '<div class="row">'+button('① Scan open sheets','scanSheets','','primary')+button('② Sync selected','syncSheet')+'</div>'+
     (options.length?'<label class="field">Open sheet<select data-sheet-pick>'+options.map((sheet,i)=>
-      '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+'</option>').join('')+'</select></label>':
-      '<p class="hint">No sheets scanned yet.</p>')+
+      '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+' · '+int(sheet.readableFields)+' readable fields</option>').join('')+'</select></label>'+
+      '<p class="hint">Found '+options.length+' candidate sheet(s). '+int(options[RB.selectedSheet||0]?.readableFields)+' named attributes accessible in the selected sheet. Click <strong>Sync selected</strong> to import. For the 2024 sheet, try Advanced Tools → Attributes if the count is zero.</p>':
+      '<p class="hint">No sheets scanned yet. Start by opening your character sheet and clicking Scan open sheets.</p>')+
     '<label><input type="checkbox" data-sheet-auto '+(link?.auto?'checked':'')+'> Refresh while the linked sheet is open (every 12 seconds)</label>'+
     '<p class="hint">Local notes, macros, equipment, and custom spells are preserved. Imported data is a local copy.</p></div>'+
     '<div class="card"><h3>Import coverage</h3>'+
@@ -1083,6 +1114,24 @@ const BG3_STYLE = String.raw`
 }
 :host([data-theme="bg3"]) #rbe-palette .palette-choice.on{
   border-color:#ead099;background:#534132;
+}
+
+/* Screenshot-driven readability adjustment, especially beside a 2024 character sheet. */
+:host([data-theme="bg3"]) #rbe-panel{
+  font-size:calc(15px * var(--scale,1));line-height:1.5;
+}
+:host([data-theme="bg3"]) #rbe-body .hint{
+  font-size:.94em;line-height:1.53;color:#d0c2aa;
+}
+:host([data-theme="bg3"]) #rbe-body .card p{line-height:1.56}
+:host([data-theme="bg3"]) #rbe-body .card{padding:16px 15px}
+:host([data-theme="bg3"]) #rbe-body .card button{white-space:normal}
+:host([data-theme="bg3"]) #rbe-body select,
+:host([data-theme="bg3"]) #rbe-body input,
+:host([data-theme="bg3"]) #rbe-body textarea{font-size:1em}
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] [data-action="scanSheets"],
+:host([data-theme="bg3"]) #rbe-body[data-panel="Sheet"] [data-action="syncSheet"]{
+  min-height:39px;
 }
 `;
 
