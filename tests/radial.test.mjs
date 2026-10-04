@@ -22,8 +22,8 @@ function env(){
     localStorage:{getItem(k){return saved.get(k)||null},setItem(k,v){saved.set(k,v)}}
   };
   vm.createContext(scope);vm.runInContext(script,scope);
-  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition,radialLabelLines,radialLabelRotation,radialLabelMarkup,radialVisiblePage};",scope);
-  return {r:scope.r,sent,field,doc};
+  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition,radialLabelLines,radialLabelRotation,radialLabelMarkup,radialVisiblePage,radialLayout,radialViewportBounds,radialLabelsFit};",scope);
+  return {r:scope.r,sent,field,doc,scope};
 }
 test('rings progressively contract the original circle and grow concentric choices',()=>{
   const {r}=env(),a=r.radialRadii(1),b=r.radialRadii(2),c=r.radialRadii(3),d=r.radialRadii(4);
@@ -197,4 +197,64 @@ test('full name and distinguishing attack stats remain in accessible tooltip',()
   assert.match(markup,/rbe-option-name/);
   assert.match(markup,/rbe-option-meta/);
   assert.doesNotMatch(markup,/Throw …|Dagger…/);
+});
+
+test('uncluttered wheel keeps its original 520px size',()=>{
+  const {r}=env();
+  r.RB.radial.path=[];
+  const layout=r.radialLayout();
+  assert.equal(layout.factor,1);
+  assert.equal(layout.diameter,520);
+  assert.equal(layout.outer,112);
+});
+test('crowded detailed attacks may expand the wheel while retaining complete names',()=>{
+  const {r}=env(),p=r.profile();
+  p.attacks=Array.from({length:10},(_,i)=>({
+    id:'knife'+i,name:'Throwing Dagger '+(i+1),
+    toHit:'+7',damage:'1d4+4',range:'20/60 ft',command:''
+  }));
+  r.RB.radial.path=['attack','all'];
+  const layout=r.radialLayout();
+  assert.ok(layout.factor>1,'Long crowded labels should request more physical space');
+  assert.ok(layout.factor<=1.6);
+  const svg=r.radialWheelSVG();
+  assert.ok(svg.includes('viewBox='));
+  assert.match(svg,/Throwing/);
+  assert.match(svg,/Dagger/);
+  assert.match(r.radialHTML(),/--rbe-wheel-size:/);
+});
+test('ring expansion never exceeds available Roll20 tabletop area',()=>{
+  const {r,scope}=env(),p=r.profile();
+  p.attacks=Array.from({length:10},(_,i)=>({
+    id:'knife'+i,name:'Throwing Dagger '+(i+1),
+    toHit:'+7',damage:'1d4+4',range:'20/60 ft',command:''
+  }));
+  r.RB.radial.path=['attack','all'];
+  scope.window.innerWidth=700;scope.window.innerHeight=540;
+  scope.innerWidth=700;scope.innerHeight=540;
+  const bounds=r.radialViewportBounds();
+  const layout=r.radialLayout();
+  assert.equal(bounds.width,700);
+  assert.equal(layout.factor,1,'Do not enlarge when the screen has no spare room');
+  r.RB.radial.manual={x:690,y:525};
+  r.RB.radial.lastPresence=true;
+  const wheel={style:{left:'',top:'',scale:'',setProperty(key,v){if(key==='--wheel-scale')this.scale=v;}}};
+  r.RB.shadow.querySelector=id=>id==='#rbe-radial-wheel'?wheel:null;
+  r.radialPosition();
+  const s=Number(wheel.style.scale),cx=Number(wheel.style.left),cy=Number(wheel.style.top);
+  assert.ok(cx-layout.diameter*s/2>=-1);
+  assert.ok(cx+layout.diameter*s/2<=700+1);
+  assert.ok(cy-(layout.outer+45)*s>=-1);
+  assert.ok(cy+(layout.outer+95)*s<=540+1);
+});
+test('uses editor canvas bounds instead of expanding into Roll20 sidebar',()=>{
+  const {r,scope}=env();
+  scope.window.innerWidth=1500;scope.window.innerHeight=920;
+  scope.innerWidth=1500;scope.innerHeight=920;
+  scope.document.querySelector=()=>({getBoundingClientRect(){
+    return {left:20,top:55,right:1100,bottom:850,width:1080,height:795};
+  }});
+  const bounds=r.radialViewportBounds();
+  assert.equal(bounds.width,1080);assert.equal(bounds.right,1100);
+  assert.equal(bounds.top,55);assert.equal(bounds.bottom,850);
 });

@@ -43,3 +43,6 @@ Click **Sheet → Import all sheet tabs**. When your character sheet is closed, 
 
 ## Readable combat wheel labels (2.2.1)
 Weapon, item, and spell names now wrap onto multiple lines inside the SVG wedges, with context such as attack bonus, range, damage, spell level, concentration, or quantity on a secondary line when space allows. Labels follow their wedges tangentially and flip to remain upright. When a ring contains more than 12 choices, the wheel shows at most 10 per page with Previous/Next wedges rather than shrinking every name to 6 characters. The complete name and additional details remain in the native hover title and screen-reader label. Existing attack execution behavior, sheet integration, and bottom control positioning are unchanged.
+
+### Adaptive wheel sizing (2.2.1)
+The original 520 px wheel size is retained whenever its labels fit. If long names, crowded selections, or important attack/spell metadata would otherwise be clipped, it may grow gradually up to 1.6×. The exact ceiling depends on the available Roll20 tabletop viewport (preferably the editor canvas) and the bottom toolbar/title clearance. On smaller windows the wheel automatically scales down to stay visible rather than expanding off-screen. This does not change the ring hierarchy or action commands.
