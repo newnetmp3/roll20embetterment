@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import {randomUUID} from 'node:crypto';
 
 const root=resolve(import.meta.dirname,'..');
-const modules=['00_core.js','10_roll20_bridge.js','14_beacon_dom.js','15_sheet_link.js','16_beacon_visible.js','19_radial_hud.js','20_ui.js','25_bg3_theme.js','30_events.js'];
+const modules=['00_core.js','10_roll20_bridge.js','14_beacon_dom.js','15_sheet_link.js','16_beacon_visible.js','17_frame_bridge.js','19_radial_hud.js','20_ui.js','25_bg3_theme.js','30_events.js'];
 const program=modules.map(x=>readFileSync(join(root,'src',x),'utf8')).join('\n')
   .replace(/if\(document\.readyState==='loading'\)document\.addEventListener\('DOMContentLoaded',boot,\{once:true\}\);else boot\(\);\s*$/,'');
 
@@ -27,7 +27,7 @@ function environment(saved){
 test('new campaigns use BG3 dark fantasy as default',()=>{
   const {spec}=environment();
   assert.equal(spec.RB.state.settings.theme,'bg3');
-  assert.equal(spec.RB.version,'2.0.2');
+  assert.equal(spec.RB.version,'2.1.0');
   assert.match(spec.settingsUI(),/Baldurian • Dark Fantasy \(default\)/);
   assert.equal(spec.RB.state.settings.showBar,false);
   assert.equal(spec.RB.state.settings.showHud,false);

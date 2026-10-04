@@ -29,3 +29,8 @@ The **Sheet → Scan open sheets → Import visible attributes** flow supports t
 
 ## Silent attribute preload (2.0.2)
 On **Scan open sheets**, the importer quietly traverses virtualized Advanced Tools attribute rows, allowing the UI to keep displaying the same content while the hidden list is visited. When finished it restores the previous scroll position and caches the fields. **Import visible attributes** applies that snapshot to your local profile and can rescan if stale. It stays within the accessible sheet DOM; no private Roll20 APIs are read. If a particular Roll20 version does not expose a scrollable element, it imports currently rendered rows only.
+
+## Cross-origin D&D 2024 character sheets (2.1.0)
+Roll20 Jumpgate displays the 2024 character in a separate iframe at `advanced-sheets.production.roll20preflight.net/dnd2024byroll20/`. Tampermonkey runs the same userscript in both the Roll20 editor and that iframe, using an origin-checked `postMessage` bridge to read the *currently rendered, player-accessible sheet DOM*. The parent finds the character via `.characterdialog .asv__header__name`, not the unrelated `pencil` icon. The reader supports both Combat and Attributes tabs; the Advanced Tools list is scrolled behind a frozen snapshot only when appropriate. No Roll20 private APIs, network calls, or GM-only information are accessed.
+
+If **Scan open sheets** identifies Nier but **Import visible attributes** times out, verify the updated v2.1.0 userscript is enabled for `advanced-sheets.production.roll20preflight.net` in Tampermonkey and reload the game. A full live Roll20 verification is still necessary; the supplied full HTML dump contains the iframe *element*, not its inner sheet document.

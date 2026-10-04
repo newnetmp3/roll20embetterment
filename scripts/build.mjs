@@ -6,14 +6,14 @@ if(sourceFiles.length<4) throw new Error('Missing source modules');
 const header = `// ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.0.2
+// @version      2.1.0
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
 // @match        https://app.roll20.net/editor
+// @match        https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/*
 // @grant        none
 // @run-at       document-idle
-// @noframes
 // @updateURL    https://raw.githubusercontent.com/newnetmp3/roll20embetterment/main/roll20-embetterment.user.js
 // @downloadURL  https://raw.githubusercontent.com/newnetmp3/roll20embetterment/main/roll20-embetterment.user.js
 // ==/UserScript==`;
