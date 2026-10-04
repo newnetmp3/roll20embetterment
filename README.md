@@ -80,6 +80,14 @@ Not affiliated with or endorsed by Roll20.
 
 **All functionality remains player-first and read-only toward Roll20 game data.** Sheet imports, custom macros, saved profile data, storage keys, and the keyboard event isolation fix are preserved. Install or update using the same raw userscript URL above, then refresh the tabletop.
 
+## v1.2.1 — in-game screenshot refinements
+
+- The **Sheet** selector now tries multiple accessible name labels on 2024/Beacon dialogs (including a name in the outer dialog when the actual sheet lives in a frame).
+- Scan displays a **readable attribute count** for each detected sheet. **Scan only discovers candidates**; click **Sync selected** to actually import a selected sheet into the local Embetterment profile.
+- If the character sheet is visible but shows **0 readable fields**, try opening **Advanced Tools → Attributes** (when accessible) and rescan. The Beacon UI does not expose all visible values as named fields, so a zero-count scan does not imply a usable import.
+- Slightly larger text, more legible hints, and more comfortable input/button targets in the Baldurian theme.
+- The original Roll20 sheet is never changed by scanning or syncing.
+
 ## Character-sheet integration (v1.1.1)
 
 The new **Sheet** tab imports as much data as Roll20 exposes to a player in the **open character sheet**. It does **not** require GM access, a Pro subscription, or any external service.
