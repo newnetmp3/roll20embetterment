@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 import vm from 'node:vm';
 const root=resolve(import.meta.dirname,'..');
-const files=['00_core.js','10_roll20_bridge.js','14_beacon_dom.js','15_sheet_link.js','16_beacon_visible.js','19_radial_hud.js','20_ui.js','25_bg3_theme.js','30_events.js'];
+const files=['00_core.js','10_roll20_bridge.js','14_beacon_dom.js','15_sheet_link.js','16_beacon_visible.js','17_frame_bridge.js','19_radial_hud.js','20_ui.js','25_bg3_theme.js','30_events.js'];
 const program=files.map(f=>readFileSync(join(root,'src',f),'utf8')).join('\n').replace(/if\(document\.readyState==='loading'\)document\.addEventListener\('DOMContentLoaded',boot,\{once:true\}\);else boot\(\);\s*$/,'');
 function environment(query='?id=123'){
   const store=new Map();const sent=[];const toasts=[];

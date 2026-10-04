@@ -249,6 +249,7 @@ function boot() {
   window.addEventListener('pointerup',onPointerUp);
   document.addEventListener('keydown',onKeyDown,true);
   window.addEventListener('beforeunload',save);
+  startBeaconParentBridge();
   setInterval(sheetAutoTick,12000);
   RB.visible=!!RB.state.settings.alwaysOpen;render();startRadialTracking();
 }
