@@ -42,7 +42,7 @@ function action(name, el) {
       sendToRoll20((name==='gmRoll'?'/gmroll ':'/roll ')+expression);break;
     }
     case 'scanSheets':scanSheets();break;
-    case 'syncSheet':syncSheet();break;
+    case 'syncSheet':syncSheetDeep();break;
     case 'unlinkSheet':if(confirm('Stop syncing? Imported entries remain until deleted.')){p.sheetLink=null;RB.sheetSignature=null;changedProfile();}break;
     case 'pasteSheet':{
       try{const snap=parseSheetPaste(getText('sheet-json'));if(!snap.coverage.attributes)throw Error('No named attributes found');
