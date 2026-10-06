@@ -295,7 +295,7 @@ function boot() {
   window.addEventListener('beforeunload',save);
   startBeaconParentBridge();
   setInterval(sheetAutoTick,12000);
-  RB.visible=!!RB.state.settings.alwaysOpen;render();startRadialTracking();
+  RB.visible=!!RB.state.settings.alwaysOpen;render();startRadialTracking();startAutoControlledCharacterImport();
 }
 // Never install the combat HUD inside the external character-sheet iframe.
 const rbeStartup=isBeaconSheetDocument()?startBeaconFrameReader:isRoll20Editor()?boot:null;
