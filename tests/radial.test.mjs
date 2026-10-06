@@ -109,7 +109,7 @@ test('footer follows outer radius as choices expand and collapse',()=>{
     assert.equal(r.radialOuterRadius(i+1),outer);
     const rendered=r.radialHTML();
     assert.ok(rendered.includes('--rbe-outer-radius:'+outer+'px'));
-    assert.match(rendered,/class="rbe-wheel-footer"><div class="rbe-wheel-toolbar">/);
+    assert.match(rendered,/class="rbe-wheel-footer"><div class="rbe-wheel-health"[^>]*>.*<div class="rbe-wheel-toolbar">/);
     assert.match(rendered,/class="rbe-wheel-info">/);
   }
   r.RB.radial.path.pop();
