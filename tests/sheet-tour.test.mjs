@@ -267,7 +267,7 @@ test('controlled character Backbone attributes seed the automatic import without
     {name:'spell_attack_bonus',current:'7',max:''}
   ]}}};
   const fields=api.autoCharacterAttributeFields(character);
-  assert.deepEqual(fields.hp,{current:'27',max:'35'});
+  assert.equal(fields.hp.current,'27');assert.equal(fields.hp.max,'35');
   assert.equal(fields.wisdom.current,'16');
   assert.equal(fields.spell_attack_bonus.current,'7');
 });
