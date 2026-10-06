@@ -147,7 +147,7 @@ function settingsUI() {
 }
 function debugUI() {
   const p=profile(),link=p.sheetLink||null,scan=RB.sheetWarm?.scan||null;
-  const token=RB.radial?.lastPlayerToken||null;
+  const token=RB.radial?.lastPlayerToken||null,assignments=Object.values(RB.state.tokenAssignments||{});
   const counts={
     attacks:(p.attacks||[]).length,spells:(p.spells||[]).length,inventory:(p.inventory||[]).length,
     resources:(p.resources||[]).length,features:(p.features||[]).length,
@@ -165,6 +165,8 @@ function debugUI() {
         <div><span class="hint">Open sheets</span><br><strong>${(RB.openSheets||[]).length}</strong></div>
         <div><span class="hint">Cached attributes</span><br><strong>${counts.attributes}</strong></div>
         <div><span class="hint">Token tracking</span><br><strong>${html(RB.radial?.source||'none')}</strong></div>
+        <div><span class="hint">Controlled token assignments</span><br><strong>${assignments.length}</strong></div>
+        <div><span class="hint">Auto-import</span><br><strong>${RB.autoCharacterImportBusy?'Running':html(RB.autoCharacterLastScan?'Last scan '+new Date(RB.autoCharacterLastScan).toLocaleTimeString():'Waiting for tabletop')}</strong></div>
       </div>
       <p class="hint">Profile ID: <code>${html(p.id)}</code>${token?.name?' • matched token: '+html(token.name):''}</p>
     </div>
@@ -173,8 +175,12 @@ function debugUI() {
         ${button('Export debug report','debugExport','','primary')}
         ${button('Clear scan cache','debugClearSheetCache')}
         ${button('Re-detect player token','debugRedetectToken')}
+        ${button('Rescan controlled characters','debugAutoImportControlled')}
       </div>
       <p class="hint">The debug report contains version/status information and item counts, not journal text or complete character-sheet values.</p>
+    </div>
+    <div class="card"><h3>Controlled token → character assignments</h3>
+      ${assignments.length?'<div class="table-scroll"><table><thead><tr><th>Token</th><th>Character</th><th>R20eb profile</th></tr></thead><tbody>'+assignments.map(a=>'<tr><td>'+html(a.tokenName||a.tokenId)+'</td><td>'+html(a.characterName||a.characterId)+'</td><td>'+html(RB.state.profiles.find(p=>p.id===a.profileId)?.name||'Unassigned')+'</td></tr>').join('')+'</tbody></table></div>':'<p class="hint">No controlled represented tokens have been discovered on the active Roll20 page yet.</p>'}
     </div>
     <div class="card"><h3>Clear imported sheet data</h3>
       <p class="hint">Removes R20eb's imported stats, abilities, currency, spell slots, sheet-linked attacks/features, and other entries marked as originating from the Roll20 sheet. Local journal entries and locally-created spells/items/resources are preserved.</p>
