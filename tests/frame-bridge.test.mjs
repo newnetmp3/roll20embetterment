@@ -141,8 +141,9 @@ test('registered popout can answer the same read-only snapshot requests as an if
     data:{bridge:'roll20-embetterment:beacon-sheet:v1',type:'ready',mode:'popout',
       session:'sheet-session-456',name:'Captain Rowan'}});
   const candidate=h.beaconPopoutCandidates()[0];
+  const before=sent.length;
   const promise=h.requestBeaconFrame(candidate,true);
-  const request=sent.find(x=>x.data.type==='scan');
+  const request=sent.slice(before).find(x=>x.data.type==='scan');
   assert.ok(request);
   assert.equal(request.origin,'https://advanced-sheets.production.roll20preflight.net');
   h.onBeaconFrameMessage({origin:'https://advanced-sheets.production.roll20preflight.net',source,
