@@ -49,3 +49,9 @@ The original 520 px wheel size is retained whenever its labels fit. If long name
 
 ## Jumpgate player-token tracking (2.2.2)
 The combat HUD now prefers Roll20 Jumpgate's rendered tabletop token overlay instead of relying on legacy Fabric internals. It looks in `#tabletop-ui-layer .overlay` for a visible nameplate matching the current/local linked character (exact or prefix match, so a local profile named `Nier` can follow a token named `Nier Stoneshadow`). The token-sized child rectangle supplies the browser-space center, which automatically includes Roll20 pan and zoom transforms. Style/DOM mutations in the tabletop UI layer schedule immediate position updates, while the prior selected-token DOM, Fabric, and manual pin methods remain as fallbacks. No private Babylon scene data is read.
+
+## Bottom HP gauge and native Roll20 token cleanup (2.2.3)
+
+R20eb leaves the token center clear and renders its hit-point gauge immediately below the active outer ring, above the Back / Root / Pin / Sheet controls. The gauge includes temporary HP when present and changes appearance at wounded and critical thresholds. Its height is included in viewport clamping.
+
+When R20eb is enabled, the matched Jumpgate player token is tagged locally with `data-r20e-player-token="true"`. R20eb hides that token's native Jumpgate `.bars-above` and `.nameplate-container`. It also hides Roll20's selected-token status-marker button and bar controls in `#radial-menu` (buttons 2–5 and an editable fourth bar), while deliberately leaving the native settings/gear button (button 1) available. These are presentation-only CSS changes; Roll20 token values are not modified.

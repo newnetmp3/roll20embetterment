@@ -22,7 +22,7 @@ function env(){
     localStorage:{getItem(k){return saved.get(k)||null},setItem(k,v){saved.set(k,v)}}
   };
   vm.createContext(scope);vm.runInContext(script,scope);
-  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition,radialLabelLines,radialLabelRotation,radialLabelMarkup,radialVisiblePage,radialLayout,radialViewportBounds,radialLabelsFit,radialJumpgateToken,radialTokenNameScore,radialTokenRectCenter,radialWatchJumpgate};",scope);
+  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition,radialLabelLines,radialLabelRotation,radialLabelMarkup,radialVisiblePage,radialLayout,radialViewportBounds,radialLabelsFit,radialJumpgateToken,radialTokenNameScore,radialTokenRectCenter,radialWatchJumpgate,radialHealthMarkup,radialEnsureNativeTokenCleanup,radialMarkPlayerOverlay};",scope);
   return {r:scope.r,sent,field,doc,scope};
 }
 test('rings progressively contract the original circle and grow concentric choices',()=>{
@@ -109,7 +109,7 @@ test('footer follows outer radius as choices expand and collapse',()=>{
     assert.equal(r.radialOuterRadius(i+1),outer);
     const rendered=r.radialHTML();
     assert.ok(rendered.includes('--rbe-outer-radius:'+outer+'px'));
-    assert.match(rendered,/class="rbe-wheel-footer"><div class="rbe-wheel-toolbar">/);
+    assert.match(rendered,/class="rbe-wheel-footer"><div class="rbe-wheel-health"[^>]*>.*<div class="rbe-wheel-toolbar">/);
     assert.match(rendered,/class="rbe-wheel-info">/);
   }
   r.RB.radial.path.pop();
@@ -339,4 +339,66 @@ test('Jumpgate tracker installs an observer on tabletop overlay style changes wh
   assert.equal(observed.options.childList,true);
   assert.ok(observed.options.attributeFilter.includes('style'));
   assert.equal(typeof callback,'function');
+});
+
+test('HP gauge moved from wheel center to footer and keeps temp HP',()=>{
+  const {r}=env(),p=r.profile();
+  p.stats.hp=84;p.stats.maxHp=84;p.stats.tempHp=7;
+  r.RB.radial.anchor={x:640,y:450};r.RB.radial.source='player-token';
+  const svg=r.radialWheelSVG(),markup=r.radialHTML();
+  assert.doesNotMatch(svg,/84\/84/,'HP text must not cover the token center');
+  assert.doesNotMatch(svg,/rbe-center|rbe-core/);
+  assert.match(markup,/class="rbe-wheel-health"/);
+  assert.match(markup,/84\/84 \+7 temp/);
+  assert.match(markup,/--rbe-hp-percent:100\.0%/);
+  assert.ok(markup.indexOf('rbe-wheel-health')<markup.indexOf('rbe-wheel-toolbar'));
+});
+test('HP gauge changes state at wounded and critical thresholds',()=>{
+  const {r}=env(),p=r.profile();
+  p.stats.maxHp=100;p.stats.hp=50;
+  assert.match(r.radialHealthMarkup(),/is-wounded/);
+  p.stats.hp=25;
+  assert.match(r.radialHealthMarkup(),/is-critical/);
+  p.stats.hp=76;
+  assert.doesNotMatch(r.radialHealthMarkup(),/is-wounded|is-critical/);
+});
+test('native Roll20 cleanup hides status bars/nameplate/marker but preserves gear',()=>{
+  const {r,doc}=env();
+  let added=null;
+  doc.getElementById=()=>null;
+  doc.createElement=()=>({id:'',textContent:''});
+  doc.head={appendChild(node){added=node}};
+  r.radialEnsureNativeTokenCleanup();
+  assert.ok(added);
+  assert.equal(added.id,'r20e-native-token-cleanup');
+  assert.match(added.textContent,/\.bars-above/);
+  assert.match(added.textContent,/\.nameplate-container/);
+  assert.match(added.textContent,/show_marker_menu/);
+  assert.match(added.textContent,/button-2/);
+  assert.match(added.textContent,/button-3/);
+  assert.match(added.textContent,/button-4/);
+  assert.match(added.textContent,/button-5/);
+  assert.doesNotMatch(added.textContent,/button-1/,'native settings gear remains available');
+});
+test('matched Jumpgate player overlay is marked for native chrome suppression',()=>{
+  const {r,doc}=env();
+  let marker=null;
+  const box={getAttribute(){return 'height:70px;width:70px;pointer-events:none;'},
+    getBoundingClientRect(){return {left:500,top:300,width:70,height:70,right:570,bottom:370}}};
+  const overlay={children:[box],isConnected:true,
+    attrs:{},
+    getAttribute(name){return this.attrs[name]??null},
+    setAttribute(name,value){this.attrs[name]=value;marker=value},
+    removeAttribute(name){delete this.attrs[name]},
+    querySelector(sel){return sel==='.nameplate-container'?{textContent:'Nier Stoneshadow'}:null},
+    getBoundingClientRect(){return {left:490,top:290,width:90,height:100,right:580,bottom:390}}};
+  r.profile().name='Nier';
+  doc.getElementById=()=>({id:'r20e-native-token-cleanup'});
+  doc.querySelector=sel=>sel==='#tabletop-ui-layer'?{querySelectorAll(){return [overlay]}}:
+    sel==='#babylonCanvas'?{getBoundingClientRect(){return {left:0,top:0,right:1280,bottom:900,width:1280,height:900}}}:null;
+  const found=r.radialJumpgateToken();
+  assert.equal(marker,'true');
+  assert.equal(overlay.attrs['data-r20e-player-token'],'true');
+  assert.equal(found.source,'player-token');
+  assert.equal(found.overlay,undefined,'DOM element must not leak into anchor object');
 });

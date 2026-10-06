@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.2.2
+// @version      2.2.3
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -18,7 +18,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.2.2',
+  version: '2.2.3',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -1384,11 +1384,14 @@ async function sheetTourStart() {
  #rbe-radial-wheel .rbe-wedge .rbe-glyph{font:24px Georgia,serif;stroke-width:1px;fill:#ffe2a4}
  #rbe-radial-wheel .rbe-wedge.is-muted text{fill:#9c876c}
  #rbe-radial-wheel .rbe-ring{animation:rbe-ring-bloom .21s ease-out both;transform-origin:center}
- #rbe-radial-wheel .rbe-core{fill:#10101723;stroke:#d2aa6c;stroke-width:2;stroke-dasharray:4 6;pointer-events:none}
- #rbe-radial-wheel .rbe-center{fill:#f7d999;stroke:#241916;stroke-width:1;font:600 12px Georgia,serif;pointer-events:none}
  #rbe-radial-wheel .rbe-tether-hub{fill:none;stroke:#ad9164;stroke-width:2;pointer-events:none}
  #rbe-radial-layer .rbe-wheel-title{position:absolute;left:50%;top:calc(50% - var(--rbe-outer-radius,112px) - 22px);transform:translate(-50%,-50%);font:700 14px Georgia,serif;color:#f5d8a8;letter-spacing:1.8px;text-shadow:0 2px 8px black;white-space:nowrap}
  #rbe-radial-layer .rbe-wheel-footer{position:absolute;left:50%;top:calc(50% + var(--rbe-outer-radius,112px) + 12px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:7px;max-width:520px;pointer-events:none}
+ #rbe-radial-layer .rbe-wheel-health{position:relative;width:156px;height:24px;overflow:hidden;border:1px solid #a98b58;border-radius:14px;background:#171318e8;box-shadow:0 2px 9px #0009,inset 0 0 0 1px #0007;color:#fff;font:800 13px/24px system-ui;text-align:center;text-shadow:0 1px 3px #000;pointer-events:none}
+ #rbe-radial-layer .rbe-wheel-health-fill{position:absolute;inset:2px auto 2px 2px;width:var(--rbe-hp-percent,0%);max-width:calc(100% - 4px);border-radius:11px;background:linear-gradient(90deg,#3d8b52,#72c987);opacity:.88}
+ #rbe-radial-layer .rbe-wheel-health.is-wounded .rbe-wheel-health-fill{background:linear-gradient(90deg,#a16b28,#d6a047)}
+ #rbe-radial-layer .rbe-wheel-health.is-critical .rbe-wheel-health-fill{background:linear-gradient(90deg,#8e252b,#c84a4e)}
+ #rbe-radial-layer .rbe-wheel-health-text{position:relative;z-index:1;padding:0 8px}
  #rbe-radial-layer .rbe-wheel-info{position:static;transform:none;white-space:nowrap;max-width:500px;overflow:hidden;text-overflow:ellipsis;padding:5px 12px;background:#151115dc;border:1px solid #8d754b;border-radius:20px;color:#f0d6a7;font:12px Georgia,serif;pointer-events:none}
  #rbe-radial-layer .rbe-wheel-toolbar{pointer-events:auto;position:static;transform:none;display:flex;align-items:center;gap:4px;background:#19131be6;padding:5px;border:1px solid #91764b;border-radius:30px;white-space:nowrap}
  #rbe-radial-layer .rbe-wheel-toolbar button{border:0;background:transparent;color:#e6cb9d;font:600 12px system-ui;padding:4px 7px}
@@ -1633,6 +1636,13 @@ async function sheetTourStart() {
    const subtitle=wrappedMeta?`<text class="rbe-option-meta" x="0" y="${(nameBase+lines.length*gap-1).toFixed(1)}" text-anchor="middle">${html(wrappedMeta)}</text>`:'';
    return `<text x="0" y="${iconY.toFixed(1)}" text-anchor="middle"><tspan class="rbe-glyph" style="font-size:${thickness<47?15:20}px">${glyph}</tspan></text>${names}${subtitle}`;
  }
+ function radialHealthMarkup(){
+   const p=profile(),hp=Math.max(0,Number(p.stats.hp)||0),max=Math.max(0,Number(p.stats.maxHp)||0);
+   const temp=Math.max(0,Number(p.stats.tempHp)||0),percent=max>0?Math.max(0,Math.min(100,hp/max*100)):0;
+   const state=percent<=25?' is-critical':percent<=50?' is-wounded':'';
+   const label=hp+'/'+max+(temp?' +'+temp+' temp':'');
+   return `<div class="rbe-wheel-health${state}" role="progressbar" aria-label="Hit points ${html(label)}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${Math.min(hp,max)}" style="--rbe-hp-percent:${percent.toFixed(1)}%"><span class="rbe-wheel-health-fill" aria-hidden="true"></span><span class="rbe-wheel-health-text">${html(label)}</span></div>`;
+ }
  function radialWheelSVG(){
    const layout=radialLayout(),rings=layout.rings,radius=layout.radii;
    const content=rings.map((items,d)=>{
@@ -1646,11 +1656,9 @@ async function sheetTourStart() {
      }).join('');
      return `<g class="rbe-ring" data-ring="${d}" style="animation-delay:${d*35}ms">${nodes}</g>`;
    }).join('');
-   const p=profile(),hp=Number(p.stats.hp)||0,max=Number(p.stats.maxHp)||0;
    return `<svg class="rbe-wheel" viewBox="${(-layout.diameter/2).toFixed(1)} ${(-layout.diameter/2).toFixed(1)} ${layout.diameter.toFixed(1)} ${layout.diameter.toFixed(1)}" aria-label="Concentric combat action menu" role="group">
      <defs><radialGradient id="rbe-wedge-metal"><stop stop-color="#53402b" offset="0"/><stop stop-color="#211a22" offset=".75"/><stop stop-color="#130f17" offset="1"/></radialGradient>
      <linearGradient id="rbe-wedge-selected"><stop stop-color="#b9914f"/><stop stop-color="#5c3a21" offset=".53"/><stop stop-color="#332332" offset="1"/></linearGradient></defs>
-     <circle r="23" class="rbe-core"/><text class="rbe-center" x="0" y="4" text-anchor="middle">${Math.max(0,hp)}/${Math.max(0,max)}</text>
      ${content}</svg>`;
  }
  function radialHTML(){
@@ -1660,7 +1668,7 @@ async function sheetTourStart() {
    return `<div id="rbe-radial-layer"><svg id="rbe-token-tether" aria-hidden="true"><path id="rbe-tether-path" d=""></path></svg>
     ${active?`<div id="rbe-radial-wheel" style="left:${Math.round(r.anchor.x)}px;top:${Math.round(r.anchor.y)}px;--rbe-outer-radius:${outerRadius}px;--rbe-wheel-size:${layout.diameter}px">
       <div class="rbe-wheel-title">${html(short(p.name,27))} · COMBAT</div>${radialWheelSVG()}
-      <div class="rbe-wheel-footer"><div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
+      <div class="rbe-wheel-footer">${radialHealthMarkup()}<div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
       <button data-action="radialPanel" title="Open character sheet importer">▤ Sheet</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
       <div class="rbe-wheel-info">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
@@ -1722,6 +1730,34 @@ async function sheetTourStart() {
    }
    if(success){RB.radial.path=[];save();render();radialPosition();}
  }
+ const RBE_NATIVE_TOKEN_STYLE_ID='r20e-native-token-cleanup';
+ const RBE_NATIVE_TOKEN_STYLE=`
+ #tabletop-ui-layer .overlay[data-r20e-player-token="true"] > .bars-above,
+ #tabletop-ui-layer .overlay[data-r20e-player-token="true"] > .nameplate-container{display:none!important}
+ #radial-menu [data-action-type="show_marker_menu"],
+ #radial-menu > .button.button-2,
+ #radial-menu > .button.button-3,
+ #radial-menu > .button.button-4,
+ #radial-menu > .button.button-5,
+ #radial-menu > .button.button-optional.droppable{display:none!important}
+ `;
+ let radialNativeOverlay=null;
+ function radialEnsureNativeTokenCleanup(){
+   if(document.getElementById?.(RBE_NATIVE_TOKEN_STYLE_ID))return;
+   const style=document.createElement?.('style');
+   if(!style)return;
+   style.id=RBE_NATIVE_TOKEN_STYLE_ID;
+   style.textContent=RBE_NATIVE_TOKEN_STYLE;
+   (document.head||document.documentElement)?.appendChild?.(style);
+ }
+ function radialMarkPlayerOverlay(overlay){
+   radialEnsureNativeTokenCleanup();
+   if(radialNativeOverlay&&radialNativeOverlay!==overlay)
+     radialNativeOverlay.removeAttribute?.('data-r20e-player-token');
+   radialNativeOverlay=overlay||null;
+   if(overlay?.getAttribute?.('data-r20e-player-token')!=='true')
+     overlay?.setAttribute?.('data-r20e-player-token','true');
+ }
  function radialTokenName(value){
    return String(value??'').toLocaleLowerCase().normalize('NFKD')
      .replace(/[^\p{L}\p{N}]+/gu,' ').trim();
@@ -1778,12 +1814,15 @@ async function sheetTourStart() {
        if(center.x<canvasRect.left-pad||center.x>canvasRect.right+pad||
           center.y<canvasRect.top-pad||center.y>canvasRect.bottom+pad)continue;
      }
-     best={...center,score,name:label,source:'player-token'};
+     best={...center,score,name:label,source:'player-token',overlay};
    }
    if(best){
+     radialMarkPlayerOverlay(best.overlay);
      RB.radial.lastPlayerToken={x:best.x,y:best.y,name:best.name,seen:Date.now()};
-     return best;
+     const {overlay,...point}=best;
+     return point;
    }
+   if(radialNativeOverlay?.isConnected===false)radialMarkPlayerOverlay(null);
    return null;
  }
  function radialDomToken(){
@@ -1822,7 +1861,7 @@ async function sheetTourStart() {
    if(!wheel||!r.anchor)return;
    // Clamp the full wheel including its footer, not just the SVG.
    const layout=radialLayout(),outer=layout.outer,bounds=layout.bounds;
-   const above=outer+45,below=outer+95;
+   const above=outer+45,below=outer+126;
    const scale=Math.max(0.1,Math.min(1,
      (bounds.width-12)/layout.diameter,
      (bounds.height-12)/(above+below)));
@@ -1862,6 +1901,7 @@ async function sheetTourStart() {
    }
  }
  function startRadialTracking(){
+   radialEnsureNativeTokenCleanup();
    document.addEventListener('pointerdown',radialCapturePin,true);
    window.addEventListener('resize',radialSchedulePosition);
    document.addEventListener?.('scroll',radialSchedulePosition,true);
