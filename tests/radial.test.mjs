@@ -262,7 +262,7 @@ test('uses editor canvas bounds instead of expanding into Roll20 sidebar',()=>{
 
 test('Jumpgate player token is found from the rendered nameplate overlay',()=>{
   const {r,doc}=env(),p=r.profile();
-  p.name='Nier';p.sheetLink.name='Nier';
+  p.name='Nier';
   const makeOverlay=(name,left,top)=> {
     const box={getAttribute(){return 'height: 70px; width: 70px; pointer-events: none;'},
       getBoundingClientRect(){return {left,top,width:59.85,height:59.85,right:left+59.85,bottom:top+59.85}}};
@@ -282,7 +282,7 @@ test('Jumpgate player token is found from the rendered nameplate overlay',()=>{
 });
 test('Jumpgate tracker supports sheet-name prefix matching without confusing unrelated tokens',()=>{
   const {r}=env(),p=r.profile();
-  p.name='Nier';p.sheetLink.name='Nier';
+  p.name='Nier';
   assert.equal(r.radialTokenNameScore('Nier Stoneshadow'),900);
   assert.equal(r.radialTokenNameScore('Nier'),1000);
   assert.equal(r.radialTokenNameScore('Nier Stone Shadow'),900);
@@ -291,7 +291,7 @@ test('Jumpgate tracker supports sheet-name prefix matching without confusing unr
 });
 test('Jumpgate nameplate tracking takes priority over generic selected DOM fallback',()=>{
   const {r,doc}=env(),p=r.profile();
-  p.name='Nier';p.sheetLink.name='Nier';
+  p.name='Nier';
   const tokenBox={getAttribute(){return 'height:70px;width:70px;pointer-events:none;'},
     getBoundingClientRect(){return {left:500,top:350,width:70,height:70,right:570,bottom:420}}};
   const overlay={children:[tokenBox],querySelector(sel){return sel==='.nameplate-container'?{textContent:'Nier Stoneshadow'}:null},
