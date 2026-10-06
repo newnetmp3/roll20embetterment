@@ -55,3 +55,14 @@ The combat HUD now prefers Roll20 Jumpgate's rendered tabletop token overlay ins
 R20eb leaves the token center clear and renders its hit-point gauge immediately below the active outer ring, above the Back / Root / Pin / Sheet controls. The gauge includes temporary HP when present and changes appearance at wounded and critical thresholds. Its height is included in viewport clamping.
 
 When R20eb is enabled, the matched Jumpgate player token is tagged locally with `data-r20e-player-token="true"`. R20eb hides that token's native Jumpgate `.bars-above` and `.nameplate-container`. It also hides Roll20's selected-token status-marker button and bar controls in `#radial-menu` (buttons 2–5 and an editable fourth bar), while deliberately leaving the native settings/gear button (button 1) available. These are presentation-only CSS changes; Roll20 token values are not modified.
+
+## Debug & local maintenance tab (2.2.4)
+
+R20eb now includes a dedicated **Debug** tab. It shows local profile/sheet-link status, cached attribute count, and current token-tracking status. The tab can export a compact debug report, clear R20eb's sheet scan/cache state, and force player-token re-detection.
+
+Two reset levels are available:
+
+- **Clear imported sheet data** resets imported stats, abilities, currency, spell slots, sheet linkage, and entries marked `origin: "sheet"`, while preserving local journal entries and locally-created spells, inventory, resources, and quests.
+- **Clear current character data** resets the entire current R20eb character profile to defaults while preserving that profile's name and ID.
+
+Both actions change browser-local R20eb data only. They do not edit, delete, save, or otherwise modify the authoritative Roll20 character sheet.
