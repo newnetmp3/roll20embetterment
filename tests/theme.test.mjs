@@ -27,7 +27,7 @@ function environment(saved){
 test('new campaigns use BG3 dark fantasy as default',()=>{
   const {spec}=environment();
   assert.equal(spec.RB.state.settings.theme,'bg3');
-  assert.equal(spec.RB.version,'2.2.3');
+  assert.equal(spec.RB.version,'2.2.4');
   assert.match(spec.settingsUI(),/Baldurian • Dark Fantasy \(default\)/);
   assert.equal(spec.RB.state.settings.showBar,false);
   assert.equal(spec.RB.state.settings.showHud,false);
@@ -50,6 +50,7 @@ test('render includes decorated navigation and the Sheet importer',()=>{
   assert.match(markup,/rbe-section-heading/);
   assert.match(markup,/rbe-nav-glyph/);
   assert.match(markup,/data-action="tab" data-value="Sheet"/);
+  assert.match(markup,/data-action="tab" data-value="Debug"/);
   assert.match(markup,/rbe-hero-seal/);
   assert.match(markup,/Import character sheet/);
 });
@@ -69,9 +70,9 @@ test('HUD displays tracked HP and concentration in decorated theme',()=>{
   assert.match(spec.hudUI(),/rbe-hud-name/);
   assert.match(spec.hudUI(),/10\/10 HP/);
 });
-test('all ten player tabs have themed readable headings',()=>{
+test('all eleven player tabs have themed readable headings',()=>{
   const {spec}=environment();
-  for(const tab of ['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings']){
+  for(const tab of ['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings','Debug']){
     const heading=spec.themeHeading(tab);
     assert.match(heading,/rbe-section-heading/);
     assert.match(heading,/<h2>[^<]+<\/h2>/);
