@@ -27,7 +27,7 @@ function environment(saved){
 test('new campaigns use BG3 dark fantasy as default',()=>{
   const {spec}=environment();
   assert.equal(spec.RB.state.settings.theme,'bg3');
-  assert.equal(spec.RB.version,'2.2.4');
+  assert.equal(spec.RB.version,'2.2.5');
   assert.match(spec.settingsUI(),/Baldurian • Dark Fantasy \(default\)/);
   assert.equal(spec.RB.state.settings.showBar,false);
   assert.equal(spec.RB.state.settings.showHud,false);

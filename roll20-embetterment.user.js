@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.2.4
+// @version      2.2.5
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
 // @match        https://app.roll20.net/editor
 // @match        https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/*
+// @match        https://advanced-sheets.production.roll20preflight.net/*dnd2024byroll20/*
 // @grant        none
 // @run-at       document-idle
 // @updateURL    https://raw.githubusercontent.com/newnetmp3/roll20embetterment/main/roll20-embetterment.user.js
@@ -18,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.2.4',
+  version: '2.2.5',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -634,7 +635,7 @@ function findSheetForms(doc=document){
     if(!frame)continue;
     let url;
     try{url=new URL(frame.src||frame.getAttribute('src'),location.href);}catch{continue;}
-    if(url.origin!==RBE_BEACON_ORIGIN||!/^\/dnd2024byroll20(?:\/|$)/.test(url.pathname))continue;
+    if(url.origin!==RBE_BEACON_ORIGIN||!/\/dnd2024byroll20(?:\/|$)/.test(url.pathname))continue;
     const title=String(dialog.querySelector?.('.asv__header__name')?.textContent||'').trim()||
       String(frame.getAttribute?.('title')||'').replace(/^Character sheet for\s+/i,'').trim();
     const name=sheetMeaningfulName(title)?sheetText(title,100):'Open character sheet';
@@ -675,6 +676,12 @@ function findSheetForms(doc=document){
   options.sort((a,b)=>b.score-a.score);
   return options.filter((x,i)=>!options.slice(0,i).some(y=>
     x.root===y.root||x.root.contains?.(y.root)||y.root.contains?.(x.root))).slice(0,25);
+}
+function sheetCandidates(doc=document){
+  const local=findSheetForms(doc),remote=typeof beaconPopoutCandidates==='function'?beaconPopoutCandidates():[];
+  const out=[...local];
+  for(const candidate of remote)if(!out.some(x=>x.id===candidate.id))out.push(candidate);
+  return out.sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,25);
 }
 function snapshotSheet(input,label='Character'){
   const attrs=sheetAttributes(input),values=Object.fromEntries(Object.entries(attrs).map(([key,val])=>[key.toLowerCase(),val]));
@@ -797,8 +804,8 @@ function applySheetSnapshot(p,s){
   return true;
 }
 function scanSheets(){
-  RB.openSheets=findSheetForms(document);
-  if(!RB.openSheets.length){toast('Open your sheet inside Roll20 (disable pop-out), then Scan again.');return;}
+  RB.openSheets=sheetCandidates(document);
+  if(!RB.openSheets.length){toast('Open the official character sheet in Roll20 or its popout, then Scan again.');return;}
   const current=profile().sheetLink?.name,idx=RB.openSheets.findIndex(x=>x.name===current);
   RB.selectedSheet=idx>=0?idx:0;RB.sheetSignature=null;
   render();toast('Found '+RB.openSheets.length+' open sheet(s).');
@@ -808,7 +815,7 @@ function syncSheet({quiet=false,fieldsOverride=null}={}){
   const candidate=RB.openSheets?.[RB.selectedSheet||0];
   if(!candidate){if(!quiet)toast('Scan for an open sheet first.');return false;}
   if(candidate.root?.isConnected===false){if(!quiet)toast('Sheet closed; reopen and scan.');return false;}
-  if(candidate.frame){if(!quiet)toast('Importing 2024 iframe sheet…');return false;}
+  if(beaconRemoteCandidate(candidate)){if(!quiet)toast('Importing official 2024 sheet…');return false;}
   const live=readSheetFields(candidate.root);
   const cached=RB.sheetWarm?.root===candidate.root?RB.sheetWarm?.scan?.fields:null;
   const fields=fieldsOverride || (cached?{...cached,...live}:live);
@@ -834,11 +841,11 @@ function syncSheet({quiet=false,fieldsOverride=null}={}){
 // Warm the virtualized attribute list without changing player data. The
 // explicit Import action uses the collected fields and can retry if needed.
 function sheetPrefetchAttributes(candidate){
-  if(!candidate?.root)return;
-  if(candidate.frame){
-    const existing=RB.sheetWarm;
-    if(existing?.frame===candidate.frame&&(existing.promise||Date.now()-(existing.at||0)<20000))return;
-    const cache={frame:candidate.frame,root:candidate.root,at:0,promise:null,scan:null};
+  if(!candidate)return;
+  if(beaconRemoteCandidate(candidate)){
+    const endpoint=candidate.frame?.contentWindow||candidate.popoutWindow,existing=RB.sheetWarm;
+    if(existing?.endpoint===endpoint&&(existing.promise||Date.now()-(existing.at||0)<20000))return;
+    const cache={endpoint,frame:candidate.frame||null,popoutSession:candidate.popoutSession||null,root:candidate.root||null,at:0,promise:null,scan:null};
     RB.sheetWarm=cache;
     cache.promise=requestBeaconFrame(candidate,true).then(scan=>{
       cache.scan=scan;cache.at=Date.now();
@@ -854,7 +861,7 @@ function sheetPrefetchAttributes(candidate){
     }).finally(()=>{cache.promise=null;});
     return;
   }
-  if(!sheetScrollableAttributeContainer(candidate.root))return;
+  if(!candidate.root||!sheetScrollableAttributeContainer(candidate.root))return;
   if(RB.sheetWarm?.root===candidate.root &&
      (RB.sheetWarm.promise || Date.now()-(RB.sheetWarm.at||0)<20000))return;
   const cache={root:candidate.root,at:0,promise:null,scan:null};
@@ -883,16 +890,17 @@ async function syncSheetDeep(){
   const originalProfile=RB.state.current;
   RB.sheetDeepSync=true;
   try{
-    if(candidate.frame){
-      const cache=RB.sheetWarm?.frame===candidate.frame?RB.sheetWarm:null;
+    if(beaconRemoteCandidate(candidate)){
+      const endpoint=candidate.frame?.contentWindow||candidate.popoutWindow;
+      const cache=RB.sheetWarm?.endpoint===endpoint?RB.sheetWarm:null;
       let scan=cache?.promise?await cache.promise:cache?.scan;
       if(!scan||Date.now()-(cache?.at||0)>30000)scan=await requestBeaconFrame(candidate,true);
       if(!RB.openSheets?.includes(candidate)||RB.state.current!==originalProfile)return;
       if(beaconFrameSnapshot(candidate,scan)){
-        RB.sheetWarm={root:candidate.root,frame:candidate.frame,scan,at:Date.now(),promise:null};
+        RB.sheetWarm={root:candidate.root||null,frame:candidate.frame||null,popoutSession:candidate.popoutSession||null,endpoint,scan,at:Date.now(),promise:null};
         toast('Imported '+Object.keys(scan.fields).length+' 2024 attributes and '+
           (scan.visible?.coverage?.visibleFields||0)+' visible values from '+candidate.name+'.');
-      }else toast('The iframe replied, but its current tab contains no readable character data.');
+      }else toast('The official sheet replied, but its current tab contains no readable character data.');
       return;
     }
     // If background preloading is in progress, share it rather than visibly
@@ -922,7 +930,7 @@ function sheetAutoTick(){
   const link=profile().sheetLink,candidate=RB.openSheets?.[RB.selectedSheet||0];
   if(!link?.auto||!link.lastSync||!candidate)return;
   if(link.source!==candidate.id&&link.name!==candidate.name)return;
-  if(candidate.frame){
+  if(beaconRemoteCandidate(candidate)){
     if(RB.frameRefreshBusy)return;
     RB.frameRefreshBusy=true;
     requestBeaconFrame(candidate,false).then(scan=>{
@@ -1071,84 +1079,161 @@ function mergeBeaconSnapshot(named,visible){
 }
 
 // ===== 17_frame_bridge.js =====
-// Communication between the Roll20 editor and the separate D&D 2024 sheet iframe.
-// Only a recognized, player-opened Roll20 sheet iframe is allowed to exchange data.
+// Communication between the Roll20 editor and the official D&D 2024 sheet.
+// Supports both the embedded iframe and Roll20's official top-level popout.
+// Only player-opened documents from the exact Roll20 advanced-sheet origin
+// are allowed to exchange read-only snapshots with the editor.
 const RBE_BEACON_ORIGIN='https://advanced-sheets.production.roll20preflight.net';
 const RBE_EDITOR_ORIGIN='https://app.roll20.net';
 const RBE_BRIDGE_MARKER='roll20-embetterment:beacon-sheet:v1';
 const rbeFramePending=new Map();
+const rbePopoutSheets=new Map();
 let rbeFrameCounter=0;
-function isBeaconFrame(){
+let rbeReaderAck=false,rbeReaderAnnounceTimer=null,rbeReaderAnnounceCount=0;
+const rbeReaderSession=(crypto.randomUUID?.()||('sheet-'+Date.now()+'-'+Math.random().toString(36).slice(2))).slice(0,100);
+
+function isBeaconSheetDocument(){
   return location.hostname==='advanced-sheets.production.roll20preflight.net' &&
-    /^\/dnd2024byroll20(?:\/|$)/.test(location.pathname) && window.parent!==window;
+    /\/dnd2024byroll20(?:\/|$)/.test(location.pathname);
+}
+function isBeaconFrame(){
+  return isBeaconSheetDocument() && window.parent!==window;
+}
+function isBeaconPopout(){
+  return isBeaconSheetDocument() && window.parent===window;
 }
 function isRoll20Editor(){
   return location.hostname==='app.roll20.net'&&/^\/editor(?:\/|$)/.test(location.pathname);
 }
-function beaconFrameForMessage(event){
+function beaconRemoteCandidate(candidate){
+  return !!(candidate?.frame?.contentWindow||candidate?.popoutWindow);
+}
+function beaconReaderName(){
+  const title=String(document.title||'').trim();
+  if(sheetMeaningfulName(title))return sheetText(title,100);
+  const selectors=['[data-testid="character-name"]','.profile__name','.profile__name input','.character-name'];
+  for(const selector of selectors){
+    const el=document.querySelector?.(selector);
+    const value=String(el?.value||el?.textContent||'').replace(/\s+/g,' ').trim();
+    if(sheetMeaningfulName(value))return sheetText(value,100);
+  }
+  return 'Open character sheet';
+}
+function beaconReaderPeer(){
+  if(isBeaconFrame())return window.parent;
+  if(isBeaconPopout()){
+    try{if(window.opener&&!window.opener.closed)return window.opener;}catch{}
+  }
+  return null;
+}
+function beaconFrameUrlOkay(frame){
+  if(!frame)return false;
+  try{
+    const src=new URL(frame.src||frame.getAttribute?.('src'),location.href);
+    return src.origin===RBE_BEACON_ORIGIN&&/\/dnd2024byroll20(?:\/|$)/.test(src.pathname);
+  }catch{return false;}
+}
+function beaconPopoutCandidates(){
+  const live=[];
+  for(const [session,candidate] of rbePopoutSheets){
+    let closed=false;
+    try{closed=!!candidate.popoutWindow?.closed;}catch{}
+    if(closed){rbePopoutSheets.delete(session);continue;}
+    live.push(candidate);
+  }
+  return live.sort((a,b)=>(b.lastSeen||0)-(a.lastSeen||0));
+}
+function beaconRegisterPopout(event,message){
   if(event.origin!==RBE_BEACON_ORIGIN||!event.source)return null;
-  for(const candidate of RB.openSheets||[]){
-    const f=candidate.frame;
-    if(f?.contentWindow===event.source &&
-      new URL(f.src||f.getAttribute?.('src'),location.href).origin===RBE_BEACON_ORIGIN)return candidate;
+  const session=String(message.session||'').slice(0,100);
+  if(!/^[A-Za-z0-9_.:-]{6,100}$/.test(session))return null;
+  const rawName=sheetText(message.name,100);
+  const name=sheetMeaningfulName(rawName)?rawName:'Open character sheet';
+  let candidate=rbePopoutSheets.get(session);
+  if(!candidate){
+    candidate={id:'popout:'+session,name,root:null,frame:null,popoutWindow:event.source,
+      popoutSession:session,origin:RBE_BEACON_ORIGIN,readableFields:0,visibleFields:0,
+      kind:'D&D 2024 official sheet popout',score:3000,lastSeen:Date.now()};
+    rbePopoutSheets.set(session,candidate);
+  }else{
+    candidate.name=name;candidate.popoutWindow=event.source;candidate.lastSeen=Date.now();
+  }
+  const existing=(RB.openSheets||[]).filter(x=>x.id!==candidate.id);
+  RB.openSheets=[...existing,candidate].sort((a,b)=>(b.score||0)-(a.score||0));
+  if(RB.visible&&RB.tab==='Sheet'&&!RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
+  return candidate;
+}
+function beaconCandidateForMessage(event){
+  if(event.origin!==RBE_BEACON_ORIGIN||!event.source)return null;
+  const candidates=[...(RB.openSheets||[]),...beaconPopoutCandidates()];
+  for(const candidate of candidates){
+    if(candidate.frame?.contentWindow===event.source&&beaconFrameUrlOkay(candidate.frame))return candidate;
+    if(candidate.popoutWindow===event.source&&candidate.origin===RBE_BEACON_ORIGIN)return candidate;
   }
   return null;
 }
 function onBeaconFrameMessage(event){
   const message=event.data;
   if(!message||message.bridge!==RBE_BRIDGE_MARKER)return;
-  const candidate=beaconFrameForMessage(event);
+  if(message.type==='ready'&&message.mode==='popout'){
+    const candidate=beaconRegisterPopout(event,message);
+    if(!candidate)return;
+    try{event.source.postMessage({bridge:RBE_BRIDGE_MARKER,type:'ack',session:message.session},RBE_BEACON_ORIGIN);}catch{}
+    sheetPrefetchAttributes(candidate);
+    return;
+  }
+  const candidate=beaconCandidateForMessage(event);
   if(!candidate)return;
   if(message.type==='ready'){
     candidate.frameReady=true;
+    try{event.source.postMessage({bridge:RBE_BRIDGE_MARKER,type:'ack',session:message.session||''},RBE_BEACON_ORIGIN);}catch{}
     sheetPrefetchAttributes(candidate);
     return;
   }
   if(message.type!=='snapshot'||typeof message.id!=='string')return;
   const pending=rbeFramePending.get(message.id);
-  if(!pending||pending.frame!==candidate.frame)return;
+  if(!pending||pending.target!==event.source)return;
   rbeFramePending.delete(message.id);clearTimeout(pending.timeout);
+  candidate.lastSeen=Date.now();
   if(message.error)return pending.reject(new Error(String(message.error).slice(0,160)));
   const fields=sheetAttributes(message.fields);
   if(Object.keys(fields).length>6000)return pending.reject(new Error('Character sheet returned too many fields'));
   const visible=message.visible&&typeof message.visible==='object'?message.visible:
     beaconImportVisible({innerText:''},candidate.name);
-  // The window title, not a generic icon or panel heading, identifies the
-  // character. Local file data still gets validated by snapshotSheet.
   pending.resolve({fields,visible,full:!!message.full,expected:Math.max(0,int(message.expected)),
-    scannedPages:Math.max(1,int(message.scannedPages)),tabs:Array.isArray(message.tabs)?message.tabs.slice(0,48).map(x=>String(x).slice(0,100)):[],at:Date.now()});
+    scannedPages:Math.max(1,int(message.scannedPages)),
+    tabs:Array.isArray(message.tabs)?message.tabs.slice(0,48).map(x=>String(x).slice(0,100)):[],at:Date.now()});
 }
 function requestBeaconFrame(candidate,deep=false,options={}){
   return new Promise((resolve,reject)=>{
-    const f=candidate?.frame;
-    if(!f?.contentWindow)return reject(new Error('Character sheet iframe is no longer open'));
-    let src;
-    try{src=new URL(f.src||f.getAttribute('src'),location.href);}catch{return reject(new Error('Invalid character sheet iframe'));}
-    if(src.origin!==RBE_BEACON_ORIGIN||!/^\/dnd2024byroll20(?:\/|$)/.test(src.pathname))
-      return reject(new Error('Unrecognized sheet origin'));
+    const target=candidate?.frame?.contentWindow||candidate?.popoutWindow;
+    if(!target)return reject(new Error('Official character sheet reader is no longer available'));
+    if(candidate.frame&&!beaconFrameUrlOkay(candidate.frame))
+      return reject(new Error('Unrecognized character sheet iframe origin'));
+    if(candidate.popoutWindow&&candidate.origin!==RBE_BEACON_ORIGIN)
+      return reject(new Error('Unrecognized character sheet popout origin'));
     const id='rbe'+(++rbeFrameCounter);
     const timeout=setTimeout(()=>{
       rbeFramePending.delete(id);
-      reject(new Error('No reply from the 2024 sheet reader. Reload Roll20 and allow Tampermonkey on advanced-sheets.production.roll20preflight.net.'));
+      reject(new Error('No reply from the official 2024 sheet reader. Reload the sheet and allow R20eb/Tampermonkey on advanced-sheets.production.roll20preflight.net.'));
     },options.tour?90000:18000);
-    rbeFramePending.set(id,{frame:f,resolve,reject,timeout});
+    rbeFramePending.set(id,{target,candidateId:candidate.id,resolve,reject,timeout});
     try{
-      f.contentWindow.postMessage({bridge:RBE_BRIDGE_MARKER,type:'scan',id,deep:!!deep,tour:!!options.tour},RBE_BEACON_ORIGIN);
+      target.postMessage({bridge:RBE_BRIDGE_MARKER,type:'scan',id,deep:!!deep,tour:!!options.tour},RBE_BEACON_ORIGIN);
     }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
   });
 }
 function beaconFrameSnapshot(candidate,scan,{quiet=false}={}){
-  if(!scan||!candidate?.frame)return false;
+  if(!scan||!beaconRemoteCandidate(candidate))return false;
   const visual=scan.visible&&typeof scan.visible==='object'?scan.visible:
     beaconImportVisible({innerText:''},candidate.name);
   const data=mergeBeaconSnapshot(snapshotSheet(scan.fields,candidate.name),visual);
   if(!data.coverage.attributes&&!data.coverage.visibleFields)return false;
-  // Identity comes from .asv__header__name in the VTT parent and is never
-  // inferred from a neighboring pencil icon or a different sheet.
   data.name=candidate.name;
   if(!applySheetSnapshot(profile(),data))return false;
   candidate.readableFields=data.coverage.attributes;
   candidate.visibleFields=data.coverage.visibleFields;
+  candidate.lastSeen=Date.now();
   profile().sheetLink.source=candidate.id;
   RB.sheetSignature=JSON.stringify(scan.fields)+'|'+(visual.signature||'');
   save();
@@ -1157,7 +1242,8 @@ function beaconFrameSnapshot(candidate,scan,{quiet=false}={}){
   return true;
 }
 async function beaconFrameReadRequest(event){
-  if(event.origin!==RBE_EDITOR_ORIGIN || event.source!==window.parent)return;
+  const peer=beaconReaderPeer();
+  if(event.origin!==RBE_EDITOR_ORIGIN||!peer||event.source!==peer)return;
   const message=event.data;
   if(!message||message.bridge!==RBE_BRIDGE_MARKER||message.type!=='scan'||
     typeof message.id!=='string'||message.id.length>100)return;
@@ -1166,20 +1252,46 @@ async function beaconFrameReadRequest(event){
     const scan=message.tour?await sheetTourFrameScan():(message.deep?await sheetHarvestBeaconRows(scope):{
       fields:readSheetFields(scope),full:false,expected:sheetExpectedAttributeCount(scope),scannedPages:1
     });
-    const visible=message.tour?scan.visible:beaconImportVisible(scope,'Open character sheet');
+    const visible=message.tour?scan.visible:beaconImportVisible(scope,beaconReaderName());
     const fields=Object.fromEntries(Object.entries(scan.fields).slice(0,6000));
-    window.parent.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
+    peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
       fields,visible,full:scan.full,expected:scan.expected,scannedPages:scan.scannedPages,tabs:scan.tabs||[]},RBE_EDITOR_ORIGIN);
   }catch(err){
-    window.parent.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
-      error:String(err.message||err).slice(0,160)},RBE_EDITOR_ORIGIN);
+    try{peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
+      error:String(err.message||err).slice(0,160)},RBE_EDITOR_ORIGIN);}catch{}
   }
 }
+function beaconReaderAnnounce(){
+  const peer=beaconReaderPeer();
+  if(!peer)return false;
+  try{
+    peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'ready',
+      mode:isBeaconPopout()?'popout':'iframe',session:rbeReaderSession,name:beaconReaderName()},RBE_EDITOR_ORIGIN);
+    return true;
+  }catch{return false;}
+}
+function beaconReaderMessage(event){
+  const message=event.data;
+  if(message?.bridge===RBE_BRIDGE_MARKER&&message.type==='ack'&&
+     event.origin===RBE_EDITOR_ORIGIN&&event.source===beaconReaderPeer()){
+    rbeReaderAck=true;
+    if(rbeReaderAnnounceTimer)clearInterval(rbeReaderAnnounceTimer);
+    rbeReaderAnnounceTimer=null;
+    return;
+  }
+  beaconFrameReadRequest(event);
+}
 function startBeaconFrameReader(){
-  window.addEventListener('message',beaconFrameReadRequest);
-  window.parent.postMessage({bridge:RBE_BRIDGE_MARKER,type:'ready'},RBE_EDITOR_ORIGIN);
-  // First ready may be posted before the VTT parent has discovered the
-  // character dialog. It still responds to explicit scan requests later.
+  window.addEventListener('message',beaconReaderMessage);
+  beaconReaderAnnounce();
+  rbeReaderAnnounceTimer=setInterval(()=>{
+    if(rbeReaderAck||++rbeReaderAnnounceCount>40){
+      clearInterval(rbeReaderAnnounceTimer);rbeReaderAnnounceTimer=null;return;
+    }
+    beaconReaderAnnounce();
+  },1500);
+  window.addEventListener?.('focus',beaconReaderAnnounce);
+  document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState==='visible')beaconReaderAnnounce();});
 }
 function startBeaconParentBridge(){
   window.addEventListener('message',onBeaconFrameMessage);
@@ -1190,9 +1302,9 @@ function startBeaconParentBridge(){
 // No private Roll20 models, endpoint calls, action rolls, or character writes.
 const RBE_SHEET_TOUR_MAIN=['Character Sheet','Bio & Info','Advanced Tools'];
 const RBE_SHEET_TOUR_INNER=[
-  'Combat','Spells','Inventory','Features & Traits','Features and Traits',
-  'Notes','Actions','Resources','Skills','Equipment','Character','Details',
-  'Background','Feats','Cantrips',...Array.from({length:9},(_,i)=>'Level '+(i+1))
+  'Combat','Skills & Tools','Spells','Inventory','Features & Traits','Features and Traits','Notes','About',
+  'Actions','Resources','Skills','Equipment','Character','Details','Background','Feats','Cantrips',
+  ...Array.from({length:9},(_,i)=>'Level '+(i+1))
 ];
 const sheetTourDelay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function sheetTourStatus(text) {
@@ -1209,6 +1321,8 @@ function sheetTourTabs(scope,labels,selector) {
   const found=[];
   for(const el of Array.from(scope.querySelectorAll(selector)||[]).slice(0,1200)){
     if(!set.has(sheetTourLabel(el).toLowerCase()) || el.disabled)continue;
+    const rect=el.getBoundingClientRect?.();
+    if(rect&&Number.isFinite(rect.width)&&Number.isFinite(rect.height)&&rect.width===0&&rect.height===0)continue;
     // Never click an in-game action just because its text happens to match.
     const isTab=selector==='.asv__header__nav__tabs_link' ||
       el.getAttribute?.('role')==='tab' ||
@@ -1274,7 +1388,7 @@ async function sheetTourFrameScan() {
   const scope=document.body;
   const acc=sheetTourAccumulator();
   const tabs=sheetTourTabs(document,RBE_SHEET_TOUR_INNER,
-    'button,[role="tab"],nav a,[class*="tabs"] a');
+    '.layout-tabbed-panel__tab-link[role="tab"],[role="tab"],nav a,[class*="tabs"] a,button');
   const original=tabs.find(sheetTourActive)||tabs[0]||null;
   let count=0;
   const gather=async label=>{
@@ -1330,7 +1444,7 @@ function sheetTourPromptOpen() {
       if(Date.now()-started>120000)sheetTourStatus('Waiting timed out. Click Import all tabs to try again.');
       return;
     }
-    const options=findSheetForms(document);
+    const options=sheetCandidates(document);
     if(!options.length)return;
     clearInterval(RB.sheetTourWatch);RB.sheetTourWatch=null;
     RB.sheetTourWaiting=false;
@@ -1349,7 +1463,7 @@ function sheetTourCancel(){
 }
 async function sheetTourStart() {
   if(RB.sheetTourBusy)return;
-  const sheets=findSheetForms(document);
+  const sheets=sheetCandidates(document);
   if(!sheets.length){sheetTourPromptOpen();return;}
   if(RB.sheetTourWaiting)sheetTourCancel();
   RB.openSheets=sheets;
@@ -1368,10 +1482,10 @@ async function sheetTourStart() {
     await sheetTourCollect(dialog,acc,'Current Roll20 view',false);
     const main=tabs.find(x=>sheetTourLabel(x)==='Character Sheet');
     if(main && !sheetTourActive(main)){main.click?.();await sheetTourDelay(250);}
-    if(candidate.frame){
-      sheetTourStatus('Reading Combat, Spells, Inventory and Features…');
+    if(beaconRemoteCandidate(candidate)){
+      sheetTourStatus(candidate.popoutWindow?'Reading official popout tabs…':'Reading Combat, Spells, Inventory and Features…');
       const scan=await requestBeaconFrame(candidate,true,{tour:true});
-      sheetTourAdd(acc,scan,'Character Sheet');
+      sheetTourAdd(acc,scan,candidate.popoutWindow?'Official sheet popout':'Character Sheet');
     }else{
       await sheetTourCollect(dialog,acc,'Character Sheet',true);
     }
@@ -1388,15 +1502,15 @@ async function sheetTourStart() {
       }
       await sheetTourCollect(dialog,acc,label,true);
     }
-    if(RB.state.current!==profileId||dialog.isConnected===false)
+    if(RB.state.current!==profileId||dialog?.isConnected===false)
       throw new Error('Character sheet or local profile changed during import.');
     // One transaction: no intermediate partial tab results overwrite the profile.
-    const didImport=candidate.frame?beaconFrameSnapshot(candidate,acc):
+    const didImport=beaconRemoteCandidate(candidate)?beaconFrameSnapshot(candidate,acc):
       applySheetSnapshot(profile(),mergeBeaconSnapshot(snapshotSheet(acc.fields,candidate.name),acc.visible));
     if(!didImport)throw new Error('No accessible values were found in the opened sheet.');
-    if(!candidate.frame){profile().sheetLink.source=candidate.id;save();}
+    if(!beaconRemoteCandidate(candidate)){profile().sheetLink.source=candidate.id;save();}
     profile().sheetLink.tabsVisited=acc.tabs;
-    RB.sheetWarm={frame:candidate.frame,root:dialog,scan:acc,at:Date.now(),promise:null};
+    RB.sheetWarm={frame:candidate.frame||null,popoutSession:candidate.popoutSession||null,endpoint:candidate.frame?.contentWindow||candidate.popoutWindow||null,root:dialog||null,scan:acc,at:Date.now(),promise:null};
     save();
     sheetTourStatus('Imported '+Object.keys(acc.fields).length+' named attributes and '+
       acc.visible.coverage.visibleFields+' visible values from '+acc.tabs.length+' views.');
@@ -2006,7 +2120,7 @@ function sheetUI() {
     '<p class="hint">Import accessible character data in one run. Embetterment visits Character Sheet, Bio & Info, Advanced Tools → Attributes, and the available combat/spell sections, then restores the original tabs. Read-only; no rolls or sheet edits.</p>'+
     '<div class="row">'+button('Import all sheet tabs','sheetTourAll','','primary')+button('Find open sheets','scanSheets')+button('② Import visible attributes','syncSheet')+'</div>'+
     '<p id="rbe-sheet-tour-status" role="status" class="hint">'+html(RB.sheetTourStatus||'Ready to import.')+'</p>'+
-    (RB.sheetTourWaiting?'<div class="card"><strong>Open your character sheet in Roll20 now</strong><p class="hint">Open Journal → '+html(p.name)+' → Character Sheet. Embetterment will detect the sheet and automatically start importing its available tabs.</p>'+button('Cancel waiting','sheetTourCancel')+'</div>':'')+
+    (RB.sheetTourWaiting?'<div class="card"><strong>Open your character sheet in Roll20 now</strong><p class="hint">Open Journal → '+html(p.name)+' → Character Sheet, either embedded or in Roll20’s official popout. R20eb will detect it and automatically import the available tabs.</p>'+button('Cancel waiting','sheetTourCancel')+'</div>':'')+
     (options.length?'<label class="field">Open sheet<select data-sheet-pick>'+options.map((sheet,i)=>
       '<option value="'+i+'" '+(i===(RB.selectedSheet||0)?'selected':'')+'>'+html(sheet.name)+' · '+int(sheet.readableFields)+' named / '+int(sheet.visibleFields)+' visible</option>').join('')+'</select></label>'+
       '<p class="hint">Found '+options.length+' candidate sheet(s). <strong>'+int(options[RB.selectedSheet||0]?.readableFields)+' named attributes</strong> and <strong>'+int(options[RB.selectedSheet||0]?.visibleFields)+' visible values</strong> detected. Scanning automatically gathers the full scrollable Attributes list behind a frozen view and restores your position. Click <strong>Import visible attributes</strong> to apply the gathered values locally. For attacks and spells not exposed as attributes, switch to Character Sheet → Combat / Spells, then scan again.</p>':
@@ -2037,7 +2151,7 @@ function sheetUI() {
 function homeUI() {
   const p=profile(),s=p.stats;
   return `<div class="stack"><div class="row between"><h2>${html(p.name)} — Player HUD <span class="pill">${p.sheetLink?'sheet-linked · local copy':'local tracking'}</span></h2>${button('⚙ Profiles','profiles')}</div>
-  <div class="card"><div class="row between"><strong>Character-sheet import</strong>${button(p.sheetLink?'View linked sheet':'Import character sheet','tab','data-value="Sheet"','primary')}</div><p class="hint">Open your D&amp;D 5E sheet inside Roll20, then scan and sync from the Sheet tab.</p></div>
+  <div class="card"><div class="row between"><strong>Character-sheet import</strong>${button(p.sheetLink?'View linked sheet':'Import character sheet','tab','data-value="Sheet"','primary')}</div><p class="hint">Open your official D&amp;D 5E sheet in Roll20, embedded or popped out, then scan and sync from the Sheet tab.</p></div>
   ${RB.state.settings.theme==='bg3'? `<div class="rbe-hero" role="group" aria-label="Adventurer profile"><div class="rbe-hero-seal" aria-hidden="true">✦</div><div class="rbe-hero-copy"><div class="rbe-eyebrow">THE ADVENTURER</div><div class="rbe-hero-name">${html(p.name)}</div><div class="rbe-hero-meta">Level ${int(s.level)} ${html(p.sheetDetails?.class||'Adventurer')}${p.sheetDetails?.race?' · '+html(p.sheetDetails.race):''}</div><span class="pill">${p.sheetLink?'Sheet-linked · read only':'Local character record'}</span></div></div>` : ''}
   <div class="card"><div class="row between"><strong>Hit Points <span class="stat">${int(s.hp)} / ${int(s.maxHp)}</span></strong><span class="hint">Temp: ${int(s.tempHp)} • AC ${int(s.ac)} • Speed ${int(s.speed)} ft</span></div>${progress(s.hp,s.maxHp)}
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
@@ -2914,7 +3028,7 @@ function boot() {
   RB.visible=!!RB.state.settings.alwaysOpen;render();startRadialTracking();
 }
 // Never install the combat HUD inside the external character-sheet iframe.
-const rbeStartup=isBeaconFrame()?startBeaconFrameReader:isRoll20Editor()?boot:null;
+const rbeStartup=isBeaconSheetDocument()?startBeaconFrameReader:isRoll20Editor()?boot:null;
 if(rbeStartup){
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rbeStartup,{once:true});
   else rbeStartup();

@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 
 const root=resolve(import.meta.dirname,'..');
-const modules=['00_core.js','10_roll20_bridge.js','14_beacon_dom.js','15_sheet_link.js','16_beacon_visible.js','17_frame_bridge.js','19_radial_hud.js','20_ui.js','25_bg3_theme.js','30_events.js'];
+const modules=['00_core.js','10_roll20_bridge.js','14_beacon_dom.js','15_sheet_link.js','16_beacon_visible.js','17_frame_bridge.js','18_sheet_tour.js','19_radial_hud.js','20_ui.js','25_bg3_theme.js','30_events.js'];
 const script=modules.map(name=>readFileSync(join(root,'src',name),'utf8')).join('\n');
 function harness(){
   const storage=new Map(),events={};
@@ -16,7 +16,7 @@ function harness(){
     localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}}
   };
   vm.createContext(context);
-  vm.runInContext(script+'\nload(); globalThis.h={RB,findSheetForms,requestBeaconFrame,onBeaconFrameMessage,beaconFrameSnapshot,beaconFrameReadRequest,isBeaconFrame,isRoll20Editor};',context);
+  vm.runInContext(script+'\nload(); globalThis.h={RB,findSheetForms,requestBeaconFrame,onBeaconFrameMessage,beaconFrameSnapshot,beaconFrameReadRequest,isBeaconSheetDocument,isBeaconFrame,isBeaconPopout,isRoll20Editor,beaconPopoutCandidates,beaconRemoteCandidate};',context);
   return {h:context.h,events,context};
 }
 function sheetFixture(){
@@ -79,7 +79,7 @@ test('same-origin page has no permission to impersonate an open iframe',async()=
 test('bridge rejects foreign iframe origins before posting messages',async()=>{
   const {h}=harness(),f=sheetFixture();
   f.frame.src='https://evil.example/dnd2024byroll20/';
-  await assert.rejects(h.requestBeaconFrame({frame:f.frame}),/Unrecognized sheet origin/);
+  await assert.rejects(h.requestBeaconFrame({frame:f.frame}),/Unrecognized character sheet iframe origin/);
   assert.equal(f.sent.length,0);
 });
 test('child reader ignores cross-origin messages not sent by app.roll20.net',async()=>{
@@ -100,4 +100,65 @@ test('erroneously imported pencil name is corrected using actual character windo
       attacks:[],resources:[],coverage:{visibleFields:1,sections:['Combat'],names:['HP']}}};
   assert.equal(h.beaconFrameSnapshot(h.RB.openSheets[0],scan),true);
   assert.equal(profile.name,'Nier');
+});
+
+test('official CDN-backed D&D 2024 popout URL is recognized as a sheet document',()=>{
+  const {h,context}=harness();
+  context.location.hostname='advanced-sheets.production.roll20preflight.net';
+  context.location.pathname='/https://storage.googleapis.com/roll20-cdn/advanced-sheets-production-9b1f7af9/dnd2024byroll20/sheet';
+  context.window.parent=context.window;
+  assert.equal(h.isBeaconSheetDocument(),true);
+  assert.equal(h.isBeaconPopout(),true);
+  assert.equal(h.isBeaconFrame(),false);
+});
+test('authenticated popout ready message registers a generic character candidate',()=>{
+  const {h}=harness(),sent=[];
+  const source={closed:false,postMessage(data,origin){sent.push({data,origin})}};
+  h.onBeaconFrameMessage({origin:'https://advanced-sheets.production.roll20preflight.net',source,
+    data:{bridge:'roll20-embetterment:beacon-sheet:v1',type:'ready',mode:'popout',
+      session:'sheet-session-123',name:'Aria Moonfall'}});
+  const popouts=h.beaconPopoutCandidates();
+  assert.equal(popouts.length,1);
+  assert.equal(popouts[0].name,'Aria Moonfall');
+  assert.equal(popouts[0].kind,'D&D 2024 official sheet popout');
+  assert.equal(popouts[0].popoutWindow,source);
+  assert.equal(h.beaconRemoteCandidate(popouts[0]),true);
+  assert.ok(h.RB.openSheets.some(x=>x.id===popouts[0].id));
+  assert.equal(sent[0].origin,'https://advanced-sheets.production.roll20preflight.net');
+  assert.equal(sent[0].data.type,'ack');
+});
+test('foreign origin cannot register a fake official sheet popout',()=>{
+  const {h}=harness(),source={closed:false,postMessage(){}};
+  h.onBeaconFrameMessage({origin:'https://evil.example',source,
+    data:{bridge:'roll20-embetterment:beacon-sheet:v1',type:'ready',mode:'popout',
+      session:'sheet-session-evil',name:'Aria Moonfall'}});
+  assert.equal(h.beaconPopoutCandidates().length,0);
+});
+test('registered popout can answer the same read-only snapshot requests as an iframe',async()=>{
+  const {h}=harness(),sent=[];
+  const source={closed:false,postMessage(data,origin){sent.push({data,origin})}};
+  h.onBeaconFrameMessage({origin:'https://advanced-sheets.production.roll20preflight.net',source,
+    data:{bridge:'roll20-embetterment:beacon-sheet:v1',type:'ready',mode:'popout',
+      session:'sheet-session-456',name:'Captain Rowan'}});
+  const candidate=h.beaconPopoutCandidates()[0];
+  const before=sent.length;
+  const promise=h.requestBeaconFrame(candidate,true);
+  const request=sent.slice(before).find(x=>x.data.type==='scan');
+  assert.ok(request);
+  assert.equal(request.origin,'https://advanced-sheets.production.roll20preflight.net');
+  h.onBeaconFrameMessage({origin:'https://advanced-sheets.production.roll20preflight.net',source,
+    data:{bridge:request.data.bridge,type:'snapshot',id:request.data.id,
+      fields:{hp:{current:'31',max:'42'}},
+      visible:{name:'Captain Rowan',stats:{hp:31,maxHp:42},abilityScores:{},abilityMods:{},
+        saveBonuses:{},skillBonuses:{},spellSlots:{},usedSlots:{},details:{},
+        attacks:[],resources:[],coverage:{visibleFields:1,sections:['Combat'],names:['HP']}},
+      tabs:['Combat','Spells','Inventory','Features & Traits','Notes','About']}});
+  const scan=await promise;
+  assert.equal(scan.fields.hp.current,'31');
+  assert.deepEqual(Array.from(scan.tabs),['Combat','Spells','Inventory','Features & Traits','Notes','About']);
+  assert.equal(h.beaconFrameSnapshot(candidate,scan),true);
+  const profile=h.RB.state.profiles.find(p=>p.id===h.RB.state.current);
+  assert.equal(profile.name,'Captain Rowan');
+  assert.equal(profile.stats.hp,31);
+  assert.equal(profile.stats.maxHp,42);
 });
