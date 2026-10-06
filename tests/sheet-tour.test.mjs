@@ -159,3 +159,43 @@ test('outer Roll20 tabs are visited and original view restored before committing
   assert.ok(p.sheetLink.tabsVisited.includes('Spells'));
   assert.equal(api.RB.sheetTourBusy,false);
 });
+
+test('official popout desktop tabs from captured D&D 2024 markup are toured and restored',async()=>{
+  const selected={value:'Combat'},history=[];
+  const labels=['Combat','Skills & Tools','Spells','Inventory','Features & Traits','Notes','About'];
+  const tabs=labels.map(label=>({
+    innerText:label,textContent:label,isConnected:true,className:'layout-tabbed-panel__tab-link nav-link u-aria-focus-text',
+    getAttribute(attr){return attr==='role'?'tab':attr==='aria-selected'?(selected.value===label?'true':'false'):null},
+    closest(){return {nodeName:'NAV'}},
+    getBoundingClientRect(){return {width:100,height:28}},
+    click(){selected.value=label;history.push(label)}
+  }));
+  const values={
+    'Combat':[field('hp',42)],
+    'Skills & Tools':[field('perception_bonus',6)],
+    'Spells':[field('spell_attack_bonus',8)],
+    'Inventory':[field('gp',123)],
+    'Features & Traits':[field('level',7)],
+    'Notes':[],
+    'About':[field('background','Sailor')]
+  };
+  const body={
+    get innerText(){return 'Character Sheet\n'+selected.value+'\nHIT POINTS\n42 / 42\nABILITIES\nWIS 16 +3\nSKILLS';},
+    querySelectorAll(selector){return selector.startsWith('input,textarea')?values[selected.value]:[]}
+  };
+  const doc={body,querySelectorAll(selector){
+    if(selector.includes('[role="tab"]')||selector.startsWith('button'))return tabs;
+    return [];
+  }};
+  const {api}=harness(doc);
+  const result=await api.sheetTourFrameScan();
+  assert.equal(result.fields.hp.current,'42');
+  assert.equal(result.fields.perception_bonus.current,'6');
+  assert.equal(result.fields.spell_attack_bonus.current,'8');
+  assert.equal(result.fields.gp.current,'123');
+  assert.equal(result.fields.background.current,'Sailor');
+  for(const label of labels)assert.ok(result.tabs.includes(label),label+' should be recorded');
+  assert.equal(selected.value,'Combat','original popout tab restored');
+  assert.ok(history.includes('Skills & Tools'));
+  assert.ok(history.includes('About'));
+});
