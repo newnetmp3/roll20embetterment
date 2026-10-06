@@ -86,7 +86,7 @@ function findSheetForms(doc=document){
     if(!frame)continue;
     let url;
     try{url=new URL(frame.src||frame.getAttribute('src'),location.href);}catch{continue;}
-    if(url.origin!==RBE_BEACON_ORIGIN||!/^\/dnd2024byroll20(?:\/|$)/.test(url.pathname))continue;
+    if(url.origin!==RBE_BEACON_ORIGIN||!/\/dnd2024byroll20(?:\/|$)/.test(url.pathname))continue;
     const title=String(dialog.querySelector?.('.asv__header__name')?.textContent||'').trim()||
       String(frame.getAttribute?.('title')||'').replace(/^Character sheet for\s+/i,'').trim();
     const name=sheetMeaningfulName(title)?sheetText(title,100):'Open character sheet';
@@ -127,6 +127,12 @@ function findSheetForms(doc=document){
   options.sort((a,b)=>b.score-a.score);
   return options.filter((x,i)=>!options.slice(0,i).some(y=>
     x.root===y.root||x.root.contains?.(y.root)||y.root.contains?.(x.root))).slice(0,25);
+}
+function sheetCandidates(doc=document){
+  const local=findSheetForms(doc),remote=typeof beaconPopoutCandidates==='function'?beaconPopoutCandidates():[];
+  const out=[...local];
+  for(const candidate of remote)if(!out.some(x=>x.id===candidate.id))out.push(candidate);
+  return out.sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,25);
 }
 function snapshotSheet(input,label='Character'){
   const attrs=sheetAttributes(input),values=Object.fromEntries(Object.entries(attrs).map(([key,val])=>[key.toLowerCase(),val]));
@@ -249,8 +255,8 @@ function applySheetSnapshot(p,s){
   return true;
 }
 function scanSheets(){
-  RB.openSheets=findSheetForms(document);
-  if(!RB.openSheets.length){toast('Open your sheet inside Roll20 (disable pop-out), then Scan again.');return;}
+  RB.openSheets=sheetCandidates(document);
+  if(!RB.openSheets.length){toast('Open the official character sheet in Roll20 or its popout, then Scan again.');return;}
   const current=profile().sheetLink?.name,idx=RB.openSheets.findIndex(x=>x.name===current);
   RB.selectedSheet=idx>=0?idx:0;RB.sheetSignature=null;
   render();toast('Found '+RB.openSheets.length+' open sheet(s).');
@@ -260,7 +266,7 @@ function syncSheet({quiet=false,fieldsOverride=null}={}){
   const candidate=RB.openSheets?.[RB.selectedSheet||0];
   if(!candidate){if(!quiet)toast('Scan for an open sheet first.');return false;}
   if(candidate.root?.isConnected===false){if(!quiet)toast('Sheet closed; reopen and scan.');return false;}
-  if(candidate.frame){if(!quiet)toast('Importing 2024 iframe sheet…');return false;}
+  if(beaconRemoteCandidate(candidate)){if(!quiet)toast('Importing official 2024 sheet…');return false;}
   const live=readSheetFields(candidate.root);
   const cached=RB.sheetWarm?.root===candidate.root?RB.sheetWarm?.scan?.fields:null;
   const fields=fieldsOverride || (cached?{...cached,...live}:live);
@@ -286,11 +292,11 @@ function syncSheet({quiet=false,fieldsOverride=null}={}){
 // Warm the virtualized attribute list without changing player data. The
 // explicit Import action uses the collected fields and can retry if needed.
 function sheetPrefetchAttributes(candidate){
-  if(!candidate?.root)return;
-  if(candidate.frame){
-    const existing=RB.sheetWarm;
-    if(existing?.frame===candidate.frame&&(existing.promise||Date.now()-(existing.at||0)<20000))return;
-    const cache={frame:candidate.frame,root:candidate.root,at:0,promise:null,scan:null};
+  if(!candidate)return;
+  if(beaconRemoteCandidate(candidate)){
+    const endpoint=candidate.frame?.contentWindow||candidate.popoutWindow,existing=RB.sheetWarm;
+    if(existing?.endpoint===endpoint&&(existing.promise||Date.now()-(existing.at||0)<20000))return;
+    const cache={endpoint,frame:candidate.frame||null,popoutSession:candidate.popoutSession||null,root:candidate.root||null,at:0,promise:null,scan:null};
     RB.sheetWarm=cache;
     cache.promise=requestBeaconFrame(candidate,true).then(scan=>{
       cache.scan=scan;cache.at=Date.now();
@@ -306,7 +312,7 @@ function sheetPrefetchAttributes(candidate){
     }).finally(()=>{cache.promise=null;});
     return;
   }
-  if(!sheetScrollableAttributeContainer(candidate.root))return;
+  if(!candidate.root||!sheetScrollableAttributeContainer(candidate.root))return;
   if(RB.sheetWarm?.root===candidate.root &&
      (RB.sheetWarm.promise || Date.now()-(RB.sheetWarm.at||0)<20000))return;
   const cache={root:candidate.root,at:0,promise:null,scan:null};
@@ -335,16 +341,17 @@ async function syncSheetDeep(){
   const originalProfile=RB.state.current;
   RB.sheetDeepSync=true;
   try{
-    if(candidate.frame){
-      const cache=RB.sheetWarm?.frame===candidate.frame?RB.sheetWarm:null;
+    if(beaconRemoteCandidate(candidate)){
+      const endpoint=candidate.frame?.contentWindow||candidate.popoutWindow;
+      const cache=RB.sheetWarm?.endpoint===endpoint?RB.sheetWarm:null;
       let scan=cache?.promise?await cache.promise:cache?.scan;
       if(!scan||Date.now()-(cache?.at||0)>30000)scan=await requestBeaconFrame(candidate,true);
       if(!RB.openSheets?.includes(candidate)||RB.state.current!==originalProfile)return;
       if(beaconFrameSnapshot(candidate,scan)){
-        RB.sheetWarm={root:candidate.root,frame:candidate.frame,scan,at:Date.now(),promise:null};
+        RB.sheetWarm={root:candidate.root||null,frame:candidate.frame||null,popoutSession:candidate.popoutSession||null,endpoint,scan,at:Date.now(),promise:null};
         toast('Imported '+Object.keys(scan.fields).length+' 2024 attributes and '+
           (scan.visible?.coverage?.visibleFields||0)+' visible values from '+candidate.name+'.');
-      }else toast('The iframe replied, but its current tab contains no readable character data.');
+      }else toast('The official sheet replied, but its current tab contains no readable character data.');
       return;
     }
     // If background preloading is in progress, share it rather than visibly
@@ -374,7 +381,7 @@ function sheetAutoTick(){
   const link=profile().sheetLink,candidate=RB.openSheets?.[RB.selectedSheet||0];
   if(!link?.auto||!link.lastSync||!candidate)return;
   if(link.source!==candidate.id&&link.name!==candidate.name)return;
-  if(candidate.frame){
+  if(beaconRemoteCandidate(candidate)){
     if(RB.frameRefreshBusy)return;
     RB.frameRefreshBusy=true;
     requestBeaconFrame(candidate,false).then(scan=>{
