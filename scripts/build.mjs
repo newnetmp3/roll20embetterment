@@ -6,7 +6,7 @@ if(sourceFiles.length<4) throw new Error('Missing source modules');
 const header = `// ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.2.3
+// @version      2.2.4
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*

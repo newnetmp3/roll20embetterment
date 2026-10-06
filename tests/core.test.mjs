@@ -20,7 +20,7 @@ function environment(query='?id=123'){
     confirm:()=>true,prompt:()=>null,window:{innerWidth:1200,innerHeight:900}
   };
   vm.createContext(scope);vm.runInContext(program,scope);
-  vm.runInContext('load(); RB.shadow={querySelector(){return null},querySelectorAll(){return []},innerHTML:""}; RB.root={style:{setProperty(){}},setAttribute(){}}; globalThis.h={RB,profile,makeRoll,quickRoll,sendToRoll20,executeSlot,applyDamage,rest,html,save,load,setValue,newProfile,render,notesMarkdown,baseMacros,action,rollsUI,homeUI,inventoryUI,spellListHTML,normalizeProfile,filterChatMessages,onKeyDown,keepEmbettermentKeysLocal}',scope);
+  vm.runInContext('load(); RB.shadow={querySelector(){return null},querySelectorAll(){return []},innerHTML:""}; RB.root={style:{setProperty(){}},setAttribute(){}}; globalThis.h={RB,profile,makeRoll,quickRoll,sendToRoll20,executeSlot,applyDamage,rest,html,save,load,setValue,newProfile,render,notesMarkdown,baseMacros,action,rollsUI,homeUI,inventoryUI,spellListHTML,normalizeProfile,clearImportedSheetData,resetCurrentProfileData,debugUI,filterChatMessages,onKeyDown,keepEmbettermentKeysLocal}',scope);
   return {h:scope.h,scope,store,sent,toasts,setDraft(v){draft=v},getDraft(){return draft},setChatAvailable(v){allowed=v}};
 }
 test('initializes per-campaign key and a local profile with 8 action slots',()=>{const {h}=environment();assert.match(h.RB.key,/123$/);assert.equal(h.profile().macrosSlots.length,8);assert.equal(h.RB.state.profiles.length,1);});
@@ -63,4 +63,51 @@ test('action hotkeys do not run when focus is on an Embetterment button',()=>{
   const button={closest(){return null}};
   const event={target:e.h.RB.root,composedPath(){return [button,e.h.RB.shadow,e.h.RB.root]},code:'Digit1',key:'1',altKey:false,shiftKey:false,metaKey:false,ctrlKey:false,preventDefault(){throw Error('Must not run a hotkey in the panel')}};
   e.h.onKeyDown(event);assert.equal(e.sent.length,0);
+});
+
+test('Debug tab clearly marks maintenance as local-only and exposes both reset levels',()=>{
+  const {h}=environment();
+  const ui=h.debugUI();
+  assert.match(ui,/Debug & local maintenance/);
+  assert.match(ui,/never write to, delete from, or modify the authoritative Roll20 character sheet/);
+  assert.match(ui,/data-action="debugClearImported"/);
+  assert.match(ui,/data-action="debugResetCharacter"/);
+  assert.match(ui,/data-action="debugExport"/);
+});
+test('clearing imported sheet data removes sheet-origin values but preserves local character content',()=>{
+  const e=environment(),p=e.h.profile(),id=p.id,name=p.name;
+  p.notes='Keep my journal';
+  p.quests=[{id:'q',text:'Keep this quest',done:false}];
+  p.stats.hp=84;p.stats.maxHp=84;p.abilityScores.wis=15;p.abilityMods.wis=2;
+  p.currency.gp=250;p.spellSlots[1]=4;p.usedSlots[1]=2;p.sheetDetails.class='Wizard';
+  p.sheetLink={name:'Character',edition:'2024'};
+  p.attacks=[{id:'sheet:atk',origin:'sheet',name:'Sword'},{id:'local:atk',origin:'local',name:'Custom'}];
+  p.spells=[{id:'sheet:spell',origin:'sheet',name:'Bless'},{id:'local:spell',name:'Homebrew'}];
+  p.inventory=[{id:'sheet:item',origin:'sheet',name:'Potion'},{id:'local:item',name:'Rope'}];
+  p.resources=[{id:'sheet:r',origin:'sheet',name:'Sheet Resource'},{id:'local:r',name:'Local Resource',current:1,max:2}];
+  p.macrosSlots[0]='attack:sheet:atk';p.macrosSlots[1]='spell:sheet:spell';
+  e.h.clearImportedSheetData();
+  const out=e.h.profile();
+  assert.equal(out.id,id);assert.equal(out.name,name);
+  assert.equal(out.sheetLink,null);assert.equal(out.stats.hp,10);assert.equal(out.stats.maxHp,10);
+  assert.deepEqual(Object.keys(out.abilityScores),[]);assert.equal(out.currency.gp,0);
+  assert.equal(out.spellSlots[1],0);assert.equal(out.usedSlots[1],0);
+  assert.equal(out.notes,'Keep my journal');assert.equal(out.quests.length,1);
+  assert.deepEqual(out.attacks.map(x=>x.id),['local:atk']);
+  assert.deepEqual(out.spells.map(x=>x.id),['local:spell']);
+  assert.deepEqual(out.inventory.map(x=>x.id),['local:item']);
+  assert.deepEqual(out.resources.map(x=>x.id),['local:r']);
+  assert.equal(out.macrosSlots[0],'');assert.equal(out.macrosSlots[1],'');
+  assert.equal(e.sent.length,0,'local reset must not submit anything to Roll20 chat');
+});
+test('clearing current R20eb character data preserves profile identity but resets all local character content',()=>{
+  const e=environment(),p=e.h.profile(),id=p.id,name=p.name;
+  p.notes='delete me';p.inventory=[{id:'x',name:'Sword'}];p.spells=[{id:'s',name:'Spell'}];
+  p.stats.hp=42;p.sheetLink={name:'Linked'};
+  const out=e.h.resetCurrentProfileData();
+  assert.equal(out.id,id);assert.equal(out.name,name);
+  assert.equal(out.notes,'');assert.equal(out.inventory.length,0);assert.equal(out.spells.length,0);
+  assert.equal(out.stats.hp,10);assert.equal(out.sheetLink,null);
+  assert.equal(e.h.profile(),out);
+  assert.equal(e.sent.length,0,'full local reset must not submit anything to Roll20');
 });

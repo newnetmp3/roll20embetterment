@@ -145,6 +145,47 @@ function settingsUI() {
   <div class="card"><h3>Backup & privacy</h3><div class="row">${button('Export JSON backup','exportBackup','', 'primary')}<label class="field">Import backup<input type="file" id="rbe-import" accept=".json,application/json"></label>${button('Reset panel position','resetPosition')}</div><p class="hint">Everything stays in this browser's localStorage. This script makes no external requests and has no analytics. Export backups before clearing browser data.</p></div>
   <div class="note">Roll20 Embetterment v${RB.version}. Sheet-independent 5E tools work with both 2014 and 2024 sheets. Local trackers do not change authoritative Roll20 attributes or provide GM-only information.</div></div>`;
 }
+function debugUI() {
+  const p=profile(),link=p.sheetLink||null,scan=RB.sheetWarm?.scan||null;
+  const token=RB.radial?.lastPlayerToken||null;
+  const counts={
+    attacks:(p.attacks||[]).length,spells:(p.spells||[]).length,inventory:(p.inventory||[]).length,
+    resources:(p.resources||[]).length,features:(p.features||[]).length,
+    attributes:Object.keys(scan?.fields||{}).length
+  };
+  return `<div class="stack">
+    <div class="card"><h2>Debug & local maintenance</h2>
+      <p class="hint">Everything on this tab operates on R20eb's browser-local state only. These controls never write to, delete from, or modify the authoritative Roll20 character sheet.</p>
+      <div class="grid">
+        <div><span class="hint">R20eb version</span><br><strong>${html(RB.version)}</strong></div>
+        <div><span class="hint">Current profile</span><br><strong>${html(p.name)}</strong></div>
+        <div><span class="hint">Sheet link</span><br><strong>${link?html(link.name||'Linked'):'Not linked'}</strong></div>
+        <div><span class="hint">Edition</span><br><strong>${html(link?.edition||'Unknown')}</strong></div>
+        <div><span class="hint">Last sync</span><br><strong>${html(link?.lastSync?new Date(link.lastSync).toLocaleString():'Never')}</strong></div>
+        <div><span class="hint">Open sheets</span><br><strong>${(RB.openSheets||[]).length}</strong></div>
+        <div><span class="hint">Cached attributes</span><br><strong>${counts.attributes}</strong></div>
+        <div><span class="hint">Token tracking</span><br><strong>${html(RB.radial?.source||'none')}</strong></div>
+      </div>
+      <p class="hint">Profile ID: <code>${html(p.id)}</code>${token?.name?' • matched token: '+html(token.name):''}</p>
+    </div>
+    <div class="card"><h3>Diagnostics</h3>
+      <div class="row">
+        ${button('Export debug report','debugExport','','primary')}
+        ${button('Clear scan cache','debugClearSheetCache')}
+        ${button('Re-detect player token','debugRedetectToken')}
+      </div>
+      <p class="hint">The debug report contains version/status information and item counts, not journal text or complete character-sheet values.</p>
+    </div>
+    <div class="card"><h3>Clear imported sheet data</h3>
+      <p class="hint">Removes R20eb's imported stats, abilities, currency, spell slots, sheet-linked attacks/features, and other entries marked as originating from the Roll20 sheet. Local journal entries and locally-created spells/items/resources are preserved.</p>
+      ${button('Clear imported sheet data','debugClearImported','','warn')}
+    </div>
+    <div class="card"><h3>Clear current character data</h3>
+      <p class="hint">Resets the entire current R20eb character profile to defaults while keeping this profile's name and ID. This clears local notes, inventory, spells, resources, combat state, and sheet linkage. It does <strong>not</strong> alter the Roll20 character sheet.</p>
+      ${button('Clear current character data','debugResetCharacter','','warn')}
+    </div>
+  </div>`;
+}
 function referenceUI() {
   return `<div class="stack"><h2>5E quick reference</h2><div class="card"><h3>Action economy</h3><p>Generally on your turn: movement up to speed, one action, and a bonus action if a feature permits. Reactions are triggered separately and normally recharge at the start of your turn. Extra Attack and class features modify this.</p></div>
   <div class="card"><h3>Common combat actions</h3><p>Attack • Dash • Disengage • Dodge • Help • Hide • Ready • Search • Use an Object (2014). Some actions differ in 2024; use your campaign's rules.</p></div>
@@ -154,7 +195,7 @@ function referenceUI() {
   <p class="hint">Convenience summary only. Your table's official rules edition and DM rulings take precedence.</p></div>`;
 }
 function paletteEntries() {
-  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
+  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings','Debug'];
   return [...tabs.map(t=>({name:'Open '+t,kind:'tab',value:t})),
     ...RB.state.macros.map(m=>({name:'Macro: '+m.name,kind:'macro',value:m.id})),
     ...profile().spells.map(s=>({name:'Spell: '+s.name,kind:'spell',value:s.id})),
@@ -207,17 +248,18 @@ function themeHeading(tab) {
     Journal:['Chronicle & Quests','Notes, objectives and session history','✎'],
     Chat:['Tavern Whispers','Conversation and rolls within the tabletop','☷'],
     Reference:['Adventurer’s Codex','Rules and battlefield reminders','❖'],
-    Settings:['Companion Settings','Theme, profiles, accessibility and privacy','⚙']
+    Settings:['Companion Settings','Theme, profiles, accessibility and privacy','⚙'],
+    Debug:['Debug & Maintenance','Local diagnostics, cache tools and safe resets','⌘']
   };
   const [title,description,glyph]=sections[tab]||sections.Home;
   return `<div class="rbe-section-heading"><div><h2>${html(title)}</h2><small>${html(description)}</small></div><span class="rbe-section-mark" aria-hidden="true">${glyph}</span></div>`;
 }
-const THEME_TAB_GLYPHS={Home:'♜',Sheet:'✥',Rolls:'⚄',Macros:'⚔',Spells:'✧',Inventory:'◆',Journal:'✎',Chat:'☷',Reference:'❖',Settings:'⚙'};
+const THEME_TAB_GLYPHS={Home:'♜',Sheet:'✥',Rolls:'⚄',Macros:'⚔',Spells:'✧',Inventory:'◆',Journal:'✎',Chat:'☷',Reference:'❖',Settings:'⚙',Debug:'⌘'};
 function render() {
   if (!RB.shadow || !RB.state) return;
   const s=RB.state.settings; RB.root.style.setProperty('--scale',s.scale); RB.root.setAttribute('data-theme',s.theme); RB.root.setAttribute('data-reduced-motion',String(!!s.reducedMotion));
-  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
-  const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI};
+  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings','Debug'];
+  const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI,Debug:debugUI};
   RB.shadow.innerHTML=`<style>${STYLE}${BG3_STYLE}${RADIAL_STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
   ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header">${s.theme==='bg3'?'<span class="rbe-header-crest" aria-hidden="true">✥</span><span class="rbe-header-copy"><strong>roll20 <em>Embetterment</em></strong><span class="rbe-header-sub">Adventurer’s Companion</span></span>':'<strong>⚔ roll20 Embetterment</strong>'}<div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}" title="${html(t)}">${s.theme==='bg3'?`<span class="rbe-nav-glyph" aria-hidden="true">${THEME_TAB_GLYPHS[t]}</span><span class="rbe-nav-label">${html(t)}</span>`:html(t)}</button>`).join('')}</nav><div id="rbe-body" data-panel="${html(RB.tab)}">${s.theme==='bg3'?themeHeading(RB.tab):''}${(panels[RB.tab]||homeUI)()}</div></section>`:''}
   ${radialHTML()}${paletteUI()}${modalUI()}<div id="rbe-toast" role="status" hidden></div>`;
