@@ -1736,9 +1736,8 @@ async function sheetTourStart() {
      else if(token.startsWith(name+' '))best=Math.max(best,900);
      else if(name.startsWith(token+' '))best=Math.max(best,850);
      else{
-       const words=name.split(' ').filter(w=>w.length>=4);
-       if(words.length&&words.every(w=>token.split(' ').includes(w)))best=Math.max(best,750);
-       else if(words[0]&&token.split(' ')[0]===words[0])best=Math.max(best,600);
+       const first=name.split(' ').find(w=>w.length>=4);
+       if(first&&token.split(' ')[0]===first)best=Math.max(best,600);
      }
    }
    return best;
