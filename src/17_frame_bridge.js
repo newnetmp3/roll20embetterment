@@ -142,22 +142,27 @@ function requestBeaconFrame(candidate,deep=false,options={}){
     }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
   });
 }
-function beaconFrameSnapshot(candidate,scan,{quiet=false}={}){
+function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,characterId=''}={}){
   if(!scan||!beaconRemoteCandidate(candidate))return false;
   const visual=scan.visible&&typeof scan.visible==='object'?scan.visible:
     beaconImportVisible({innerText:''},candidate.name);
   const data=mergeBeaconSnapshot(snapshotSheet(scan.fields,candidate.name),visual);
   if(!data.coverage.attributes&&!data.coverage.visibleFields)return false;
   data.name=candidate.name;
-  if(!applySheetSnapshot(profile(),data))return false;
+  const target=targetProfile||profile();
+  if(!applySheetSnapshot(target,data))return false;
   candidate.readableFields=data.coverage.attributes;
   candidate.visibleFields=data.coverage.visibleFields;
   candidate.lastSeen=Date.now();
-  profile().sheetLink.source=candidate.id;
+  target.sheetLink.source=candidate.id;
+  if(characterId){
+    target.roll20CharacterId=String(characterId).slice(0,120);
+    target.sheetLink.characterId=target.roll20CharacterId;
+  }
   RB.sheetSignature=JSON.stringify(scan.fields)+'|'+(visual.signature||'');
   save();
   if(!quiet)render();
-  else if(RB.visible&&RB.tab==='Sheet'&&!RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
+  else if(target===profile()&&RB.visible&&RB.tab==='Sheet'&&!RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
   return true;
 }
 async function beaconFrameReadRequest(event){
