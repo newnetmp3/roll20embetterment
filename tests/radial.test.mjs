@@ -22,7 +22,7 @@ function env(){
     localStorage:{getItem(k){return saved.get(k)||null},setItem(k,v){saved.set(k,v)}}
   };
   vm.createContext(scope);vm.runInContext(script,scope);
-  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition,radialLabelLines,radialLabelRotation,radialLabelMarkup,radialVisiblePage,radialLayout,radialViewportBounds,radialLabelsFit};",scope);
+  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition,radialLabelLines,radialLabelRotation,radialLabelMarkup,radialVisiblePage,radialLayout,radialViewportBounds,radialLabelsFit,radialJumpgateToken,radialTokenNameScore,radialTokenRectCenter,radialWatchJumpgate};",scope);
   return {r:scope.r,sent,field,doc,scope};
 }
 test('rings progressively contract the original circle and grow concentric choices',()=>{
@@ -258,4 +258,85 @@ test('uses editor canvas bounds instead of expanding into Roll20 sidebar',()=>{
   const bounds=r.radialViewportBounds();
   assert.equal(bounds.width,1080);assert.equal(bounds.right,1100);
   assert.equal(bounds.top,55);assert.equal(bounds.bottom,850);
+});
+
+test('Jumpgate player token is found from the rendered nameplate overlay',()=>{
+  const {r,doc}=env(),p=r.profile();
+  p.name='Nier';
+  const makeOverlay=(name,left,top)=> {
+    const box={getAttribute(){return 'height: 70px; width: 70px; pointer-events: none;'},
+      getBoundingClientRect(){return {left,top,width:59.85,height:59.85,right:left+59.85,bottom:top+59.85}}};
+    return {children:[{getAttribute(){return ''}},box],
+      querySelector(sel){return sel==='.nameplate-container'?{textContent:name}:null},
+      getBoundingClientRect(){return {left:left-10,top:top-20,width:90,height:100,right:left+80,bottom:top+80}}};
+  };
+  const other=makeOverlay('Goblin',300,400),nier=makeOverlay('Nier Stoneshadow',900,500);
+  const layer={querySelectorAll(sel){return sel==='.overlay'?[other,nier]:[]}};
+  doc.querySelector=sel=>sel==='#tabletop-ui-layer'?layer:
+    sel==='#babylonCanvas'?{getBoundingClientRect(){return {left:0,top:0,right:1280,bottom:900,width:1280,height:900}}}:null;
+  const found=r.radialJumpgateToken();
+  assert.equal(found.name,'Nier Stoneshadow');
+  assert.equal(found.source,'player-token');
+  assert.ok(Math.abs(found.x-(900+59.85/2))<0.01);
+  assert.ok(Math.abs(found.y-(500+59.85/2))<0.01);
+});
+test('Jumpgate tracker supports sheet-name prefix matching without confusing unrelated tokens',()=>{
+  const {r}=env(),p=r.profile();
+  p.name='Nier';
+  assert.equal(r.radialTokenNameScore('Nier Stoneshadow'),900);
+  assert.equal(r.radialTokenNameScore('Nier'),1000);
+  assert.equal(r.radialTokenNameScore('Nier Stone Shadow'),900);
+  assert.equal(r.radialTokenNameScore('Niera'),0);
+  assert.equal(r.radialTokenNameScore('Goblin Nier'),0);
+});
+test('Jumpgate nameplate tracking takes priority over generic selected DOM fallback',()=>{
+  const {r,doc}=env(),p=r.profile();
+  p.name='Nier';
+  const tokenBox={getAttribute(){return 'height:70px;width:70px;pointer-events:none;'},
+    getBoundingClientRect(){return {left:500,top:350,width:70,height:70,right:570,bottom:420}}};
+  const overlay={children:[tokenBox],querySelector(sel){return sel==='.nameplate-container'?{textContent:'Nier Stoneshadow'}:null},
+    getBoundingClientRect(){return {left:480,top:330,width:110,height:120,right:590,bottom:450}}};
+  const layer={querySelectorAll(){return [overlay]}};
+  const generic={getBoundingClientRect(){return {left:50,top:50,width:60,height:60}}};
+  doc.querySelector=sel=>{
+    if(sel==='#tabletop-ui-layer')return layer;
+    if(sel==='#babylonCanvas')return {getBoundingClientRect(){return {left:0,top:0,right:1280,bottom:900,width:1280,height:900}}};
+    if(sel.includes('[data-token-id]'))return generic;
+    return null;
+  };
+  const wheel={style:{setProperty(){}}},tether={setAttribute(){}};
+  r.RB.shadow.querySelector=sel=>sel==='#rbe-radial-wheel'?wheel:sel==='#rbe-tether-path'?tether:null;
+  r.RB.radial.lastPresence=true;
+  r.radialPosition();
+  assert.equal(r.RB.radial.source,'player-token');
+  assert.equal(r.RB.radial.anchor.x,535);
+  assert.equal(r.RB.radial.anchor.y,385);
+});
+test('Jumpgate token center is rejected when its overlay is outside the visible Babylon canvas',()=>{
+  const {r,doc}=env(),p=r.profile();
+  p.name='Nier';
+  const box={getAttribute(){return 'width:70px;height:70px;pointer-events:none;'},
+    getBoundingClientRect(){return {left:1600,top:300,width:70,height:70,right:1670,bottom:370}}};
+  const overlay={children:[box],querySelector(){return {textContent:'Nier Stoneshadow'}},
+    getBoundingClientRect(){return {left:1600,top:300,width:70,height:70,right:1670,bottom:370}}};
+  doc.querySelector=sel=>sel==='#tabletop-ui-layer'?{querySelectorAll(){return [overlay]}}:
+    sel==='#babylonCanvas'?{getBoundingClientRect(){return {left:0,top:0,right:1280,bottom:900,width:1280,height:900}}}:null;
+  assert.equal(r.radialJumpgateToken(),null);
+});
+test('Jumpgate tracker installs an observer on tabletop overlay style changes when available',()=>{
+  const {r,doc,scope}=env();
+  let observed=null,callback=null;
+  const layer={querySelectorAll(){return []}};
+  doc.querySelector=sel=>sel==='#tabletop-ui-layer'?layer:null;
+  scope.MutationObserver=class{
+    constructor(cb){callback=cb}
+    observe(target,options){observed={target,options}}
+    disconnect(){}
+  };
+  r.radialWatchJumpgate();
+  assert.equal(observed.target,layer);
+  assert.equal(observed.options.attributes,true);
+  assert.equal(observed.options.childList,true);
+  assert.ok(observed.options.attributeFilter.includes('style'));
+  assert.equal(typeof callback,'function');
 });

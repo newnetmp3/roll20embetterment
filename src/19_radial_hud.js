@@ -294,7 +294,7 @@
       <div class="rbe-wheel-footer"><div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
       <button data-action="radialPanel" title="Open character sheet importer">▤ Sheet</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
-      <div class="rbe-wheel-info">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':' · selected token'}</div></div>
+      <div class="rbe-wheel-info">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
      </div>`:''}
     ${!active?`<div id="rbe-radial-dock"><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
    </div>`;
@@ -353,6 +353,70 @@
    }
    if(success){RB.radial.path=[];save();render();radialPosition();}
  }
+ function radialTokenName(value){
+   return String(value??'').toLocaleLowerCase().normalize('NFKD')
+     .replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+ }
+ function radialTokenNameScore(label){
+   const token=radialTokenName(label);
+   if(!token)return 0;
+   const p=profile(),names=[p.name,p.sheetLink?.name].map(radialTokenName).filter(Boolean);
+   let best=0;
+   for(const name of names){
+     if(token===name)best=Math.max(best,1000);
+     else if(token.startsWith(name+' '))best=Math.max(best,900);
+     else if(name.startsWith(token+' '))best=Math.max(best,850);
+     else{
+       const first=name.split(' ').find(w=>w.length>=4);
+       if(first&&token.split(' ')[0]===first)best=Math.max(best,600);
+     }
+   }
+   return best;
+ }
+ function radialTokenRectCenter(rect){
+   if(!rect||!Number.isFinite(rect.left)||!Number.isFinite(rect.top)||
+      !Number.isFinite(rect.width)||!Number.isFinite(rect.height)||
+      rect.width<6||rect.height<6||rect.width>1000||rect.height>1000)return null;
+   return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+ }
+ function radialJumpgateToken(){
+   // Captured Jumpgate markup renders every tabletop token as an .overlay.
+   // The player's visible nameplate lets us identify the linked character
+   // without touching Roll20's Babylon scene or private application state.
+   const layer=document.querySelector?.('#tabletop-ui-layer');
+   if(!layer)return null;
+   const canvas=document.querySelector?.('#babylonCanvas');
+   const canvasRect=canvas?.getBoundingClientRect?.();
+   let best=null;
+   for(const overlay of Array.from(layer.querySelectorAll?.('.overlay')||[]).slice(0,2500)){
+     const nameplate=overlay.querySelector?.('.nameplate-container');
+     const label=String(nameplate?.textContent||'').replace(/\s+/g,' ').trim();
+     const score=radialTokenNameScore(label);
+     if(!score||score<Number(best?.score||0))continue;
+     // Jumpgate's overlay contains a token-sized, pointer-events:none child.
+     // Its browser rect already incorporates tabletop pan, zoom and the
+     // overlay's translate(-50%,-50%)/scale transform.
+     const tokenBox=Array.from(overlay.children||[]).find(el=>{
+       const style=String(el.getAttribute?.('style')||'');
+       return /pointer-events\s*:\s*none/i.test(style)&&
+         /(?:width|height)\s*:/i.test(style);
+     });
+     const center=radialTokenRectCenter(tokenBox?.getBoundingClientRect?.())||
+       radialTokenRectCenter(overlay.getBoundingClientRect?.());
+     if(!center)continue;
+     if(canvasRect&&Number.isFinite(canvasRect.left)&&Number.isFinite(canvasRect.right)){
+       const pad=40;
+       if(center.x<canvasRect.left-pad||center.x>canvasRect.right+pad||
+          center.y<canvasRect.top-pad||center.y>canvasRect.bottom+pad)continue;
+     }
+     best={...center,score,name:label,source:'player-token'};
+   }
+   if(best){
+     RB.radial.lastPlayerToken={x:best.x,y:best.y,name:best.name,seen:Date.now()};
+     return best;
+   }
+   return null;
+ }
  function radialDomToken(){
    // Modern VTT may expose a selected token as an accessible DOM element.
    const el=document.querySelector('[data-token-id][aria-selected="true"],[data-token-id][data-selected="true"],.token.selected[data-token-id]');
@@ -379,8 +443,8 @@
  }
  function radialPosition(){
    if(!RB.shadow||!RB.state)return;
-   const r=RB.radial,auto=radialDomToken()||radialCanvasToken();
-   if(auto){r.anchor=auto;r.source='selected';}
+   const r=RB.radial,auto=radialJumpgateToken()||radialDomToken()||radialCanvasToken();
+   if(auto){r.anchor=auto;r.source=auto.source||'selected';}
    else if(r.manual){r.anchor=r.manual;r.source='manual';}
    else{r.anchor=null;r.source='none';}
    const present=!!r.anchor;
@@ -411,9 +475,36 @@
    RB.radial.source='manual';RB.radial.pin=false;RB.radial.open=true;RB.radial.path=[];
    RB.radial.lastPresence=true;render();radialPosition();toast('HUD pinned. Re-pin after panning if the token cannot be tracked.');
  }
+ let radialTrackFrame=0,radialJumpgateObserver=null,radialJumpgateLayer=null;
+ function radialSchedulePosition(){
+   if(radialTrackFrame)return;
+   const run=()=>{radialTrackFrame=0;radialPosition();};
+   radialTrackFrame=typeof requestAnimationFrame==='function'?requestAnimationFrame(run):setTimeout(run,16);
+ }
+ function radialWatchJumpgate(){
+   const layer=document.querySelector?.('#tabletop-ui-layer');
+   if(!layer||layer===radialJumpgateLayer)return;
+   radialJumpgateObserver?.disconnect?.();
+   radialJumpgateLayer=layer;
+   if(typeof MutationObserver==='function'){
+     radialJumpgateObserver=new MutationObserver(radialSchedulePosition);
+     radialJumpgateObserver.observe(layer,{subtree:true,childList:true,attributes:true,
+       attributeFilter:['style','class']});
+   }
+ }
  function startRadialTracking(){
    document.addEventListener('pointerdown',radialCapturePin,true);
-   window.addEventListener('resize',radialPosition);
-   setInterval(()=>{if(document.visibilityState==='visible')radialPosition();},160);
+   window.addEventListener('resize',radialSchedulePosition);
+   document.addEventListener?.('scroll',radialSchedulePosition,true);
+   const canvas=document.querySelector?.('#babylonCanvas');
+   canvas?.addEventListener?.('pointermove',radialSchedulePosition,{passive:true});
+   canvas?.addEventListener?.('wheel',radialSchedulePosition,{passive:true});
+   radialWatchJumpgate();
+   setInterval(()=>{
+     if(document.visibilityState==='visible'){
+       radialWatchJumpgate();
+       radialPosition();
+     }
+   },160);
    radialPosition();
  }
