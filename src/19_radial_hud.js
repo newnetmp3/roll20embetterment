@@ -396,7 +396,10 @@
  function radialTokenNameScore(label){
    const token=radialTokenName(label);
    if(!token)return 0;
-   const p=profile(),assigned=Object.values(RB.state.tokenAssignments||{})
+   const p=profile(),selected=typeof autoSelectedTokenAssignment==='function'?autoSelectedTokenAssignment():null;
+   const selectedName=selected?.profileId===p.id?radialTokenName(selected.tokenName):'';
+   if(selectedName&&token===selectedName)return 1800;
+   const assigned=Object.values(RB.state.tokenAssignments||{})
      .filter(x=>x.profileId===p.id).flatMap(x=>[x.tokenName,x.characterName]);
    const names=[p.name,p.sheetLink?.name,...assigned].map(radialTokenName).filter(Boolean);
    let best=0;
