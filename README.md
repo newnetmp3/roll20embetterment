@@ -46,3 +46,6 @@ Weapon, item, and spell names now wrap onto multiple lines inside the SVG wedges
 
 ### Adaptive wheel sizing (2.2.1)
 The original 520 px wheel size is retained whenever its labels fit. If long names, crowded selections, or important attack/spell metadata would otherwise be clipped, it may grow gradually up to 1.6×. The exact ceiling depends on the available Roll20 tabletop viewport (preferably the editor canvas) and the bottom toolbar/title clearance. On smaller windows the wheel automatically scales down to stay visible rather than expanding off-screen. This does not change the ring hierarchy or action commands.
+
+## Jumpgate player-token tracking (2.2.2)
+The combat HUD now prefers Roll20 Jumpgate's rendered tabletop token overlay instead of relying on legacy Fabric internals. It looks in `#tabletop-ui-layer .overlay` for a visible nameplate matching the current/local linked character (exact or prefix match, so a local profile named `Nier` can follow a token named `Nier Stoneshadow`). The token-sized child rectangle supplies the browser-space center, which automatically includes Roll20 pan and zoom transforms. Style/DOM mutations in the tabletop UI layer schedule immediate position updates, while the prior selected-token DOM, Fabric, and manual pin methods remain as fallbacks. No private Babylon scene data is read.
