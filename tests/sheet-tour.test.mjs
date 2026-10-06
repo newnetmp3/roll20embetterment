@@ -21,7 +21,7 @@ function harness(doc){
     localStorage:{getItem(k){return stored.get(k)||null},setItem(k,v){stored.set(k,v)}}
   };
   vm.createContext(scope);
-  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoAssignControlledTokens,autoProfileForCharacter,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
+  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
   return {api:scope.api,intervals,doc:page,context:scope};
 }
 function tab(label,selected,change) {
@@ -257,4 +257,27 @@ test('automatic import processes each represented character once even with multi
   assert.equal(api.RB.state.tokenAssignments['tok-a'].profileId,api.RB.state.tokenAssignments['tok-a2'].profileId);
   assert.notEqual(api.RB.state.tokenAssignments['tok-a'].profileId,api.RB.state.tokenAssignments['tok-b'].profileId);
   assert.equal(api.RB.autoCharacterImported.size,2);
+});
+
+test('controlled character Backbone attributes seed the automatic import without scrolling the sheet',()=>{
+  const {api}=harness();
+  const character={attribs:{toJSON(){return [
+    {name:'hp',current:'27',max:'35'},
+    {name:'wisdom',current:'16',max:''},
+    {name:'spell_attack_bonus',current:'7',max:''}
+  ]}}};
+  const fields=api.autoCharacterAttributeFields(character);
+  assert.deepEqual(fields.hp,{current:'27',max:'35'});
+  assert.equal(fields.wisdom.current,'16');
+  assert.equal(fields.spell_attack_bonus.current,'7');
+});
+test('GM universal access is not mistaken for an explicit player-controlled token assignment',()=>{
+  const {api,context}=harness();
+  const character=backboneModel('char-gm',{name:'GM NPC',controlledby:''});
+  const token=backboneModel('tok-gm',{name:'GM NPC',type:'image',represents:'char-gm',controlledby:''});
+  token.currentPlayerControls=()=>true;
+  context.window.currentPlayer={id:'gm-player'};context.window.is_gm=true;
+  context.window.d20={Campaign:{activePage(){return {thegraphics:{models:[token]}}},
+    characters:{get(){return character}}}};
+  assert.equal(api.autoDiscoverControlledTokens().length,0);
 });
