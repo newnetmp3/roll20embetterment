@@ -2,9 +2,9 @@
 // No private Roll20 models, endpoint calls, action rolls, or character writes.
 const RBE_SHEET_TOUR_MAIN=['Character Sheet','Bio & Info','Advanced Tools'];
 const RBE_SHEET_TOUR_INNER=[
-  'Combat','Spells','Inventory','Features & Traits','Features and Traits',
-  'Notes','Actions','Resources','Skills','Equipment','Character','Details',
-  'Background','Feats','Cantrips',...Array.from({length:9},(_,i)=>'Level '+(i+1))
+  'Combat','Skills & Tools','Spells','Inventory','Features & Traits','Features and Traits','Notes','About',
+  'Actions','Resources','Skills','Equipment','Character','Details','Background','Feats','Cantrips',
+  ...Array.from({length:9},(_,i)=>'Level '+(i+1))
 ];
 const sheetTourDelay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function sheetTourStatus(text) {
@@ -21,6 +21,8 @@ function sheetTourTabs(scope,labels,selector) {
   const found=[];
   for(const el of Array.from(scope.querySelectorAll(selector)||[]).slice(0,1200)){
     if(!set.has(sheetTourLabel(el).toLowerCase()) || el.disabled)continue;
+    const rect=el.getBoundingClientRect?.();
+    if(rect&&Number.isFinite(rect.width)&&Number.isFinite(rect.height)&&rect.width===0&&rect.height===0)continue;
     // Never click an in-game action just because its text happens to match.
     const isTab=selector==='.asv__header__nav__tabs_link' ||
       el.getAttribute?.('role')==='tab' ||
@@ -86,7 +88,7 @@ async function sheetTourFrameScan() {
   const scope=document.body;
   const acc=sheetTourAccumulator();
   const tabs=sheetTourTabs(document,RBE_SHEET_TOUR_INNER,
-    'button,[role="tab"],nav a,[class*="tabs"] a');
+    '.layout-tabbed-panel__tab-link[role="tab"],[role="tab"],nav a,[class*="tabs"] a,button');
   const original=tabs.find(sheetTourActive)||tabs[0]||null;
   let count=0;
   const gather=async label=>{
@@ -142,7 +144,7 @@ function sheetTourPromptOpen() {
       if(Date.now()-started>120000)sheetTourStatus('Waiting timed out. Click Import all tabs to try again.');
       return;
     }
-    const options=findSheetForms(document);
+    const options=sheetCandidates(document);
     if(!options.length)return;
     clearInterval(RB.sheetTourWatch);RB.sheetTourWatch=null;
     RB.sheetTourWaiting=false;
@@ -161,7 +163,7 @@ function sheetTourCancel(){
 }
 async function sheetTourStart() {
   if(RB.sheetTourBusy)return;
-  const sheets=findSheetForms(document);
+  const sheets=sheetCandidates(document);
   if(!sheets.length){sheetTourPromptOpen();return;}
   if(RB.sheetTourWaiting)sheetTourCancel();
   RB.openSheets=sheets;
@@ -180,10 +182,10 @@ async function sheetTourStart() {
     await sheetTourCollect(dialog,acc,'Current Roll20 view',false);
     const main=tabs.find(x=>sheetTourLabel(x)==='Character Sheet');
     if(main && !sheetTourActive(main)){main.click?.();await sheetTourDelay(250);}
-    if(candidate.frame){
-      sheetTourStatus('Reading Combat, Spells, Inventory and Features…');
+    if(beaconRemoteCandidate(candidate)){
+      sheetTourStatus(candidate.popoutWindow?'Reading official popout tabs…':'Reading Combat, Spells, Inventory and Features…');
       const scan=await requestBeaconFrame(candidate,true,{tour:true});
-      sheetTourAdd(acc,scan,'Character Sheet');
+      sheetTourAdd(acc,scan,candidate.popoutWindow?'Official sheet popout':'Character Sheet');
     }else{
       await sheetTourCollect(dialog,acc,'Character Sheet',true);
     }
@@ -200,15 +202,15 @@ async function sheetTourStart() {
       }
       await sheetTourCollect(dialog,acc,label,true);
     }
-    if(RB.state.current!==profileId||dialog.isConnected===false)
+    if(RB.state.current!==profileId||dialog?.isConnected===false)
       throw new Error('Character sheet or local profile changed during import.');
     // One transaction: no intermediate partial tab results overwrite the profile.
-    const didImport=candidate.frame?beaconFrameSnapshot(candidate,acc):
+    const didImport=beaconRemoteCandidate(candidate)?beaconFrameSnapshot(candidate,acc):
       applySheetSnapshot(profile(),mergeBeaconSnapshot(snapshotSheet(acc.fields,candidate.name),acc.visible));
     if(!didImport)throw new Error('No accessible values were found in the opened sheet.');
-    if(!candidate.frame){profile().sheetLink.source=candidate.id;save();}
+    if(!beaconRemoteCandidate(candidate)){profile().sheetLink.source=candidate.id;save();}
     profile().sheetLink.tabsVisited=acc.tabs;
-    RB.sheetWarm={frame:candidate.frame,root:dialog,scan:acc,at:Date.now(),promise:null};
+    RB.sheetWarm={frame:candidate.frame||null,popoutSession:candidate.popoutSession||null,endpoint:candidate.frame?.contentWindow||candidate.popoutWindow||null,root:dialog||null,scan:acc,at:Date.now(),promise:null};
     save();
     sheetTourStatus('Imported '+Object.keys(acc.fields).length+' named attributes and '+
       acc.visible.coverage.visibleFields+' visible values from '+acc.tabs.length+' views.');
