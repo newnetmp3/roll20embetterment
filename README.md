@@ -66,3 +66,6 @@ Two reset levels are available:
 - **Clear current character data** resets the entire current R20eb character profile to defaults while preserving that profile's name and ID.
 
 Both actions change browser-local R20eb data only. They do not edit, delete, save, or otherwise modify the authoritative Roll20 character sheet.
+
+## Official D&D 2024 sheet popout (2.2.5)
+R20eb now recognizes the official top-level D&D 2024 character-sheet popout hosted on `advanced-sheets.production.roll20preflight.net`, including Roll20's CDN-backed popout URL form. The reader announces itself to the originating Roll20 editor with an origin-checked `postMessage` handshake, appears as a normal Sheet import candidate, and supports the same read-only snapshot and full-tab tour as the embedded iframe. The captured official popout markup provides stable desktop tab links for Combat, Skills & Tools, Spells, Inventory, Features & Traits, Notes, and About; R20eb visits those rendered tabs and restores the originally selected one. Character identity comes from the popout document/title at runtime, never a hardcoded character name. If a browser opens the popout without an opener relationship, the direct editor bridge cannot connect and R20eb will report no popout candidate; this case can be diagnosed from the Debug tab.
