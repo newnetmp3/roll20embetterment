@@ -298,7 +298,7 @@ function boot() {
   RB.visible=!!RB.state.settings.alwaysOpen;render();startRadialTracking();
 }
 // Never install the combat HUD inside the external character-sheet iframe.
-const rbeStartup=isBeaconFrame()?startBeaconFrameReader:isRoll20Editor()?boot:null;
+const rbeStartup=isBeaconSheetDocument()?startBeaconFrameReader:isRoll20Editor()?boot:null;
 if(rbeStartup){
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rbeStartup,{once:true});
   else rbeStartup();
