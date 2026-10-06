@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.2.3
+// @version      2.2.4
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -18,7 +18,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.2.3',
+  version: '2.2.4',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -80,6 +80,54 @@ function normalizeProfile(p) {
   cleaned.spellSlots = [...cleaned.spellSlots.slice(0,10),...Array(10).fill(0)].slice(0,10).map(n=>clamp(n,0,99));
   cleaned.usedSlots = [...cleaned.usedSlots.slice(0,10),...Array(10).fill(0)].slice(0,10).map(n=>clamp(n,0,99));
   return cleaned;
+}
+function clearSheetRuntimeState() {
+  RB.openSheets=[];
+  RB.selectedSheet=0;
+  RB.sheetSignature=null;
+  RB.sheetWarm=null;
+  RB.sheetDeepSync=false;
+  RB.frameRefreshBusy=false;
+  RB.sheetTourBusy=false;
+  RB.sheetTourWaiting=false;
+  if(RB.sheetTourWatch)clearInterval(RB.sheetTourWatch);
+  RB.sheetTourWatch=null;
+  RB.sheetTourStatus='';
+}
+function clearImportedSheetData() {
+  const p=profile(),d=newProfile(p.name);
+  const sheetSpellIds=new Set((p.spells||[]).filter(x=>x?.origin==='sheet').map(x=>x.id));
+  const sheetAttackIds=new Set((p.attacks||[]).filter(x=>x?.origin==='sheet').map(x=>x.id));
+  p.stats={...d.stats};
+  p.abilityMods={...d.abilityMods};
+  p.skillBonuses={};
+  p.saveBonuses={};
+  p.abilityScores={};
+  p.sheetDetails={};
+  p.sheetLink=null;
+  p.currency={...d.currency};
+  p.spellSlots=[...d.spellSlots];
+  p.usedSlots=[...d.usedSlots];
+  p.inspiration=false;
+  for(const key of ['spells','inventory','resources','attacks','features','proficiencies','tools'])
+    p[key]=(p[key]||[]).filter(x=>x?.origin!=='sheet');
+  p.macrosSlots=(p.macrosSlots||d.macrosSlots).map(value=>{
+    if(value?.startsWith('spell:')&&sheetSpellIds.has(value.slice(6)))return '';
+    if(value?.startsWith('attack:')&&sheetAttackIds.has(value.slice(7)))return '';
+    return value;
+  });
+  clearSheetRuntimeState();
+  save();
+  return p;
+}
+function resetCurrentProfileData() {
+  const current=profile(),replacement=newProfile(current.name);
+  replacement.id=current.id;
+  const index=RB.state.profiles.findIndex(p=>p.id===current.id);
+  if(index>=0)RB.state.profiles[index]=replacement;
+  clearSheetRuntimeState();
+  save();
+  return replacement;
 }
 function load() {
   const d = initialState();
@@ -2066,6 +2114,47 @@ function settingsUI() {
   <div class="card"><h3>Backup & privacy</h3><div class="row">${button('Export JSON backup','exportBackup','', 'primary')}<label class="field">Import backup<input type="file" id="rbe-import" accept=".json,application/json"></label>${button('Reset panel position','resetPosition')}</div><p class="hint">Everything stays in this browser's localStorage. This script makes no external requests and has no analytics. Export backups before clearing browser data.</p></div>
   <div class="note">Roll20 Embetterment v${RB.version}. Sheet-independent 5E tools work with both 2014 and 2024 sheets. Local trackers do not change authoritative Roll20 attributes or provide GM-only information.</div></div>`;
 }
+function debugUI() {
+  const p=profile(),link=p.sheetLink||null,scan=RB.sheetWarm?.scan||null;
+  const token=RB.radial?.lastPlayerToken||null;
+  const counts={
+    attacks:(p.attacks||[]).length,spells:(p.spells||[]).length,inventory:(p.inventory||[]).length,
+    resources:(p.resources||[]).length,features:(p.features||[]).length,
+    attributes:Object.keys(scan?.fields||{}).length
+  };
+  return `<div class="stack">
+    <div class="card"><h2>Debug & local maintenance</h2>
+      <p class="hint">Everything on this tab operates on R20eb's browser-local state only. These controls never write to, delete from, or modify the authoritative Roll20 character sheet.</p>
+      <div class="grid">
+        <div><span class="hint">R20eb version</span><br><strong>${html(RB.version)}</strong></div>
+        <div><span class="hint">Current profile</span><br><strong>${html(p.name)}</strong></div>
+        <div><span class="hint">Sheet link</span><br><strong>${link?html(link.name||'Linked'):'Not linked'}</strong></div>
+        <div><span class="hint">Edition</span><br><strong>${html(link?.edition||'Unknown')}</strong></div>
+        <div><span class="hint">Last sync</span><br><strong>${html(link?.lastSync?new Date(link.lastSync).toLocaleString():'Never')}</strong></div>
+        <div><span class="hint">Open sheets</span><br><strong>${(RB.openSheets||[]).length}</strong></div>
+        <div><span class="hint">Cached attributes</span><br><strong>${counts.attributes}</strong></div>
+        <div><span class="hint">Token tracking</span><br><strong>${html(RB.radial?.source||'none')}</strong></div>
+      </div>
+      <p class="hint">Profile ID: <code>${html(p.id)}</code>${token?.name?' • matched token: '+html(token.name):''}</p>
+    </div>
+    <div class="card"><h3>Diagnostics</h3>
+      <div class="row">
+        ${button('Export debug report','debugExport','','primary')}
+        ${button('Clear scan cache','debugClearSheetCache')}
+        ${button('Re-detect player token','debugRedetectToken')}
+      </div>
+      <p class="hint">The debug report contains version/status information and item counts, not journal text or complete character-sheet values.</p>
+    </div>
+    <div class="card"><h3>Clear imported sheet data</h3>
+      <p class="hint">Removes R20eb's imported stats, abilities, currency, spell slots, sheet-linked attacks/features, and other entries marked as originating from the Roll20 sheet. Local journal entries and locally-created spells/items/resources are preserved.</p>
+      ${button('Clear imported sheet data','debugClearImported','','warn')}
+    </div>
+    <div class="card"><h3>Clear current character data</h3>
+      <p class="hint">Resets the entire current R20eb character profile to defaults while keeping this profile's name and ID. This clears local notes, inventory, spells, resources, combat state, and sheet linkage. It does <strong>not</strong> alter the Roll20 character sheet.</p>
+      ${button('Clear current character data','debugResetCharacter','','warn')}
+    </div>
+  </div>`;
+}
 function referenceUI() {
   return `<div class="stack"><h2>5E quick reference</h2><div class="card"><h3>Action economy</h3><p>Generally on your turn: movement up to speed, one action, and a bonus action if a feature permits. Reactions are triggered separately and normally recharge at the start of your turn. Extra Attack and class features modify this.</p></div>
   <div class="card"><h3>Common combat actions</h3><p>Attack • Dash • Disengage • Dodge • Help • Hide • Ready • Search • Use an Object (2014). Some actions differ in 2024; use your campaign's rules.</p></div>
@@ -2075,7 +2164,7 @@ function referenceUI() {
   <p class="hint">Convenience summary only. Your table's official rules edition and DM rulings take precedence.</p></div>`;
 }
 function paletteEntries() {
-  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
+  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings','Debug'];
   return [...tabs.map(t=>({name:'Open '+t,kind:'tab',value:t})),
     ...RB.state.macros.map(m=>({name:'Macro: '+m.name,kind:'macro',value:m.id})),
     ...profile().spells.map(s=>({name:'Spell: '+s.name,kind:'spell',value:s.id})),
@@ -2128,17 +2217,18 @@ function themeHeading(tab) {
     Journal:['Chronicle & Quests','Notes, objectives and session history','✎'],
     Chat:['Tavern Whispers','Conversation and rolls within the tabletop','☷'],
     Reference:['Adventurer’s Codex','Rules and battlefield reminders','❖'],
-    Settings:['Companion Settings','Theme, profiles, accessibility and privacy','⚙']
+    Settings:['Companion Settings','Theme, profiles, accessibility and privacy','⚙'],
+    Debug:['Debug & Maintenance','Local diagnostics, cache tools and safe resets','⌘']
   };
   const [title,description,glyph]=sections[tab]||sections.Home;
   return `<div class="rbe-section-heading"><div><h2>${html(title)}</h2><small>${html(description)}</small></div><span class="rbe-section-mark" aria-hidden="true">${glyph}</span></div>`;
 }
-const THEME_TAB_GLYPHS={Home:'♜',Sheet:'✥',Rolls:'⚄',Macros:'⚔',Spells:'✧',Inventory:'◆',Journal:'✎',Chat:'☷',Reference:'❖',Settings:'⚙'};
+const THEME_TAB_GLYPHS={Home:'♜',Sheet:'✥',Rolls:'⚄',Macros:'⚔',Spells:'✧',Inventory:'◆',Journal:'✎',Chat:'☷',Reference:'❖',Settings:'⚙',Debug:'⌘'};
 function render() {
   if (!RB.shadow || !RB.state) return;
   const s=RB.state.settings; RB.root.style.setProperty('--scale',s.scale); RB.root.setAttribute('data-theme',s.theme); RB.root.setAttribute('data-reduced-motion',String(!!s.reducedMotion));
-  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings'];
-  const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI};
+  const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings','Debug'];
+  const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI,Debug:debugUI};
   RB.shadow.innerHTML=`<style>${STYLE}${BG3_STYLE}${RADIAL_STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
   ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header">${s.theme==='bg3'?'<span class="rbe-header-crest" aria-hidden="true">✥</span><span class="rbe-header-copy"><strong>roll20 <em>Embetterment</em></strong><span class="rbe-header-sub">Adventurer’s Companion</span></span>':'<strong>⚔ roll20 Embetterment</strong>'}<div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}" title="${html(t)}">${s.theme==='bg3'?`<span class="rbe-nav-glyph" aria-hidden="true">${THEME_TAB_GLYPHS[t]}</span><span class="rbe-nav-label">${html(t)}</span>`:html(t)}</button>`).join('')}</nav><div id="rbe-body" data-panel="${html(RB.tab)}">${s.theme==='bg3'?themeHeading(RB.tab):''}${(panels[RB.tab]||homeUI)()}</div></section>`:''}
   ${radialHTML()}${paletteUI()}${modalUI()}<div id="rbe-toast" role="status" hidden></div>`;
@@ -2658,6 +2748,48 @@ function action(name, el) {
     case 'newProfile':{const name=prompt('Name for new character profile?','New Adventurer');if(name?.trim()){const next=newProfile(name.trim().slice(0,100));RB.state.profiles.push(next);RB.state.current=next.id;changedProfile();}break;}
     case 'renameProfile':{const name=prompt('Rename current profile?',p.name);if(name?.trim()){p.name=name.trim().slice(0,100);changedProfile();}break;}
     case 'deleteProfile':if(RB.state.profiles.length===1)toast('Keep at least one profile.');else if(confirm('Delete '+p.name+' and all locally saved character data?')){RB.state.profiles=RB.state.profiles.filter(x=>x.id!==p.id);RB.state.current=RB.state.profiles[0].id;changedProfile();}break;
+    case 'debugExport':{
+      const current=profile(),link=current.sheetLink||null,scan=RB.sheetWarm?.scan||null;
+      const report={
+        generatedAt:new Date().toISOString(),
+        r20ebVersion:RB.version,
+        storageKey:RB.key,
+        profile:{id:current.id,name:current.name,
+          counts:{attacks:(current.attacks||[]).length,spells:(current.spells||[]).length,
+            inventory:(current.inventory||[]).length,resources:(current.resources||[]).length,
+            features:(current.features||[]).length,proficiencies:(current.proficiencies||[]).length,
+            tools:(current.tools||[]).length}},
+        sheetLink:link?{name:link.name||'',edition:link.edition||'',lastSync:link.lastSync||null,
+          auto:!!link.auto,counts:link.counts||{},coverage:link.coverage?{
+            attributes:link.coverage.attributes||0,visibleFields:link.coverage.visibleFields||0,
+            mapped:link.coverage.mapped||0,unmappedCount:(link.coverage.unmapped||[]).length}:null}:null,
+        runtime:{openSheets:(RB.openSheets||[]).length,cachedAttributes:Object.keys(scan?.fields||{}).length,
+          sheetTourBusy:!!RB.sheetTourBusy,sheetTourWaiting:!!RB.sheetTourWaiting},
+        tokenTracking:{source:RB.radial?.source||'none',matchedName:RB.radial?.lastPlayerToken?.name||null,
+          pinned:!!RB.radial?.manual},
+        note:'Local diagnostics only. This report intentionally omits journal text and full character-sheet values.'
+      };
+      downloadText('r20eb-debug-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json',
+        JSON.stringify(report,null,2),'application/json');break;
+    }
+    case 'debugClearSheetCache':
+      clearSheetRuntimeState();save();render();toast('Cleared R20eb sheet scan/cache state. Roll20 was not changed.');break;
+    case 'debugRedetectToken':
+      if(typeof radialMarkPlayerOverlay==='function')radialMarkPlayerOverlay(null);
+      if(RB.radial){RB.radial.manual=null;RB.radial.anchor=null;RB.radial.source='none';RB.radial.lastPlayerToken=null;RB.radial.lastPresence=false;}
+      radialPosition();render();toast('R20eb player-token tracking reset. Roll20 token data was not changed.');break;
+    case 'debugClearImported':
+      if(confirm('Clear imported sheet data for '+p.name+' from R20eb only? This does not modify the Roll20 character sheet. Local journal entries and locally-created spells/items/resources will be kept.')){
+        clearImportedSheetData();
+        if(RB.radial){RB.radial.path=[];RB.radial.pages={};}
+        render();toast('Imported R20eb sheet data cleared. Roll20 was not changed.');
+      }break;
+    case 'debugResetCharacter':
+      if(confirm('Clear ALL current R20eb character data for '+p.name+'? This resets this local R20eb profile but does not modify the Roll20 character sheet.')){
+        resetCurrentProfileData();
+        if(RB.radial){RB.radial.path=[];RB.radial.pages={};RB.radial.manual=null;RB.radial.anchor=null;}
+        render();toast('Current R20eb character data cleared. Roll20 was not changed.');
+      }break;
     case 'resetPosition':RB.state.ui.panelX=null;RB.state.ui.panelY=null;RB.state.ui.panelWidth=520;changedProfile();break;
     case 'exportBackup':exportBackup();break;
     case 'copyCommand':copyText(RB.pendingCommand||'');break;
