@@ -161,9 +161,10 @@ function sheetTourCancel(){
   RB.sheetTourStatus='Import cancelled.';
   if(RB.visible&&RB.tab==='Sheet')render();
 }
-async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,characterId='',auto=false}={}){
+async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,characterId='',auto=false,seedFields=null}={}){
   if(!candidate||!targetProfile)return null;
   const acc=sheetTourAccumulator(),dialog=candidate.root||null;
+  if(seedFields&&typeof seedFields==='object')Object.assign(acc.fields,seedFields);
   const tabs=dialog?sheetTourTabs(dialog,RBE_SHEET_TOUR_MAIN,'.asv__header__nav__tabs_link'):[];
   const original=tabs.find(sheetTourActive)||tabs[0]||null;
   const status=text=>{if(!quiet)sheetTourStatus(text);};
@@ -271,6 +272,16 @@ function autoCharacterById(id){
   return campaign.characters?.get?.(id)||
     campaign.activeCharacters?.()?.find?.(x=>String(x.id||x.get?.('id')||'')===String(id))||null;
 }
+function autoCharacterAttributeFields(character){
+  const rows=character?.attribs?.toJSON?.()||character?.attribs?.models?.map?.(x=>x.toJSON?.()||x.attributes)||[];
+  const fields={};
+  for(const row of Array.isArray(rows)?rows:[]){
+    const name=String(row?.name||'').trim();
+    if(!name||name.length>180)continue;
+    fields[name]={current:row.current??'',max:row.max??''};
+  }
+  return fields;
+}
 function autoActiveTokenModels(){
   const campaign=autoCampaign(),page=campaign?.activePage?.();
   if(!page)return [];
@@ -353,7 +364,10 @@ function autoCandidateForCharacter(record){
   const exact=candidates.find(x=>String(x.characterId||x.id||'')===String(record.characterId));
   if(exact)return exact;
   const name=String(record.characterName||'').toLocaleLowerCase();
-  const named=name?candidates.filter(x=>String(x.name||'').toLocaleLowerCase()===name):[];
+  // Only popouts lack a Roll20 character id. Never bind a different
+  // embedded character merely because two characters share a display name.
+  const named=name?candidates.filter(x=>!x.characterId&&!!x.popoutWindow&&
+    String(x.name||'').toLocaleLowerCase()===name):[];
   return named.length===1?named[0]:null;
 }
 function autoHideSheetDialog(candidate){
@@ -377,7 +391,9 @@ function autoCloseSheetDialog(record,hidden){
   }catch{}
   const close=wrapper?.querySelector?.('.ui-dialog-titlebar-close,button[aria-label="Close"],button[title="Close"]');
   if(close){close.click?.();return;}
-  if(wrapper?.style)wrapper.style.cssText=hidden.prior||'';
+  // If Roll20 changes its close control, keep the auto-opened helper sheet
+  // offscreen rather than surprising the player with a visible dialog.
+  if(wrapper)console.warn('[R20eb] Hidden import sheet could not be closed cleanly; leaving it offscreen until reload.');
 }
 async function autoEnsureSheetCandidate(record){
   let candidate=autoCandidateForCharacter(record);
@@ -428,23 +444,44 @@ async function autoImportControlledCharacters(){
   try{
     for(const [characterId,group] of groups){
       if(RB.autoCharacterImported.has(characterId))continue;
+      RB.autoCharacterRetryAfter=RB.autoCharacterRetryAfter||new Map();
+      if((RB.autoCharacterRetryAfter.get(characterId)||0)>Date.now())continue;
+      const directFields=autoCharacterAttributeFields(group.record.character);
       const opened=await autoEnsureSheetCandidate(group.record);
       if(!opened){
-        console.warn('[R20eb] Controlled character sheet could not be opened:',group.record.characterName);
+        // Import whatever Roll20 has already exposed through the controlled
+        // character model, but keep retrying later for the full tab tour.
+        RB.autoCharacterDirectSeeded=RB.autoCharacterDirectSeeded||new Set();
+        if(Object.keys(directFields).length&&!RB.autoCharacterDirectSeeded.has(characterId)){
+          const snap=snapshotSheet(directFields,group.record.characterName);
+          if(applySheetSnapshot(group.profile,snap)){
+            group.profile.roll20CharacterId=characterId;
+            group.profile.sheetLink.characterId=characterId;
+            group.profile.sheetLink.source='auto:character-model';
+            group.profile.sheetLink.importMode='partial-model';
+            RB.autoCharacterDirectSeeded.add(characterId);save();
+          }
+        }
+        RB.autoCharacterRetryAfter.set(characterId,Date.now()+30000);
+        console.warn('[R20eb] Full controlled character sheet could not be opened yet:',group.record.characterName);
         continue;
       }
       RB.sheetTourBusy=true;
       try{
         const result=await sheetTourImportCandidate(opened.candidate,group.profile,
-          {quiet:true,characterId,auto:true});
+          {quiet:true,characterId,auto:true,seedFields:directFields});
         if(result){
           group.profile.sheetLink.tokenIds=group.tokens.slice(0,50);
+          group.profile.sheetLink.importMode='full-auto';
           for(const tokenId of group.tokens){
             if(RB.state.tokenAssignments[tokenId])RB.state.tokenAssignments[tokenId].profileId=group.profile.id;
           }
-          RB.autoCharacterImported.add(characterId);imported++;save();
+          RB.autoCharacterImported.add(characterId);
+          RB.autoCharacterRetryAfter.delete(characterId);
+          imported++;save();
         }
       }catch(err){
+        RB.autoCharacterRetryAfter.set(characterId,Date.now()+30000);
         console.warn('[R20eb] Automatic controlled-character import failed:',group.record.characterName,err);
       }finally{
         RB.sheetTourBusy=false;
