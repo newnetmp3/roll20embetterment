@@ -349,14 +349,22 @@ function autoProfileForCharacter(record){
 function autoAssignControlledTokens(records){
   RB.state.tokenAssignments=RB.state.tokenAssignments||{};
   const now=new Date().toISOString(),byCharacter=new Map();
+  let dirty=false;
   for(const record of records){
-    const p=autoProfileForCharacter(record);
-    RB.state.tokenAssignments[record.tokenId]={tokenId:record.tokenId,characterId:record.characterId,
-      profileId:p.id,characterName:record.characterName,tokenName:record.tokenName,lastSeen:now};
+    const beforeProfiles=RB.state.profiles.length,p=autoProfileForCharacter(record);
+    if(RB.state.profiles.length!==beforeProfiles)dirty=true;
+    const previous=RB.state.tokenAssignments[record.tokenId];
+    const next={tokenId:record.tokenId,characterId:record.characterId,profileId:p.id,
+      characterName:record.characterName,tokenName:record.tokenName,lastSeen:previous?.lastSeen||now};
+    if(!previous||previous.characterId!==next.characterId||previous.profileId!==next.profileId||
+       previous.characterName!==next.characterName||previous.tokenName!==next.tokenName){
+      next.lastSeen=now;dirty=true;
+    }
+    RB.state.tokenAssignments[record.tokenId]=next;
     if(!byCharacter.has(record.characterId))byCharacter.set(record.characterId,{record,profile:p,tokens:[]});
     byCharacter.get(record.characterId).tokens.push(record.tokenId);
   }
-  save();
+  if(dirty)save();
   return byCharacter;
 }
 function autoCandidateForCharacter(record){
