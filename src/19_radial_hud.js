@@ -396,7 +396,9 @@
  function radialTokenNameScore(label){
    const token=radialTokenName(label);
    if(!token)return 0;
-   const p=profile(),names=[p.name,p.sheetLink?.name].map(radialTokenName).filter(Boolean);
+   const p=profile(),assigned=Object.values(RB.state.tokenAssignments||{})
+     .filter(x=>x.profileId===p.id).flatMap(x=>[x.tokenName,x.characterName]);
+   const names=[p.name,p.sheetLink?.name,...assigned].map(radialTokenName).filter(Boolean);
    let best=0;
    for(const name of names){
      if(token===name)best=Math.max(best,1000);
@@ -482,6 +484,7 @@
  }
  function radialPosition(){
    if(!RB.shadow||!RB.state)return;
+   if(typeof autoActivateSelectedTokenProfile==='function')autoActivateSelectedTokenProfile();
    const r=RB.radial,auto=radialJumpgateToken()||radialDomToken()||radialCanvasToken();
    if(auto){r.anchor=auto;r.source=auto.source||'selected';}
    else if(r.manual){r.anchor=r.manual;r.source='manual';}
