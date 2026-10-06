@@ -1,7 +1,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.2.3',
+  version: '2.2.4',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -63,6 +63,54 @@ function normalizeProfile(p) {
   cleaned.spellSlots = [...cleaned.spellSlots.slice(0,10),...Array(10).fill(0)].slice(0,10).map(n=>clamp(n,0,99));
   cleaned.usedSlots = [...cleaned.usedSlots.slice(0,10),...Array(10).fill(0)].slice(0,10).map(n=>clamp(n,0,99));
   return cleaned;
+}
+function clearSheetRuntimeState() {
+  RB.openSheets=[];
+  RB.selectedSheet=0;
+  RB.sheetSignature=null;
+  RB.sheetWarm=null;
+  RB.sheetDeepSync=false;
+  RB.frameRefreshBusy=false;
+  RB.sheetTourBusy=false;
+  RB.sheetTourWaiting=false;
+  if(RB.sheetTourWatch)clearInterval(RB.sheetTourWatch);
+  RB.sheetTourWatch=null;
+  RB.sheetTourStatus='';
+}
+function clearImportedSheetData() {
+  const p=profile(),d=newProfile(p.name);
+  const sheetSpellIds=new Set((p.spells||[]).filter(x=>x?.origin==='sheet').map(x=>x.id));
+  const sheetAttackIds=new Set((p.attacks||[]).filter(x=>x?.origin==='sheet').map(x=>x.id));
+  p.stats={...d.stats};
+  p.abilityMods={...d.abilityMods};
+  p.skillBonuses={};
+  p.saveBonuses={};
+  p.abilityScores={};
+  p.sheetDetails={};
+  p.sheetLink=null;
+  p.currency={...d.currency};
+  p.spellSlots=[...d.spellSlots];
+  p.usedSlots=[...d.usedSlots];
+  p.inspiration=false;
+  for(const key of ['spells','inventory','resources','attacks','features','proficiencies','tools'])
+    p[key]=(p[key]||[]).filter(x=>x?.origin!=='sheet');
+  p.macrosSlots=(p.macrosSlots||d.macrosSlots).map(value=>{
+    if(value?.startsWith('spell:')&&sheetSpellIds.has(value.slice(6)))return '';
+    if(value?.startsWith('attack:')&&sheetAttackIds.has(value.slice(7)))return '';
+    return value;
+  });
+  clearSheetRuntimeState();
+  save();
+  return p;
+}
+function resetCurrentProfileData() {
+  const current=profile(),replacement=newProfile(current.name);
+  replacement.id=current.id;
+  const index=RB.state.profiles.findIndex(p=>p.id===current.id);
+  if(index>=0)RB.state.profiles[index]=replacement;
+  clearSheetRuntimeState();
+  save();
+  return replacement;
 }
 function load() {
   const d = initialState();
