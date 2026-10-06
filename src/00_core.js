@@ -29,7 +29,7 @@ const baseMacros = () => [
   {id:'whisper', name:'Whisper GM', command:'/w gm ?{Message|Hello}', favorite:false, category:'Social'}
 ];
 function newProfile(name='Adventurer') {
-  return {id:uid(), name, stats:{hp:10,maxHp:10,tempHp:0,ac:10,speed:30,init:0,proficiency:2,level:1},
+  return {id:uid(), name, roll20CharacterId:'', stats:{hp:10,maxHp:10,tempHp:0,ac:10,speed:30,init:0,proficiency:2,level:1},
     abilityMods:{str:0,dex:0,con:0,int:0,wis:0,cha:0}, skillBonuses:{}, saveBonuses:{},
     abilityScores:{},sheetDetails:{},sheetLink:null,attacks:[],features:[],proficiencies:[],tools:[],
     spellSlots:[0,0,0,0,0,0,0,0,0,0], usedSlots:[0,0,0,0,0,0,0,0,0,0],
@@ -52,6 +52,7 @@ function normalizeProfile(p) {
   const cleaned = {...d, ...p};
   cleaned.id = String(p.id || d.id).slice(0,100);
   cleaned.name = String(p.name || d.name).slice(0,100);
+  cleaned.roll20CharacterId=String(p.roll20CharacterId||'').slice(0,120);
   for (const key of ['stats','abilityMods','skillBonuses','saveBonuses','currency','death']) cleaned[key] = {...d[key], ...(p[key] && typeof p[key] === 'object' && !Array.isArray(p[key]) ? p[key] : {})};
   for (const key of ['spells','inventory','resources','quests','conditions','sessionLog','macrosSlots','spellSlots','usedSlots','attacks','features','proficiencies','tools']) cleaned[key] = Array.isArray(p[key]) ? p[key].slice(0,key === 'sessionLog' ? 500 : 200) : d[key];
   cleaned.abilityScores={...d.abilityScores,...(p.abilityScores||{})};
@@ -106,6 +107,7 @@ function clearImportedSheetData() {
 function resetCurrentProfileData() {
   const current=profile(),replacement=newProfile(current.name);
   replacement.id=current.id;
+  replacement.roll20CharacterId=current.roll20CharacterId||'';
   const index=RB.state.profiles.findIndex(p=>p.id===current.id);
   if(index>=0)RB.state.profiles[index]=replacement;
   clearSheetRuntimeState();
