@@ -90,9 +90,9 @@ function findSheetForms(doc=document){
     const title=String(dialog.querySelector?.('.asv__header__name')?.textContent||'').trim()||
       String(frame.getAttribute?.('title')||'').replace(/^Character sheet for\s+/i,'').trim();
     const name=sheetMeaningfulName(title)?sheetText(title,100):'Open character sheet';
-    const id=dialog.querySelector?.('#advanced-printsheet')?.getAttribute?.('data-charid') ||
-      frame.getAttribute?.('name')||'beacon-'+(options.length+1);
-    options.push({id,name,root:dialog,frame,readableFields:0,
+    const characterId=dialog.querySelector?.('#advanced-printsheet')?.getAttribute?.('data-charid')||'';
+    const id=characterId||frame.getAttribute?.('name')||'beacon-'+(options.length+1);
+    options.push({id,name,characterId,root:dialog,frame,readableFields:0,
       visibleFields:0,kind:'D&D 2024 sheet iframe',score:2000});
     used.add(dialog);
   }

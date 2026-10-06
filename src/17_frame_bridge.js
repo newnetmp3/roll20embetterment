@@ -28,15 +28,18 @@ function beaconRemoteCandidate(candidate){
   return !!(candidate?.frame?.contentWindow||candidate?.popoutWindow);
 }
 function beaconReaderName(){
-  const title=String(document.title||'').trim();
-  if(sheetMeaningfulName(title))return sheetText(title,100);
-  const selectors=['[data-testid="character-name"]','.profile__name','.profile__name input','.character-name'];
+  const selectors=['[data-testid="character-name"]','.profile__name','.profile__name input','.character-name',
+    '[class*="profile__name"]','[class*="character-name"]'];
   for(const selector of selectors){
     const el=document.querySelector?.(selector);
     const value=String(el?.value||el?.textContent||'').replace(/\s+/g,' ').trim();
     if(sheetMeaningfulName(value))return sheetText(value,100);
   }
-  return 'Open character sheet';
+  // Official popout titles can include the campaign name after the
+  // character name (for example "Character — Campaign"). Strip that
+  // decoration rather than treating the whole browser title as identity.
+  const title=String(document.title||'').replace(/\s+[—–]\s+.*$/,'').trim();
+  return sheetMeaningfulName(title)?sheetText(title,100):'Open character sheet';
 }
 function beaconReaderPeer(){
   if(isBeaconFrame())return window.parent;
@@ -142,22 +145,27 @@ function requestBeaconFrame(candidate,deep=false,options={}){
     }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
   });
 }
-function beaconFrameSnapshot(candidate,scan,{quiet=false}={}){
+function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,characterId=''}={}){
   if(!scan||!beaconRemoteCandidate(candidate))return false;
   const visual=scan.visible&&typeof scan.visible==='object'?scan.visible:
     beaconImportVisible({innerText:''},candidate.name);
   const data=mergeBeaconSnapshot(snapshotSheet(scan.fields,candidate.name),visual);
   if(!data.coverage.attributes&&!data.coverage.visibleFields)return false;
   data.name=candidate.name;
-  if(!applySheetSnapshot(profile(),data))return false;
+  const target=targetProfile||profile();
+  if(!applySheetSnapshot(target,data))return false;
   candidate.readableFields=data.coverage.attributes;
   candidate.visibleFields=data.coverage.visibleFields;
   candidate.lastSeen=Date.now();
-  profile().sheetLink.source=candidate.id;
+  target.sheetLink.source=candidate.id;
+  if(characterId){
+    target.roll20CharacterId=String(characterId).slice(0,120);
+    target.sheetLink.characterId=target.roll20CharacterId;
+  }
   RB.sheetSignature=JSON.stringify(scan.fields)+'|'+(visual.signature||'');
   save();
   if(!quiet)render();
-  else if(RB.visible&&RB.tab==='Sheet'&&!RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
+  else if(target===profile()&&RB.visible&&RB.tab==='Sheet'&&!RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
   return true;
 }
 async function beaconFrameReadRequest(event){

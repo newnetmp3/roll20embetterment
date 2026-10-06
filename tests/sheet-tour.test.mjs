@@ -21,7 +21,7 @@ function harness(doc){
     localStorage:{getItem(k){return stored.get(k)||null},setItem(k,v){stored.set(k,v)}}
   };
   vm.createContext(scope);
-  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourCancel,sheetTourPromptOpen,sheetUI};',scope);
+  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
   return {api:scope.api,intervals,doc:page,context:scope};
 }
 function tab(label,selected,change) {
@@ -198,4 +198,86 @@ test('official popout desktop tabs from captured D&D 2024 markup are toured and 
   assert.equal(selected.value,'Combat','original popout tab restored');
   assert.ok(history.includes('Skills & Tools'));
   assert.ok(history.includes('About'));
+});
+
+function backboneModel(id,attrs){
+  return {id,get(key){return key==='id'?id:attrs[key]},attributes:{id,...attrs}};
+}
+test('discovers every current-player-controlled token with a represented character',()=>{
+  const {api,context}=harness();
+  const chars=new Map([
+    ['char-a',backboneModel('char-a',{name:'Aria Moonfall',controlledby:'player-1'})],
+    ['char-b',backboneModel('char-b',{name:'Borin Stone',controlledby:'other,player-1'})],
+    ['char-c',backboneModel('char-c',{name:'Enemy',controlledby:'other'})]
+  ]);
+  const tokens=[
+    backboneModel('tok-a',{name:'Aria',type:'image',represents:'char-a',controlledby:''}),
+    backboneModel('tok-a2',{name:'Aria Familiar',type:'image',represents:'char-a',controlledby:'player-1'}),
+    backboneModel('tok-b',{name:'Borin',type:'image',represents:'char-b',controlledby:''}),
+    backboneModel('tok-c',{name:'Enemy',type:'image',represents:'char-c',controlledby:''}),
+    backboneModel('generic',{name:'Generic',type:'image',represents:'',controlledby:'player-1'})
+  ];
+  context.window.currentPlayer={id:'player-1'};context.window.is_gm=false;
+  context.window.d20={Campaign:{activePage(){return {thegraphics:{models:tokens}}},characters:{get(id){return chars.get(id)||null}}}};
+  const found=api.autoDiscoverControlledTokens();
+  assert.deepEqual(Array.from(found,x=>x.tokenId),['tok-a','tok-a2','tok-b']);
+  assert.deepEqual(Array.from(new Set(found.map(x=>x.characterId))),['char-a','char-b']);
+});
+test('multiple controlled tokens for one character share one profile and distinct characters get distinct profiles',()=>{
+  const {api}=harness();
+  const records=[
+    {tokenId:'tok-a',tokenName:'Aria',characterId:'char-a',characterName:'Aria Moonfall'},
+    {tokenId:'tok-a2',tokenName:'Aria Familiar',characterId:'char-a',characterName:'Aria Moonfall'},
+    {tokenId:'tok-b',tokenName:'Borin',characterId:'char-b',characterName:'Borin Stone'}
+  ];
+  const groups=api.autoAssignControlledTokens(records);
+  assert.equal(groups.size,2);
+  const a=api.RB.state.tokenAssignments['tok-a'],a2=api.RB.state.tokenAssignments['tok-a2'],b=api.RB.state.tokenAssignments['tok-b'];
+  assert.equal(a.profileId,a2.profileId);assert.notEqual(a.profileId,b.profileId);
+  assert.equal(api.RB.state.profiles.find(p=>p.id===a.profileId).roll20CharacterId,'char-a');
+  assert.equal(api.RB.state.profiles.find(p=>p.id===b.profileId).roll20CharacterId,'char-b');
+});
+test('selecting an assigned controlled token switches R20eb to its associated profile',()=>{
+  const {api,context}=harness();
+  const pa=api.profile(),pb=vm.runInContext("newProfile('Second Character')",context);api.RB.state.profiles.push(pb);
+  api.RB.state.tokenAssignments={'tok-a':{tokenId:'tok-a',characterId:'char-a',profileId:pa.id,characterName:'First',tokenName:'First'},'tok-b':{tokenId:'tok-b',characterId:'char-b',profileId:pb.id,characterName:'Second Character',tokenName:'Second'}};
+  context.window.d20={engine:{selected(){return [{model:{id:'tok-b'}}]}}};
+  assert.equal(api.autoActivateSelectedTokenProfile(),true);assert.equal(api.RB.state.current,pb.id);assert.equal(api.autoSelectedTokenAssignment().characterId,'char-b');
+});
+test('automatic import processes each represented character once even with multiple tokens',async()=>{
+  const {api,context}=harness();
+  context.location.hostname='app.roll20.net';context.location.pathname='/editor/123';context.window.currentPlayer={id:'player-1'};context.window.is_gm=false;
+  const chars=new Map([['char-a',backboneModel('char-a',{name:'Aria Moonfall',controlledby:'player-1'})],['char-b',backboneModel('char-b',{name:'Borin Stone',controlledby:'player-1'})]]);
+  const tokens=[backboneModel('tok-a',{name:'Aria',type:'image',represents:'char-a',controlledby:''}),backboneModel('tok-a2',{name:'Aria Copy',type:'image',represents:'char-a',controlledby:''}),backboneModel('tok-b',{name:'Borin',type:'image',represents:'char-b',controlledby:''})];
+  context.window.d20={Campaign:{activePage(){return {thegraphics:{models:tokens}}},characters:{get(id){return chars.get(id)||null}}}};
+  const imported=[];context.importedHook=(characterId,profileId,assignedId)=>imported.push({characterId,profileId,assignedId});
+  vm.runInContext("autoEnsureSheetCandidate=async record=>({candidate:{id:record.characterId,characterId:record.characterId,name:record.characterName,root:{isConnected:true,querySelectorAll(){return []}},frame:null,popoutWindow:null},opened:false,hidden:null}); sheetTourImportCandidate=async(candidate,target,opts)=>{importedHook(candidate.id,target.id,opts.characterId);target.sheetLink={name:candidate.name,source:candidate.id,characterId:opts.characterId};return {candidate,profile:target,acc:{tabs:['Combat']}};};",context);
+  await api.autoImportControlledCharacters();
+  assert.equal(imported.length,2);assert.deepEqual(Array.from(imported,x=>x.characterId).sort(),['char-a','char-b']);
+  assert.equal(api.RB.state.tokenAssignments['tok-a'].profileId,api.RB.state.tokenAssignments['tok-a2'].profileId);
+  assert.notEqual(api.RB.state.tokenAssignments['tok-a'].profileId,api.RB.state.tokenAssignments['tok-b'].profileId);
+  assert.equal(api.RB.autoCharacterImported.size,2);
+});
+
+test('controlled character Backbone attributes seed the automatic import without scrolling the sheet',()=>{
+  const {api}=harness();
+  const character={attribs:{toJSON(){return [
+    {name:'hp',current:'27',max:'35'},
+    {name:'wisdom',current:'16',max:''},
+    {name:'spell_attack_bonus',current:'7',max:''}
+  ]}}};
+  const fields=api.autoCharacterAttributeFields(character);
+  assert.equal(fields.hp.current,'27');assert.equal(fields.hp.max,'35');
+  assert.equal(fields.wisdom.current,'16');
+  assert.equal(fields.spell_attack_bonus.current,'7');
+});
+test('GM universal access is not mistaken for an explicit player-controlled token assignment',()=>{
+  const {api,context}=harness();
+  const character=backboneModel('char-gm',{name:'GM NPC',controlledby:''});
+  const token=backboneModel('tok-gm',{name:'GM NPC',type:'image',represents:'char-gm',controlledby:''});
+  token.currentPlayerControls=()=>true;
+  context.window.currentPlayer={id:'gm-player'};context.window.is_gm=true;
+  context.window.d20={Campaign:{activePage(){return {thegraphics:{models:[token]}}},
+    characters:{get(){return character}}}};
+  assert.equal(api.autoDiscoverControlledTokens().length,0);
 });

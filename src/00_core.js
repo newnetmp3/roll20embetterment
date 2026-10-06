@@ -1,7 +1,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.2.5',
+  version: '2.3.0',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -29,7 +29,7 @@ const baseMacros = () => [
   {id:'whisper', name:'Whisper GM', command:'/w gm ?{Message|Hello}', favorite:false, category:'Social'}
 ];
 function newProfile(name='Adventurer') {
-  return {id:uid(), name, stats:{hp:10,maxHp:10,tempHp:0,ac:10,speed:30,init:0,proficiency:2,level:1},
+  return {id:uid(), name, roll20CharacterId:'', stats:{hp:10,maxHp:10,tempHp:0,ac:10,speed:30,init:0,proficiency:2,level:1},
     abilityMods:{str:0,dex:0,con:0,int:0,wis:0,cha:0}, skillBonuses:{}, saveBonuses:{},
     abilityScores:{},sheetDetails:{},sheetLink:null,attacks:[],features:[],proficiencies:[],tools:[],
     spellSlots:[0,0,0,0,0,0,0,0,0,0], usedSlots:[0,0,0,0,0,0,0,0,0,0],
@@ -42,7 +42,7 @@ function newProfile(name='Adventurer') {
 function initialState() {
   const p = newProfile();
   return {schema:1, settings:{theme:'bg3',visualMigration:1,scale:1,hotkeys:false,showBar:false,showHud:false,showFab:false,chatSearch:'',chatKind:'all',reducedMotion:false,alwaysOpen:false,radialMigration:2},
-    profiles:[p], current:p.id, macros:baseMacros(),
+    profiles:[p], current:p.id, macros:baseMacros(), tokenAssignments:{},
     ui:{panelX:null,panelY:null,panelWidth:520,lastTab:'Home',barCollapsed:false}};
 }
 function profile() { return RB.state.profiles.find(p=>p.id === RB.state.current) || RB.state.profiles[0]; }
@@ -52,6 +52,7 @@ function normalizeProfile(p) {
   const cleaned = {...d, ...p};
   cleaned.id = String(p.id || d.id).slice(0,100);
   cleaned.name = String(p.name || d.name).slice(0,100);
+  cleaned.roll20CharacterId=String(p.roll20CharacterId||'').slice(0,120);
   for (const key of ['stats','abilityMods','skillBonuses','saveBonuses','currency','death']) cleaned[key] = {...d[key], ...(p[key] && typeof p[key] === 'object' && !Array.isArray(p[key]) ? p[key] : {})};
   for (const key of ['spells','inventory','resources','quests','conditions','sessionLog','macrosSlots','spellSlots','usedSlots','attacks','features','proficiencies','tools']) cleaned[key] = Array.isArray(p[key]) ? p[key].slice(0,key === 'sessionLog' ? 500 : 200) : d[key];
   cleaned.abilityScores={...d.abilityScores,...(p.abilityScores||{})};
@@ -106,6 +107,7 @@ function clearImportedSheetData() {
 function resetCurrentProfileData() {
   const current=profile(),replacement=newProfile(current.name);
   replacement.id=current.id;
+  replacement.roll20CharacterId=current.roll20CharacterId||'';
   const index=RB.state.profiles.findIndex(p=>p.id===current.id);
   if(index>=0)RB.state.profiles[index]=replacement;
   clearSheetRuntimeState();
@@ -126,6 +128,18 @@ function load() {
       d.macros = Array.isArray(stored.macros) ? stored.macros.slice(0,300).map(m=>({id:String(m.id||uid()),name:String(m.name||'Macro').slice(0,120),command:String(m.command||'').slice(0,3000),favorite:!!m.favorite,category:String(m.category||'Custom').slice(0,50)})) : d.macros;
       d.profiles = Array.isArray(stored.profiles) && stored.profiles.length ? stored.profiles.slice(0,30).map(normalizeProfile) : d.profiles;
       d.current = d.profiles.some(p=>p.id===stored.current) ? stored.current : d.profiles[0].id;
+      if(stored.tokenAssignments&&typeof stored.tokenAssignments==='object'&&!Array.isArray(stored.tokenAssignments)){
+        const entries=Object.entries(stored.tokenAssignments).slice(0,250).filter(([tokenId,value])=>
+          /^[A-Za-z0-9_-]{1,120}$/.test(tokenId)&&value&&typeof value==='object');
+        d.tokenAssignments=Object.fromEntries(entries.map(([tokenId,value])=>[tokenId,{
+          tokenId,
+          characterId:String(value.characterId||'').slice(0,120),
+          profileId:String(value.profileId||'').slice(0,100),
+          characterName:String(value.characterName||'').slice(0,100),
+          tokenName:String(value.tokenName||'').slice(0,100),
+          lastSeen:String(value.lastSeen||'').slice(0,40)
+        }]));
+      }
     }
   } catch (err) { console.warn('[roll20 Embetterment] Could not load saved state', err); }
   RB.state=d; RB.tab=d.ui.lastTab || 'Home';

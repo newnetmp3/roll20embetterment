@@ -149,6 +149,9 @@ function action(name, el) {
             mapped:link.coverage.mapped||0,unmappedCount:(link.coverage.unmapped||[]).length}:null}:null,
         runtime:{openSheets:(RB.openSheets||[]).length,cachedAttributes:Object.keys(scan?.fields||{}).length,
           sheetTourBusy:!!RB.sheetTourBusy,sheetTourWaiting:!!RB.sheetTourWaiting},
+        controlledCharacters:{assignmentCount:Object.keys(RB.state.tokenAssignments||{}).length,
+          assignments:Object.values(RB.state.tokenAssignments||{}).slice(0,100).map(a=>({tokenId:a.tokenId,tokenName:a.tokenName,characterId:a.characterId,characterName:a.characterName,profileId:a.profileId})),
+          autoImportBusy:!!RB.autoCharacterImportBusy,lastScan:RB.autoCharacterLastScan||null},
         tokenTracking:{source:RB.radial?.source||'none',matchedName:RB.radial?.lastPlayerToken?.name||null,
           pinned:!!RB.radial?.manual},
         note:'Local diagnostics only. This report intentionally omits journal text and full character-sheet values.'
@@ -162,6 +165,11 @@ function action(name, el) {
       if(typeof radialMarkPlayerOverlay==='function')radialMarkPlayerOverlay(null);
       if(RB.radial){RB.radial.manual=null;RB.radial.anchor=null;RB.radial.source='none';RB.radial.lastPlayerToken=null;RB.radial.lastPresence=false;}
       radialPosition();render();toast('R20eb player-token tracking reset. Roll20 token data was not changed.');break;
+    case 'debugAutoImportControlled':
+      RB.autoCharacterImported=new Set();
+      autoImportControlledCharacters().then(()=>{render();toast('Controlled-character scan complete.');})
+        .catch(err=>{console.warn('[R20eb] Manual controlled-character scan failed',err);toast('Controlled-character scan failed; see console.');});
+      break;
     case 'debugClearImported':
       if(confirm('Clear imported sheet data for '+p.name+' from R20eb only? This does not modify the Roll20 character sheet. Local journal entries and locally-created spells/items/resources will be kept.')){
         clearImportedSheetData();
@@ -295,7 +303,7 @@ function boot() {
   window.addEventListener('beforeunload',save);
   startBeaconParentBridge();
   setInterval(sheetAutoTick,12000);
-  RB.visible=!!RB.state.settings.alwaysOpen;render();startRadialTracking();
+  RB.visible=!!RB.state.settings.alwaysOpen;render();startRadialTracking();startAutoControlledCharacterImport();
 }
 // Never install the combat HUD inside the external character-sheet iframe.
 const rbeStartup=isBeaconSheetDocument()?startBeaconFrameReader:isRoll20Editor()?boot:null;
