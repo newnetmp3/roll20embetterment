@@ -408,20 +408,23 @@ async function autoEnsureSheetCandidate(record){
   if(candidate)return {candidate,opened:false,hidden:null};
   const character=record.character||autoCharacterById(record.characterId);
   if(typeof character?.view?.showDialog!=='function')return null;
+  const focused=document.activeElement;
   try{character.view.showDialog();}catch(err){
     console.warn('[R20eb] Could not open controlled character sheet',record.characterName,err);return null;
   }
   let hidden=null;
-  for(let attempt=0;attempt<160;attempt++){
+  for(let attempt=0;attempt<300;attempt++){
     await sheetTourDelay(50);
     candidate=autoCandidateForCharacter(record);
     if(candidate){
       if(!hidden)hidden=autoHideSheetDialog(candidate);
+      try{focused?.focus?.({preventScroll:true});}catch{try{focused?.focus?.();}catch{}}
       // Let the advanced-sheet reader finish booting offscreen.
       await sheetTourDelay(350);
       return {candidate,opened:true,hidden};
     }
   }
+  try{focused?.focus?.({preventScroll:true});}catch{}
   return null;
 }
 function autoSelectedTokenAssignment(){
