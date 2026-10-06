@@ -132,6 +132,48 @@ function action(name, el) {
     case 'newProfile':{const name=prompt('Name for new character profile?','New Adventurer');if(name?.trim()){const next=newProfile(name.trim().slice(0,100));RB.state.profiles.push(next);RB.state.current=next.id;changedProfile();}break;}
     case 'renameProfile':{const name=prompt('Rename current profile?',p.name);if(name?.trim()){p.name=name.trim().slice(0,100);changedProfile();}break;}
     case 'deleteProfile':if(RB.state.profiles.length===1)toast('Keep at least one profile.');else if(confirm('Delete '+p.name+' and all locally saved character data?')){RB.state.profiles=RB.state.profiles.filter(x=>x.id!==p.id);RB.state.current=RB.state.profiles[0].id;changedProfile();}break;
+    case 'debugExport':{
+      const current=profile(),link=current.sheetLink||null,scan=RB.sheetWarm?.scan||null;
+      const report={
+        generatedAt:new Date().toISOString(),
+        r20ebVersion:RB.version,
+        storageKey:RB.key,
+        profile:{id:current.id,name:current.name,
+          counts:{attacks:(current.attacks||[]).length,spells:(current.spells||[]).length,
+            inventory:(current.inventory||[]).length,resources:(current.resources||[]).length,
+            features:(current.features||[]).length,proficiencies:(current.proficiencies||[]).length,
+            tools:(current.tools||[]).length}},
+        sheetLink:link?{name:link.name||'',edition:link.edition||'',lastSync:link.lastSync||null,
+          auto:!!link.auto,counts:link.counts||{},coverage:link.coverage?{
+            attributes:link.coverage.attributes||0,visibleFields:link.coverage.visibleFields||0,
+            mapped:link.coverage.mapped||0,unmappedCount:(link.coverage.unmapped||[]).length}:null}:null,
+        runtime:{openSheets:(RB.openSheets||[]).length,cachedAttributes:Object.keys(scan?.fields||{}).length,
+          sheetTourBusy:!!RB.sheetTourBusy,sheetTourWaiting:!!RB.sheetTourWaiting},
+        tokenTracking:{source:RB.radial?.source||'none',matchedName:RB.radial?.lastPlayerToken?.name||null,
+          pinned:!!RB.radial?.manual},
+        note:'Local diagnostics only. This report intentionally omits journal text and full character-sheet values.'
+      };
+      downloadText('r20eb-debug-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json',
+        JSON.stringify(report,null,2),'application/json');break;
+    }
+    case 'debugClearSheetCache':
+      clearSheetRuntimeState();save();render();toast('Cleared R20eb sheet scan/cache state. Roll20 was not changed.');break;
+    case 'debugRedetectToken':
+      if(typeof radialMarkPlayerOverlay==='function')radialMarkPlayerOverlay(null);
+      if(RB.radial){RB.radial.manual=null;RB.radial.anchor=null;RB.radial.source='none';RB.radial.lastPlayerToken=null;RB.radial.lastPresence=false;}
+      radialPosition();render();toast('R20eb player-token tracking reset. Roll20 token data was not changed.');break;
+    case 'debugClearImported':
+      if(confirm('Clear imported sheet data for '+p.name+' from R20eb only? This does not modify the Roll20 character sheet. Local journal entries and locally-created spells/items/resources will be kept.')){
+        clearImportedSheetData();
+        if(RB.radial){RB.radial.path=[];RB.radial.pages={};}
+        render();toast('Imported R20eb sheet data cleared. Roll20 was not changed.');
+      }break;
+    case 'debugResetCharacter':
+      if(confirm('Clear ALL current R20eb character data for '+p.name+'? This resets this local R20eb profile but does not modify the Roll20 character sheet.')){
+        resetCurrentProfileData();
+        if(RB.radial){RB.radial.path=[];RB.radial.pages={};RB.radial.manual=null;RB.radial.anchor=null;}
+        render();toast('Current R20eb character data cleared. Roll20 was not changed.');
+      }break;
     case 'resetPosition':RB.state.ui.panelX=null;RB.state.ui.panelY=null;RB.state.ui.panelWidth=520;changedProfile();break;
     case 'exportBackup':exportBackup();break;
     case 'copyCommand':copyText(RB.pendingCommand||'');break;
