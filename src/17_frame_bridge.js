@@ -28,15 +28,18 @@ function beaconRemoteCandidate(candidate){
   return !!(candidate?.frame?.contentWindow||candidate?.popoutWindow);
 }
 function beaconReaderName(){
-  const title=String(document.title||'').trim();
-  if(sheetMeaningfulName(title))return sheetText(title,100);
-  const selectors=['[data-testid="character-name"]','.profile__name','.profile__name input','.character-name'];
+  const selectors=['[data-testid="character-name"]','.profile__name','.profile__name input','.character-name',
+    '[class*="profile__name"]','[class*="character-name"]'];
   for(const selector of selectors){
     const el=document.querySelector?.(selector);
     const value=String(el?.value||el?.textContent||'').replace(/\s+/g,' ').trim();
     if(sheetMeaningfulName(value))return sheetText(value,100);
   }
-  return 'Open character sheet';
+  // Official popout titles can include the campaign name after the
+  // character name (for example "Character — Campaign"). Strip that
+  // decoration rather than treating the whole browser title as identity.
+  const title=String(document.title||'').replace(/\s+[—–]\s+.*$/,'').trim();
+  return sheetMeaningfulName(title)?sheetText(title,100):'Open character sheet';
 }
 function beaconReaderPeer(){
   if(isBeaconFrame())return window.parent;
