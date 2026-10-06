@@ -1,7 +1,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.2.5',
+  version: '2.3.0',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -42,7 +42,7 @@ function newProfile(name='Adventurer') {
 function initialState() {
   const p = newProfile();
   return {schema:1, settings:{theme:'bg3',visualMigration:1,scale:1,hotkeys:false,showBar:false,showHud:false,showFab:false,chatSearch:'',chatKind:'all',reducedMotion:false,alwaysOpen:false,radialMigration:2},
-    profiles:[p], current:p.id, macros:baseMacros(),
+    profiles:[p], current:p.id, macros:baseMacros(), tokenAssignments:{},
     ui:{panelX:null,panelY:null,panelWidth:520,lastTab:'Home',barCollapsed:false}};
 }
 function profile() { return RB.state.profiles.find(p=>p.id === RB.state.current) || RB.state.profiles[0]; }
@@ -126,6 +126,18 @@ function load() {
       d.macros = Array.isArray(stored.macros) ? stored.macros.slice(0,300).map(m=>({id:String(m.id||uid()),name:String(m.name||'Macro').slice(0,120),command:String(m.command||'').slice(0,3000),favorite:!!m.favorite,category:String(m.category||'Custom').slice(0,50)})) : d.macros;
       d.profiles = Array.isArray(stored.profiles) && stored.profiles.length ? stored.profiles.slice(0,30).map(normalizeProfile) : d.profiles;
       d.current = d.profiles.some(p=>p.id===stored.current) ? stored.current : d.profiles[0].id;
+      if(stored.tokenAssignments&&typeof stored.tokenAssignments==='object'&&!Array.isArray(stored.tokenAssignments)){
+        const entries=Object.entries(stored.tokenAssignments).slice(0,250).filter(([tokenId,value])=>
+          /^[A-Za-z0-9_-]{1,120}$/.test(tokenId)&&value&&typeof value==='object');
+        d.tokenAssignments=Object.fromEntries(entries.map(([tokenId,value])=>[tokenId,{
+          tokenId,
+          characterId:String(value.characterId||'').slice(0,120),
+          profileId:String(value.profileId||'').slice(0,100),
+          characterName:String(value.characterName||'').slice(0,100),
+          tokenName:String(value.tokenName||'').slice(0,100),
+          lastSeen:String(value.lastSeen||'').slice(0,40)
+        }]));
+      }
     }
   } catch (err) { console.warn('[roll20 Embetterment] Could not load saved state', err); }
   RB.state=d; RB.tab=d.ui.lastTab || 'Home';
