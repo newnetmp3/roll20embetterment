@@ -2336,14 +2336,20 @@ function autoRefreshCharacterStats(groups){
     const fields=autoCharacterAttributeFields(group.record.character);
     const snap=snapshotSheet(fields,group.record.characterName);
     const link=group.profile.sheetLink;
-    if(link?.visibleStatAt&&Date.now()-link.visibleStatAt<45000){
+    const protectedLive=link?.visibleStatAt&&Date.now()-link.visibleStatAt<45000;
+    if(protectedLive){
       for(const section of ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']){
         for(const key of link.visibleStatKeys?.[section]||[])delete snap[section]?.[key];
       }
     }
+    const protectedStats=new Set(protectedLive?link.visibleStatKeys?.stats||[]:[]);
     const token=autoTokenHealthSnapshot(group.record,group.profile);
-    if(token)Object.assign(snap.stats,token.stats);
-    const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
+    const overrides={};
+    if(token)for(const [key,value] of Object.entries(token.stats)){
+      // Protect a just-read official HP/max-HP from stale token health bars too.
+      if(protectedStats.has(key))continue;
+      snap.stats[key]=value;overrides[key]=token.source;
+    }
     if(applyLiveCharacterValues(group.profile,snap,characterId,'Roll20 attributes',overrides))updated++;
   }
   if(updated)autoPresentStatsUpdated();
