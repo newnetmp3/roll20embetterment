@@ -44,7 +44,7 @@
  }
  function radialSheetRollLeaves(list){
    const actionLabel=value=>({attack:'Attack',damage:'Damage',skill:'Check',ability:'Check',
-     save:'Save',initiative:'Roll',healing:'Healing'}[value]||String(value||'Roll'));
+     save:'Save',initiative:'Roll',healing:'Healing',roll:'Roll'}[value]||String(value||'Roll'));
    return list.slice(0,80).map(r=>radialNode('sr:'+r.id,
      r.name+' · '+actionLabel(r.action),
      r.action==='damage'||r.action==='healing'?'✦':'⚄',[],'sheetRoll',r.id,
