@@ -60,6 +60,15 @@ function beaconCollectRollActions(scope,tab=''){
   }
   const initiative=scope.querySelector?.('.initiative-btn button');
   if(initiative)push('initiative','Initiative','initiative',initiative,{group:'Initiative',global:true});
+  // Catch additional official Roll20 controls such as tool checks and Hit
+  // Dice without opening arbitrary controls. Only buttons whose accessible
+  // label explicitly begins with "Roll " qualify for this generic fallback.
+  for(const button of Array.from(scope.querySelectorAll?.('button[aria-label]')||[]).slice(0,500)){
+    const aria=String(button.getAttribute?.('aria-label')||'').replace(/\s+/g,' ').trim();
+    if(!/^Roll\b/i.test(aria))continue;
+    const visible=beaconRollText(button),name=(visible||aria.replace(/^Roll\s+(?:a\s+)?/i,'')).slice(0,120);
+    push('generic',name,'roll',button,{group:'Other Rolls',global:true,ariaLabel:aria.slice(0,200)});
+  }
   for(const card of Array.from(panel.querySelectorAll?.('.action-item')||[]).slice(0,160)){
     const name=beaconRollName(card,['.action-item__name','.span--item-row-title','.name-chat'])||
       beaconRollText(card).split(/\s+\d+d\d+/)[0].trim().slice(0,120);
