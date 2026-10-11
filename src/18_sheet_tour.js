@@ -211,6 +211,14 @@ async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,cha
     targetProfile.sheetLink=targetProfile.sheetLink||{};
     targetProfile.sheetLink.source=candidate.id;
     targetProfile.sheetLink.tabsVisited=acc.tabs;
+    // A full tab import can be newer than the editor's cached attribute model.
+    // Retain its mapped values until the model catches up or a visible scan
+    // refreshes them, rather than snapping to stale defaults five seconds later.
+    const imported=mergeBeaconSnapshot(snapshotSheet(acc.fields,candidate.name),acc.visible);
+    targetProfile.sheetLink.visibleStatAt=Date.now();
+    targetProfile.sheetLink.visibleStatKeys=Object.fromEntries(
+      ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
+        .map(section=>[section,Object.keys(imported[section]||{})]));
     if(characterId){
       targetProfile.roll20CharacterId=String(characterId).slice(0,120);
       targetProfile.sheetLink.characterId=targetProfile.roll20CharacterId;
@@ -291,22 +299,106 @@ function autoCharacterAttributeFields(character){
   }
   return fields;
 }
+function autoTokenHealthSnapshot(record,profileRecord){
+  const model=record?.model,character=record?.character;
+  if(!model?.get)return null;
+  const choice=String(profileRecord?.sheetLink?.hpSource||'auto');
+  if(!['auto','bar1','bar2','bar3'].includes(choice))return null;
+  const attributes=character?.attribs?.models||[];
+  const normalized=name=>String(name||'').toLowerCase().replace(/[\\s.-]+/g,'_');
+  const names=new Set(['hp','hit_points','hit_points_current','current_hp','hp_current','current_hit_points']);
+  const linkedName=id=>{
+    for(const attr of attributes){
+      const attrId=String(attr?.id||attr?.get?.('id')||attr?.attributes?.id||'');
+      if(attrId&&attrId===String(id))
+        return normalized(attr?.get?.('name')||attr?.attributes?.name);
+    }
+    return '';
+  };
+  for(const index of [1,2,3]){
+    const bar='bar'+index,linked=String(model.get(bar+'_link')||'');
+    const name=linked?linkedName(linked):'';
+    const explicit=choice===bar;
+    if(!explicit&&!(choice==='auto'&&names.has(name)))continue;
+    const current=sheetNum(model.get(bar+'_value')),maximum=sheetNum(model.get(bar+'_max'));
+    if(current===null||current<0||current>9999)continue;
+    if(maximum!==null&&(maximum<1||maximum>9999))continue;
+    return {stats:{hp:current,...(maximum!==null?{maxHp:maximum}:{})},
+      source:'Token Bar '+index+(name?' (linked HP)':' (selected HP source)')};
+  }
+  return null;
+}
+function autoPresentStatsUpdated(){
+  save();
+  if(RB.visible&&!RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
+  else if(RB.radial?.anchor)render();
+  if(RB.shadow&&RB.radial?.anchor)radialPosition();
+}
 function autoRefreshCharacterStats(groups){
   let updated=0;
   for(const [characterId,group] of groups){
     const fields=autoCharacterAttributeFields(group.record.character);
-    if(!Object.keys(fields).length)continue;
     const snap=snapshotSheet(fields,group.record.characterName);
-    if(applyLiveCharacterValues(group.profile,snap,characterId))updated++;
+    const link=group.profile.sheetLink;
+    if(link?.visibleStatAt&&Date.now()-link.visibleStatAt<45000){
+      for(const section of ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']){
+        for(const key of link.visibleStatKeys?.[section]||[])delete snap[section]?.[key];
+      }
+    }
+    const token=autoTokenHealthSnapshot(group.record,group.profile);
+    if(token)Object.assign(snap.stats,token.stats);
+    const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
+    if(applyLiveCharacterValues(group.profile,snap,characterId,'Roll20 attributes',overrides))updated++;
   }
-  if(updated){
-    save();
-    // Do not replace focused text inputs or disrupt manual imports.
-    if(RB.visible&&!RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
-    else if(RB.radial?.anchor)render();
-    if(RB.shadow&&RB.radial?.anchor)radialPosition();
-  }
+  if(updated)autoPresentStatsUpdated();
   return updated;
+}
+// Only scan a player-opened sheet. Never create a helper or visit other tabs.
+async function autoRefreshVisibleSheetStats(record,profileRecord){
+  const charId=String(record?.characterId||'');
+  const candidate=autoCandidateForCharacter(record);
+  if(!candidate)return false;
+  try{
+    RB.openSheets=sheetCandidates(document);
+    const live=RB.openSheets.find(c=>c.id===candidate.id||
+      (candidate.frame&&c.frame?.contentWindow===candidate.frame.contentWindow)||
+      (candidate.popoutWindow&&c.popoutWindow===candidate.popoutWindow))||candidate;
+    const scan=beaconRemoteCandidate(live)?await requestBeaconFrame(live,false):
+      {fields:readSheetFields(live.root),visible:beaconImportVisible(live.root,live.name)};
+    const visual=scan.visible||beaconImportVisible({innerText:''},live.name);
+    const snap=mergeBeaconSnapshot(snapshotSheet(scan.fields||{},live.name),visual);
+    if(!Object.keys(snap.stats).length&&!Object.keys(snap.abilityScores).length)return false;
+    const token=autoTokenHealthSnapshot(record,profileRecord);
+    if(token)Object.assign(snap.stats,token.stats);
+    const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
+    const changed=applyLiveCharacterValues(profileRecord,snap,charId,
+      beaconRemoteCandidate(live)?'Visible official sheet':'Visible Roll20 sheet',overrides);
+    if(profileRecord.sheetLink){
+      profileRecord.sheetLink.visibleStatAt=Date.now();
+      profileRecord.sheetLink.visibleStatKeys=Object.fromEntries(
+        ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
+          .map(section=>[section,Object.keys(snap[section]||{})]));
+    }
+    if(changed)autoPresentStatsUpdated();
+    return changed;
+  }catch(err){
+    console.warn('[R20eb] Nonintrusive live sheet stat read unavailable',String(err?.message||err).slice(0,160));
+    return false;
+  }
+}
+function autoScheduleVisibleSheetStats(groups){
+  RB.autoStatProbeAt=RB.autoStatProbeAt||new Map();
+  RB.autoStatProbeBusy=RB.autoStatProbeBusy||new Set();
+  for(const [characterId,group] of groups){
+    if(RB.autoStatProbeBusy.has(characterId))continue;
+    if(Date.now()-(RB.autoStatProbeAt.get(characterId)||0)<15000)continue;
+    if(!autoCandidateForCharacter(group.record))continue;
+    RB.autoStatProbeAt.set(characterId,Date.now());
+    RB.autoStatProbeBusy.add(characterId);
+    autoRefreshVisibleSheetStats(group.record,group.profile)
+      .catch(err=>console.warn('[R20eb] Live stat scan failed',err))
+      .finally(()=>RB.autoStatProbeBusy.delete(characterId));
+  }
 }
 function autoActiveTokenModels(){
   const campaign=autoCampaign(),page=campaign?.activePage?.();
@@ -477,33 +569,79 @@ function autoCloseSheetDialog(record,hidden){
   if(close?.click)close.click();
   else console.warn('[R20eb] Automatic helper sheet could not be closed; styling restored for manual access.');
 }
+// Roll20's journal URL is an officially supported, player-initiated sheet link.
+// The 2024/Jumpgate client does not always expose the old Backbone view API.
+function roll20CharacterSheetUrl(characterId){
+  const id=String(characterId||'').trim();
+  return /^[A-Za-z0-9_-]{1,120}$/.test(id)?
+    'https://journal.roll20.net/character/'+encodeURIComponent(id):'';
+}
+function roll20LinkedCharacterId(){
+  const p=profile();
+  const selected=autoSelectedTokenAssignment()?.characterId;
+  const owned=Object.values(RB.state?.tokenAssignments||{})
+    .filter(item=>item?.profileId===p.id&&roll20CharacterSheetUrl(item.characterId));
+  // A linked profile is authoritative, even when there is no selected token.
+  for(const id of [p.roll20CharacterId,p.sheetLink?.characterId,selected]){
+    if(roll20CharacterSheetUrl(id))return String(id);
+  }
+  const unique=new Set(owned.map(item=>item.characterId));
+  if(unique.size===1)return [...unique][0];
+  // Some player sheets are visible only through controlled token models.
+  // Match an exact, unique controlled character name; never open the first NPC.
+  const records=autoDiscoverControlledTokens();
+  const matching=new Set(records.filter(item=>
+    String(item.characterName||'').toLocaleLowerCase()===String(p.name||'').toLocaleLowerCase()||
+    String(item.tokenName||'').toLocaleLowerCase()===String(p.name||'').toLocaleLowerCase())
+    .map(item=>item.characterId).filter(roll20CharacterSheetUrl));
+  return matching.size===1?[...matching][0]:'';
+}
 function openRoll20CharacterSheet(){
-  const p=profile(),characterId=p.roll20CharacterId||p.sheetLink?.characterId||
-    autoSelectedTokenAssignment()?.characterId||'';
-  const character=autoCharacterById(characterId);
-  if(typeof character?.view?.showDialog!=='function'){
-    toast('Select a controlled character token or open its sheet from the Roll20 Journal.');
+  const characterId=roll20LinkedCharacterId(),url=roll20CharacterSheetUrl(characterId);
+  if(!url){
+    toast('No linked Roll20 character found. Open the Journal or select your token.');
     return false;
   }
-  // A deliberate player open wins over an in-progress hidden helper.
+  const character=autoCharacterById(characterId);
   const hidden=RB.autoHelperActive;
-  if(hidden&&hidden.characterId===String(characterId)){
+  if(hidden&&hidden.characterId===characterId){
     hidden.reclaimed=true;
-    // A helper might currently display Advanced Tools: return to Character
-    // Sheet before exposing the reclaimed window to the player.
     const tabs=sheetTourTabs(hidden.wrapper,RBE_SHEET_TOUR_MAIN,'.asv__header__nav__tabs_link');
     const main=tabs.find(tab=>sheetTourLabel(tab)==='Character Sheet');
     if(main&&!sheetTourActive(main))main.click?.();
     autoReleaseSheetDialog(hidden);
   }
   RB.autoCharacterRetryAfter=RB.autoCharacterRetryAfter||new Map();
-  RB.autoCharacterRetryAfter.set(String(characterId),Date.now()+120000);
-  try{character.view.showDialog();return true;}
-  catch(err){
-    console.warn('[R20eb] Could not open the player character sheet',err);
-    toast('Roll20 could not open the character sheet. Try the Journal.');
-    return false;
+  RB.autoCharacterRetryAfter.set(characterId,Date.now()+120000);
+  const methods=[
+    [character?.view?.showDialog,character?.view],
+    [character?.showDialog,character]
+  ];
+  for(const [fn,owner] of methods){
+    if(typeof fn!=='function')continue;
+    try{fn.call(owner);return true;}
+    catch(err){console.warn('[R20eb] Roll20 native sheet opening unavailable',err);}
   }
+  // Journal URLs are special VTT-intercepted links. Their hostname does not
+  // resolve as a standalone external sheet, so NEVER window.open this URL.
+  // Dispatch a click from the light DOM where Roll20 delegates its handlers.
+  const doc=document,body=doc.body;
+  if(body?.appendChild&&doc.createElement){
+    const link=doc.createElement('a');
+    link.href=url;
+    link.textContent='Open linked Roll20 sheet';
+    link.style.display='none';
+    link.addEventListener?.('click',event=>event.preventDefault());
+    try{
+      body.appendChild(link);
+      link.click();
+      return true;
+    }catch(err){console.warn('[R20eb] Roll20 Journal link activation failed',err);}
+    finally{link.remove?.();}
+  }
+  RB.tab='Sheet';RB.state.ui.lastTab='Sheet';RB.visible=true;render();
+  toast('Unable to open the sheet automatically. Use the Roll20 Journal.');
+  return false;
 }
 async function autoEnsureSheetCandidate(record){
   const register=candidate=>{
@@ -573,6 +711,7 @@ async function autoImportControlledCharacters(){
   // Unlike full imports, numeric stats keep refreshing from loaded Roll20
   // models every scan, even after a character has been fully imported.
   autoRefreshCharacterStats(groups);
+  autoScheduleVisibleSheetStats(groups);
   RB.autoCharacterImportBusy=true;
   RB.autoCharacterImported=RB.autoCharacterImported||new Set();
   let imported=0;

@@ -228,6 +228,17 @@ function onChange(e) {
   else if(el.matches('[data-death]')){p.death[el.dataset.death]=el.checked?int(el.dataset.count):int(el.dataset.count)-1;save();render();}
   else if(el.matches('[data-sheet-pick]')){RB.selectedSheet=clamp(el.value,0,Math.max(0,(RB.openSheets||[]).length-1));RB.sheetSignature=null;save();render();}
   else if(el.matches('[data-sheet-auto]')){p.sheetLink=p.sheetLink||{name:p.name};p.sheetLink.auto=el.checked;save();render();}
+  else if(el.matches('[data-hp-source]')){
+    if(!['auto','bar1','bar2','bar3'].includes(el.value))return;
+    p.sheetLink=p.sheetLink||{name:p.name};p.sheetLink.hpSource=el.value;save();
+    const records=autoDiscoverControlledTokens().filter(x=>
+      x.characterId===(p.roll20CharacterId||p.sheetLink?.characterId));
+    if(records.length){
+      const record=records[0];
+      autoRefreshCharacterStats(new Map([[record.characterId,{record,profile:p}]]));
+    }
+    render();
+  }
   else if(el.matches('[data-panel-width]')){RB.state.ui.panelWidth=clamp(el.value,360,920);save();render();}
   else if(el.matches('[data-slot]')){p.macrosSlots[clamp(el.dataset.slot,0,7)]=el.value;save();render();}
   else if(el.matches('[data-slot-max]')){const i=clamp(el.dataset.slotMax,1,9);p.spellSlots[i]=clamp(el.value,0,99);p.usedSlots[i]=Math.min(p.usedSlots[i],p.spellSlots[i]);save();render();}

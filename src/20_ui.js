@@ -18,6 +18,8 @@ const STYLE = `
 #rbe-header strong{color:var(--accent);font-size:1.06em}#rbe-tabs{display:flex;overflow-x:auto;gap:2px;padding:7px;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0}
 #rbe-tabs button{padding:6px 10px;border-radius:5px;font-size:.89em}#rbe-tabs button.active{border-color:var(--accent);color:var(--accent);background:var(--raised)}
 #rbe-body{overflow-y:auto;min-height:140px;padding:13px;scrollbar-color:var(--border) transparent;overscroll-behavior:contain}
+#rbe-body .rbe-journal-link{display:inline-flex;align-items:center;padding:7px 11px;border:1px solid var(--accent);border-radius:7px;color:var(--accent);background:var(--panel);text-decoration:none;font-weight:650}
+#rbe-body .rbe-journal-link:hover,#rbe-body .rbe-journal-link:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 #rbe-toast{position:fixed;bottom:150px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--accent);color:var(--text);padding:11px 17px;border-radius:10px;max-width:min(430px,90vw);box-shadow:var(--shadow);text-align:center}#rbe-toast[hidden]{display:none}
 #rbe-palette,#rbe-copy-modal{position:fixed;inset:0;background:#070b10ad;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
 #rbe-palette .dialog,#rbe-copy-modal .dialog{background:var(--bg);border:1px solid var(--accent);padding:15px;border-radius:12px;box-shadow:var(--shadow);width:min(540px,90vw);max-height:70vh;overflow-y:auto}
@@ -29,6 +31,9 @@ const button = (label,action,extra='',cls='') => `<button data-action="${html(ac
 const progress = (cur,max) => `<div class="hpbar"><span style="width:${max?Math.max(0,Math.min(100,cur/max*100)):0}%"></span></div>`;
 function sheetUI() {
   const p=profile(),link=p.sheetLink,options=RB.openSheets||[];
+  const journalUrl=typeof roll20LinkedCharacterId==='function'&&
+    typeof roll20CharacterSheetUrl==='function'?
+    roll20CharacterSheetUrl(roll20LinkedCharacterId()):'';
   const nativeButton=(label,ref,cls='small primary')=>
     button(label,'runNativeSheetRoll','data-id="'+html(ref.id)+'"'+(RB.nativeRollPending?.has(p.id+':'+ref.id)?' disabled':''),cls);
   const attackControls=item=>{
@@ -47,7 +52,11 @@ function sheetUI() {
       '<p class="hint">Nothing accessible in the last scan.</p>')+'</div>';
   return '<div class="stack"><div class="card"><h2>Link character sheet</h2>'+
     '<p class="hint">Open your original Roll20 sheet whenever you want. Manual full imports may visit Character Sheet, Bio & Info and Advanced Tools → Attributes; automatic background imports use temporary hidden helpers and never navigate a sheet you already opened. All imports are read-only.</p>'+
-    '<div class="row">'+button('Open original Roll20 sheet','openRoll20Sheet','','primary')+button('Import all sheet tabs','sheetTourAll')+button('Find open sheets','scanSheets')+button('② Import visible attributes','syncSheet')+'</div>'+
+    '<div class="row">'+button('Open original Roll20 sheet','openRoll20Sheet','','primary')+
+    (journalUrl?
+      '<a class="rbe-journal-link" href="'+html(journalUrl)+
+      '" data-action="openRoll20Sheet" title="Open via Roll20 in-game Journal handler">Open via Roll20 Journal ↗</a>':'')+
+    button('Import all sheet tabs','sheetTourAll')+button('Find open sheets','scanSheets')+button('② Import visible attributes','syncSheet')+'</div>'+
     '<p id="rbe-sheet-tour-status" role="status" class="hint">'+html(RB.sheetTourStatus||'Ready to import.')+'</p>'+
     (RB.sheetTourWaiting?'<div class="card"><strong>Open your character sheet in Roll20 now</strong><p class="hint">Open Journal → '+html(p.name)+' → Character Sheet, either embedded or in Roll20’s official popout. R20eb will detect it and automatically import the available tabs.</p>'+button('Cancel waiting','sheetTourCancel')+'</div>':'')+
     (options.length?'<label class="field">Open sheet<select data-sheet-pick>'+options.map((sheet,i)=>
@@ -55,6 +64,13 @@ function sheetUI() {
       '<p class="hint">Found '+options.length+' candidate sheet(s). <strong>'+int(options[RB.selectedSheet||0]?.readableFields)+' named attributes</strong> and <strong>'+int(options[RB.selectedSheet||0]?.visibleFields)+' visible values</strong> detected. Scanning automatically gathers the full scrollable Attributes list behind a frozen view and restores your position. Click <strong>Import visible attributes</strong> to apply the gathered values locally. For attacks and spells not exposed as attributes, switch to Character Sheet → Combat / Spells, then scan again.</p>':
       '<p class="hint">No sheets scanned yet. Click Import all sheet tabs to be prompted to open your character sheet.</p>')+
     '<label><input type="checkbox" data-sheet-auto '+(link?.auto?'checked':'')+'> Refresh while the linked sheet is open (every 12 seconds)</label>'+
+    '<label class="field">Health source<select data-hp-source>'+
+    [['auto','Auto · linked HP attribute'],['bar1','Token Bar 1'],['bar2','Token Bar 2'],['bar3','Token Bar 3']]
+      .map(([value,label])=>'<option value="'+value+'" '+((link?.hpSource||'auto')===value?'selected':'')+'>'+label+'</option>').join('')+
+    '</select></label>'+
+    '<p class="hint">If the health total is incorrect, select the token bar your game uses for HP. Auto recognizes only a linked HP attribute. Current sources: '+
+    html(Object.entries(link?.statSources||{}).filter(([key])=>['hp','maxHp','ac','speed','init'].includes(key))
+      .map(([key,value])=>key+' = '+value).join(' · ')||'No verified stats yet')+'</p>'+
     '<p class="hint">Local notes, macros, equipment, and custom spells are preserved. Imports are read-only local copies. Beacon fields only import when their values can be identified confidently.</p></div>'+
     '<div class="card"><h3>Import coverage</h3>'+
     (link?'<strong>'+html(link.name||p.name)+'</strong> <span class="pill">'+html(link.edition||'Sheet')+'</span>'+
