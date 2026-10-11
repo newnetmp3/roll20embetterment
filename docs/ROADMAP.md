@@ -4,8 +4,8 @@ Updated: October 11, 2026. v2.3.13 continued to fail real Floorp/Roll20 imports 
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
-| 1 | Replace production bundle with independent v3 engine | Implemented | Generated script contains no old v2 runtime |
-| 2 | Labeled HP/stats/abilities/saves/skills/slots | Implemented; live QA pending | Official 2024 iframe in Floorp |
+| 1 | Replace production bundle with independent v3 engine | Implemented | Run 38182938287 green; 189 total tests, 10 for v3; v2 runtime excluded |
+| 2 | Labeled HP/stats/abilities/saves/skills/slots | CI verified; live QA pending | Official 2024 iframe in Floorp |
 | 3 | Spells, attacks, inventory, features and resources | Implemented; live QA pending | Live populated character sheet tabs |
 | 4 | Bounded tab traversal, origin verification, diagnostics and JSON export | Implemented; live QA pending | Browser and security tests |
 | 5 | Improve unmapped fields from exported observations | Planned | No guessed selectors |
