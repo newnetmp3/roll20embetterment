@@ -639,3 +639,10 @@ test('combat wheel shows latest HP AC speed and initiative without Choose an act
  assert.doesNotMatch(markup,/Choose an action|rbe-wheel-info/);
  assert.match(markup,/data-action="radialOpenSheet"/);
 });
+
+test('combat wheel keeps fractional initiative as printed on official 2024 sheet',()=>{
+ const {r}=env(),p=r.profile();
+ p.stats.init=2.14;
+ r.RB.radial.anchor={x:400,y:300};
+ assert.match(r.radialHTML(),/INIT \+2\.14/);
+});
