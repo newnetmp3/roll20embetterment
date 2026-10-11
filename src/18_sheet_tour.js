@@ -581,40 +581,48 @@ function roll20LinkedCharacterId(){
 function openRoll20CharacterSheet(){
   const characterId=roll20LinkedCharacterId(),url=roll20CharacterSheetUrl(characterId);
   if(!url){
-    toast('No linked Roll20 character found. Open the character from Journal or select its token.');
+    toast('No linked Roll20 character found. Open the Journal or select your token.');
     return false;
   }
   const character=autoCharacterById(characterId);
-  const openNative=character?.view?.showDialog;
-  if(typeof openNative==='function'){
-    // A deliberate player open takes ownership of any hidden import helper.
-    const hidden=RB.autoHelperActive;
-    if(hidden&&hidden.characterId===characterId){
-      hidden.reclaimed=true;
-      const tabs=sheetTourTabs(hidden.wrapper,RBE_SHEET_TOUR_MAIN,'.asv__header__nav__tabs_link');
-      const main=tabs.find(tab=>sheetTourLabel(tab)==='Character Sheet');
-      if(main&&!sheetTourActive(main))main.click?.();
-      autoReleaseSheetDialog(hidden);
-    }
-    RB.autoCharacterRetryAfter=RB.autoCharacterRetryAfter||new Map();
-    RB.autoCharacterRetryAfter.set(characterId,Date.now()+120000);
-    try{openNative.call(character.view);return true;}
-    catch(err){console.warn('[R20eb] Native Roll20 sheet opening failed; trying Journal link',err);}
+  const hidden=RB.autoHelperActive;
+  if(hidden&&hidden.characterId===characterId){
+    hidden.reclaimed=true;
+    const tabs=sheetTourTabs(hidden.wrapper,RBE_SHEET_TOUR_MAIN,'.asv__header__nav__tabs_link');
+    const main=tabs.find(tab=>sheetTourLabel(tab)==='Character Sheet');
+    if(main&&!sheetTourActive(main))main.click?.();
+    autoReleaseSheetDialog(hidden);
   }
-  // A click on the combat-wheel button provides the required user gesture.
-  // The Journal link preserves Roll20's own access controls and opens the
-  // specific sheet, not an unrelated token editor or Advanced Tools pane.
-  try{
-    const opened=window.open?.(url,'_blank');
-    if(opened){
-      try{opened.opener=null;}catch{}
+  RB.autoCharacterRetryAfter=RB.autoCharacterRetryAfter||new Map();
+  RB.autoCharacterRetryAfter.set(characterId,Date.now()+120000);
+  const methods=[
+    [character?.view?.showDialog,character?.view],
+    [character?.showDialog,character]
+  ];
+  for(const [fn,owner] of methods){
+    if(typeof fn!=='function')continue;
+    try{fn.call(owner);return true;}
+    catch(err){console.warn('[R20eb] Roll20 native sheet opening unavailable',err);}
+  }
+  // Journal URLs are special VTT-intercepted links. Their hostname does not
+  // resolve as a standalone external sheet, so NEVER window.open this URL.
+  // Dispatch a click from the light DOM where Roll20 delegates its handlers.
+  const doc=document,body=doc.body;
+  if(body?.appendChild&&doc.createElement){
+    const link=doc.createElement('a');
+    link.href=url;
+    link.textContent='Open linked Roll20 sheet';
+    link.style.display='none';
+    link.addEventListener?.('click',event=>event.preventDefault());
+    try{
+      body.appendChild(link);
+      link.click();
       return true;
-    }
-  }catch(err){console.warn('[R20eb] Journal sheet popout unavailable',err);}
-  // Popup blockers may reject programmatic opens. Reveal a regular anchor
-  // the player can activate directly instead of leaving a dead button.
+    }catch(err){console.warn('[R20eb] Roll20 Journal link activation failed',err);}
+    finally{link.remove?.();}
+  }
   RB.tab='Sheet';RB.state.ui.lastTab='Sheet';RB.visible=true;render();
-  toast('Browser blocked the sheet tab. Use Open Journal link in the Sheet panel.');
+  toast('Unable to open the sheet automatically. Use the Roll20 Journal.');
   return false;
 }
 async function autoEnsureSheetCandidate(record){
