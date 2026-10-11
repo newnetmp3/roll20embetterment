@@ -46,7 +46,7 @@ function sheetUI() {
       '</div><p class="hint">'+html(short(description(item),450))+'</p></div>').join('')+'</div>':
       '<p class="hint">Nothing accessible in the last scan.</p>')+'</div>';
   return '<div class="stack"><div class="card"><h2>Link character sheet</h2>'+
-    '<p class="hint">Open your original Roll20 sheet whenever you want. Manual full imports can visit its tabs; automatic background imports use temporary hidden helpers and never navigate a sheet you already opened. All imports are read-only.</p>'+
+    '<p class="hint">Open your original Roll20 sheet whenever you want. Manual full imports may visit Character Sheet, Bio & Info and Advanced Tools → Attributes; automatic background imports use temporary hidden helpers and never navigate a sheet you already opened. All imports are read-only.</p>'+
     '<div class="row">'+button('Open original Roll20 sheet','openRoll20Sheet','','primary')+button('Import all sheet tabs','sheetTourAll')+button('Find open sheets','scanSheets')+button('② Import visible attributes','syncSheet')+'</div>'+
     '<p id="rbe-sheet-tour-status" role="status" class="hint">'+html(RB.sheetTourStatus||'Ready to import.')+'</p>'+
     (RB.sheetTourWaiting?'<div class="card"><strong>Open your character sheet in Roll20 now</strong><p class="hint">Open Journal → '+html(p.name)+' → Character Sheet, either embedded or in Roll20’s official popout. R20eb will detect it and automatically import the available tabs.</p>'+button('Cancel waiting','sheetTourCancel')+'</div>':'')+
