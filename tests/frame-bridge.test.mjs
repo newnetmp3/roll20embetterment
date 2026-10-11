@@ -16,7 +16,7 @@ function harness(){
     localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}}
   };
   vm.createContext(context);
-  vm.runInContext(script+'\nload(); globalThis.h={RB,findSheetForms,requestBeaconFrame,onBeaconFrameMessage,beaconFrameSnapshot,beaconFrameReadRequest,isBeaconSheetDocument,isBeaconFrame,isBeaconPopout,isRoll20Editor,beaconPopoutCandidates,beaconRemoteCandidate};',context);
+  vm.runInContext(script+'\nload(); globalThis.h={RB,findSheetForms,requestBeaconFrame,requestBeaconAction,onBeaconFrameMessage,beaconFrameSnapshot,beaconFrameReadRequest,beaconExecuteSheetAction,isBeaconSheetDocument,isBeaconFrame,isBeaconPopout,isRoll20Editor,beaconPopoutCandidates,beaconRemoteCandidate};',context);
   return {h:context.h,events,context};
 }
 function sheetFixture(){
@@ -161,4 +161,32 @@ test('registered popout can answer the same read-only snapshot requests as an if
   assert.equal(profile.name,'Captain Rowan');
   assert.equal(profile.stats.hp,31);
   assert.equal(profile.stats.maxHp,42);
+});
+
+test('editor dispatches a native official-sheet action and accepts only the authenticated result',async()=>{
+  const {h}=harness(),f=sheetFixture();
+  h.RB.openSheets=h.findSheetForms(f.doc);
+  const candidate=h.RB.openSheets[0];
+  const promise=h.requestBeaconAction(candidate,{kind:'attack-row',rowId:'attack-1',control:'hit'});
+  const request=f.sent.at(-1).data;
+  assert.equal(request.type,'execute');
+  assert.equal(request.sheetRef.rowId,'attack-1');
+  let resolved=false;promise.then(()=>resolved=true);
+  h.onBeaconFrameMessage({origin:'https://evil.example',source:f.frame.contentWindow,
+    data:{bridge:request.bridge,type:'action-result',id:request.id,ok:true}});
+  await Promise.resolve();assert.equal(resolved,false);
+  h.onBeaconFrameMessage({origin:'https://advanced-sheets.production.roll20preflight.net',source:f.frame.contentWindow,
+    data:{bridge:request.bridge,type:'action-result',id:request.id,ok:true}});
+  assert.equal(await promise,true);
+});
+test('sheet reader clicks the exact resolved native roll control',async()=>{
+  const {h,context}=harness();let clicked=0;
+  const button={disabled:false,click(){clicked++}};
+  context.document.getElementById=id=>id==='attack-1'?{
+    querySelector(sel){return sel==='.poly-button--hit-dc button'?button:null},
+    querySelectorAll(){return []}
+  }:null;
+  context.document.querySelectorAll=()=>[];
+  assert.equal(await h.beaconExecuteSheetAction({kind:'attack-row',rowId:'attack-1',control:'hit'}),true);
+  assert.equal(clicked,1);
 });
