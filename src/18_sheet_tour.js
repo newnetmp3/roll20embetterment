@@ -43,7 +43,7 @@ function sheetTourMergeVisible(target,source) {
   for(const k of ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','spellSlots','usedSlots','details']){
     Object.assign(target[k],source[k]||{});
   }
-  for(const key of ['attacks','resources','spells','inventory','features','proficiencies','tools']){
+  for(const key of ['attacks','resources','spells','inventory','features','proficiencies','tools','sheetRolls']){
     const list=Array.isArray(source[key])?source[key]:[];
     if(!Array.isArray(target[key]))target[key]=[];
     const existing=new Set(target[key].map(x=>x.id||x.name));
