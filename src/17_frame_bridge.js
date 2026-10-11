@@ -164,8 +164,8 @@ function requestBeaconAction(candidate,ref){
 }
 function beaconRollRefOkay(ref){
   return !!ref&&typeof ref==='object'&&
-    ['attack','spell','skill','ability','save','initiative','action'].includes(String(ref.kind||''))&&
-    ['attack','damage','skill','ability','save','initiative','healing'].includes(String(ref.action||''))&&
+    ['attack','spell','skill','ability','save','initiative','action','generic'].includes(String(ref.kind||''))&&
+    ['attack','damage','skill','ability','save','initiative','healing','roll'].includes(String(ref.action||''))&&
     typeof ref.name==='string'&&ref.name.length>0&&ref.name.length<=120;
 }
 function beaconFindRollButton(ref){
@@ -198,6 +198,12 @@ function beaconFindRollButton(ref){
     return null;
   }
   if(ref.kind==='initiative')return document.querySelector?.('.initiative-btn button')||null;
+  if(ref.kind==='generic'){
+    const wanted=String(ref.ariaLabel||'').replace(/\s+/g,' ').trim();
+    if(!/^Roll\b/i.test(wanted)||wanted.length>200)return null;
+    return Array.from(document.querySelectorAll?.('button[aria-label]')||[]).find(button=>
+      String(button.getAttribute?.('aria-label')||'').replace(/\s+/g,' ').trim()===wanted)||null;
+  }
   if(ref.kind==='action'){
     const card=namedCard('.action-item',ref.name,['.action-item__name','.span--item-row-title','.name-chat']);
     const selector=ref.action==='healing'?'.poly-button--healing button':
