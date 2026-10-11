@@ -125,6 +125,7 @@ function onBeaconFrameMessage(event){
     beaconImportVisible({innerText:''},candidate.name);
   pending.resolve({fields,visible,full:!!message.full,expected:Math.max(0,int(message.expected)),
     scannedPages:Math.max(1,int(message.scannedPages)),
+    rollActions:Array.isArray(message.rollActions)?message.rollActions.slice(0,500):[],
     tabs:Array.isArray(message.tabs)?message.tabs.slice(0,48).map(x=>String(x).slice(0,100)):[],at:Date.now()});
 }
 function requestBeaconFrame(candidate,deep=false,options={}){
@@ -190,6 +191,8 @@ function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,char
   data.name=candidate.name;
   const target=targetProfile||profile();
   if(!applySheetSnapshot(target,data))return false;
+  const actions=(scan.rollActions||visual.rollActions||[]).slice(0,500);
+  if(actions.length)target.sheetActions=actions;
   candidate.readableFields=data.coverage.attributes;
   candidate.visibleFields=data.coverage.visibleFields;
   candidate.lastSeen=Date.now();
@@ -223,7 +226,8 @@ async function beaconFrameReadRequest(event){
     const visible=message.tour?scan.visible:beaconImportVisible(scope,beaconReaderName());
     const fields=Object.fromEntries(Object.entries(scan.fields).slice(0,6000));
     peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
-      fields,visible,full:scan.full,expected:scan.expected,scannedPages:scan.scannedPages,tabs:scan.tabs||[]},RBE_EDITOR_ORIGIN);
+      fields,visible,full:scan.full,expected:scan.expected,scannedPages:scan.scannedPages,
+      rollActions:scan.rollActions||visible.rollActions||[],tabs:scan.tabs||[]},RBE_EDITOR_ORIGIN);
   }catch(err){
     try{peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
       error:String(err.message||err).slice(0,160)},RBE_EDITOR_ORIGIN);}catch{}
