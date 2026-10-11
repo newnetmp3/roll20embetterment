@@ -5,7 +5,7 @@
 **Default branch:** `main`  
 **Current verified main baseline before stabilization:** `dda3b1e35f6edfe91c54363b3e3fce280040e766` (v2.3.9, PR #23 documentation merged).  
 **Latest completed milestone:** v2.3.9 — source-aware stat refresh and attempted sheet access, with known live failures.  
-**Current work:** v2.3.10 stabilization/refactor (CI pending).  
+**Current work:** v2.3.10 stabilization/refactor (PR #24, GitHub Actions verified: 169 passing tests).  
 **Pending:** Live Roll20 Jumpgate/Firefox verification of sheet opening and actual HP/AC/speed correctness.  
 
 ## Resume process
@@ -100,7 +100,7 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 
 - Additional user feedback: current HP/AC/speed still inaccurate after v2.3.8. Added nonintrusive three-source reconciliation (model / linked-or-selected token HP bar / visible official sheet), a per-character HP source selector (Auto/Bar 1/2/3), and source diagnostics in Sheet UI. An open sheet's more recent stats are held for 45s to avoid flicker from stale attribute models between 15s read-only frame scans. Unknown/unlinked bars are never silently assumed to be HP. Manual browser verification remains because token bar setup and 2024 form data vary by campaign.
 
-## v2.3.10 — Stabilization and source cleanup (CI pending)
+## v2.3.10 — Stabilization and source cleanup (PR #24, CI verified)
 
 - Split the oversized `src/18_sheet_tour.js` into three single-purpose files: `src/18_sheet_access.js`, `src/18_sheet_tour.js`, and `src/18_stats_sync.js`. Production build uses lexical source order and runtime function declarations, with no new external dependencies or storage migration.
 - Centralized full-runtime test module discovery via `tests/_runtime.mjs`, mirroring `scripts/build.mjs`. Added a module-structure regression test to catch missing/duplicate implementations.
@@ -108,6 +108,6 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 - The selected token's character ID is only eligible when the token belongs to the active R20eb profile. This avoids sending a click to another player's/NPC's sheet.
 - Corrected the linked-token-HP attribute-name normalizer for spaces, hyphens and dots, with a regression fixture.
 - No claims of fixing live stat freshness or modern Jumpgate UI behavior. Known limitations: native opener unverified in modern Roll20; attribute model vs. visible sheet vs. token-bar precedence still needs actual browser tracing; React fields may not exist in the cached attributes model.
-- Pending: complete CI, inspect all tests, record final PR/SHA and test count. Do not merge unless green.
+- **Verified:** PR #24 head `91fb6c922a83fd17c4cc92f94ef8372d7eae9869`: 169 tests passed, 0 failed. GitHub Actions `npm run check` and generated userscript consistency checks passed. Pending squash merge SHA, which must be verified from `main` after merging.
 
 **Next:** Capture a controlled, read-only comparison for Nier (HP, AC, movement, initiative, six abilities) that records exact source names without sensitive tokens; verify the authoritative Roll20 values before extending mappings. Review `docs/ARCHITECTURE.md` first.

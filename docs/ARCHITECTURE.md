@@ -1,6 +1,6 @@
 # R20eb runtime architecture and known integration limits
 
-**Updated:** 2026-10-11 · **Status:** Stabilization; Roll20 browser integration still needs validation.
+**Updated:** 2026-10-11 · **Status:** v2.3.10 stabilization CI verified (169 tests); Roll20 browser integration still needs validation.
 
 ## Source organization
 

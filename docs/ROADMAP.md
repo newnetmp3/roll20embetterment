@@ -12,7 +12,7 @@
 | 6 | Native-roll pending feedback and duplicate-click protection | ✅ v2.3.4 PR #17 | 130 passing tests; live Roll20 QA remains |
 | 7 | Spell roll versus casting semantics, safe local turn/resource reminders | ✅ v2.3.5 PR #18 | 136 tests passing; live Roll20 QA remains |
 | 8 | Keyboard accessibility, wheel density, palette navigation | ✅ v2.3.6 PR #19 | 140 tests passing; live density/keyboard QA remains |
-| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧪 v2.3.10 stabilization in progress | Modularized sheet access/stats, removed fake opener success; live browser QA still required |
+| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧹 v2.3.10 cleanup PR #24 | 169 tests passing; sheet access/stat modules isolated; live integration still unverified |
 | 10 | Release/version automation and reproducible install | ⬜ planned | CI tags |
 
 **Next actionable milestone:** Finish v2.3.10 cleanup CI, then collect a read-only browser trace of Nier's true character-sheet fields, HP token-bar mapping and native-opening behavior before changing mappings or UI.
