@@ -45,12 +45,12 @@ function beaconDiscoverRollActions(scope=document){
     const hit=row.querySelector?.('.poly-button--hit-dc button');
     if(hit){
       const detail=beaconActionNorm(hit.textContent)||'Attack';
-      beaconPushAction(out,seen,{name,category:'attack',detail,
+      beaconPushAction(out,seen,{id:rowId?'sheet:action:attack:'+rowId+':hit':'',name,category:'attack',detail,
         sheetRef:rowId?{kind:'attack-row',rowId,control:'hit'}:{kind:'named-row',rowType:'attack-item',name,control:'hit'}});
     }
     q(row,'.poly-button--damage button').forEach((button,index)=>{
       const detail=beaconActionNorm(button.textContent)||'Damage';
-      beaconPushAction(out,seen,{name:name+' Damage',category:'damage',detail,
+      beaconPushAction(out,seen,{id:rowId?'sheet:action:attack:'+rowId+':damage:'+index:'',name:name+' Damage',category:'damage',detail,
         sheetRef:rowId?{kind:'attack-row',rowId,control:'damage',index}:{kind:'named-row',rowType:'attack-item',name,control:'damage',index}});
     });
   }
