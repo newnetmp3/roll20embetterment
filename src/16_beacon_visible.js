@@ -28,6 +28,7 @@ function beaconCollectRollActions(scope,tab=''){
   const active=beaconRollText(scope.querySelector?.('[role="tab"][aria-selected="true"]'));
   const actualTab=/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(active)?active:
     (/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(tab)?tab:'');
+  const panel=scope.querySelector?.('[role="tabpanel"]:not([style*="display: none"])')||scope;
   const out=[],seen=new Set(),push=(kind,name,action,button,meta={})=>{
     if(!button||!name)return;
     const key=[kind,name,action,actualTab].join('|').toLowerCase();
@@ -36,12 +37,12 @@ function beaconCollectRollActions(scope,tab=''){
       kind,name:name.slice(0,120),action,tab:String(actualTab||'').slice(0,80),
       label:beaconRollText(button).slice(0,80),...meta});
   };
-  for(const card of Array.from(scope.querySelectorAll('.attack-item')).slice(0,120)){
+  for(const card of Array.from(panel.querySelectorAll?.('.attack-item')||[]).slice(0,120)){
     const name=beaconRollName(card,['.span--item-row-title','.attack-item__title-chat','.attack-item__title-col']);
     push('attack',name,'attack',card.querySelector?.('.poly-button--hit-dc button'),{group:'Attacks'});
     push('attack',name,'damage',card.querySelector?.('.poly-button--damage button'),{group:'Attacks'});
   }
-  for(const card of Array.from(scope.querySelectorAll('.spell-item')).slice(0,160)){
+  for(const card of Array.from(panel.querySelectorAll?.('.spell-item')||[]).slice(0,160)){
     const name=beaconRollName(card,['.spell-item__name.span--item-row-title','.spell-item__name','.spell-item__name--wrapper']);
     push('spell',name,'attack',card.querySelector?.('.poly-button--hit-dc button'),{group:'Spells'});
     push('spell',name,'damage',card.querySelector?.('.poly-button--damage button'),{group:'Spells'});
@@ -58,7 +59,7 @@ function beaconCollectRollActions(scope,tab=''){
   }
   const initiative=scope.querySelector?.('.initiative-btn button');
   if(initiative)push('initiative','Initiative','initiative',initiative,{group:'Initiative'});
-  for(const card of Array.from(scope.querySelectorAll('.action-item')).slice(0,160)){
+  for(const card of Array.from(panel.querySelectorAll?.('.action-item')||[]).slice(0,160)){
     const name=beaconRollName(card,['.action-item__name','.span--item-row-title','.name-chat'])||
       beaconRollText(card).split(/\s+\d+d\d+/)[0].trim().slice(0,120);
     push('action',name,'healing',card.querySelector?.('.poly-button--healing button'),{group:'Actions'});
