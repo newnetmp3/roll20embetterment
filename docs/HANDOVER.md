@@ -4,7 +4,7 @@
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
 **Previous milestone:** v2.3.3 (PR #16, 128 tests green).  
-**Current verified main baseline:** `15cde06c65523d6ff4ba4ef94aea6e94016203e1` (v2.3.7, PR #20).  
+**Current verified main baseline:** `f2711bb8cc2d8ce2590c01e8bdc8c91d392c2f0b` (v2.3.8, PR #21).  
 **Latest verified milestone:** v2.3.7 (PR #20, 150 tests green) — hidden helper isolation, manual Roll20 character access and draggable minimized dock.  
 **Latest tested milestone:** v2.3.8 (PR #21, CI green: 155 tests) — compact wheel and live controlled-character stats. Pending merge and actual browser validation.  
 
@@ -86,3 +86,14 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 - **CI verified:** PR #21 head `11c71b80fd9b2244a10af10292fe294a951ceb6b` ran **155 tests, 155 passed, 0 failed**. Generated userscript is consistent with source. **Live Roll20 browser QA remains:** confirm exact named fields, changing HP/AC/speed and alternate character sheets. After merge, fetch the new main SHA rather than assuming the PR head.
 
 **Next:** Verify actual current HP/AC/speed on a live character, and which fields Roll20 exposes in each edition. Only expand edition-specific adapters using tested markup; never manufacture missing values.
+
+## v2.3.9 — Fix inert native Roll20 sheet button (in progress)
+
+- Live screenshot showed the Roll20 button emitted “Select a controlled character token or open its sheet from the Roll20 Journal” even while Nier's linked profile and combat wheel were active.
+- Root cause: opening previously *required* `character.view.showDialog`; current Roll20 character models do not always expose that method. Linked IDs and token assignments were ignored in this case.
+- Resolve character ID from the current profile, selected assignment, unique mapped profile assignment, or unique exact controlled-character name. Reject malformed IDs and ambiguous matches.
+- Preserve native in-editor sheet opening and hidden-helper ownership where supported. Otherwise open Roll20's documented journal character URL as a player-clicked new tab; provide a real hyperlink if the browser blocks popups.
+- Preserve the automatic importer isolation. Tests required for both native and fallback paths, popup blocker, ambiguous/missing IDs, and safe journal link rendering.
+- Pending: GitHub Actions and live Roll20 browser verification.
+
+**Next:** Verify click from expanded wheel and minimized dock opens Nier's actual sheet (native or journal tab); compare Roll20 2024 and legacy 2014. Maintain rolling docs after merging.

@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.8 — Concentric Combat HUD
+# roll20 Embetterment 2.3.9 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -135,3 +135,7 @@ The minimized **Open wheel / Pin / Sheet** dock now has a visible ⠿ grip. Drag
 The full combat wheel no longer shows the redundant “Choose an action” line. Its compact status footer displays **current/max HP**, temporary HP, **AC**, **walking speed** and **initiative** (alongside the original controls). The Home panel includes six ability scores and modifiers, proficiency, initiative, level and available passive perception. Character values imported from Roll20 stay local to R20eb and never write back to the official sheet.
 
 Background scanning refreshes **loaded Roll20 controlled-character model attributes approximately every 5 seconds**, even after the full import is complete. A change to HP, maximum HP, temporary HP, AC, speed, initiative, ability scores, modifiers, saves, skills, coins or recognized details updates the local HUD without opening/scrolling the sheet. Blank, unsupported and nonnumeric values are ignored. Imported spells, attacks, native action controls, local notes and manually tracked spell usage are preserved. Extra aliases cover 2014/2024 field spelling and speed values with feet units. If an official sheet keeps values in inaccessible React state, R20eb cannot automatically detect them; use an intentional **Import all sheet tabs** and verify the available data. Edits made only to R20eb's local HP fields may be replaced by the next real model update.
+
+## Roll20 character button fallback (v2.3.9)
+
+**Roll20** on the wheel or minimized dock, and **Open original Roll20 sheet** in the Sheet panel, identify the linked character using the profile, selected token, token assignment or an exact unique controlled-character match. If the in-editor Roll20 model provides a native `view.showDialog` method, the same window opens normally and reclaims any automatic helper. When that method is unavailable (some official 2024/Jumpgate builds), the button opens the specific character's supported `https://journal.roll20.net/character/<character-id>` link in a new tab without needing a sheet iframe, using Roll20's normal character permissions. Popup blocking is handled by showing the Sheet panel's actual **Open Journal link ↗** hyperlink. The link is constructed only from a validated Roll20 character ID; it never opens an arbitrary URL, and the importer does not manipulate an existing player-owned sheet.

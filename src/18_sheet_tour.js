@@ -477,33 +477,71 @@ function autoCloseSheetDialog(record,hidden){
   if(close?.click)close.click();
   else console.warn('[R20eb] Automatic helper sheet could not be closed; styling restored for manual access.');
 }
+// Roll20's journal URL is an officially supported, player-initiated sheet link.
+// The 2024/Jumpgate client does not always expose the old Backbone view API.
+function roll20CharacterSheetUrl(characterId){
+  const id=String(characterId||'').trim();
+  return /^[A-Za-z0-9_-]{1,120}$/.test(id)?
+    'https://journal.roll20.net/character/'+encodeURIComponent(id):'';
+}
+function roll20LinkedCharacterId(){
+  const p=profile();
+  const selected=autoSelectedTokenAssignment()?.characterId;
+  const owned=Object.values(RB.state?.tokenAssignments||{})
+    .filter(item=>item?.profileId===p.id&&roll20CharacterSheetUrl(item.characterId));
+  // A linked profile is authoritative, even when there is no selected token.
+  for(const id of [p.roll20CharacterId,p.sheetLink?.characterId,selected]){
+    if(roll20CharacterSheetUrl(id))return String(id);
+  }
+  const unique=new Set(owned.map(item=>item.characterId));
+  if(unique.size===1)return [...unique][0];
+  // Some player sheets are visible only through controlled token models.
+  // Match an exact, unique controlled character name; never open the first NPC.
+  const records=autoDiscoverControlledTokens();
+  const matching=new Set(records.filter(item=>
+    String(item.characterName||'').toLocaleLowerCase()===String(p.name||'').toLocaleLowerCase()||
+    String(item.tokenName||'').toLocaleLowerCase()===String(p.name||'').toLocaleLowerCase())
+    .map(item=>item.characterId).filter(roll20CharacterSheetUrl));
+  return matching.size===1?[...matching][0]:'';
+}
 function openRoll20CharacterSheet(){
-  const p=profile(),characterId=p.roll20CharacterId||p.sheetLink?.characterId||
-    autoSelectedTokenAssignment()?.characterId||'';
+  const characterId=roll20LinkedCharacterId(),url=roll20CharacterSheetUrl(characterId);
+  if(!url){
+    toast('No linked Roll20 character found. Open the character from Journal or select its token.');
+    return false;
+  }
   const character=autoCharacterById(characterId);
-  if(typeof character?.view?.showDialog!=='function'){
-    toast('Select a controlled character token or open its sheet from the Roll20 Journal.');
-    return false;
+  const openNative=character?.view?.showDialog;
+  if(typeof openNative==='function'){
+    // A deliberate player open takes ownership of any hidden import helper.
+    const hidden=RB.autoHelperActive;
+    if(hidden&&hidden.characterId===characterId){
+      hidden.reclaimed=true;
+      const tabs=sheetTourTabs(hidden.wrapper,RBE_SHEET_TOUR_MAIN,'.asv__header__nav__tabs_link');
+      const main=tabs.find(tab=>sheetTourLabel(tab)==='Character Sheet');
+      if(main&&!sheetTourActive(main))main.click?.();
+      autoReleaseSheetDialog(hidden);
+    }
+    RB.autoCharacterRetryAfter=RB.autoCharacterRetryAfter||new Map();
+    RB.autoCharacterRetryAfter.set(characterId,Date.now()+120000);
+    try{openNative.call(character.view);return true;}
+    catch(err){console.warn('[R20eb] Native Roll20 sheet opening failed; trying Journal link',err);}
   }
-  // A deliberate player open wins over an in-progress hidden helper.
-  const hidden=RB.autoHelperActive;
-  if(hidden&&hidden.characterId===String(characterId)){
-    hidden.reclaimed=true;
-    // A helper might currently display Advanced Tools: return to Character
-    // Sheet before exposing the reclaimed window to the player.
-    const tabs=sheetTourTabs(hidden.wrapper,RBE_SHEET_TOUR_MAIN,'.asv__header__nav__tabs_link');
-    const main=tabs.find(tab=>sheetTourLabel(tab)==='Character Sheet');
-    if(main&&!sheetTourActive(main))main.click?.();
-    autoReleaseSheetDialog(hidden);
-  }
-  RB.autoCharacterRetryAfter=RB.autoCharacterRetryAfter||new Map();
-  RB.autoCharacterRetryAfter.set(String(characterId),Date.now()+120000);
-  try{character.view.showDialog();return true;}
-  catch(err){
-    console.warn('[R20eb] Could not open the player character sheet',err);
-    toast('Roll20 could not open the character sheet. Try the Journal.');
-    return false;
-  }
+  // A click on the combat-wheel button provides the required user gesture.
+  // The Journal link preserves Roll20's own access controls and opens the
+  // specific sheet, not an unrelated token editor or Advanced Tools pane.
+  try{
+    const opened=window.open?.(url,'_blank');
+    if(opened){
+      try{opened.opener=null;}catch{}
+      return true;
+    }
+  }catch(err){console.warn('[R20eb] Journal sheet popout unavailable',err);}
+  // Popup blockers may reject programmatic opens. Reveal a regular anchor
+  // the player can activate directly instead of leaving a dead button.
+  RB.tab='Sheet';RB.state.ui.lastTab='Sheet';RB.visible=true;render();
+  toast('Browser blocked the sheet tab. Use Open Journal link in the Sheet panel.');
+  return false;
 }
 async function autoEnsureSheetCandidate(record){
   const register=candidate=>{
