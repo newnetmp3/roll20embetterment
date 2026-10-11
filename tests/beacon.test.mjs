@@ -207,3 +207,24 @@ test('official 2024 spell and healing controls are harvested as executable sheet
   assert.ok(actions.some(x=>x.kind==='spell'&&x.name==='Fire Bolt'&&x.action==='damage'));
   assert.ok(actions.some(x=>x.kind==='action'&&x.name==='Second Wind'&&x.action==='healing'));
 });
+
+test('explicit Roll-labeled tool checks and Hit Dice are harvested without arbitrary button access',()=>{
+  const {h}=env();
+  const make=(text,aria)=>({innerText:text,textContent:text,
+    getAttribute(name){return name==='aria-label'?aria:null},disabled:false,click(){}});
+  const tool=make('Guitar (or any string variation)','Roll a Guitar (or any string variation) check');
+  const hitDie=make('D10 (Fighter)','Roll a d10 hit die for Fighter');
+  const notARoll=make('Short Rest','Short Rest');
+  const scope={
+    querySelector(selector){
+      if(selector==='[role="tabpanel"]:not([style*="display: none"])')return {querySelectorAll(){return []}};
+      return null;
+    },
+    querySelectorAll(selector){return selector==='button[aria-label]'?[tool,hitDie,notARoll]:[]}
+  };
+  const actions=h.beaconCollectRollActions(scope);
+  assert.equal(actions.length,2);
+  assert.ok(actions.some(x=>x.kind==='generic'&&x.action==='roll'&&x.name==='Guitar (or any string variation)'&&/^Roll a Guitar/.test(x.ariaLabel)));
+  assert.ok(actions.some(x=>x.kind==='generic'&&x.action==='roll'&&x.name==='D10 (Fighter)'&&/^Roll a d10/.test(x.ariaLabel)));
+  assert.equal(actions.some(x=>x.name==='Short Rest'),false);
+});
