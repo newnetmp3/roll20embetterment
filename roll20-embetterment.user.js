@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.12
+// @version      2.3.13
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -1160,6 +1160,41 @@ function beaconVisibleFormValues(scope) {
     return Number.isInteger(n)&&n>=min&&n<=max?n:null;
   };
   const inputs=Array.from(root.querySelectorAll('input')||[]).slice(0,600).filter(usable);
+  // Official 2024 Vue incrementers expose their values through live input
+  // properties (not innerText). Their stable title/data-testid are preferable
+  // to hashed IDs, positional guesses, or traversing the whole document.
+  // Example: #hp-current, title="Current Hitpoints", aria-valuemax="84";
+  //          id="<generated>", title="STR", value="18".
+  let currentHpInput=null;
+  for(const input of inputs){
+    const id=String(input.id||input.getAttribute?.('id')||'').trim().toLowerCase();
+    const official=input.getAttribute?.('data-testid')==='utility-incrementer__input';
+    const title=String(input.getAttribute?.('title')||input.getAttribute?.('aria-label')||'')
+      .trim().toLowerCase().replace(/[_-]+/g,' ').replace(/hit\s*points?/g,'hp').replace(/\s+/g,' ');
+    if(!official&&!['hp-current','hp-max','hp-temp'].includes(id))continue;
+    const scoreName=official?title.match(/^(str|dex|con|int|wis|cha)$/)?.[1]:null;
+    if(scoreName){
+      const score=integer(input.value,1,30);
+      if(score!==null)result.abilityScores[scoreName]=score;
+      continue;
+    }
+    if(id==='hp-current'||/^(?:current|remaining) hp$/.test(title)){
+      const hp=integer(input.value,0,9999);
+      if(hp!==null){result.stats.hp=hp;currentHpInput=input;}
+    }else if(id==='hp-max'||/^(?:max|maximum) hp$/.test(title)){
+      const hp=integer(input.value,1,9999);
+      if(hp!==null)result.stats.maxHp=hp;
+    }else if(id==='hp-temp'||/^(?:temp|temporary) hp$/.test(title)){
+      const hp=integer(input.value,0,9999);
+      if(hp!==null)result.stats.tempHp=hp;
+    }
+  }
+  // Current HP's accessible maximum is the real max HP in the observed
+  // Roll20 2024 control, but prefer a separately labelled max-HP input.
+  if(currentHpInput&&result.stats.maxHp===undefined){
+    const ariaMax=integer(currentHpInput.getAttribute?.('aria-valuemax'),1,9999);
+    if(ariaMax!==null&&result.stats.hp<=ariaMax)result.stats.maxHp=ariaMax;
+  }
   // Find the smallest bounded panel with the literal HIT POINTS, Current and
   // Max headings. The first three visible numeric inputs represent current,
   // maximum and temporary HP in the official 2024 editor. Never use numbers
@@ -1174,9 +1209,10 @@ function beaconVisibleFormValues(scope) {
       if(panelInputs.length<2||panelInputs.length>7)continue;
       const hp=integer(panelInputs[0].value,0,9999),maxHp=integer(panelInputs[1].value,1,9999);
       if(hp===null||maxHp===null||hp>maxHp+999)continue;
-      result.stats.hp=hp;result.stats.maxHp=maxHp;
+      if(result.stats.hp===undefined)result.stats.hp=hp;
+      if(result.stats.maxHp===undefined)result.stats.maxHp=maxHp;
       const temp=integer(panelInputs[2]?.value,0,9999);
-      if(temp!==null)result.stats.tempHp=temp;
+      if(temp!==null&&result.stats.tempHp===undefined)result.stats.tempHp=temp;
       break;
     }
     if(result.stats.hp!==undefined)break;
@@ -1191,7 +1227,8 @@ function beaconVisibleFormValues(scope) {
     const score=integer(scoreInput?.value,1,30);
     const mod=integer(beaconRollText(row.querySelector?.('.poly-button--ability button')),-15,20);
     const save=integer(beaconRollText(row.querySelector?.('.poly-button--compact-saving-throw button')),-15,30);
-    if(score!==null&&(mod===null||Math.abs(Math.floor((score-10)/2)-mod)<=1))
+    if(score!==null&&result.abilityScores[abbr]===undefined&&
+       (mod===null||Math.abs(Math.floor((score-10)/2)-mod)<=1))
       result.abilityScores[abbr]=score;
     if(mod!==null)result.abilityMods[abbr]=mod;
     if(save!==null)result.saveBonuses[abbr]=save;
@@ -1214,7 +1251,6 @@ function beaconImportVisible(scope,label='Open character sheet') {
   const result={name:label,stats:{},abilityScores:{},abilityMods:{},saveBonuses:{},
     skillBonuses:{},spellSlots:{},usedSlots:{},resources:[],attacks:[],sheetRolls:beaconCollectRollActions(scope),details:{},
     coverage:{visibleFields:0,sections:[],names:[]},signature:text.slice(0,35000)};
-  if(!text.trim())return result;
   const count=(group,name)=>{result.coverage.visibleFields++;if(!result.coverage.sections.includes(group))result.coverage.sections.push(group);result.coverage.names.push(name);};
   const num=(value,min,max)=>{const n=Number(value);return Number.isInteger(n)&&n>=min&&n<=max?n:null;};
   const lines=text.split('\n').map(x=>x.trim().replace(/\s+/g,' ')).filter(Boolean);
