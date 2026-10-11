@@ -110,7 +110,7 @@ test('footer follows outer radius as choices expand and collapse',()=>{
     const rendered=r.radialHTML();
     assert.ok(rendered.includes('--rbe-outer-radius:'+outer+'px'));
     assert.match(rendered,/class="rbe-wheel-footer"><div class="rbe-wheel-health"[^>]*>.*<div class="rbe-wheel-toolbar">/);
-    assert.match(rendered,/class="rbe-wheel-info">/);
+    assert.match(rendered,/class="rbe-wheel-info"(?:\s|>)/);
   }
   r.RB.radial.path.pop();
   assert.match(r.radialHTML(),/--rbe-outer-radius:201px/);
@@ -576,7 +576,7 @@ test('combat wheel exposes ring groups, roving Tab stops and keyboard shortcuts'
 test('keyboard focus moves around radial wedges and into newly expanded rings',()=>{
   const {r,scope}=env(),calls=[];
   r.RB.radial.anchor={x:200,y:250};
-  r.RB.shadow.querySelector=selector=>({focus(){calls.push(selector)}});
+  r.RB.shadow.querySelector=selector=>selector.includes('[data-action="radialPick"]')?{focus(){calls.push(selector)}}:null;
   const target={dataset:{action:'radialPick',depth:'0',index:'0'},closest(){return null}};
   const ev=key=>({key,target,altKey:false,shiftKey:false,ctrlKey:false,metaKey:false,code:'',
     composedPath(){return [target,r.RB.root]},preventDefault(){}});
