@@ -109,7 +109,9 @@ function r3Inputs(root,s,tab){
       const n=r3Number(raw,...range);
       if(n===null){s.diagnostics.rejected++;continue;}
       if(field.kind==='slot')r3Push(s,'slot',field.key,n,{kind:'input',tab,mode:field.mode,label});
-      else r3Push(s,field.kind,field.key,n,{kind:'input',tab,label});
+      else if(field.kind==='stat'&&field.key==='maxHp'){
+        s.stats.maxHp=n;s.provenance['stats.maxHp']={kind:'input',tab,label};
+      }else r3Push(s,field.kind,field.key,n,{kind:'input',tab,label});
       if(field.kind==='stat'&&field.key==='hp'){
         const ariaMax=r3Number(r3Attr(el,'aria-valuemax'),1,9999);
         if(ariaMax!==null&&s.stats.maxHp===undefined)r3Push(s,'stat','maxHp',ariaMax,{kind:'aria-valuemax',tab,label});
@@ -261,6 +263,7 @@ function r3Merge(target,source){
     target.slots[k]={...v,...(target.slots[k]||{})};
   }
   for(const kind of Object.keys(R3_CATEGORIES)){
+    if(kind==='skills')continue; // skill bonuses are keyed values, not named cards
     const keys=new Set(target[kind].map(x=>x._key));
     for(const item of source[kind])if(!keys.has(item._key)&&target[kind].length<400){
       target[kind].push(item);keys.add(item._key);
