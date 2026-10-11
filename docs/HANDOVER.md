@@ -3,8 +3,9 @@
 **Updated:** 2026-10-11  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Starting baseline:** `d4d6a8e8d07be38c1a87371fb4e56448440ec339` (v2.3.2)  
-**Latest completed milestone:** v2.3.3 — unified official 2024 native rolls across Sheet panel, wheel and command palette in PR #16.
+**Current main baseline:** `e71b68bc523bea2e41f5e744b04a2db355baa89b` (v2.3.3, PR #16)  
+**Latest completed milestone:** v2.3.3 (PR #16, 128 tests green).  
+**In progress:** v2.3.4 — native roll busy/success/error feedback and deduplication.
 
 ## Resume process
 
@@ -32,7 +33,7 @@
 **CI verified:** PR #16 head `5de47e95b73155dc0f4049f42d6ab372cd94d92c` passed **128 tests, 0 failures**, generated-userscript check and JavaScript syntax check. Baseline v2.3.2 PR #15 passed 125 tests.  
 **Remaining live testing:** Official Jumpgate / 2024 iframe/popout, closed-sheet helper, selected token identity and legacy 2014. Automated DOM mocks do not replace these checks.
 
-## Next milestone
+## Active next milestone (v2.3.4)
 
 Add native-roll pending state and accidental duplicate-click protection, with clear confirmation/error for slow hidden helper sheets, without changing official Roll20 roll math or resource consumption.
 
