@@ -811,6 +811,7 @@ function applySheetSnapshot(p,s){
   for(const [n,v] of Object.entries(s.spellSlots))p.spellSlots[+n]=clamp(v,0,99);
   for(const [n,v] of Object.entries(s.usedSlots))p.usedSlots[+n]=clamp(v,0,p.spellSlots[+n]);
   for(const k of ['spells','inventory','resources','attacks','features','proficiencies','tools','sheetRolls']){
+    if(k==='sheetRolls'){p.sheetRolls=(s.sheetRolls||[]).slice(0,400);continue;}
     if(s[k].length||(p[k]||[]).some(x=>x.origin==='sheet'))p[k]=mergeSheetList(p[k],s[k]);
   }
   p.sheetLink={...(p.sheetLink||{}),name:s.name,edition:s.edition,lastSync:new Date().toISOString(),
@@ -992,11 +993,11 @@ function beaconCollectRollActions(scope,tab=''){
   const actualTab=/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(active)?active:
     (/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(tab)?tab:'');
   const panel=scope.querySelector?.('[role="tabpanel"]:not([style*="display: none"])')||scope;
-  const out=[],seen=new Set(),push=(kind,name,action,button,meta={})=>{
+  const out=[],seen=new Set(),seenButtons=new Set(),push=(kind,name,action,button,meta={})=>{
     if(!button||!name)return;
     const refTab=meta.global?'':actualTab,clean={...meta};delete clean.global;
     const key=[kind,name,action,refTab].join('|').toLowerCase();
-    if(seen.has(key))return;seen.add(key);
+    if(seen.has(key))return;seen.add(key);seenButtons.add(button);
     out.push({id:'sheetroll:'+key.replace(/[^a-z0-9|_-]/g,'-').slice(0,180),origin:'sheet',
       kind,name:name.slice(0,120),action,tab:String(refTab||'').slice(0,80),
       label:beaconRollText(button).slice(0,80),...clean});
@@ -1023,6 +1024,16 @@ function beaconCollectRollActions(scope,tab=''){
   }
   const initiative=scope.querySelector?.('.initiative-btn button');
   if(initiative)push('initiative','Initiative','initiative',initiative,{group:'Initiative',global:true});
+  // Catch additional official Roll20 controls such as tool checks and Hit
+  // Dice without opening arbitrary controls. Only buttons whose accessible
+  // label explicitly begins with "Roll " qualify for this generic fallback.
+  for(const button of Array.from(scope.querySelectorAll?.('button[aria-label]')||[]).slice(0,500)){
+    const aria=String(button.getAttribute?.('aria-label')||'').replace(/\s+/g,' ').trim();
+    if(!/^Roll\b/i.test(aria))continue;
+    if(seenButtons.has(button))continue;
+    const visible=beaconRollText(button),name=(visible||aria.replace(/^Roll\s+(?:a\s+)?/i,'')).slice(0,120);
+    push('generic',name,'roll',button,{group:'Other Rolls',global:true,ariaLabel:aria.slice(0,200)});
+  }
   for(const card of Array.from(panel.querySelectorAll?.('.action-item')||[]).slice(0,160)){
     const name=beaconRollName(card,['.action-item__name','.span--item-row-title','.name-chat'])||
       beaconRollText(card).split(/\s+\d+d\d+/)[0].trim().slice(0,120);
@@ -1316,8 +1327,8 @@ function requestBeaconAction(candidate,ref){
 }
 function beaconRollRefOkay(ref){
   return !!ref&&typeof ref==='object'&&
-    ['attack','spell','skill','ability','save','initiative','action'].includes(String(ref.kind||''))&&
-    ['attack','damage','skill','ability','save','initiative','healing'].includes(String(ref.action||''))&&
+    ['attack','spell','skill','ability','save','initiative','action','generic'].includes(String(ref.kind||''))&&
+    ['attack','damage','skill','ability','save','initiative','healing','roll'].includes(String(ref.action||''))&&
     typeof ref.name==='string'&&ref.name.length>0&&ref.name.length<=120;
 }
 function beaconFindRollButton(ref){
@@ -1350,6 +1361,12 @@ function beaconFindRollButton(ref){
     return null;
   }
   if(ref.kind==='initiative')return document.querySelector?.('.initiative-btn button')||null;
+  if(ref.kind==='generic'){
+    const wanted=String(ref.ariaLabel||'').replace(/\s+/g,' ').trim();
+    if(!/^Roll\b/i.test(wanted)||wanted.length>200)return null;
+    return Array.from(document.querySelectorAll?.('button[aria-label]')||[]).find(button=>
+      String(button.getAttribute?.('aria-label')||'').replace(/\s+/g,' ').trim()===wanted)||null;
+  }
   if(ref.kind==='action'){
     const card=namedCard('.action-item',ref.name,['.action-item__name','.span--item-row-title','.name-chat']);
     const selector=ref.action==='healing'?'.poly-button--healing button':
@@ -1390,8 +1407,19 @@ async function executeOfficialSheetRoll(ref,targetProfile=profile()){
     candidate=opened?.candidate||null;
   }
   if(!candidate||!beaconRemoteCandidate(candidate))return false;
-  try{return await requestBeaconAction(candidate,ref);}
-  finally{if(opened?.opened)autoCloseSheetDialog({character:opened.candidate?.character||autoCharacterById(charId)},opened.hidden);}
+  try{
+    let lastError=null;
+    for(let attempt=0;attempt<3;attempt++){
+      try{return await requestBeaconAction(candidate,ref);}
+      catch(err){
+        lastError=err;
+        if(attempt<2)await new Promise(resolve=>setTimeout(resolve,350+attempt*350));
+      }
+    }
+    throw lastError||new Error('Official sheet roll failed.');
+  }finally{
+    if(opened?.opened)autoCloseSheetDialog({character:autoCharacterById(charId)},opened.hidden);
+  }
 }
 function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,characterId=''}={}){
   if(!scan||!beaconRemoteCandidate(candidate))return false;
@@ -2046,7 +2074,7 @@ function startAutoControlledCharacterImport(){
  }
  function radialSheetRollLeaves(list){
    const actionLabel=value=>({attack:'Attack',damage:'Damage',skill:'Check',ability:'Check',
-     save:'Save',initiative:'Roll',healing:'Healing'}[value]||String(value||'Roll'));
+     save:'Save',initiative:'Roll',healing:'Healing',roll:'Roll'}[value]||String(value||'Roll'));
    return list.slice(0,80).map(r=>radialNode('sr:'+r.id,
      r.name+' · '+actionLabel(r.action),
      r.action==='damage'||r.action==='healing'?'✦':'⚄',[],'sheetRoll',r.id,
@@ -2134,10 +2162,20 @@ function startAutoControlledCharacterImport(){
      ]),
      radialNode('checks','ROLLS','⚄',[
        group('sheetRolls','Sheet Rolls','✥',radialSheetRollLeaves(p.sheetRolls||[])),
-       group('skills','Skills','⚄',skillNames.map(n=>radialNode(n.toLowerCase(),n,'⚄',[],'skill',n))),
-       group('saves','Saves','⛨',abilities.map(a=>radialNode(a,a.toUpperCase(),'⛨',[],'save',a))),
-       group('abilities','Abilities','◆',abilities.map(a=>radialNode(a,a.toUpperCase(),'◆',[],'ability',a))),
-       radialNode('initiative','Initiative','⚑',[],'initiative','')
+       group('skills','Skills','⚄',skillNames.map(n=>{
+         const ref=radialSheetRollRef('skill',n,'skill');
+         return radialNode(n.toLowerCase(),n,'⚄',[],ref?'sheetRoll':'skill',ref?.id||n);
+       })),
+       group('saves','Saves','⛨',abilities.map(a=>{
+         const name=a.toUpperCase(),ref=radialSheetRollRef('save',name,'save');
+         return radialNode(a,name,'⛨',[],ref?'sheetRoll':'save',ref?.id||a);
+       })),
+       group('abilities','Abilities','◆',abilities.map(a=>{
+         const name=a.toUpperCase(),ref=radialSheetRollRef('ability',name,'ability');
+         return radialNode(a,name,'◆',[],ref?'sheetRoll':'ability',ref?.id||a);
+       })),
+       (()=>{const ref=radialSheetRollRef('initiative','Initiative','initiative');
+         return radialNode('initiative','Initiative','⚑',[],ref?'sheetRoll':'initiative',ref?.id||'');})()
      ]),
      radialNode('more','MORE','⚙',[
        radialNode('newTurn','New turn','↻',[],'newTurn',''),
