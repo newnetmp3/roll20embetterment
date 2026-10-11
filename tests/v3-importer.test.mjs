@@ -140,11 +140,12 @@ test('origin-checked message handler ignores forged frame responses',async()=>{
   const {h,context}=harness();
   const calls=[];
   context.window.addEventListener=(type,listener)=>calls.push(listener);
-  context.document.querySelectorAll=sel=>sel==='iframe'?[{
+  const frame={
     src:'https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/test',
     getClientRects(){return [{}]},getAttribute(){return null},closest(){return null},
     contentWindow:{postMessage(message,origin){calls.push({message,origin})}}
-  }]:[];
+  };
+  context.document.querySelectorAll=sel=>sel==='iframe'?[frame]:[];
   h.r3StartEditorBridge();
   const p=h.r3SendScan(h.r3Candidates()[0],'current');
   const record=calls.find(x=>x.message?.type==='scan');assert.ok(record);
