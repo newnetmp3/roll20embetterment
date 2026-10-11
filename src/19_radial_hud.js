@@ -132,10 +132,20 @@
      ]),
      radialNode('checks','ROLLS','⚄',[
        group('sheetRolls','Sheet Rolls','✥',radialSheetRollLeaves(p.sheetRolls||[])),
-       group('skills','Skills','⚄',skillNames.map(n=>radialNode(n.toLowerCase(),n,'⚄',[],'skill',n))),
-       group('saves','Saves','⛨',abilities.map(a=>radialNode(a,a.toUpperCase(),'⛨',[],'save',a))),
-       group('abilities','Abilities','◆',abilities.map(a=>radialNode(a,a.toUpperCase(),'◆',[],'ability',a))),
-       radialNode('initiative','Initiative','⚑',[],'initiative','')
+       group('skills','Skills','⚄',skillNames.map(n=>{
+         const ref=radialSheetRollRef('skill',n,'skill');
+         return radialNode(n.toLowerCase(),n,'⚄',[],ref?'sheetRoll':'skill',ref?.id||n);
+       })),
+       group('saves','Saves','⛨',abilities.map(a=>{
+         const name=a.toUpperCase(),ref=radialSheetRollRef('save',name,'save');
+         return radialNode(a,name,'⛨',[],ref?'sheetRoll':'save',ref?.id||a);
+       })),
+       group('abilities','Abilities','◆',abilities.map(a=>{
+         const name=a.toUpperCase(),ref=radialSheetRollRef('ability',name,'ability');
+         return radialNode(a,name,'◆',[],ref?'sheetRoll':'ability',ref?.id||a);
+       })),
+       (()=>{const ref=radialSheetRollRef('initiative','Initiative','initiative');
+         return radialNode('initiative','Initiative','⚑',[],ref?'sheetRoll':'initiative',ref?.id||'');})()
      ]),
      radialNode('more','MORE','⚙',[
        radialNode('newTurn','New turn','↻',[],'newTurn',''),
