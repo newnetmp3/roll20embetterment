@@ -5,8 +5,7 @@
 **Default branch:** `main`  
 **Current main baseline:** `128b6a16fa00f14e2d82099276842c2df9d96ddf` (v2.3.4, PR #17)  
 **Previous milestone:** v2.3.3 (PR #16, 128 tests green).  
-**Latest completed milestone:** v2.3.6 (PR #19, CI 140 tests green) — keyboard-accessible wheel and command palette.  
-**In progress:** v2.3.7 — stop automatic sheet UI takeover, restore manual sheet, draggable minimized dock.  
+**Latest verified milestone:** v2.3.7 (PR #20, 150 tests green) — hidden helper isolation, manual Roll20 character access and draggable minimized dock.  
 **Current main baseline:** `81e79964297bc96568591f6fce4ee6076df9e3e5` (v2.3.6, PR #19).  
 **Verified previous main baseline:** `128b6a16fa00f14e2d82099276842c2df9d96ddf` (v2.3.4); verify main HEAD again after merge.
 
@@ -67,7 +66,7 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 
 **Next:** Continue live 2014/2024 sheet integration matrix and release/install automation. Keep this handover and the roadmap synchronized on each milestone.
 
-## v2.3.7 — live screenshot feedback and isolation repairs (in progress)
+## v2.3.7 — live screenshot feedback and isolation repairs (PR #20, CI verified)
 
 - Reported in Firefox/Roll20 screenshots: automatic imports exposed Advanced Tools → Attributes, original sheet could not be manually opened, and minimized wheel toolbar was stuck at screen corner.
 - Automatic imports now **never tour a player-opened sheet**, instead seed visible character-model attributes and defer full import to an explicitly requested tour or a future safe hidden helper.
@@ -75,6 +74,6 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 - Added explicit **Open original Roll20 sheet** to R20eb Sheet UI, the wheel footer, and the minimized dock. A player manually reopening a helper reclaims its window; background cleanup will not close it.
 - Minimized dock includes a draggable grip and per-campaign persisted position. Buttons never initiate drag.
 - Added regression tests for visibility shielding, restore/close, existing/manual-sheet ownership, interrupted helpers, and dragging. No actual Roll20 browser QA can be performed in this runtime; user live retest required.
-- Pending: confirm GitHub Actions test count, merge SHA, Firefox Jumpgate retest. After merge update next release notes as required.
+- **CI verified:** PR #20 head `33c62715e1d09e2e31beb76aa38e03084026483e`, 150 passing tests, zero failures; generated userscript matches source and JavaScript syntax check passed. **Pending:** live Firefox/Jumpgate validation of the exact screenshots and workflows. For the post-merge baseline, re-fetch `main` HEAD rather than assuming this feature commit is the squash SHA.
 
 **Next:** Test full import, manually reopened character window, external 2024 popout, helper after logout/reload, and toolbar drag on desktop/mobile; then continue priority 9 live integration matrix.
