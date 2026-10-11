@@ -29,11 +29,11 @@ function beaconCollectRollActions(scope,tab=''){
   const actualTab=/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(active)?active:
     (/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(tab)?tab:'');
   const panel=scope.querySelector?.('[role="tabpanel"]:not([style*="display: none"])')||scope;
-  const out=[],seen=new Set(),push=(kind,name,action,button,meta={})=>{
+  const out=[],seen=new Set(),seenButtons=new Set(),push=(kind,name,action,button,meta={})=>{
     if(!button||!name)return;
     const refTab=meta.global?'':actualTab,clean={...meta};delete clean.global;
     const key=[kind,name,action,refTab].join('|').toLowerCase();
-    if(seen.has(key))return;seen.add(key);
+    if(seen.has(key))return;seen.add(key);seenButtons.add(button);
     out.push({id:'sheetroll:'+key.replace(/[^a-z0-9|_-]/g,'-').slice(0,180),origin:'sheet',
       kind,name:name.slice(0,120),action,tab:String(refTab||'').slice(0,80),
       label:beaconRollText(button).slice(0,80),...clean});
@@ -66,6 +66,7 @@ function beaconCollectRollActions(scope,tab=''){
   for(const button of Array.from(scope.querySelectorAll?.('button[aria-label]')||[]).slice(0,500)){
     const aria=String(button.getAttribute?.('aria-label')||'').replace(/\s+/g,' ').trim();
     if(!/^Roll\b/i.test(aria))continue;
+    if(seenButtons.has(button))continue;
     const visible=beaconRollText(button),name=(visible||aria.replace(/^Roll\s+(?:a\s+)?/i,'')).slice(0,120);
     push('generic',name,'roll',button,{group:'Other Rolls',global:true,ariaLabel:aria.slice(0,200)});
   }
