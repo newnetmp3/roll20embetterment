@@ -1,20 +1,19 @@
-# R20 Embetterment — Rolling Roadmap
+# R20 Embetterment — v3 clean restart roadmap
 
-**Updated:** October 11, 2026 · **Goal:** Player-first, D&D 5e combat companion on Roll20 (2014 + official 2024).
+Updated: October 11, 2026. v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
-| Priority | Feature | Status | Next requirement |
+| Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
-| 1 | Modular userscript, BG3-inspired concentric combat wheel | ✅ merged | Maintain |
-| 2 | Jumpgate tracking and full 2024 attribute/sheet tab tours | ✅ merged | Live QA |
-| 3 | Player-controlled multi-character auto-import and profile switching | ✅ v2.3.0 | Live QA |
-| 4 | Secure official native weapon/spell/skill/tool rolls, closed-sheet helper | ✅ v2.3.2 | Live QA |
-| 5 | Unified Sheet/palette/wheel official native roll controls | ✅ v2.3.3 PR #16 | 128 tests passing; continue live QA |
-| 6 | Native-roll pending feedback and duplicate-click protection | ✅ v2.3.4 PR #17 | 130 passing tests; live Roll20 QA remains |
-| 7 | Spell roll versus casting semantics, safe local turn/resource reminders | ✅ v2.3.5 PR #18 | 136 tests passing; live Roll20 QA remains |
-| 8 | Keyboard accessibility, wheel density, palette navigation | ✅ v2.3.6 PR #19 | 140 tests passing; live density/keyboard QA remains |
-| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧪 v2.3.13 PR #29 CI green | 179 tests passed (0 failures), direct Vue HP/ability readers added; live Floorp iframe QA required |
-| 10 | Release/version automation and reproducible install | ⬜ planned | CI tags |
+| 1 | Replace production bundle with independent v3 engine | Implemented | Generated script contains no old v2 runtime |
+| 2 | Labeled HP/stats/abilities/saves/skills/slots | Implemented; live QA pending | Official 2024 iframe in Floorp |
+| 3 | Spells, attacks, inventory, features and resources | Implemented; live QA pending | Live populated character sheet tabs |
+| 4 | Bounded tab traversal, origin verification, diagnostics and JSON export | Implemented; live QA pending | Browser and security tests |
+| 5 | Improve unmapped fields from exported observations | Planned | No guessed selectors |
+| 6 | Verify virtualized tabs and official sheet popouts | Planned | Browser QA matrix |
+| 7 | Rebuild player combat wheel atop confirmed importer data | Planned | Separate architecture |
+| 8 | Add independent 2014 sheet adapter | Planned | Real 2014 fixtures |
+| 9 | Release/installation automation | Planned | Repeatable CI and browser install |
 
-**Next actionable milestone:** Verify exact v2.3.13 Vue input selectors (`hp-current`, titled ability incrementers) in live Floorp embedded sheet, including current/max HP changing in-game. Continue 2014/2024 browser integration matrix.
+**Next:** Install v3 with the previous version disabled. Open the original 2024 sheet, import all tabs, verify HP 82/84, STR 18, AC 17, speed 55, initiative +2.14 and spell inventory; export JSON for any missed fields. Do not call the importer correct based solely on CI.
 
-**Rolling update contract:** Every development PR refreshes both this roadmap and `docs/HANDOVER.md`; a milestone becomes ✅ only after verified checks and merge.
+Rolling rule: update this roadmap and docs/HANDOVER.md with each development milestone.
