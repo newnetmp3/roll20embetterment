@@ -209,3 +209,11 @@ test('keyboard command palette has combobox semantics and clamps empty results',
   h.onKeyDown(event('Home'));assert.equal(h.RB.paletteSelection,0);
   assert.match(vm.runInContext('paletteUI()',scope),/id="rbe-palette-option-0" role="option"/);
 });
+
+test('character HUD stores minimized dock coordinates alongside panel coordinates',()=>{
+  const {h}=environment();
+  h.RB.state.ui.dockX=260;h.RB.state.ui.dockY=180;h.save();h.load();
+  assert.equal(h.RB.state.ui.dockX,260);
+  assert.equal(h.RB.state.ui.dockY,180);
+  assert.match(h.sheetUI(),/data-action="openRoll20Sheet"/);
+});
