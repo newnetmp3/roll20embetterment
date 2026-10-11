@@ -63,7 +63,7 @@
    '×'+String(i.qty??1)+(i.category?' · '+String(i.category):'')));
  }
  function radialCategories(){
-   const p=profile(),attacks=p.attacks||[],spells=p.spells||[],items=p.inventory||[],features=p.features||[];
+   const p=profile(),attacks=p.attacks||[],spells=p.spells||[],items=p.inventory||[],features=p.features||[],sheetActions=p.sheetActions||[];
    const group=(id,name,glyph,children)=>radialNode(id,name,glyph,children.length?children:[radialNode('empty','Open sheet','▤',[],'panel','Sheet')]);
    const ranged=a=>/range|bow|crossbow|sling|gun|thrown|javelin/i.test([a.range,a.name,a.description].join(' '));
    const reaction=features.filter(f=>/reaction|counterspell|shield/i.test([f.name,f.description].join(' ')));
@@ -106,6 +106,7 @@
        radialNode('used','Mark spent','✓',[],'toggle','reactionUsed')
      ]),
      radialNode('checks','ROLLS','⚄',[
+       group('sheetRolls','Sheet Rolls','⚄',sheetActions.slice(0,120).map(a=>radialNode('sa:'+a.id,a.name,'⚄',[],'sheetAction',a.id,a.detail||'',a.detail||''))),
        group('skills','Skills','⚄',skillNames.map(n=>radialNode(n.toLowerCase(),n,'⚄',[],'skill',n))),
        group('saves','Saves','⛨',abilities.map(a=>radialNode(a,a.toUpperCase(),'⛨',[],'save',a))),
        group('abilities','Abilities','◆',abilities.map(a=>radialNode(a,a.toUpperCase(),'◆',[],'ability',a))),
@@ -327,14 +328,32 @@
    let success=false;
    switch(node.kind){
      case 'attack':
-       if(!attack?.command){toast('No safe Roll20 action for this weapon. Use its character sheet button.');break;}
+       if(!attack?.command&&attack?.sheetRef){
+         executeProfileSheetAction({name:attack.name,category:'attack',sheetRef:attack.sheetRef},p).then(ok=>{
+           if(!ok)return;p.actionUsed=true;record('Attacked: '+attack.name);RB.radial.path=[];save();render();radialPosition();
+         });return;
+       }
+       if(!attack?.command){toast('No safe Roll20 action for this weapon. Re-import its official character sheet.');break;}
        success=sendToRoll20(attack.command);if(success){p.actionUsed=true;record('Attacked: '+attack.name);}break;
      case 'spell':
-       if(!spell?.command){toast('No Roll20 command for '+(spell?.name||'this spell')+'. Set it on the Spells tab.');break;}
+       if(!spell?.command&&spell?.sheetRef){
+         executeProfileSheetAction({name:spell.name,category:'spell-roll',sheetRef:spell.sheetRef},p).then(ok=>{
+           if(!ok)return;if(/bonus/i.test(spell.castTime||''))p.bonusUsed=true;else p.actionUsed=true;
+           if(spell.concentration)p.concentration=spell.name;record('Rolled spell: '+spell.name);
+           RB.radial.path=[];save();render();radialPosition();
+         });return;
+       }
+       if(!spell?.command){toast('No Roll20 command for '+(spell?.name||'this spell')+'. Re-import the official sheet or set a command on the Spells tab.');break;}
        success=sendToRoll20(spell.command);
        if(success){if(/bonus/i.test(spell.castTime||''))p.bonusUsed=true;else p.actionUsed=true;
          if(spell.concentration)p.concentration=spell.name;record('Cast '+spell.name);}
        break;
+     case 'sheetAction':{const a=(p.sheetActions||[]).find(x=>x.id===node.value);
+       if(!a){toast('Imported sheet roll is unavailable.');break;}
+       executeProfileSheetAction(a,p).then(ok=>{if(!ok)return;
+         if(['attack','spell-attack'].includes(a.category))p.actionUsed=true;
+         RB.radial.path=[];save();render();radialPosition();
+       });return;}
      case 'macro':{const m=RB.state.macros.find(m=>m.id===node.value);if(m){success=sendToRoll20(m.command);if(success)record('Macro '+m.name);}break;}
      case 'initiative':quickRoll('initiative','');success=true;break;
      case 'skill':case 'save':case 'ability':quickRoll(node.kind,node.value);success=true;break;
