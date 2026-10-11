@@ -660,3 +660,22 @@ test('screenshot regression: visible Nier stats override 69 HP token, 10 AC, 30 
  assert.equal(p.stats.speed,55,'background model must not restore default speed');
  assert.equal(p.abilityScores.str,18,'live STR score must survive model refresh');
 });
+
+
+test('a live official frame can refresh named HP and AC without visible text and without a token-bar override',async()=>{
+ const {api,context}=harness(),p=api.profile();
+ p.name='Nier';p.stats.hp=69;p.stats.maxHp=84;p.stats.ac=10;
+ p.sheetLink={name:'Nier',hpSource:'bar1',statSources:{}};
+ const model=backboneModel('tok-nier',{type:'image',bar1_value:'69',bar1_max:'84'});
+ const record={characterId:'char-nier',characterName:'Nier',character:{},model};
+ const candidate={id:'char-nier',characterId:'char-nier',name:'Nier',frame:{contentWindow:{}},root:{}};
+ context.candidateHook=candidate;
+ vm.runInContext("autoCandidateForCharacter=()=>candidateHook; sheetCandidates=()=>[candidateHook]; requestBeaconFrame=async()=>({fields:{hp:{current:'82',max:'84'},ac:{current:'17',max:''},strength:{current:'18',max:''}},visible:{stats:{},abilityScores:{},abilityMods:{},saveBonuses:{},skillBonuses:{},coverage:{visibleFields:0},details:{},resources:[],attacks:[],sheetRolls:[]}});",context);
+ assert.equal(await api.autoRefreshVisibleSheetStats(record,p),true);
+ assert.equal(p.stats.hp,82);
+ assert.equal(p.stats.maxHp,84);
+ assert.equal(p.stats.ac,17);
+ assert.equal(p.abilityScores.str,18);
+ assert.equal(p.sheetLink.statSources.hp,'Roll20 attributes');
+ assert.equal(p.sheetLink.visibleStatAt,undefined,'named-only snapshots must not claim a fresh visible stat');
+});
