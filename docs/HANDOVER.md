@@ -137,10 +137,10 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 - Added regression tests for input values absent from `innerText`, invisible controls and named-frame HP taking precedence over stale token-bar values.
 - **CI verified:** PR #28 head `a1bc636c8deafed83cc82fbafc3ed97bb63d245d`, **176 tests, 0 failures**, `npm run check` and generated-userscript consistency green (Actions run 38174945102). Live Firefox/Jumpgate retest remains required because the shared HTML is the VTT shell, not the iframe's internal form markup. Do not declare live HP correct until visual QA.
 
-## v2.3.13 — Official 2024 Vue HP/ability incrementer fix (PR pending)
+## v2.3.13 — Official 2024 Vue HP/ability incrementer fix (PR #29, CI verified)
 
 - Live Floorp iframe element samples: `<input id="hp-current" data-testid="utility-incrementer__input" role="spinbutton" type="text" title="Current Hitpoints" value="82" aria-valuemax="84">`, and a hashed-ID `<input data-testid="utility-incrementer__input" title="STR" value="18">`. These form values are not represented by `innerText`.
 - The previous bounded HP panel and `.inline-ability` parser can miss these actual controls. Added read-only title/ID/test-ID recognition, uses `aria-valuemax` as max HP only when a separate max-HP control is unavailable, and preserves existing fallback extraction.
 - Removed the early return for sheets with empty `innerText`, so visible input-only scans can update the profile. Reject hidden/invalid/spoofed inputs; avoid overwriting directly identified scores with row-derived guesses.
 - Regression fixtures exercise current 82/max 84, STR 18, explicit max/temp precedence and hidden/invalid controls. Version `2.3.13`; generated distribution updated.
-- **Pending:** GitHub Actions and real Floorp/official Roll20 2024 iframe validation. Confirm HUD reflects 82/84 and STR 18, then modify a live HP value and ensure it refreshes; do not claim production correctness solely from mocks.
+- **CI verified:** GitHub Actions run 38176978583 on code head `08de26c442a1849faa9124ee3ed129354e8ea7fd`: **179 tests passed, 0 failed**, build and userscript syntax passed. **Pending:** real Floorp/official Roll20 2024 iframe validation. Confirm HUD reflects 82/84 and STR 18, then modify a live HP value and ensure it refreshes; do not claim production correctness solely from mocks.
