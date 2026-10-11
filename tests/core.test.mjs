@@ -158,3 +158,29 @@ test('palette uses official save and skill controls with legacy fallback',async(
   h.navigatePalette('skill','Perception');
   assert.equal(sent.length,1);
 });
+
+test('Spells panel distinguishes native attack/damage, legacy casting and local marking',()=>{
+  const {h}=environment(),p=h.profile();
+  p.spells=[{id:'bolt',name:'Fire Bolt',level:0,command:''},
+    {id:'shield',name:'Shield',level:1,command:'%{selected|shield}'}];
+  p.sheetRolls=[{id:'bolt-hit',kind:'spell',name:'Fire Bolt',action:'attack',tab:'Spells'},
+    {id:'bolt-dmg',kind:'spell',name:'Fire Bolt',action:'damage',tab:'Spells'}];
+  const ui=h.spellListHTML();
+  assert.match(ui,/Mark cast \(local\)/);
+  assert.match(ui,/Roll attack \(official\)/);
+  assert.match(ui,/Roll damage \(official\)/);
+  assert.match(ui,/Cast via Roll20/);
+  assert.match(ui,/data-id="bolt-hit"/);
+  assert.match(ui,/data-id="bolt-dmg"/);
+  assert.equal((ui.match(/data-action="castSpell"/g)||[]).length,1);
+});
+test('palette separates local mark-cast from actual Roll20 casting and native spell rolls',()=>{
+  const {h}=environment(),p=h.profile();
+  p.spells=[{id:'bless',name:'Bless',command:''},{id:'burning',name:'Burning Hands',command:'/roll 1d6'}];
+  p.sheetRolls=[{id:'bless-native',kind:'spell',name:'Bless',action:'damage'}];
+  const entries=h.paletteEntries();
+  assert.ok(entries.some(x=>x.name==='Mark cast (local): Bless'&&x.kind==='markCast'));
+  assert.ok(!entries.some(x=>x.kind==='spell'&&x.value==='bless'));
+  assert.ok(entries.some(x=>x.name==='Cast via Roll20: Burning Hands'&&x.kind==='spell'));
+  assert.ok(entries.some(x=>x.kind==='sheetRoll'&&x.value==='bless-native'));
+});

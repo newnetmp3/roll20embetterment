@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.4
+// @version      2.3.5
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.4',
+  version: '2.3.5',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -239,17 +239,35 @@ function executeSlot(slot) {
     useSpell(s.id);
   }
 }
-function useSpell(id) {
-  const p=profile(), spell=p.spells.find(s=>s.id===id);
-  if (!spell) return;
-  // No automatic slot expenditure: cantrips/rituals/free casts complicate this.
-  if (spell.command) {if (sendToRoll20(spell.command)) record('Cast/used '+spell.name);}
-  else {toast('No Roll20 command set for '+spell.name+'. Add one using Edit.');}
-  if (spell.concentration && spell.command) {
-    p.concentration=spell.name; save();
-    toast('Concentrating on '+spell.name+' (local reminder).');
+// A cast reminder is local: no native roll control or authoritative sheet is modified.
+function markSpellCastLocal(spell) {
+  if (!spell) return false;
+  const p=profile(), timing=String(spell.castTime||'').toLowerCase();
+  // Do not guess action economy for minutes, rituals, or an unknown casting time.
+  if (/\breaction\b/.test(timing)) p.reactionUsed=true;
+  else if (/\bbonus\s+action\b/.test(timing)) p.bonusUsed=true;
+  else if (/\baction\b/.test(timing)) p.actionUsed=true;
+  if (spell.concentration) p.concentration=spell.name;
+  const level=clamp(spell.level,0,9);
+  record('Cast reminder (local): '+spell.name);
+  toast('Marked '+spell.name+' cast locally.'+
+    (level?' No slot spent; use a level '+level+' slot separately if needed.':''));
+  return true;
+}
+function castSpellCommand(spell) {
+  if (!spell) return false;
+  if (!spell.command) {
+    toast('No Roll20 cast command for '+spell.name+'. Use Mark cast (local) or the official sheet.');
+    return false;
   }
-  render();
+  if (!sendToRoll20(spell.command)) return false;
+  return markSpellCastLocal(spell);
+}
+function useSpell(id) {
+  const spell=profile().spells.find(s=>s.id===id);
+  const success=castSpellCommand(spell);
+  if (success) {save();render();}
+  return success;
 }
 function applyDamage(dmg) {
   const p=profile(); let n=clamp(dmg,0,100000); if (!n) return;
@@ -2115,11 +2133,12 @@ function startAutoControlledCharacterImport(){
      const attackRef=radialSheetRollRef('spell',spell.name,'attack');
      const damageRef=radialSheetRollRef('spell',spell.name,'damage');
      const actions=[
-       ...(spell.command?[radialNode('cast','Cast','✧',[],'spell',spell.id)]:[]),
-       ...(attackRef?[radialNode('attack','Attack','⚄',[],'sheetRoll',attackRef.id)]:[]),
-       ...(damageRef?[radialNode('damage','Damage','✦',[],'sheetRoll',damageRef.id)]:[]),
+       ...(spell.command?[radialNode('cast','Cast in Roll20','✧',[],'spell',spell.id)]:[]),
+       radialNode('markCast','Mark cast (local)','✓',[],'markCast',spell.id),
+       ...(attackRef?[radialNode('attack','Roll attack','⚄',[],'sheetRoll',attackRef.id)]:[]),
+       ...(damageRef?[radialNode('damage','Roll damage','✦',[],'sheetRoll',damageRef.id)]:[]),
        radialNode('info','Info','⌕',[],'spellInfo',spell.id),
-       ...(Number(spell.level)>0?[radialNode('slot','Use slot','◈',[],'spendSlot',String(spell.level))]:[])
+       ...(Number(spell.level)>0?[radialNode('slot','Use L'+spell.level+' slot (local)','◈',[],'spendSlot',String(spell.level))]:[])
      ];
      return radialNode('s:'+spell.id,spell.name,'✧',actions,'','',
        [spell.castTime,spell.range,spell.duration].filter(Boolean).join(' · '),
@@ -2451,10 +2470,10 @@ function startAutoControlledCharacterImport(){
        break;
      }
      case 'spell':
-       if(!spell?.command){toast('No Roll20 command for '+(spell?.name||'this spell')+'. Set it on the Spells tab.');break;}
-       success=sendToRoll20(spell.command);
-       if(success){if(/bonus/i.test(spell.castTime||''))p.bonusUsed=true;else p.actionUsed=true;
-         if(spell.concentration)p.concentration=spell.name;record('Cast '+spell.name);}
+       success=castSpellCommand(spell);
+       break;
+     case 'markCast':
+       success=markSpellCastLocal(spell);
        break;
      case 'macro':{const m=RB.state.macros.find(m=>m.id===node.value);if(m){success=sendToRoll20(m.command);if(success)record('Macro '+m.name);}break;}
      case 'initiative':quickRoll('initiative','');success=true;break;
@@ -2802,14 +2821,21 @@ function macroListHTML(macros) {
 }
 function spellsUI() {
   const p=profile(), editing=p.spells.find(s=>s.id===RB.editSpell);
-  return `<div class="stack"><div class="card"><h2>Spell slots (local)</h2><div class="grid">${Array.from({length:9},(_,i)=>i+1).map(i=>`<div class="stack"><label>Level ${i}</label><div class="row"><input class="mini" type="number" min="0" max="99" data-slot-max="${i}" value="${p.spellSlots[i]}"><input class="mini" type="number" min="0" max="99" data-slot-used="${i}" value="${p.usedSlots[i]}"></div><span class="hint">Total / used</span>${button('Use','useSlot',`data-index="${i}"`,'small')}${button('Restore','restoreSlot',`data-index="${i}"`,'small')}</div>`).join('')}</div><p class="hint">Tracking is local. Casting does not automatically use a spell slot (rituals, free casts, etc.). Use the slot buttons when appropriate.</p></div>
+  return `<div class="stack"><div class="card"><h2>Spell slots (local)</h2><div class="grid">${Array.from({length:9},(_,i)=>i+1).map(i=>`<div class="stack"><label>Level ${i}</label><div class="row"><input class="mini" type="number" min="0" max="99" data-slot-max="${i}" value="${p.spellSlots[i]}"><input class="mini" type="number" min="0" max="99" data-slot-used="${i}" value="${p.usedSlots[i]}"></div><span class="hint">Total / used</span>${button('Use','useSlot',`data-index="${i}"`,'small')}${button('Restore','restoreSlot',`data-index="${i}"`,'small')}</div>`).join('')}</div><p class="hint">Local reminders only: a native Attack or Damage roll is not a cast. Mark cast separately to note your turn and concentration. Slot expenditure is always manual (rituals and free casts may not use one). Nothing here changes your Roll20 sheet.</p></div>
   <div class="card"><h3>${editing?'Edit spell':'Add spell / feature'}</h3><div class="row"><label class="field">Name<input id="rbe-spell-name" value="${html(editing?.name||'')}"></label><label class="field narrow">Level (0–9)<input id="rbe-spell-level" type="number" min="0" max="9" value="${editing?.level??0}"></label><label class="field">Range / target<input id="rbe-spell-range" value="${html(editing?.range||'')}"></label></div>
   <label class="field">Roll20 cast command (optional)<input id="rbe-spell-command" placeholder="%{selected|repeating_spell-...}" value="${html(editing?.command||'')}"></label><label class="field">Notes / components<textarea id="rbe-spell-notes" rows="2">${html(editing?.notes||'')}</textarea></label><div class="row"><label><input type="checkbox" id="rbe-spell-conc" ${editing?.concentration?'checked':''}> Concentration</label>${button(editing?'Save spell':'Add spell','saveSpell','', 'primary')}${editing?button('Cancel edit','cancelSpell'):''}</div></div>
   <div class="card"><h3>Spellbook (${p.spells.length})</h3><input class="wide" id="rbe-spell-search" placeholder="Search spells and notes" value="${html(RB.spellSearch||'')}"><div id="rbe-spell-results">${spellListHTML()}</div></div></div>`;
 }
+function spellNativeRollButton(spell,action,label) {
+  const ref=radialSheetRollRef('spell',spell.name,action);
+  if(!ref)return '';
+  const busy=RB.nativeRollPending.has(profile().id+':'+ref.id);
+  return button(label+' (official)','runNativeSheetRoll',
+    'data-id="'+html(ref.id)+'"'+(busy?' disabled':''),'small');
+}
 function spellListHTML() {
   const p=profile(), q=(RB.spellSearch||'').toLowerCase();
-  return p.spells.filter(s=>(s.name+' '+(s.notes||'')).toLowerCase().includes(q)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).map(s=>`<div class="list-entry"><div class="row"><strong class="grow">${html(s.name)}</strong><span class="pill">${s.level?'Level '+s.level:'Cantrip'}</span>${s.concentration?'<span class="pill">Concentration</span>':''}${s.origin==='sheet'?'<span class="pill">Sheet</span>':''}${s.prepared?'<span class="pill">Prepared</span>':''}${button('Cast','castSpell',`data-id="${html(s.id)}"`,'small primary')}${button('Edit','editSpell',`data-id="${html(s.id)}"`,'small')}${button('✕','deleteSpell',`data-id="${html(s.id)}"`,'small warn')}</div><p class="hint">${html([s.range,s.castTime,s.duration,s.components,s.school].filter(Boolean).join(' · '))}${s.notes?' • '+html(short(s.notes,140)):''}</p></div>`).join('')||'<p class="hint">No spells yet. Add spells and optionally link their sheet macros.</p>';
+  return p.spells.filter(s=>(s.name+' '+(s.notes||'')).toLowerCase().includes(q)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).map(s=>`<div class="list-entry"><div class="row"><strong class="grow">${html(s.name)}</strong><span class="pill">${s.level?'Level '+s.level:'Cantrip'}</span>${s.concentration?'<span class="pill">Concentration</span>':''}${s.origin==='sheet'?'<span class="pill">Sheet</span>':''}${s.prepared?'<span class="pill">Prepared</span>':''}${s.command?button('Cast via Roll20','castSpell',`data-id="${html(s.id)}"`,'small primary'):''}${button('Mark cast (local)','markCast',`data-id="${html(s.id)}"`,'small')}${spellNativeRollButton(s,'attack','Roll attack')}${spellNativeRollButton(s,'damage','Roll damage')}${button('Edit','editSpell',`data-id="${html(s.id)}"`,'small')}${button('✕','deleteSpell',`data-id="${html(s.id)}"`,'small warn')}</div><p class="hint">${html([s.range,s.castTime,s.duration,s.components,s.school].filter(Boolean).join(' · '))}${s.notes?' • '+html(short(s.notes,140)):''}</p></div>`).join('')||'<p class="hint">No spells yet. Add spells and optionally link their sheet macros.</p>';
 }
 function inventoryUI() {
   const p=profile(), weight=p.inventory.reduce((acc,x)=>acc+Math.max(0,Number(x.qty)||0)*Math.max(0,Number(x.weight)||0),0);
@@ -2902,7 +2928,10 @@ function paletteEntries() {
   const covered=new Set(attackEntries.filter(x=>x.kind==='sheetRoll').map(x=>x.value));
   return [...tabs.map(t=>({name:'Open '+t,kind:'tab',value:t})),
     ...RB.state.macros.map(m=>({name:'Macro: '+m.name,kind:'macro',value:m.id})),
-    ...p.spells.map(s=>({name:'Spell: '+s.name,kind:'spell',value:s.id})),
+    ...p.spells.flatMap(s=>[
+      ...(s.command?[{name:'Cast via Roll20: '+s.name,kind:'spell',value:s.id}]:[]),
+      {name:'Mark cast (local): '+s.name,kind:'markCast',value:s.id}
+    ]),
     ...attackEntries,
     ...native.filter(r=>!covered.has(r.id)).map(r=>({name:officialSheetRollLabel(r),kind:'sheetRoll',value:r.id})),
     ...skillNames.map(n=>({name:'Skill: '+n,kind:'skill',value:n})),
@@ -3469,6 +3498,7 @@ function action(name, el) {
     case 'cancelSpell':RB.editSpell=null;render();break;
     case 'deleteSpell':if(confirm('Remove this local spell?')){p.spells=p.spells.filter(x=>x.id!==id);p.macrosSlots=p.macrosSlots.map(x=>x==='spell:'+id?'':x);changedProfile();}break;
     case 'castSpell':useSpell(id);break;
+    case 'markCast':radialExecute({kind:'markCast',value:id});break;
     case 'useSlot':if(ix>0&&ix<10&&p.usedSlots[ix]<p.spellSlots[ix]){p.usedSlots[ix]++;changedProfile();}else toast('No spell slots available at that level.');break;
     case 'restoreSlot':if(ix>0&&ix<10){p.usedSlots[ix]=Math.max(0,p.usedSlots[ix]-1);changedProfile();}break;
     case 'addResource':{const r=prompt('Resource name?','Lay on Hands');if(!r?.trim())break;const max=clamp(prompt('Maximum uses or points?','5'),0,99999);p.resources.push({id:uid(),name:r.trim().slice(0,120),max,current:max,reset:'long'});changedProfile();break;}
@@ -3561,6 +3591,7 @@ function navigatePalette(kind,id) {
   if(kind==='tab'){RB.tab=id;RB.state.ui.lastTab=id;RB.visible=true;save();render();}
   else if(kind==='macro') {runMacro(id);render();}
   else if(kind==='spell')useSpell(id);
+  else if(kind==='markCast')radialExecute({kind:'markCast',value:id});
   else if(kind==='attack'||kind==='sheetRoll')radialExecute({kind,value:id});
   else if(kind==='skill'||kind==='save') {
     const ref=radialSheetRollRef(kind,kind==='save'?id.toUpperCase():id,kind);

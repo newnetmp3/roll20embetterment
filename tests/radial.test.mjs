@@ -442,9 +442,10 @@ test('2024 spell wheel exposes native spell attack and damage buttons when impor
   ];
   const spellRoot=r.radialCategories().find(x=>x.id==='spells');
   const fire=spellRoot.children.find(x=>x.id==='lvl0').children.find(x=>x.label==='Fire Bolt');
-  assert.equal(fire.children.find(x=>x.label==='Attack').kind,'sheetRoll');
-  assert.equal(fire.children.find(x=>x.label==='Damage').kind,'sheetRoll');
-  assert.equal(fire.children.some(x=>x.label==='Cast'),false,'No guessed command should be fabricated');
+  assert.equal(fire.children.find(x=>x.label==='Roll attack').kind,'sheetRoll');
+  assert.equal(fire.children.find(x=>x.label==='Roll damage').kind,'sheetRoll');
+  assert.equal(fire.children.some(x=>x.label==='Cast in Roll20'),false,'No guessed command should be fabricated');
+  assert.equal(fire.children.find(x=>x.label==='Mark cast (local)').kind,'markCast');
 });
 test('executing a native sheet roll uses the official sheet bridge and never synthesizes chat dice',async()=>{
   const {r,sent,scope}=env(),p=r.profile(),called=[];
@@ -507,4 +508,58 @@ test('failed official sheet rolls release the guard without spending an action',
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(calls,2);
   assert.equal(sent.length,0);
+});
+
+test('official 2024 spells expose mark-cast separately from native rolls and slots',()=>{
+  const {r,sent}=env(),p=r.profile();
+  p.spells=[{id:'bless',name:'Bless',level:1,castTime:'1 Action',concentration:true,command:''}];
+  p.spellSlots[1]=3;
+  p.sheetRolls=[{id:'bless-hit',kind:'spell',name:'Bless',action:'attack',tab:'Spells'},
+    {id:'bless-dmg',kind:'spell',name:'Bless',action:'damage',tab:'Spells'}];
+  const spell=r.radialCategories().find(x=>x.id==='spells').children.find(x=>x.id==='all').children[0];
+  assert.deepEqual(Array.from(spell.children,x=>x.kind),['markCast','sheetRoll','sheetRoll','spellInfo','spendSlot']);
+  r.radialExecute({kind:'markCast',value:'bless'});
+  assert.equal(p.actionUsed,true);
+  assert.equal(p.concentration,'Bless');
+  assert.equal(p.usedSlots[1],0);
+  assert.equal(sent.length,0);
+});
+test('local spell casting reminders use explicit bonus/reaction times, not inferred costs',()=>{
+  const {r,sent}=env(),p=r.profile();
+  p.spells=[{id:'shield',name:'Shield',level:1,castTime:'1 Reaction',command:''},
+    {id:'misty',name:'Misty Step',level:2,castTime:'1 Bonus Action',command:''},
+    {id:'ritual',name:'Detect Magic',level:1,castTime:'10 minutes',command:''}];
+  r.radialExecute({kind:'markCast',value:'shield'});
+  assert.equal(p.reactionUsed,true);assert.equal(p.actionUsed,false);assert.equal(p.bonusUsed,false);
+  r.radialExecute({kind:'markCast',value:'misty'});
+  assert.equal(p.bonusUsed,true);assert.equal(p.actionUsed,false);
+  r.radialExecute({kind:'markCast',value:'ritual'});
+  assert.equal(p.actionUsed,false);assert.equal(p.usedSlots[1],0);assert.equal(p.usedSlots[2],0);
+  assert.equal(sent.length,0);
+});
+test('failed legacy cast chat action does not change local economy, concentration or slots',()=>{
+  const {r,doc}=env(),p=r.profile();
+  p.spells=[{id:'hex',name:'Hex',level:1,castTime:'1 Bonus Action',concentration:true,command:'/roll 1d20'}];
+  p.spellSlots[1]=2;
+  doc.querySelector=()=>null;
+  r.radialExecute({kind:'spell',value:'hex'});
+  assert.equal(p.bonusUsed,false);assert.equal(p.concentration,'');
+  assert.equal(p.usedSlots[1],0);
+});
+
+test('official 2024 spell roll executes native button without declaring cast, concentration or slot use',async()=>{
+  const {r,sent,scope}=env(),p=r.profile();
+  p.spells=[{id:'guiding',name:'Guiding Bolt',level:1,castTime:'1 Action',command:'',concentration:true}];
+  p.spellSlots[1]=3;
+  p.sheetRolls=[{id:'guiding-hit',kind:'spell',name:'Guiding Bolt',action:'attack',tab:'Spells'}];
+  let calls=0;
+  scope.nativeRollHook=()=>{calls++;return Promise.resolve(true)};
+  vm.runInContext('executeOfficialSheetRoll=(ref)=>nativeRollHook(ref)',scope);
+  r.radialExecute({kind:'sheetRoll',value:'guiding-hit'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls,1);
+  assert.equal(sent.length,0);
+  assert.equal(p.actionUsed,false);
+  assert.equal(p.concentration,'');
+  assert.equal(p.usedSlots[1],0);
 });
