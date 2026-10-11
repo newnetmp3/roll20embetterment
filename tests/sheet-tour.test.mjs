@@ -21,7 +21,7 @@ function harness(doc){
     localStorage:{getItem(k){return stored.get(k)||null},setItem(k,v){stored.set(k,v)}}
   };
   vm.createContext(scope);
-  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
+  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoEnsureSheetCandidate,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
   return {api:scope.api,intervals,doc:page,context:scope};
 }
 function tab(label,selected,change) {
@@ -280,4 +280,16 @@ test('GM universal access is not mistaken for an explicit player-controlled toke
   context.window.d20={Campaign:{activePage(){return {thegraphics:{models:[token]}}},
     characters:{get(){return character}}}};
   assert.equal(api.autoDiscoverControlledTokens().length,0);
+});
+
+test('existing or hidden helper sheet is registered before cross-frame import/roll replies are accepted',async()=>{
+  const {api,context}=harness();
+  const target={id:'char-a',characterId:'char-a',name:'Aria Moonfall',
+    root:{},frame:{contentWindow:{postMessage(){}}},popoutWindow:null};
+  context.helperCandidate=target;
+  vm.runInContext("autoCandidateForCharacter=()=>helperCandidate; sheetCandidates=()=>[helperCandidate];",context);
+  const result=await api.autoEnsureSheetCandidate({characterId:'char-a',characterName:'Aria Moonfall'});
+  assert.equal(result.candidate,target);
+  assert.equal(api.RB.openSheets.length,1);
+  assert.equal(api.RB.openSheets[0],target);
 });
