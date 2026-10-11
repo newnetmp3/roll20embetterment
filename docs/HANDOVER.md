@@ -92,8 +92,10 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 - Live screenshot showed the Roll20 button emitted “Select a controlled character token or open its sheet from the Roll20 Journal” even while Nier's linked profile and combat wheel were active.
 - Root cause: opening previously *required* `character.view.showDialog`; current Roll20 character models do not always expose that method. Linked IDs and token assignments were ignored in this case.
 - Resolve character ID from the current profile, selected assignment, unique mapped profile assignment, or unique exact controlled-character name. Reject malformed IDs and ambiguous matches.
-- Preserve native in-editor sheet opening and hidden-helper ownership where supported. Otherwise open Roll20's documented journal character URL as a player-clicked new tab; provide a real hyperlink if the browser blocks popups.
-- Preserve the automatic importer isolation. Tests required for both native and fallback paths, popup blocker, ambiguous/missing IDs, and safe journal link rendering.
+- Preserve native in-editor sheet opening and hidden-helper ownership where supported. Otherwise activate Roll20's special in-game journal character link from the light DOM; never use window.open/new tab because Roll20 intercepts these links inside the VTT.
+- Preserve the automatic importer isolation. Tests required for both native methods, in-VTT journal link fallback, ambiguous/missing IDs, safe link rendering, and stat-source correctness.
 - Pending: GitHub Actions and live Roll20 browser verification.
 
 **Next:** Verify click from expanded wheel and minimized dock opens Nier's actual sheet (native or journal tab); compare Roll20 2024 and legacy 2014. Maintain rolling docs after merging.
+
+- Additional user feedback: current HP/AC/speed still inaccurate after v2.3.8. Investigated discrepancy between cached character model, linked token bar values, and visible 2024 sheet content. Added nonintrusive three-source reconciliation, a per-character HP token-bar selector (Auto/Bar 1/2/3), and a source summary in Sheet UI. User verification needed because Roll20's configured token bars and 2024 form differ by campaign.
