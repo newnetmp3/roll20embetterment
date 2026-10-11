@@ -42,6 +42,13 @@
    const same=(a,b)=>String(a||'').trim().toLocaleLowerCase()===String(b||'').trim().toLocaleLowerCase();
    return (profile().sheetRolls||[]).find(r=>r.kind===kind&&r.action===action&&same(r.name,name))||null;
  }
+ function officialSheetRollLabel(ref){
+   const kind={attack:'Weapon',spell:'Spell',skill:'Skill',save:'Save',ability:'Ability',initiative:'Initiative',
+     action:'Feature',tool:'Tool',roll:'Sheet'}[ref.kind]||'Sheet';
+   const act={attack:'Attack',damage:'Damage',skill:'Check',save:'Save',ability:'Check',initiative:'Roll',
+     healing:'Healing',roll:'Roll'}[ref.action]||String(ref.action||'Roll');
+   return kind+': '+String(ref.name||'Roll')+' · '+act+' (official)';
+ }
  function radialSheetRollLeaves(list){
    const actionLabel=value=>({attack:'Attack',damage:'Damage',skill:'Check',ability:'Check',
      save:'Save',initiative:'Roll',healing:'Healing',roll:'Roll'}[value]||String(value||'Roll'));

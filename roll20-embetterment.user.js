@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.2
+// @version      2.3.3
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.2',
+  version: '2.3.3',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -2080,6 +2080,13 @@ function startAutoControlledCharacterImport(){
    const same=(a,b)=>String(a||'').trim().toLocaleLowerCase()===String(b||'').trim().toLocaleLowerCase();
    return (profile().sheetRolls||[]).find(r=>r.kind===kind&&r.action===action&&same(r.name,name))||null;
  }
+ function officialSheetRollLabel(ref){
+   const kind={attack:'Weapon',spell:'Spell',skill:'Skill',save:'Save',ability:'Ability',initiative:'Initiative',
+     action:'Feature',tool:'Tool',roll:'Sheet'}[ref.kind]||'Sheet';
+   const act={attack:'Attack',damage:'Damage',skill:'Check',save:'Save',ability:'Check',initiative:'Roll',
+     healing:'Healing',roll:'Roll'}[ref.action]||String(ref.action||'Roll');
+   return kind+': '+String(ref.name||'Roll')+' · '+act+' (official)';
+ }
  function radialSheetRollLeaves(list){
    const actionLabel=value=>({attack:'Attack',damage:'Damage',skill:'Check',ability:'Check',
      save:'Save',initiative:'Roll',healing:'Healing',roll:'Roll'}[value]||String(value||'Roll'));
@@ -2669,11 +2676,18 @@ const button = (label,action,extra='',cls='') => `<button data-action="${html(ac
 const progress = (cur,max) => `<div class="hpbar"><span style="width:${max?Math.max(0,Math.min(100,cur/max*100)):0}%"></span></div>`;
 function sheetUI() {
   const p=profile(),link=p.sheetLink,options=RB.openSheets||[];
-  const section=(title,items,description,withRoll=false)=>
+  const attackControls=item=>{
+    const attackRef=radialSheetRollRef('attack',item.name,'attack'),damageRef=radialSheetRollRef('attack',item.name,'damage');
+    return (item.command?button('Attack','runSheetAction','data-id="'+html(item.id)+'"','small primary'):
+      attackRef?button('Attack · official','runNativeSheetRoll','data-id="'+html(attackRef.id)+'"','small primary'):'')+
+      (damageRef?button('Damage · official','runNativeSheetRoll','data-id="'+html(damageRef.id)+'"','small'):'');
+  };
+  const section=(title,items,description,withRoll='')=>
     '<div class="card"><h3>'+title+' ('+items.length+')</h3>'+
     (items.length?'<div class="scroll">'+items.map(item=>
       '<div class="list-entry"><div class="row"><strong class="grow">'+html(item.name)+'</strong>'+
-      (withRoll&&item.command?button('Roll','runSheetAction','data-id="'+html(item.id)+'"','small primary'):'')+
+      (withRoll==='attack'?attackControls(item):withRoll==='native'?
+        button('Roll · official','runNativeSheetRoll','data-id="'+html(item.id)+'"','small primary'):'')+
       '</div><p class="hint">'+html(short(description(item),450))+'</p></div>').join('')+'</div>':
       '<p class="hint">Nothing accessible in the last scan.</p>')+'</div>';
   return '<div class="stack"><div class="card"><h2>Link character sheet</h2>'+
@@ -2698,7 +2712,8 @@ function sheetUI() {
     '<div class="card"><h3>Attribute JSON fallback</h3><p class="hint">For fields hidden by the 2024 sheet, paste a JSON object of named attributes or an array with name/current/max entries.</p>'+
     '<textarea id="rbe-sheet-json" rows="3" placeholder="Paste sheet attribute JSON here"></textarea>'+
     button('Import pasted attributes','pasteSheet')+'</div>'+
-    section('Attacks and actions',p.attacks||[],x=>[x.toHit&&'To hit '+x.toHit,x.damage&&'Damage '+x.damage,x.damageType,x.range,x.description].filter(Boolean).join(' · '),true)+
+    section('Attacks and actions',p.attacks||[],x=>[x.toHit&&'To hit '+x.toHit,x.damage&&'Damage '+x.damage,x.damageType,x.range,x.description].filter(Boolean).join(' · '),'attack')+
+    section('Official sheet rolls',p.sheetRolls||[],x=>[officialSheetRollLabel(x),x.tab,x.group,x.label].filter(Boolean).join(' · '),'native')+
     section('Class features and feats',p.features||[],x=>[x.source,x.description].filter(Boolean).join(' · '))+
     section('Proficiencies',p.proficiencies||[],x=>x.description||'')+
     section('Tools',p.tools||[],x=>x.description||'')+
@@ -2845,17 +2860,24 @@ function referenceUI() {
 }
 function paletteEntries() {
   const tabs=['Home','Sheet','Rolls','Macros','Spells','Inventory','Journal','Chat','Reference','Settings','Debug'];
+  const p=profile(),attacks=p.attacks||[],native=p.sheetRolls||[];
+  const attackEntries=attacks.map(a=>{
+    const ref=!a.command&&radialSheetRollRef('attack',a.name,'attack');
+    return {name:'Attack: '+a.name+(ref?' · official':''),kind:ref?'sheetRoll':'attack',value:ref?.id||a.id};
+  });
+  const covered=new Set(attackEntries.filter(x=>x.kind==='sheetRoll').map(x=>x.value));
   return [...tabs.map(t=>({name:'Open '+t,kind:'tab',value:t})),
     ...RB.state.macros.map(m=>({name:'Macro: '+m.name,kind:'macro',value:m.id})),
-    ...profile().spells.map(s=>({name:'Spell: '+s.name,kind:'spell',value:s.id})),
-    ...(profile().attacks||[]).map(a=>({name:'Attack: '+a.name,kind:'attack',value:a.id})),
+    ...p.spells.map(s=>({name:'Spell: '+s.name,kind:'spell',value:s.id})),
+    ...attackEntries,
+    ...native.filter(r=>!covered.has(r.id)).map(r=>({name:officialSheetRollLabel(r),kind:'sheetRoll',value:r.id})),
     ...skillNames.map(n=>({name:'Skill: '+n,kind:'skill',value:n})),
     ...abilities.map(n=>({name:'Save: '+n.toUpperCase(),kind:'save',value:n}))];
 }
 function paletteUI() {
   if (!RB.paletteOpen) return '';
   const q=(RB.paletteQuery||'').toLowerCase(), choices=paletteEntries().filter(x=>x.name.toLowerCase().includes(q)).slice(0,30);
-  return `<div id="rbe-palette"><div class="dialog"><div class="row between"><strong>⌘ Player command palette</strong>${button('✕','closePalette')}</div><input id="rbe-palette-input" placeholder="Find a macro, spell, skill, or panel…" value="${html(RB.paletteQuery||'')}"><div id="rbe-palette-results">${choices.map((x,i)=>`<button class="palette-choice ${i===RB.paletteSelection?'on':''}" data-action="paletteGo" data-value="${html(x.kind)}" data-id="${html(x.value)}">${html(x.name)}</button>`).join('')||'<p class="hint">Nothing found.</p>'}</div><p class="hint">↑ ↓ to choose • Enter to execute • Escape to close</p></div></div>`;
+  return `<div id="rbe-palette"><div class="dialog"><div class="row between"><strong>⌘ Player command palette</strong>${button('✕','closePalette')}</div><input id="rbe-palette-input" placeholder="Find an attack, official roll, spell, skill, or panel…" value="${html(RB.paletteQuery||'')}"><div id="rbe-palette-results">${choices.map((x,i)=>`<button class="palette-choice ${i===RB.paletteSelection?'on':''}" data-action="paletteGo" data-value="${html(x.kind)}" data-id="${html(x.value)}">${html(x.name)}</button>`).join('')||'<p class="hint">Nothing found.</p>'}</div><p class="hint">↑ ↓ to choose • Enter to execute • Escape to close</p></div></div>`;
 }
 function modalUI() {
   if (RB.modal!=='copy') return '';
@@ -3372,9 +3394,13 @@ function action(name, el) {
     }
     case 'runSheetAction':{
       const chosen=(p.attacks||[]).find(x=>x.id===id);
-      if(chosen?.command)sendToRoll20(chosen.command);
-      else toast('No accessible Roll20 attack button. Roll from the original character sheet.');break;
+      const native=chosen&&!chosen.command?radialSheetRollRef('attack',chosen.name,'attack'):null;
+      if(chosen?.command)radialExecute({kind:'attack',value:chosen.id});
+      else if(native)radialExecute({kind:'sheetRoll',value:native.id});
+      else toast('No accessible Roll20 attack button. Roll from the original character sheet.');
+      break;
     }
+    case 'runNativeSheetRoll':radialExecute({kind:'sheetRoll',value:id});break;
     case 'slot':executeSlot(ix);break;
     case 'runMacro':runMacro(id);break;
     case 'editMacro':RB.editMacro=id;render();break;
@@ -3493,8 +3519,12 @@ function navigatePalette(kind,id) {
   if(kind==='tab'){RB.tab=id;RB.state.ui.lastTab=id;RB.visible=true;save();render();}
   else if(kind==='macro') {runMacro(id);render();}
   else if(kind==='spell')useSpell(id);
-  else if(kind==='attack'){const a=(profile().attacks||[]).find(x=>x.id===id);if(a?.command)sendToRoll20(a.command);else toast('Sheet action button unavailable.');}
-  else if(kind==='skill'||kind==='save') {quickRoll(kind,id);render();}
+  else if(kind==='attack'||kind==='sheetRoll')radialExecute({kind,value:id});
+  else if(kind==='skill'||kind==='save') {
+    const ref=radialSheetRollRef(kind,kind==='save'?id.toUpperCase():id,kind);
+    if(ref)radialExecute({kind:'sheetRoll',value:ref.id});
+    else {quickRoll(kind,id);render();}
+  }
 }
 function onClick(e) {
   const control=e.target.closest('[data-action]');
