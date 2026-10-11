@@ -144,3 +144,13 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 - Removed the early return for sheets with empty `innerText`, so visible input-only scans can update the profile. Reject hidden/invalid/spoofed inputs; avoid overwriting directly identified scores with row-derived guesses.
 - Regression fixtures exercise current 82/max 84, STR 18, explicit max/temp precedence and hidden/invalid controls. Version `2.3.13`; generated distribution updated.
 - **CI verified:** GitHub Actions run 38176978583 on code head `08de26c442a1849faa9124ee3ed129354e8ea7fd`: **179 tests passed, 0 failed**, build and userscript syntax passed. **Pending:** real Floorp/official Roll20 2024 iframe validation. Confirm HUD reflects 82/84 and STR 18, then modify a live HP value and ensure it refreshes; do not claim production correctness solely from mocks.
+
+## v3.0.0 — Independent importer rebuild
+
+**Reason:** Actual official D&D 2024 imports in Floorp still failed after v2.3.13, despite 179 passing tests. Stop using the v2 importer. The production build now includes only new files under v3/; previous src/ modules remain unexecuted for comparison and archival tests.
+
+**Architecture:** 00_capture.js captures bounded current rendered DOM controls/cards and their provenance, 10_reader.js authenticates iframe communication and explicitly traverses tabs, 20_ui.js shows source selector, coverage, fields, diagnostics, and export, 30_boot.js starts only v3. No old HUD, token HP fallback or background profile cache runs. The example control id hp-current, title Current Hitpoints, value 82, aria-valuemax 84 and a dynamic-ID STR title with value 18 are used in regression tests.
+
+**Scope:** read-only current-tab and explicitly requested full-tab imports. Collect labeled combat stats, abilities, modifiers, saves, skills, slot values, spells, attacks, inventory, features, resources, and unrecognized labeled observations. An explicit warning marks offscreen/virtualized content as potentially incomplete. New per-campaign storage is separate from v2.
+
+**Pending:** final v3 CI and crucial live Floorp/official 2024 iframe verification. The prior combat wheel and D&D 2014 support were deliberately excluded until the new data source works. On resume, fetch main HEAD and PR status, inspect snapshot diagnostics, then update both handover and roadmap. Do not equate passing mocks with working Roll20 integration.
