@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.1
+// @version      2.3.2
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.1',
+  version: '2.3.2',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -1916,8 +1916,15 @@ function autoCloseSheetDialog(record,hidden){
   if(wrapper)console.warn('[R20eb] Hidden import sheet could not be closed cleanly; leaving it offscreen until reload.');
 }
 async function autoEnsureSheetCandidate(record){
+  const register=candidate=>{
+    const live=sheetCandidates(document);
+    RB.openSheets=live;
+    return live.find(x=>x.id===candidate.id||
+      (candidate.frame&&x.frame?.contentWindow===candidate.frame.contentWindow)||
+      (candidate.popoutWindow&&x.popoutWindow===candidate.popoutWindow))||candidate;
+  };
   let candidate=autoCandidateForCharacter(record);
-  if(candidate)return {candidate,opened:false,hidden:null};
+  if(candidate)return {candidate:register(candidate),opened:false,hidden:null};
   const character=record.character||autoCharacterById(record.characterId);
   if(typeof character?.view?.showDialog!=='function')return null;
   const focused=document.activeElement;
@@ -1929,6 +1936,7 @@ async function autoEnsureSheetCandidate(record){
     await sheetTourDelay(50);
     candidate=autoCandidateForCharacter(record);
     if(candidate){
+      candidate=register(candidate);
       if(!hidden)hidden=autoHideSheetDialog(candidate);
       try{focused?.focus?.({preventScroll:true});}catch{try{focused?.focus?.();}catch{}}
       // Let the advanced-sheet reader finish booting offscreen.
