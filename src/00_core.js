@@ -94,6 +94,7 @@ function clearImportedSheetData() {
   p.abilityScores={};
   p.sheetDetails={};
   p.sheetLink=null;
+  p.sheetActions=[];
   p.currency={...d.currency};
   p.spellSlots=[...d.spellSlots];
   p.usedSlots=[...d.usedSlots];
