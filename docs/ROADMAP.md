@@ -11,10 +11,10 @@
 | 5 | Unified Sheet/palette/wheel official native roll controls | ✅ v2.3.3 PR #16 | 128 tests passing; continue live QA |
 | 6 | Native-roll pending feedback and duplicate-click protection | ✅ v2.3.4 PR #17 | 130 passing tests; live Roll20 QA remains |
 | 7 | Spell roll versus casting semantics, safe local turn/resource reminders | ✅ v2.3.5 PR #18 | 136 tests passing; live Roll20 QA remains |
-| 8 | Keyboard accessibility, wheel density, palette navigation | ⬜ planned | QA + implementation |
+| 8 | Keyboard accessibility, wheel density, palette navigation | 🧪 v2.3.6 PR pending | Wheel/palette keyboard focus + assistive tech; density QA remains |
 | 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🔍 live QA | Browser fixtures |
 | 10 | Release/version automation and reproducible install | ⬜ planned | CI tags |
 
-**Next actionable milestone:** Complete v2.3.5 CI/live QA for explicit spellcasting semantics, then improve wheel keyboard accessibility and command-palette navigation (priority 8).
+**Next actionable milestone:** Finish keyboard accessibility CI/live QA for v2.3.6, then complete Roll20 real-browser compatibility matrix (priority 9).
 
 **Rolling update contract:** Every development PR refreshes both this roadmap and `docs/HANDOVER.md`; a milestone becomes ✅ only after verified checks and merge.

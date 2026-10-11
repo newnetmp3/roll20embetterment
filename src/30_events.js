@@ -249,8 +249,9 @@ function onInput(e) {
   if(el.id==='rbe-macro-search'){RB.macroSearch=el.value;const n=getInput('macro-results');if(n)n.innerHTML=macroListHTML(RB.state.macros);}
   if(el.id==='rbe-spell-search'){RB.spellSearch=el.value;const n=getInput('spell-results');if(n)n.innerHTML=spellListHTML();}
   if(el.id==='rbe-palette-input'){RB.paletteQuery=el.value;RB.paletteSelection=0; // defer to preserve focus and caret
-    const choices=paletteEntries().filter(x=>x.name.toLowerCase().includes(el.value.toLowerCase())).slice(0,30);
-    const n=getInput('palette-results');if(n)n.innerHTML=choices.map((x,i)=>`<button class="palette-choice ${i===0?'on':''}" data-action="paletteGo" data-value="${html(x.kind)}" data-id="${html(x.value)}">${html(x.name)}</button>`).join('')||'<p class="hint">Nothing found.</p>';
+    const choices=paletteOptions(),n=getInput('palette-results');
+    if(n)n.innerHTML=paletteChoicesHTML(choices);
+    el.setAttribute?.('aria-activedescendant',choices.length?'rbe-palette-option-0':'');
   }
 }
 // Roll20 shortcuts are registered outside this ShadowRoot. Stop keyboard
@@ -258,13 +259,40 @@ function onInput(e) {
 // B, V, Z and other typed keys as tabletop commands. Never preventDefault.
 function keepEmbettermentKeysLocal(e) { e.stopPropagation(); }
 function onKeyDown(e) {
-  if(e.key==='Escape' && RB.radial?.path?.length){RB.radial.path.pop();render();radialPosition();return;}
-  if(e.key==='Escape' && (RB.paletteOpen||RB.modal)){RB.paletteOpen=false;RB.modal=null;render();return;}
   const origin=e.composedPath?.()[0] || e.target;
   const editing=origin?.closest?.('input,textarea,select,[contenteditable="true"],[role="textbox"]');
   const insideEmbetterment=e.composedPath?.().includes(RB.root) || false;
-  if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyR'){e.preventDefault();RB.radial.open=!RB.radial.open;render();radialPosition();return;}
-  if(insideEmbetterment&&['Enter',' '].includes(e.key)&&origin?.dataset?.action==='radialPick'){e.preventDefault();radialPick(int(origin.dataset.depth),int(origin.dataset.index));return;}
+  // An open palette takes precedence over navigating the underlying combat wheel.
+  if(e.key==='Escape' && RB.paletteOpen){e.preventDefault();RB.paletteOpen=false;render();return;}
+  if(e.key==='Escape' && RB.modal){e.preventDefault();RB.modal=null;render();return;}
+  if(e.key==='Escape' && RB.radial?.path?.length && !editing){
+    e.preventDefault();RB.radial.path.pop();render();radialPosition();
+    if(origin?.dataset?.action==='radialPick')radialFocusWedge(RB.radial.path.length,0);
+    return;
+  }
+  if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyR'){
+    e.preventDefault();RB.radial.open=!RB.radial.open;render();radialPosition();
+    if(RB.radial.open)radialFocusWedge(0,0);
+    return;
+  }
+  if(insideEmbetterment&&origin?.dataset?.action==='radialPick'){
+    const depth=int(origin.dataset.depth),index=int(origin.dataset.index),key=e.key;
+    if(['ArrowRight','ArrowDown','ArrowLeft','ArrowUp','Home','End'].includes(key)){
+      e.preventDefault();
+      const size=radialTreeRings()[depth]?.length||0;
+      const next=key==='Home'?0:key==='End'?size-1:index+(key==='ArrowRight'||key==='ArrowDown'?1:-1);
+      radialFocusWedge(depth,next);
+      return;
+    }
+    if(key==='Enter'||key===' '){
+      e.preventDefault();
+      const before=RB.radial.path.length;
+      radialPick(depth,index);
+      const expanded=RB.radial.path.length>before&&radialTreeRings().length>depth+1;
+      radialFocusWedge(expanded?depth+1:Math.min(depth,radialTreeRings().length-1),expanded?0:index);
+      return;
+    }
+  }
   if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyE'){
     e.preventDefault();RB.visible=!RB.visible;render();return;
   }
@@ -272,17 +300,35 @@ function onKeyDown(e) {
     e.preventDefault();RB.paletteOpen=!RB.paletteOpen;RB.paletteSelection=0;RB.paletteQuery='';render();getInput('palette-input')?.focus();return;
   }
   if(RB.paletteOpen && origin?.id==='rbe-palette-input'){
-    const options=paletteEntries().filter(x=>x.name.toLowerCase().includes((RB.paletteQuery||'').toLowerCase())).slice(0,30);
-    if(e.key==='ArrowDown'){e.preventDefault();RB.paletteSelection=Math.min(options.length-1,RB.paletteSelection+1);highlightPalette();}
-    if(e.key==='ArrowUp'){e.preventDefault();RB.paletteSelection=Math.max(0,RB.paletteSelection-1);highlightPalette();}
-    if(e.key==='Enter'){e.preventDefault();const selected=options[RB.paletteSelection];if(selected)navigatePalette(selected.kind,selected.value);}
+    const options=paletteOptions();
+    if(['ArrowDown','ArrowUp','Home','End','PageDown','PageUp'].includes(e.key)){
+      e.preventDefault();
+      if(!options.length){RB.paletteSelection=0;highlightPalette();return;}
+      const delta=e.key==='PageDown'?5:e.key==='PageUp'?-5:e.key==='ArrowDown'?1:-1;
+      RB.paletteSelection=e.key==='Home'?0:e.key==='End'?options.length-1:
+        Math.max(0,Math.min(options.length-1,RB.paletteSelection+delta));
+      highlightPalette();return;
+    }
+    if(e.key==='Enter'){
+      e.preventDefault();const selected=options[RB.paletteSelection];
+      if(selected)navigatePalette(selected.kind,selected.value);
+    }
     return;
   }
   if(!editing&&!insideEmbetterment&&RB.state.settings.hotkeys&&!e.altKey&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey && /^Digit[1-8]$/.test(e.code)){
     e.preventDefault();executeSlot(Number(e.code.slice(-1))-1);
   }
 }
-function highlightPalette() {RB.shadow.querySelectorAll('.palette-choice').forEach((e,i)=>e.classList.toggle('on',i===RB.paletteSelection));}
+function highlightPalette() {
+  RB.shadow.querySelectorAll('.palette-choice').forEach((el,i)=>{
+    const selected=i===RB.paletteSelection;
+    el.classList.toggle('on',selected);
+    el.setAttribute?.('aria-selected',String(selected));
+    if(selected)el.scrollIntoView?.({block:'nearest'});
+  });
+  getInput('palette-input')?.setAttribute?.('aria-activedescendant',
+    paletteOptions().length?'rbe-palette-option-'+RB.paletteSelection:'');
+}
 function onDragStart(e) {
   if(e.target.closest('button,input,select,textarea'))return;
   if(!e.target.closest('#rbe-header')||!RB.panel)return;

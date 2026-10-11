@@ -329,14 +329,24 @@
        const gap=Math.min(2.4,step*.12),start=-90+i*step+gap,end=-90+(i+1)*step-gap;
        const mid=radialPoint((inner+outer)*.5,angle),rotation=radialLabelRotation(angle);
        const detail=[node.label,node.subtitle,node.detail].filter(Boolean).join(' · ');
-       return `<g class="rbe-wedge ${chosen?'is-selected':''} ${muted?'is-muted':''}" data-action="radialPick" data-depth="${d}" data-index="${i}" role="button" tabindex="0" aria-label="${html(detail)}" aria-selected="${!!chosen}"><title>${html(detail)}</title><path d="${radialSector(inner,outer,start,end)}"></path><g transform="translate(${mid.x.toFixed(1)} ${mid.y.toFixed(1)}) rotate(${rotation.toFixed(1)})">${radialLabelMarkup(node,step,inner,outer,angle)}</g></g>`;
+       return `<g class="rbe-wedge ${chosen?'is-selected':''} ${muted?'is-muted':''}" data-action="radialPick" data-depth="${d}" data-index="${i}" role="button" tabindex="${i===0?0:-1}" aria-label="${html(detail)}" aria-pressed="${!!chosen}" aria-keyshortcuts="Enter Space ArrowLeft ArrowRight ArrowUp ArrowDown Home End"><title>${html(detail)}</title><path d="${radialSector(inner,outer,start,end)}"></path><g transform="translate(${mid.x.toFixed(1)} ${mid.y.toFixed(1)}) rotate(${rotation.toFixed(1)})">${radialLabelMarkup(node,step,inner,outer,angle)}</g></g>`;
      }).join('');
-     return `<g class="rbe-ring" data-ring="${d}" style="animation-delay:${d*35}ms">${nodes}</g>`;
+     return `<g class="rbe-ring" data-ring="${d}" role="group" aria-label="Combat wheel level ${d+1}" style="animation-delay:${d*35}ms">${nodes}</g>`;
    }).join('');
    return `<svg class="rbe-wheel" viewBox="${(-layout.diameter/2).toFixed(1)} ${(-layout.diameter/2).toFixed(1)} ${layout.diameter.toFixed(1)} ${layout.diameter.toFixed(1)}" aria-label="Concentric combat action menu" role="group">
      <defs><radialGradient id="rbe-wedge-metal"><stop stop-color="#53402b" offset="0"/><stop stop-color="#211a22" offset=".75"/><stop stop-color="#130f17" offset="1"/></radialGradient>
      <linearGradient id="rbe-wedge-selected"><stop stop-color="#b9914f"/><stop stop-color="#5c3a21" offset=".53"/><stop stop-color="#332332" offset="1"/></linearGradient></defs>
      ${content}</svg>`;
+ }
+ // Keep keyboard focus in the wheel even when a ring is rebuilt after selecting a wedge.
+ function radialFocusWedge(depth,index){
+   const items=radialTreeRings()[depth]||[];
+   if(!items.length)return false;
+   const next=((index%items.length)+items.length)%items.length;
+   const target=RB.shadow?.querySelector?.('#rbe-radial-wheel [data-action="radialPick"][data-depth="'+depth+'"][data-index="'+next+'"]');
+   if(!target?.focus)return false;
+   target.focus();
+   return true;
  }
  function radialHTML(){
    const r=RB.radial,active=r.anchor&&r.open,p=profile();
@@ -348,7 +358,7 @@
       <div class="rbe-wheel-footer">${radialHealthMarkup()}<div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
       <button data-action="radialPanel" title="Open character sheet importer">▤ Sheet</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
-      <div class="rbe-wheel-info">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
+      <div class="rbe-wheel-info" title="Tab to enter wheel · Arrow keys or Home/End to move · Enter to choose · Esc to go back">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
      </div>`:''}
     ${!active?`<div id="rbe-radial-dock"><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
    </div>`;
