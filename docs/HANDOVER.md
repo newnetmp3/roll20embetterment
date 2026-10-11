@@ -87,15 +87,15 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 
 **Next:** Verify actual current HP/AC/speed on a live character, and which fields Roll20 exposes in each edition. Only expand edition-specific adapters using tested markup; never manufacture missing values.
 
-## v2.3.9 — Fix inert native Roll20 sheet button (in progress)
+## v2.3.9 — Sheet opening and live-stat source fixes (PR #22, CI verified)
 
 - Live screenshot showed the Roll20 button emitted “Select a controlled character token or open its sheet from the Roll20 Journal” even while Nier's linked profile and combat wheel were active.
 - Root cause: opening previously *required* `character.view.showDialog`; current Roll20 character models do not always expose that method. Linked IDs and token assignments were ignored in this case.
 - Resolve character ID from the current profile, selected assignment, unique mapped profile assignment, or unique exact controlled-character name. Reject malformed IDs and ambiguous matches.
 - Preserve native in-editor sheet opening and hidden-helper ownership where supported. Otherwise activate Roll20's special in-game journal character link from the light DOM; never use window.open/new tab because Roll20 intercepts these links inside the VTT.
 - Preserve the automatic importer isolation. Tests required for both native methods, in-VTT journal link fallback, ambiguous/missing IDs, safe link rendering, and stat-source correctness.
-- Pending: GitHub Actions and live Roll20 browser verification.
+- **CI verified:** PR #22 head `39605329cc10e3a6c8e8788de3a5ff2caaeb6f78` passed **167 tests, zero failures**; generated userscript matched and JavaScript checks passed. **Remaining:** verify VTT Journal handler dispatch and actual Roll20 2024/2014 HP/AC/speed values in Firefox; the tests cannot prove Roll20's private event interception.
 
 **Next:** Verify click from expanded wheel and minimized dock opens Nier's actual sheet (native or journal tab); compare Roll20 2024 and legacy 2014. Maintain rolling docs after merging.
 
-- Additional user feedback: current HP/AC/speed still inaccurate after v2.3.8. Investigated discrepancy between cached character model, linked token bar values, and visible 2024 sheet content. Added nonintrusive three-source reconciliation, a per-character HP token-bar selector (Auto/Bar 1/2/3), and a source summary in Sheet UI. User verification needed because Roll20's configured token bars and 2024 form differ by campaign.
+- Additional user feedback: current HP/AC/speed still inaccurate after v2.3.8. Added nonintrusive three-source reconciliation (model / linked-or-selected token HP bar / visible official sheet), a per-character HP source selector (Auto/Bar 1/2/3), and source diagnostics in Sheet UI. An open sheet's more recent stats are held for 45s to avoid flicker from stale attribute models between 15s read-only frame scans. Unknown/unlinked bars are never silently assumed to be HP. Manual browser verification remains because token bar setup and 2024 form data vary by campaign.

@@ -12,9 +12,9 @@
 | 6 | Native-roll pending feedback and duplicate-click protection | ✅ v2.3.4 PR #17 | 130 passing tests; live Roll20 QA remains |
 | 7 | Spell roll versus casting semantics, safe local turn/resource reminders | ✅ v2.3.5 PR #18 | 136 tests passing; live Roll20 QA remains |
 | 8 | Keyboard accessibility, wheel density, palette navigation | ✅ v2.3.6 PR #19 | 140 tests passing; live density/keyboard QA remains |
-| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧪 v2.3.9 PR pending | Native/VTT Journal sheet fallback and multi-source HP/AC/speed reconciliation; browser QA |
+| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧪 v2.3.9 PR #22 | 167 tests passing; source-aware HP/AC/speed import and sheet-button fallback; live browser QA needed |
 | 10 | Release/version automation and reproducible install | ⬜ planned | CI tags |
 
-**Next actionable milestone:** Verify the Roll20 button on the actual Nier profile in Jumpgate/2024, ensure fallback journal link works, then continue current HP/AC/speed import QA.
+**Next actionable milestone:** Live test Nier's Roll20 button and match actual health, AC, speed and initiative against the official sheet. If token bars are unlinked, choose the configured HP bar in R20eb Sheet; use source diagnostics to target the remaining 2024 adapter gaps.
 
 **Rolling update contract:** Every development PR refreshes both this roadmap and `docs/HANDOVER.md`; a milestone becomes ✅ only after verified checks and merge.
