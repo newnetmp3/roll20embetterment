@@ -12,7 +12,7 @@
 | 6 | Native-roll pending feedback and duplicate-click protection | ✅ v2.3.4 PR #17 | 130 passing tests; live Roll20 QA remains |
 | 7 | Spell roll versus casting semantics, safe local turn/resource reminders | ✅ v2.3.5 PR #18 | 136 tests passing; live Roll20 QA remains |
 | 8 | Keyboard accessibility, wheel density, palette navigation | ✅ v2.3.6 PR #19 | 140 tests passing; live density/keyboard QA remains |
-| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧪 v2.3.13 input-title fix (PR pending) | Direct Vue HP/ability readers and regression fixtures; CI and live Floorp iframe QA required |
+| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧪 v2.3.13 PR #29 CI green | 179 tests passed (0 failures), direct Vue HP/ability readers added; live Floorp iframe QA required |
 | 10 | Release/version automation and reproducible install | ⬜ planned | CI tags |
 
 **Next actionable milestone:** Verify exact v2.3.13 Vue input selectors (`hp-current`, titled ability incrementers) in live Floorp embedded sheet, including current/max HP changing in-game. Continue 2014/2024 browser integration matrix.
