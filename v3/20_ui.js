@@ -1,0 +1,172 @@
+// v3 minimal companion: explicit imports, provenance, completeness, JSON export.
+const R3_UI={host:null,root:null,shown:true,busy:false,status:'Open your official Roll20 2024 character sheet, then select it below.',
+  snapshot:null,selected:'',view:'summary',storageWarning:''};
+function r3Escape(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function r3StorageKey(){
+  return 'roll20-embetterment-v3:'+(new URLSearchParams(location.search).get('id')||location.pathname.match(/\/editor\/(\d+)/)?.[1]||'editor');
+}
+function r3Load(){
+  try{
+    const s=JSON.parse(localStorage.getItem(r3StorageKey())||'null');
+    if(s?.schema===3&&s.snapshot?.schema===3&&JSON.stringify(s).length<4000000)R3_UI.snapshot=s.snapshot;
+  }catch{/* Corrupted storage should never prevent scanning. */}
+}
+function r3Save(snapshot){
+  try{
+    localStorage.setItem(r3StorageKey(),JSON.stringify({schema:3,snapshot}));
+    R3_UI.storageWarning='';
+  }catch{
+    R3_UI.storageWarning='Browser storage limit reached. Snapshot remains available until reload; export JSON now.';
+  }
+}
+function r3ReportCounts(snapshot){
+  return Object.entries(snapshot?.coverage||{}).map(([key,value])=>
+    '<div class="metric"><b>'+r3Escape(value)+'</b><span>'+r3Escape(key)+'</span></div>').join('');
+}
+function r3InfoRow(label,value,source){
+  return '<div class="kv"><span>'+r3Escape(label)+'</span><strong>'+r3Escape(value)+'</strong>'+
+    (source?'<small>'+r3Escape(source.kind||'')+'</small>':'')+'</div>';
+}
+function r3ObjectRows(obj,lookup,prefix){
+  return Object.entries(obj||{}).map(([key,value])=>
+    r3InfoRow(key,typeof value==='object'?JSON.stringify(value):value,lookup?.[prefix+'.'+key])).join('')||
+    '<p class="muted">No identifiable fields in the rendered sheet.</p>';
+}
+function r3CardsView(kind){
+  const snap=R3_UI.snapshot;
+  if(!snap?.[kind]?.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
+  return snap[kind].slice(0,400).map(item=>
+    '<details class="entry"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
+    '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+
+    (item.actions?.length?'<div class="chips">'+item.actions.map(b=>'<span>'+r3Escape(b.label)+'</span>').join('')+'</div>':'')+
+    '</details>').join('');
+}
+function r3Results(){
+  const snap=R3_UI.snapshot;
+  if(!snap)return '<p class="muted">No import yet. Only the official sheet reader supplies data; nothing is filled from default or token values.</p>';
+  const menu=['summary','spells','attacks','inventory','features','resources','skills','fields','diagnostics'];
+  const nav='<nav class="views">'+menu.map(v=>
+    '<button data-view="'+v+'"'+(R3_UI.view===v?' class="selected"':'')+'>'+r3Escape(v)+'</button>').join('')+'</nav>';
+  let content='';
+  if(R3_UI.view==='summary'){
+    content='<h3>Combat statistics</h3>'+r3ObjectRows(snap.stats,snap.provenance,'stats')+
+      '<h3>Abilities</h3>'+r3ObjectRows(snap.abilities,snap.provenance,'abilities')+
+      '<h3>Modifiers and saving throws</h3>'+r3ObjectRows(snap.modifiers,snap.provenance,'modifiers')+
+      '<h3>Saving throws</h3>'+r3ObjectRows(snap.saves,snap.provenance,'saves')+
+      '<h3>Spell slots</h3>'+r3ObjectRows(snap.slots);
+  }else if(['spells','attacks','inventory','features','resources','skills'].includes(R3_UI.view)){
+    content=R3_UI.view==='skills'?r3ObjectRows(snap.skills,snap.provenance,'skills'):r3CardsView(R3_UI.view);
+  }else if(R3_UI.view==='fields'){
+    content='<p class="muted">Raw labeled controls actually present in the rendered DOM; no guessed values.</p>'+
+      (snap.observations||[]).slice(0,750).map(o=>r3InfoRow(o.label,o.value)).join('');
+  }else{
+    const d=snap.diagnostics;
+    content='<p><b>Captured:</b> '+r3Escape(snap.capturedAt)+'</p>'+
+      '<p><b>Visited tabs:</b> '+r3Escape(d.tabs.join(', ')||'none')+'</p>'+
+      '<p><b>Rejected hidden/invalid:</b> '+r3Escape(d.rejected)+'</p>'+
+      '<p><b>Unclassified controls:</b> '+r3Escape(d.unclassified)+'</p>'+
+      '<p><b>Collection limits:</b> '+r3Escape(d.limits.join('; ')||'None reached')+'</p>'+
+      '<p><b>Notes:</b> '+r3Escape(d.notes.join('; ')||'Current rendered DOM only')+'</p>';
+  }
+  return '<p class="stamp">Imported from: <strong>'+r3Escape(snap.name)+'</strong> · '+r3Escape(snap.capturedAt)+'</p>'+
+    '<div class="metrics">'+r3ReportCounts(snap)+'</div>'+nav+'<div class="results">'+content+'</div>';
+}
+function r3UIStatus(message,coverage){
+  R3_UI.status=message;
+  const el=R3_UI.root?.getElementById('r3-status');
+  if(el)el.textContent=message+(coverage?' · '+Object.entries(coverage).filter(([k])=>['spells','attacks','inventory','features'].includes(k)).map(([k,v])=>k+' '+v).join(', '):'');
+}
+function r3UIRefresh(){
+  if(!R3_UI.root)return;
+  const frames=r3Candidates();
+  const selector=frames.map(c=>'<option value="'+r3Escape(c.key)+'"'+(c.key===R3_UI.selected?' selected':'')+'>'+
+    r3Escape(c.name)+' ('+c.type+(c.visible?'':' — HIDDEN')+')</option>').join('');
+  R3_UI.root.getElementById('r3-choices').innerHTML=selector||'<option value="">No official sheet detected</option>';
+  if(!frames.some(c=>c.key===R3_UI.selected))R3_UI.selected=frames.find(c=>c.visible)?.key||'';
+  R3_UI.root.getElementById('r3-choices').value=R3_UI.selected;
+  R3_UI.root.getElementById('r3-results').innerHTML=r3Results();
+  R3_UI.root.getElementById('r3-content').style.display=R3_UI.shown?'block':'none';
+  R3_UI.root.getElementById('r3-title').textContent=R3_UI.shown?'Hide importer':'Show importer';
+  const scan=R3_UI.root.getElementById('r3-scan'),all=R3_UI.root.getElementById('r3-all');
+  scan.disabled=R3_UI.busy||!R3_UI.selected;all.disabled=R3_UI.busy||!R3_UI.selected;
+  R3_UI.root.getElementById('r3-export').disabled=!R3_UI.snapshot;
+  r3UIStatus(R3_UI.status);
+}
+async function r3StartImport(mode){
+  const candidate=r3Candidates().find(x=>x.key===R3_UI.selected);
+  if(!candidate){r3UIStatus('Open an official Roll20 2024 sheet and refresh the list.');return;}
+  R3_UI.busy=true;r3UIRefresh();r3UIStatus(mode==='all'?'Reading all available sheet tabs…':'Reading current sheet tab…');
+  try{
+    const snapshot=await r3SendScan(candidate,mode);
+    if(!snapshot||snapshot.schema!==3)throw new Error('Unexpected sheet format');
+    // Replace the previous profile only on an explicit successful import.
+    // A partially rendered sheet remains explicit in its diagnostics.
+    R3_UI.snapshot=r3Coverage(snapshot);r3Save(R3_UI.snapshot);
+    R3_UI.view='summary';
+    R3_UI.status='Imported '+snapshot.name+'. Review each category and Diagnostics for coverage.';
+  }catch(err){
+    R3_UI.status='Import failed: '+r3String(err?.message||err,320);
+  }finally{R3_UI.busy=false;r3UIRefresh();}
+}
+function r3Export(){
+  if(!R3_UI.snapshot)return;
+  const blob=new Blob([JSON.stringify(R3_UI.snapshot,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),anchor=document.createElement('a');
+  const name=r3String(R3_UI.snapshot.name,60).replace(/[^a-z0-9-]+/gi,'-')||'character';
+  anchor.href=url;anchor.download='r20eb-v3-'+name+'.json';anchor.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+function r3UIEvent(event){
+  const target=event.target;
+  if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
+  else if(target?.id==='r3-refresh')r3UIRefresh();
+  else if(target?.id==='r3-scan')r3StartImport('current');
+  else if(target?.id==='r3-all')r3StartImport('all');
+  else if(target?.id==='r3-export')r3Export();
+  else if(target?.dataset?.view){R3_UI.view=target.dataset.view;r3UIRefresh();}
+}
+function r3StartUI(){
+  if(document.getElementById('r20eb-v3-root'))return;
+  r3Load();
+  const host=document.createElement('div');host.id='r20eb-v3-root';
+  host.style.cssText='position:fixed;bottom:16px;right:16px;z-index:2147483000;pointer-events:auto';
+  const root=host.attachShadow({mode:'open'});R3_UI.host=host;R3_UI.root=root;
+  const style=[
+    ':host{all:initial;color-scheme:dark;font:13px/1.5 system-ui,sans-serif}',
+    '*{box-sizing:border-box}button,select{font:inherit}',
+    '#r3-wrap{width:min(520px,calc(100vw - 28px));max-height:calc(100vh - 40px);border:1px solid #77829c;border-radius:12px;background:#161b28;color:#eef0f7;box-shadow:0 10px 40px #000b;overflow:hidden}',
+    '#r3-toggle{width:100%;background:#303d58;color:#fff;border:0;padding:11px 14px;text-align:left;font-weight:700;cursor:pointer}',
+    '#r3-content{padding:12px;max-height:calc(100vh - 90px);overflow:auto}',
+    'button{background:#34465f;color:#f7f8fd;border:1px solid #66748e;border-radius:6px;padding:7px 10px;cursor:pointer}',
+    'button:disabled{opacity:.4;cursor:not-allowed}button:hover:not(:disabled){background:#49698c}',
+    'select{background:#222e43;color:#fff;border:1px solid #65748d;border-radius:5px;min-width:0;width:100%;padding:7px}',
+    '.actions{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0}.actions>*{flex:1}',
+    '.muted,.stamp{color:#b6c3d9}.muted{font-size:12px}.stamp{font-size:11px}',
+    '.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:12px 0}',
+    '.metric{border:1px solid #4a5871;border-radius:6px;padding:5px;text-align:center;min-width:0}.metric b{display:block;font-size:16px}.metric span{font-size:10px;overflow-wrap:anywhere}',
+    '.views{display:flex;gap:4px;flex-wrap:wrap;margin:10px 0}.views button{font-size:11px;text-transform:capitalize;padding:5px 8px}.views button.selected{background:#9c7642;color:white}',
+    '.results{max-height:39vh;overflow:auto;padding:4px 0}.results h3{margin:12px 0 5px;color:#e6c28e}',
+    '.kv{display:flex;gap:8px;align-items:center;border-bottom:1px solid #384357;padding:6px 2px;overflow-wrap:anywhere}.kv span{flex:1}.kv strong{color:#e6c28e}.kv small{font-size:10px;color:#93a3c0}',
+    '.entry{border-bottom:1px solid #384357;padding:6px 0}.entry summary{cursor:pointer}.entry small{color:#9daecb;margin-left:6px}',
+    '.entrybody{padding:9px;white-space:pre-wrap;overflow-wrap:anywhere;color:#bac7da}.chips{display:flex;flex-wrap:wrap;gap:5px}.chips span{border:1px solid #4e617c;border-radius:8px;padding:2px 6px}',
+    '#r3-status{font-size:12px;color:#f1d39d;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}',
+    '.notice{font-size:11px;color:#b8c5d8;line-height:1.4}label{font-weight:650}'
+  ].join('');
+  root.innerHTML='<style>'+style+'</style><div id="r3-wrap"><button id="r3-toggle">Hide importer</button>'+
+    '<div id="r3-content"><label for="r3-choices">Official character sheet</label>'+
+    '<select id="r3-choices"></select><div class="actions"><button id="r3-refresh">Refresh list</button>'+
+    '<button id="r3-scan">Read current tab</button><button id="r3-all">Import all tabs</button>'+
+    '<button id="r3-export" disabled>Export JSON</button></div>'+
+    '<div class="notice">New independent v3 importer · no old HUD/profile code · read-only for character data. '+
+    'Only player-opened 2024 sheets are scanned. Full import visits tabs you can see, then restores the original tab.</div>'+
+    '<div id="r3-status" role="status" aria-live="polite"></div>'+
+    '<div id="r3-results"></div></div></div>';
+  root.addEventListener('click',r3UIEvent);
+  root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
+  root.addEventListener('keydown',event=>{event.stopPropagation();},true);
+  root.addEventListener('keyup',event=>event.stopPropagation(),true);
+  root.addEventListener('keypress',event=>event.stopPropagation(),true);
+  document.body.appendChild(host);
+  r3UIRefresh();
+  window.addEventListener('focus',()=>{if(!R3_UI.busy)r3UIRefresh();});
+}
