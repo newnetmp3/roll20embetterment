@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.0
+// @version      2.3.1
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.0',
+  version: '2.3.1',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -71,6 +71,11 @@ function normalizeProfile(p) {
   cleaned.id = String(p.id || d.id).slice(0,100);
   cleaned.name = String(p.name || d.name).slice(0,100);
   cleaned.roll20CharacterId=String(p.roll20CharacterId||'').slice(0,120);
+  cleaned.sheetActions=(Array.isArray(p.sheetActions)?p.sheetActions:[]).slice(0,500).map(a=>({
+    id:String(a?.id||'').slice(0,180),name:String(a?.name||'').slice(0,120),
+    category:String(a?.category||'roll').slice(0,40),detail:String(a?.detail||'').slice(0,180),
+    sheetRef:a?.sheetRef&&typeof a.sheetRef==='object'?JSON.parse(JSON.stringify(a.sheetRef)):null
+  })).filter(a=>a.id&&a.name&&a.sheetRef);
   for (const key of ['stats','abilityMods','skillBonuses','saveBonuses','currency','death']) cleaned[key] = {...d[key], ...(p[key] && typeof p[key] === 'object' && !Array.isArray(p[key]) ? p[key] : {})};
   for (const key of ['spells','inventory','resources','quests','conditions','sessionLog','macrosSlots','spellSlots','usedSlots','attacks','features','proficiencies','tools']) cleaned[key] = Array.isArray(p[key]) ? p[key].slice(0,key === 'sessionLog' ? 500 : 200) : d[key];
   cleaned.abilityScores={...d.abilityScores,...(p.abilityScores||{})};
@@ -107,6 +112,7 @@ function clearImportedSheetData() {
   p.abilityScores={};
   p.sheetDetails={};
   p.sheetLink=null;
+  p.sheetActions=[];
   p.currency={...d.currency};
   p.spellSlots=[...d.spellSlots];
   p.usedSlots=[...d.usedSlots];
@@ -976,11 +982,130 @@ function beaconRegion(text,start,ends=[],limit=2400) {
   for(const re of ends){const m=tail.match(re);if(m)end=Math.min(end,m.index);}
   return region.slice(0,lead+end);
 }
+
+function beaconActionNorm(value){return String(value??'').replace(/\s+/g,' ').trim();}
+function beaconActionId(category,name,detail=''){
+  return 'sheet:action:'+String(category||'roll').toLowerCase().replace(/[^a-z0-9]+/g,'-')+':'+
+    beaconActionNorm(name+' '+detail).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,120);
+}
+function beaconRowName(row){
+  const selectors=['.span--item-row-title','.item-item__title','.spell-item__title','.feature-item__title',
+    '[class*="__title"] h3','[class*="__title"] h4','[class*="__title"]'];
+  for(const selector of selectors){
+    const el=row?.querySelector?.(selector),name=beaconActionNorm(el?.textContent);
+    if(name&&name.length<=120&&!/^(?:Attacks|Spells|Damage|Hit \/ DC)$/i.test(name))return name;
+  }
+  const text=beaconActionNorm(row?.textContent);
+  return text.split(/\s{2,}|(?=\b(?:Melee|Ranged|Spell Attack|Action|Bonus Action|Reaction)\b)/)[0].slice(0,120);
+}
+function beaconPushAction(out,seen,action){
+  if(!action?.name||!action?.sheetRef)return;
+  action.id=action.id||beaconActionId(action.category,action.name,action.detail);
+  if(seen.has(action.id))return;
+  seen.add(action.id);out.push(action);
+}
+function beaconDiscoverRollActions(scope=document){
+  const out=[],seen=new Set();
+  const q=(root,selector)=>Array.from(root?.querySelectorAll?.(selector)||[]);
+  // Official 2024 attack rows expose stable UUID viewAttackBlock ids.
+  for(const row of q(scope,'.attack-item')){
+    const name=beaconRowName(row);if(!name)continue;
+    const rowId=String(row.id||'').slice(0,180);
+    const hit=row.querySelector?.('.poly-button--hit-dc button');
+    if(hit){
+      const detail=beaconActionNorm(hit.textContent)||'Attack';
+      beaconPushAction(out,seen,{id:rowId?'sheet:action:attack:'+rowId+':hit':'',name,category:'attack',detail,
+        sheetRef:rowId?{kind:'attack-row',rowId,control:'hit'}:{kind:'named-row',rowType:'attack-item',name,control:'hit'}});
+    }
+    q(row,'.poly-button--damage button').forEach((button,index)=>{
+      const detail=beaconActionNorm(button.textContent)||'Damage';
+      beaconPushAction(out,seen,{id:rowId?'sheet:action:attack:'+rowId+':damage:'+index:'',name:name+' Damage',category:'damage',detail,
+        sheetRef:rowId?{kind:'attack-row',rowId,control:'damage',index}:{kind:'named-row',rowType:'attack-item',name,control:'damage',index}});
+    });
+  }
+  // Spell cards use the same hit/DC and damage controls but currently have no stable row id.
+  for(const row of q(scope,'.spell-item')){
+    const name=beaconRowName(row);if(!name)continue;
+    const hit=row.querySelector?.('.poly-button--hit-dc button');
+    if(hit){
+      const detail=beaconActionNorm(hit.textContent);
+      beaconPushAction(out,seen,{name,category:/Attack/i.test(detail)?'spell-attack':'spell-roll',detail,
+        sheetRef:{kind:'named-row',rowType:'spell-item',name,control:'hit'}});
+    }
+    q(row,'.poly-button--damage button').forEach((button,index)=>{
+      const detail=beaconActionNorm(button.textContent)||'Damage';
+      beaconPushAction(out,seen,{name:name+' Damage',category:'damage',detail,
+        sheetRef:{kind:'named-row',rowType:'spell-item',name,control:'damage',index}});
+    });
+  }
+  // Skills and tools advertise an explicit accessible Roll label.
+  for(const button of q(scope,'button[aria-label^="Roll "],[role="button"][aria-label^="Roll "]')){
+    const aria=beaconActionNorm(button.getAttribute?.('aria-label')),name=beaconActionNorm(button.textContent)||aria.replace(/^Roll (?:a |an )?/i,'').replace(/\s+check$/i,'');
+    const category=/hit die/i.test(aria)?'hit-die':/check/i.test(aria)?'check':'roll';
+    beaconPushAction(out,seen,{name,category,detail:aria,sheetRef:{kind:'aria',ariaLabel:aria}});
+  }
+  // Ability checks and saves are distinct native buttons in the official sheet.
+  for(const control of [['.ability-button','ability'],['.save-button','save']]){
+    q(scope,control[0]).forEach(button=>{
+      let cur=button,ability='';
+      for(let i=0;i<5&&cur;i++,cur=cur.parentElement){
+        const m=beaconActionNorm(cur.textContent).match(/\b(STR|DEX|CON|INT|WIS|CHA)\b/);
+        if(m){ability=m[1];break;}
+      }
+      if(!ability)return;
+      const detail=beaconActionNorm(button.textContent);
+      beaconPushAction(out,seen,{name:ability+(control[1]==='save'?' Save':' Check'),category:control[1],detail,
+        sheetRef:{kind:'ability',ability,control:control[1]}});
+    });
+  }
+  // Initiative has no dedicated aria-label in current official-sheet markup.
+  for(const button of q(scope,'button')){
+    const text=beaconActionNorm(button.textContent);
+    if(!/^(?:Initiative|Init)\b/i.test(text))continue;
+    beaconPushAction(out,seen,{name:'Initiative',category:'initiative',detail:text,
+      sheetRef:{kind:'initiative'}});
+  }
+  return out.slice(0,500);
+}
+function beaconResolveRollAction(ref,scope=document){
+  if(!ref||typeof ref!=='object')return null;
+  if(ref.kind==='attack-row'){
+    const row=scope.getElementById?.(String(ref.rowId||''));if(!row)return null;
+    if(ref.control==='hit')return row.querySelector?.('.poly-button--hit-dc button')||null;
+    if(ref.control==='damage')return qsa(row,'.poly-button--damage button')[Math.max(0,int(ref.index))]||null;
+  }
+  if(ref.kind==='named-row'){
+    const selector=ref.rowType==='spell-item'?'.spell-item':ref.rowType==='attack-item'?'.attack-item':null;
+    if(!selector)return null;
+    const wanted=beaconActionNorm(ref.name).toLowerCase();
+    const row=Array.from(scope.querySelectorAll?.(selector)||[]).find(x=>beaconRowName(x).toLowerCase()===wanted);
+    if(!row)return null;
+    if(ref.control==='hit')return row.querySelector?.('.poly-button--hit-dc button')||null;
+    if(ref.control==='damage')return Array.from(row.querySelectorAll?.('.poly-button--damage button')||[])[Math.max(0,int(ref.index))]||null;
+  }
+  if(ref.kind==='aria'){
+    const wanted=beaconActionNorm(ref.ariaLabel);
+    return Array.from(scope.querySelectorAll?.('button[aria-label],[role="button"][aria-label]')||[])
+      .find(x=>beaconActionNorm(x.getAttribute?.('aria-label'))===wanted)||null;
+  }
+  if(ref.kind==='ability'){
+    const cls=ref.control==='save'?'.save-button':'.ability-button',ability=String(ref.ability||'').toUpperCase();
+    return Array.from(scope.querySelectorAll?.(cls)||[]).find(button=>{
+      let cur=button;
+      for(let i=0;i<5&&cur;i++,cur=cur.parentElement)if(new RegExp('\\b'+ability+'\\b').test(beaconActionNorm(cur.textContent)))return true;
+      return false;
+    })||null;
+  }
+  if(ref.kind==='initiative')return Array.from(scope.querySelectorAll?.('button')||[])
+    .find(x=>/^(?:Initiative|Init)\b/i.test(beaconActionNorm(x.textContent)))||null;
+  return null;
+}
+function qsa(root,selector){return Array.from(root?.querySelectorAll?.(selector)||[]);}
 function beaconImportVisible(scope,label='Open character sheet') {
   const text=beaconVisibleText(scope);
   const result={name:label,stats:{},abilityScores:{},abilityMods:{},saveBonuses:{},
     skillBonuses:{},spellSlots:{},usedSlots:{},resources:[],attacks:[],details:{},
-    coverage:{visibleFields:0,sections:[],names:[]},signature:text.slice(0,35000)};
+    coverage:{visibleFields:0,sections:[],names:[]},rollActions:beaconDiscoverRollActions(scope),signature:text.slice(0,35000)};
   if(!text.trim())return result;
   const count=(group,name)=>{result.coverage.visibleFields++;if(!result.coverage.sections.includes(group))result.coverage.sections.push(group);result.coverage.names.push(name);};
   const num=(value,min,max)=>{const n=Number(value);return Number.isInteger(n)&&n>=min&&n<=max?n:null;};
@@ -1207,18 +1332,20 @@ function onBeaconFrameMessage(event){
     sheetPrefetchAttributes(candidate);
     return;
   }
-  if(message.type!=='snapshot'||typeof message.id!=='string')return;
+  if(!['snapshot','action-result'].includes(message.type)||typeof message.id!=='string')return;
   const pending=rbeFramePending.get(message.id);
   if(!pending||pending.target!==event.source)return;
   rbeFramePending.delete(message.id);clearTimeout(pending.timeout);
   candidate.lastSeen=Date.now();
   if(message.error)return pending.reject(new Error(String(message.error).slice(0,160)));
+  if(message.type==='action-result')return pending.resolve(!!message.ok);
   const fields=sheetAttributes(message.fields);
   if(Object.keys(fields).length>6000)return pending.reject(new Error('Character sheet returned too many fields'));
   const visible=message.visible&&typeof message.visible==='object'?message.visible:
     beaconImportVisible({innerText:''},candidate.name);
   pending.resolve({fields,visible,full:!!message.full,expected:Math.max(0,int(message.expected)),
     scannedPages:Math.max(1,int(message.scannedPages)),
+    rollActions:Array.isArray(message.rollActions)?message.rollActions.slice(0,500):[],
     tabs:Array.isArray(message.tabs)?message.tabs.slice(0,48).map(x=>String(x).slice(0,100)):[],at:Date.now()});
 }
 function requestBeaconFrame(candidate,deep=false,options={}){
@@ -1240,6 +1367,41 @@ function requestBeaconFrame(candidate,deep=false,options={}){
     }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
   });
 }
+
+function requestBeaconAction(candidate,sheetRef){
+  return new Promise((resolve,reject)=>{
+    const target=candidate?.frame?.contentWindow||candidate?.popoutWindow;
+    if(!target)return reject(new Error('Official character sheet reader is not available'));
+    if(candidate.frame&&!beaconFrameUrlOkay(candidate.frame))
+      return reject(new Error('Unrecognized character sheet iframe origin'));
+    if(candidate.popoutWindow&&candidate.origin!==RBE_BEACON_ORIGIN)
+      return reject(new Error('Unrecognized character sheet popout origin'));
+    const id='rbea'+(++rbeFrameCounter);
+    const timeout=setTimeout(()=>{
+      rbeFramePending.delete(id);
+      reject(new Error('Official sheet action timed out'));
+    },12000);
+    rbeFramePending.set(id,{target,candidateId:candidate.id,resolve,reject,timeout,kind:'action'});
+    try{
+      target.postMessage({bridge:RBE_BRIDGE_MARKER,type:'execute',id,
+        sheetRef:sheetRef&&typeof sheetRef==='object'?sheetRef:null},RBE_BEACON_ORIGIN);
+    }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
+  });
+}
+async function beaconExecuteSheetAction(sheetRef){
+  if(!sheetRef||typeof sheetRef!=='object')return false;
+  let control=beaconResolveRollAction(sheetRef,document);
+  if(!control&&sheetRef.tab){
+    const tabs=sheetTourTabs(document,RBE_SHEET_TOUR_INNER,
+      '.layout-tabbed-panel__tab-link[role="tab"],[role="tab"],nav a,[class*="tabs"] a,button');
+    const tab=tabs.find(x=>sheetTourLabel(x).toLowerCase()===String(sheetRef.tab).toLowerCase());
+    if(tab&&!sheetTourActive(tab)){tab.click?.();await sheetTourDelay(180);}
+    control=beaconResolveRollAction(sheetRef,document);
+  }
+  if(!control||control.disabled)return false;
+  control.click?.();
+  return true;
+}
 function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,characterId=''}={}){
   if(!scan||!beaconRemoteCandidate(candidate))return false;
   const visual=scan.visible&&typeof scan.visible==='object'?scan.visible:
@@ -1249,6 +1411,8 @@ function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,char
   data.name=candidate.name;
   const target=targetProfile||profile();
   if(!applySheetSnapshot(target,data))return false;
+  const actions=(scan.rollActions||visual.rollActions||[]).slice(0,500);
+  if(actions.length)target.sheetActions=actions;
   candidate.readableFields=data.coverage.attributes;
   candidate.visibleFields=data.coverage.visibleFields;
   candidate.lastSeen=Date.now();
@@ -1267,9 +1431,14 @@ async function beaconFrameReadRequest(event){
   const peer=beaconReaderPeer();
   if(event.origin!==RBE_EDITOR_ORIGIN||!peer||event.source!==peer)return;
   const message=event.data;
-  if(!message||message.bridge!==RBE_BRIDGE_MARKER||message.type!=='scan'||
-    typeof message.id!=='string'||message.id.length>100)return;
+  if(!message||message.bridge!==RBE_BRIDGE_MARKER||
+    !['scan','execute'].includes(message.type)||typeof message.id!=='string'||message.id.length>100)return;
   try{
+    if(message.type==='execute'){
+      const ok=await beaconExecuteSheetAction(message.sheetRef);
+      peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'action-result',id:message.id,ok},RBE_EDITOR_ORIGIN);
+      return;
+    }
     const scope=document.body;
     const scan=message.tour?await sheetTourFrameScan():(message.deep?await sheetHarvestBeaconRows(scope):{
       fields:readSheetFields(scope),full:false,expected:sheetExpectedAttributeCount(scope),scannedPages:1
@@ -1277,7 +1446,8 @@ async function beaconFrameReadRequest(event){
     const visible=message.tour?scan.visible:beaconImportVisible(scope,beaconReaderName());
     const fields=Object.fromEntries(Object.entries(scan.fields).slice(0,6000));
     peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
-      fields,visible,full:scan.full,expected:scan.expected,scannedPages:scan.scannedPages,tabs:scan.tabs||[]},RBE_EDITOR_ORIGIN);
+      fields,visible,full:scan.full,expected:scan.expected,scannedPages:scan.scannedPages,
+      rollActions:scan.rollActions||visible.rollActions||[],tabs:scan.tabs||[]},RBE_EDITOR_ORIGIN);
   }catch(err){
     try{peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'snapshot',id:message.id,
       error:String(err.message||err).slice(0,160)},RBE_EDITOR_ORIGIN);}catch{}
@@ -1385,12 +1555,20 @@ function sheetTourMergeVisible(target,source) {
   return target;
 }
 function sheetTourAccumulator() {
-  return {fields:{},visible:beaconImportVisible({innerText:''}),full:false,
+  return {fields:{},visible:beaconImportVisible({innerText:''}),rollActions:[],full:false,
     expected:0,scannedPages:0,tabs:[]};
 }
 function sheetTourAdd(acc,scan,label) {
   Object.assign(acc.fields,scan.fields||{});
   sheetTourMergeVisible(acc.visible,scan.visible);
+  const actionSeen=new Set(acc.rollActions.map(x=>x.id));
+  for(const raw of scan.rollActions||scan.visible?.rollActions||[]){
+    if(!raw?.id||actionSeen.has(raw.id))continue;
+    const action={...raw,sheetRef:raw.sheetRef?{...raw.sheetRef}:null};
+    if(action.sheetRef&&label&&!/^(?:Current view|Character Sheet|Official sheet popout)$/i.test(label))
+      action.sheetRef.tab=label;
+    acc.rollActions.push(action);actionSeen.add(action.id);
+  }
   acc.scannedPages+=scan.scannedPages||1;
   acc.expected=Math.max(acc.expected,scan.expected||0);
   if(scan.full)acc.full=true;
@@ -1404,6 +1582,7 @@ async function sheetTourCollect(scope,acc,label,deep=true) {
   const batch=scroll?await sheetHarvestBeaconRows(scope):
     {fields:readSheetFields(scope),full:false,expected:sheetExpectedAttributeCount(scope),scannedPages:1};
   batch.visible=beaconImportVisible(scope,'Open character sheet');
+  batch.rollActions=batch.visible.rollActions||beaconDiscoverRollActions(scope);
   sheetTourAdd(acc,batch,label);
 }
 async function sheetTourFrameScan() {
@@ -1523,6 +1702,16 @@ async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,cha
       beaconFrameSnapshot(candidate,acc,{quiet:true,targetProfile,characterId}):
       applySheetSnapshot(targetProfile,mergeBeaconSnapshot(snapshotSheet(acc.fields,candidate.name),acc.visible));
     if(!didImport)throw new Error('No accessible values were found in the opened sheet.');
+    targetProfile.sheetActions=(acc.rollActions||[]).slice(0,500);
+    const actionName=value=>String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    for(const attack of targetProfile.attacks||[]){
+      const match=targetProfile.sheetActions.find(a=>a.category==='attack'&&actionName(a.name)===actionName(attack.name));
+      if(match){attack.sheetRef=match.sheetRef;attack.sheetActionId=match.id;}
+    }
+    for(const spell of targetProfile.spells||[]){
+      const match=targetProfile.sheetActions.find(a=>/^spell-/.test(a.category)&&actionName(a.name)===actionName(spell.name));
+      if(match){spell.sheetRef=match.sheetRef;spell.sheetActionId=match.id;}
+    }
     targetProfile.sheetLink=targetProfile.sheetLink||{};
     targetProfile.sheetLink.source=candidate.id;
     targetProfile.sheetLink.tabsVisited=acc.tabs;
@@ -1575,6 +1764,39 @@ async function sheetTourStart() {
 // Automatic controlled-character discovery/import. Roll20's own runtime
 // relationships are authoritative: token -> represents -> character and
 // token/character controlledby -> current player. Names are presentation only.
+async function executeProfileSheetAction(action,targetProfile=profile()){
+  if(!action?.sheetRef||!targetProfile)return false;
+  let candidate=sheetCandidates(document).find(x=>x.id===targetProfile.sheetLink?.source)||
+    sheetCandidates(document).find(x=>String(x.characterId||'')===String(targetProfile.roll20CharacterId||''));
+  let opened=null,record=null;
+  if(!candidate&&targetProfile.roll20CharacterId){
+    const assignment=Object.values(RB.state.tokenAssignments||{}).find(x=>x.profileId===targetProfile.id);
+    const character=autoCharacterById(targetProfile.roll20CharacterId);
+    const model=autoActiveTokenModels().find(m=>String(m.id||m.get?.('id')||'')===String(assignment?.tokenId||''))||
+      autoActiveTokenModels().find(m=>String(m.get?.('represents')||'')===String(targetProfile.roll20CharacterId));
+    record={tokenId:String(assignment?.tokenId||model?.id||model?.get?.('id')||''),
+      tokenName:String(assignment?.tokenName||model?.get?.('name')||targetProfile.name),
+      characterId:targetProfile.roll20CharacterId,characterName:targetProfile.name,model,character};
+    opened=await autoEnsureSheetCandidate(record);
+    candidate=opened?.candidate||null;
+  }
+  if(!candidate||!beaconRemoteCandidate(candidate)){
+    toast('R20eb could not open the official Roll20 sheet control for this roll.');
+    return false;
+  }
+  try{
+    const ok=await requestBeaconAction(candidate,action.sheetRef);
+    if(!ok){toast('The matching Roll20 roll control was not found. Re-import the character sheet.');return false;}
+    record('Rolled from official sheet: '+action.name);
+    return true;
+  }catch(err){
+    console.warn('[R20eb] Official sheet roll failed',action,err);
+    toast('Official Roll20 roll failed: '+String(err.message||err).slice(0,120));
+    return false;
+  }finally{
+    if(opened?.opened&&record){await sheetTourDelay(250);autoCloseSheetDialog(record,opened.hidden);}
+  }
+}
 function autoCampaign(){
   return window.d20?.Campaign||window.Campaign||null;
 }
@@ -1903,7 +2125,7 @@ function startAutoControlledCharacterImport(){
    '×'+String(i.qty??1)+(i.category?' · '+String(i.category):'')));
  }
  function radialCategories(){
-   const p=profile(),attacks=p.attacks||[],spells=p.spells||[],items=p.inventory||[],features=p.features||[];
+   const p=profile(),attacks=p.attacks||[],spells=p.spells||[],items=p.inventory||[],features=p.features||[],sheetActions=p.sheetActions||[];
    const group=(id,name,glyph,children)=>radialNode(id,name,glyph,children.length?children:[radialNode('empty','Open sheet','▤',[],'panel','Sheet')]);
    const ranged=a=>/range|bow|crossbow|sling|gun|thrown|javelin/i.test([a.range,a.name,a.description].join(' '));
    const reaction=features.filter(f=>/reaction|counterspell|shield/i.test([f.name,f.description].join(' ')));
@@ -1946,6 +2168,7 @@ function startAutoControlledCharacterImport(){
        radialNode('used','Mark spent','✓',[],'toggle','reactionUsed')
      ]),
      radialNode('checks','ROLLS','⚄',[
+       group('sheetRolls','Sheet Rolls','⚄',sheetActions.slice(0,120).map(a=>radialNode('sa:'+a.id,a.name,'⚄',[],'sheetAction',a.id,a.detail||'',a.detail||''))),
        group('skills','Skills','⚄',skillNames.map(n=>radialNode(n.toLowerCase(),n,'⚄',[],'skill',n))),
        group('saves','Saves','⛨',abilities.map(a=>radialNode(a,a.toUpperCase(),'⛨',[],'save',a))),
        group('abilities','Abilities','◆',abilities.map(a=>radialNode(a,a.toUpperCase(),'◆',[],'ability',a))),
@@ -2167,14 +2390,32 @@ function startAutoControlledCharacterImport(){
    let success=false;
    switch(node.kind){
      case 'attack':
-       if(!attack?.command){toast('No safe Roll20 action for this weapon. Use its character sheet button.');break;}
+       if(!attack?.command&&attack?.sheetRef){
+         executeProfileSheetAction({name:attack.name,category:'attack',sheetRef:attack.sheetRef},p).then(ok=>{
+           if(!ok)return;p.actionUsed=true;record('Attacked: '+attack.name);RB.radial.path=[];save();render();radialPosition();
+         });return;
+       }
+       if(!attack?.command){toast('No safe Roll20 action for this weapon. Re-import its official character sheet.');break;}
        success=sendToRoll20(attack.command);if(success){p.actionUsed=true;record('Attacked: '+attack.name);}break;
      case 'spell':
-       if(!spell?.command){toast('No Roll20 command for '+(spell?.name||'this spell')+'. Set it on the Spells tab.');break;}
+       if(!spell?.command&&spell?.sheetRef){
+         executeProfileSheetAction({name:spell.name,category:'spell-roll',sheetRef:spell.sheetRef},p).then(ok=>{
+           if(!ok)return;if(/bonus/i.test(spell.castTime||''))p.bonusUsed=true;else p.actionUsed=true;
+           if(spell.concentration)p.concentration=spell.name;record('Rolled spell: '+spell.name);
+           RB.radial.path=[];save();render();radialPosition();
+         });return;
+       }
+       if(!spell?.command){toast('No Roll20 command for '+(spell?.name||'this spell')+'. Re-import the official sheet or set a command on the Spells tab.');break;}
        success=sendToRoll20(spell.command);
        if(success){if(/bonus/i.test(spell.castTime||''))p.bonusUsed=true;else p.actionUsed=true;
          if(spell.concentration)p.concentration=spell.name;record('Cast '+spell.name);}
        break;
+     case 'sheetAction':{const a=(p.sheetActions||[]).find(x=>x.id===node.value);
+       if(!a){toast('Imported sheet roll is unavailable.');break;}
+       executeProfileSheetAction(a,p).then(ok=>{if(!ok)return;
+         if(['attack','spell-attack'].includes(a.category))p.actionUsed=true;
+         RB.radial.path=[];save();render();radialPosition();
+       });return;}
      case 'macro':{const m=RB.state.macros.find(m=>m.id===node.value);if(m){success=sendToRoll20(m.command);if(success)record('Macro '+m.name);}break;}
      case 'initiative':quickRoll('initiative','');success=true;break;
      case 'skill':case 'save':case 'ability':quickRoll(node.kind,node.value);success=true;break;
