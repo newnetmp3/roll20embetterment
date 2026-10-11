@@ -283,6 +283,9 @@ function applyLiveCharacterValues(p,s,characterId=''){
   }
   // Spell slots are not part of this live read: local manual usage must not
   // be overwritten by stale total/remaining values in an attribute cache.
+  const hasMappedData=['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
+    .some(section=>Object.keys(s[section]||{}).length>0)||s.inspiration!==undefined;
+  if(!hasMappedData)return changed;
   if(!p.sheetLink){
     p.sheetLink={name:s.name||p.name,edition:'Roll20 model attributes',
       source:'auto:character-model',importMode:'partial-model'};

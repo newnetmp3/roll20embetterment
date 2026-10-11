@@ -86,7 +86,15 @@ function homeUI() {
   <div class="card"><div class="row between"><strong>Hit Points <span class="stat">${int(s.hp)} / ${int(s.maxHp)}</span></strong><span class="hint">Temp: ${int(s.tempHp)} • AC ${int(s.ac)} • Speed ${int(s.speed)} ft</span></div>${progress(s.hp,s.maxHp)}
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
    <div class="row"><input id="rbe-hp-adjust" type="number" value="5" class="mini" min="1" aria-label="HP adjustment">${button('− Damage','damage')} ${button('+ Heal','heal')} ${button('+ Temp HP','addTemp')}</div>
-   <p class="hint">HUD HP is a local copy. The Sheet tab can refresh it from Roll20; edits here never write back.</p></div>
+   <p class="hint">HUD HP is a local copy. While the character is controlled on this map, loaded Roll20 stats refresh in the background without opening a sheet. Edits here never write back.</p></div>
+  <div class="card"><div class="row between"><h3>Character statistics</h3><span class="hint">${p.sheetLink?.liveStatsAt?'Updated from Roll20 model':'Imported or locally set'}</span></div>
+   <div class="row"><span class="pill">Initiative ${signed(s.init)}</span><span class="pill">Proficiency ${signed(s.proficiency)}</span><span class="pill">Level ${int(s.level)}</span>
+   ${p.sheetDetails?.passivePerception?'<span class="pill">Passive Perception '+html(p.sheetDetails.passivePerception)+'</span>':''}</div>
+   <div class="grid">${abilities.map(a=>{
+     const score=p.abilityScores?.[a],mod=p.abilityMods?.[a];
+     return '<div class="card"><strong>'+a.toUpperCase()+'</strong><div class="stat">'+(score===undefined?'—':int(score))+'</div><span class="hint">Mod '+(score===undefined&&!mod?'—':signed(mod))+'</span></div>';
+   }).join('')}</div>
+   <p class="hint">Ability saves and all imported skill bonuses are available under Rolls. Missing fields are not guessed.</p></div>
   <div class="card"><h3>Turn assistant</h3><div class="row">${toggle('Action','actionUsed',p.actionUsed)}${toggle('Bonus action','bonusUsed',p.bonusUsed)}${toggle('Reaction','reactionUsed',p.reactionUsed)}${button('New turn ↻','newTurn')}</div>
    <div class="row">${field('Movement used (ft)','movementUsed',p.movementUsed,{cls:'narrow'})}<span class="muted">Remaining: <strong>${Math.max(0,int(s.speed)-int(p.movementUsed))} ft</strong></span></div>
    <div class="row">${button(p.inspiration?'★ Inspiration ON':'☆ Inspiration OFF','inspiration','',p.inspiration?'on':'')}${button('Short rest','shortRest')}${button('Long rest','longRest')}</div></div>

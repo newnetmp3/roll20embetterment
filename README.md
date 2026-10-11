@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.7 — Concentric Combat HUD
+# roll20 Embetterment 2.3.8 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -129,3 +129,9 @@ Each visible combat ring has one Tab stop. Use **Left/Up** and **Right/Down** to
 Background imports no longer take over a sheet you already opened. If the player has the original Roll20 character sheet open, R20eb seeds available character-model fields without changing the player's selected tabs; **Import all sheet tabs** remains an intentional manual operation. When an automatic full import opens a temporary helper, R20eb hides newly created dialogs before the browser paints them, tours the helper offscreen and restores its original style before closing. A failed/unsupported helper is closed instead of left on the tabletop. **Open original Roll20 sheet** in the Sheet panel, **Roll20** on the wheel toolbar, and **Sheet** on the minimized dock use Roll20's own character view. Opening it during a helper import reclaims the window so R20eb does not close it. When no controlled character ID or accessible Roll20 view is present, use the Journal manually.
 
 The minimized **Open wheel / Pin / Sheet** dock now has a visible ⠿ grip. Drag that grip to reposition the dock; its position is saved per campaign in browser-local state. Dragging buttons does not move the dock, and the position is clamped to the viewport while dragging. The full wheel's control footer still follows the ring.
+
+## Automatic live character statistics (v2.3.8)
+
+The full combat wheel no longer shows the redundant “Choose an action” line. Its compact status footer displays **current/max HP**, temporary HP, **AC**, **walking speed** and **initiative** (alongside the original controls). The Home panel includes six ability scores and modifiers, proficiency, initiative, level and available passive perception. Character values imported from Roll20 stay local to R20eb and never write back to the official sheet.
+
+Background scanning refreshes **loaded Roll20 controlled-character model attributes approximately every 5 seconds**, even after the full import is complete. A change to HP, maximum HP, temporary HP, AC, speed, initiative, ability scores, modifiers, saves, skills, coins or recognized details updates the local HUD without opening/scrolling the sheet. Blank, unsupported and nonnumeric values are ignored. Imported spells, attacks, native action controls, local notes and manually tracked spell usage are preserved. Extra aliases cover 2014/2024 field spelling and speed values with feet units. If an official sheet keeps values in inaccessible React state, R20eb cannot automatically detect them; use an intentional **Import all sheet tabs** and verify the available data. Edits made only to R20eb's local HP fields may be replaced by the next real model update.

@@ -3,11 +3,10 @@
 **Updated:** 2026-10-11  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current main baseline:** `128b6a16fa00f14e2d82099276842c2df9d96ddf` (v2.3.4, PR #17)  
 **Previous milestone:** v2.3.3 (PR #16, 128 tests green).  
+**Current verified main baseline:** `15cde06c65523d6ff4ba4ef94aea6e94016203e1` (v2.3.7, PR #20).  
 **Latest verified milestone:** v2.3.7 (PR #20, 150 tests green) — hidden helper isolation, manual Roll20 character access and draggable minimized dock.  
-**Current main baseline:** `81e79964297bc96568591f6fce4ee6076df9e3e5` (v2.3.6, PR #19).  
-**Verified previous main baseline:** `128b6a16fa00f14e2d82099276842c2df9d96ddf` (v2.3.4); verify main HEAD again after merge.
+**In development:** v2.3.8 — remove wheel footer prompt, live refresh of current Roll20 character stats.  
 
 ## Resume process
 
@@ -77,3 +76,13 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 - **CI verified:** PR #20 head `33c62715e1d09e2e31beb76aa38e03084026483e`, 150 passing tests, zero failures; generated userscript matches source and JavaScript syntax check passed. **Pending:** live Firefox/Jumpgate validation of the exact screenshots and workflows. For the post-merge baseline, re-fetch `main` HEAD rather than assuming this feature commit is the squash SHA.
 
 **Next:** Test full import, manually reopened character window, external 2024 popout, helper after logout/reload, and toolbar drag on desktop/mobile; then continue priority 9 live integration matrix.
+
+## v2.3.8 — Live character stats and compact wheel (in progress)
+
+- Removed “Choose an action” wheel footer. Added compact AC, speed and initiative readout alongside current/max and temporary HP.
+- Fixed one-time import behavior: imported characters previously never refreshed cached stats. Each scan now reads loaded Roll20 model attributes and merges available HP, max HP, temp HP, AC, speed, initiative, scores, modifiers, saves, skills, coins and details without reopening Advanced Tools.
+- Preserves full imports: does not replace spells, attacks, native sheet rolls, notes or manually tracked spell use during a partial model refresh. Blank/invalid values do not reset stats. Added 2014/2024 aliases.
+- Home now displays the six ability scores and modifiers, initiative, proficiency and level with a model-update indicator.
+- CI pending: require npm run check, regenerate the userscript and include the final test count here. Live Roll20 QA still required for exposed values, aliases, changing HP and closed-sheet updates.
+
+**Next:** Verify actual current HP/AC/speed on a live character, and which fields Roll20 exposes in each edition. Only expand edition-specific adapters using tested markup; never manufacture missing values.
