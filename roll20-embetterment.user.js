@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.10
+// @version      2.3.11
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.10',
+  version: '2.3.11',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -36,6 +36,12 @@ const int = (v, d=0) => { const n = Number(v); return Number.isFinite(n) ? Math.
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, int(v)));
 const short = (s, n=38) => String(s || '').length > n ? String(s).slice(0,n-1)+'…' : String(s||'');
 const signed = v => int(v) < 0 ? String(int(v)) : '+' + int(v);
+const signedInitiative = v => {
+  const n=Number(v);
+  if(!Number.isFinite(n))return '+0';
+  const rounded=Math.round(n*100)/100;
+  return (rounded<0?'':'+')+String(rounded);
+};
 const baseMacros = () => [
   {id:'d20', name:'D20 Roll', command:'/roll 1d20', favorite:true, category:'Dice'},
   {id:'adv', name:'Advantage', command:'/roll 2d20kh1', favorite:true, category:'Dice'},
@@ -1161,6 +1167,15 @@ function beaconImportVisible(scope,label='Open character sheet') {
     const temp=next.match(/^\s*(\d{1,4})(?:\s|$)/);
     if(temp){const n=num(temp[1],0,9999);if(n!==null){result.stats.tempHp=n;count('Combat','Temporary HP');}}
   }
+  // The 2024 sheet displays current values in its rendered header. Treat
+  // them as the live view, not an older attribute-cache default.
+  const initiative=text.match(/\bINITIATIVE\s*:?\s*([+-]?\s*\d{1,2}(?:\.\d{1,2})?)\b/i);
+  if(initiative){
+    const value=Number(initiative[1].replace(/\s/g,''));
+    if(Number.isFinite(value)&&value>=-30&&value<=30){
+      result.stats.init=value;count('Combat','Initiative');
+    }
+  }
   const ac=text.match(/\bARMOR\s*CLASS\s*:?\s*(\d{1,2})\b/i);
   if(ac){const n=num(ac[1],1,40);if(n!==null){result.stats.ac=n;count('Combat','AC');}}
   const speed=text.match(/\bSPEED\s*(?:\(\s*(?:ft|feet)\s*\))?\s*:?\s*(\d{1,3})\b/i);
@@ -1231,10 +1246,14 @@ function beaconImportVisible(scope,label='Open character sheet') {
   result.coverage.names=result.coverage.names.slice(0,120);
   return result;
 }
-function mergeBeaconSnapshot(named,visible){
+function mergeBeaconSnapshot(named,visible,{preferVisibleStats=false}={}){
+  // A live 2024 UI value outranks stale Roll20 attributes *only when the
+  // caller explicitly opts in*. Legacy snapshots retain named-first behavior.
+  const liveSections=new Set(['stats','abilityScores','abilityMods','saveBonuses','skillBonuses']);
   for(const section of ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','spellSlots','usedSlots']){
     for(const [k,v] of Object.entries(visible[section]||{})){
-      if(named[section]?.[k]===undefined)named[section][k]=v;
+      if(named[section]?.[k]===undefined||(preferVisibleStats&&liveSections.has(section)))
+        named[section][k]=v;
     }
   }
   named.details={...visible.details,...named.details};
@@ -1518,7 +1537,8 @@ function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,char
   if(!scan||!beaconRemoteCandidate(candidate))return false;
   const visual=scan.visible&&typeof scan.visible==='object'?scan.visible:
     beaconImportVisible({innerText:''},candidate.name);
-  const data=mergeBeaconSnapshot(snapshotSheet(scan.fields,candidate.name),visual);
+  const data=mergeBeaconSnapshot(snapshotSheet(scan.fields,candidate.name),visual,
+    {preferVisibleStats:true});
   if(!data.coverage.attributes&&!data.coverage.visibleFields)return false;
   data.name=candidate.name;
   const target=targetProfile||profile();
@@ -2119,11 +2139,19 @@ function autoCandidateForCharacter(record){
   const candidates=sheetCandidates(document);
   const exact=candidates.find(x=>String(x.characterId||x.id||'')===String(record.characterId));
   if(exact)return exact;
-  const name=String(record.characterName||'').toLocaleLowerCase();
-  // Only popouts lack a Roll20 character id. Never bind a different
-  // embedded character merely because two characters share a display name.
-  const named=name?candidates.filter(x=>!x.characterId&&!!x.popoutWindow&&
-    String(x.name||'').toLocaleLowerCase()===name):[];
+  const name=String(record.characterName||'').trim().toLocaleLowerCase();
+  if(!name)return null;
+  // The embedded official 2024 iframe frequently has no data-charid.
+  // Accept a *unique* name-only candidate only if the character itself is
+  // unique among player-controlled characters. A same-name NPC or another
+  // player's sheet must never be mistaken for the selected player character.
+  const controlled=new Set(autoDiscoverControlledTokens()
+    .filter(x=>String(x.characterName||'').trim().toLocaleLowerCase()===name)
+    .map(x=>String(x.characterId)));
+  if(controlled.size!==1||!controlled.has(String(record.characterId)))return null;
+  const named=candidates.filter(x=>!x.characterId&&
+    (beaconRemoteCandidate(x)||x.kind==='Visible Roll20 sheet')&&
+    String(x.name||'').trim().toLocaleLowerCase()===name);
   return named.length===1?named[0]:null;
 }
 async function autoEnsureSheetCandidate(record){
@@ -2308,14 +2336,20 @@ function autoRefreshCharacterStats(groups){
     const fields=autoCharacterAttributeFields(group.record.character);
     const snap=snapshotSheet(fields,group.record.characterName);
     const link=group.profile.sheetLink;
-    if(link?.visibleStatAt&&Date.now()-link.visibleStatAt<45000){
+    const protectedLive=link?.visibleStatAt&&Date.now()-link.visibleStatAt<45000;
+    if(protectedLive){
       for(const section of ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']){
         for(const key of link.visibleStatKeys?.[section]||[])delete snap[section]?.[key];
       }
     }
+    const protectedStats=new Set(protectedLive?link.visibleStatKeys?.stats||[]:[]);
     const token=autoTokenHealthSnapshot(group.record,group.profile);
-    if(token)Object.assign(snap.stats,token.stats);
-    const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
+    const overrides={};
+    if(token)for(const [key,value] of Object.entries(token.stats)){
+      // Protect a just-read official HP/max-HP from stale token health bars too.
+      if(protectedStats.has(key))continue;
+      snap.stats[key]=value;overrides[key]=token.source;
+    }
     if(applyLiveCharacterValues(group.profile,snap,characterId,'Roll20 attributes',overrides))updated++;
   }
   if(updated)autoPresentStatsUpdated();
@@ -2334,18 +2368,35 @@ async function autoRefreshVisibleSheetStats(record,profileRecord){
     const scan=beaconRemoteCandidate(live)?await requestBeaconFrame(live,false):
       {fields:readSheetFields(live.root),visible:beaconImportVisible(live.root,live.name)};
     const visual=scan.visible||beaconImportVisible({innerText:''},live.name);
-    const snap=mergeBeaconSnapshot(snapshotSheet(scan.fields||{},live.name),visual);
-    if(!Object.keys(snap.stats).length&&!Object.keys(snap.abilityScores).length)return false;
+    const snap=mergeBeaconSnapshot(snapshotSheet(scan.fields||{},live.name),visual,
+      {preferVisibleStats:true});
+    const visibleSections=['stats','abilityScores','abilityMods','saveBonuses','skillBonuses'];
+    const hasVisible=visibleSections.some(section=>Object.keys(visual[section]||{}).length);
+    // A remote read that only returns cached attributes does not prove that
+    // the 2024 sheet's current values were visible.
+    if(!hasVisible)return false;
+    const overrides={};
+    for(const section of visibleSections){
+      if(section!=='stats')continue;
+      for(const key of Object.keys(visual.stats||{}))
+        overrides[key]=beaconRemoteCandidate(live)?'Visible official sheet':'Visible Roll20 sheet';
+    }
     const token=autoTokenHealthSnapshot(record,profileRecord);
-    if(token)Object.assign(snap.stats,token.stats);
-    const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
+    if(token){
+      for(const [key,value] of Object.entries(token.stats)){
+        // Always prefer the current value printed on the open sheet over the
+        // token bar. Token bars can represent damage, temporary HP or be stale.
+        if(visual.stats?.[key]!==undefined)continue;
+        snap.stats[key]=value;overrides[key]=token.source;
+      }
+    }
     const changed=applyLiveCharacterValues(profileRecord,snap,charId,
-      beaconRemoteCandidate(live)?'Visible official sheet':'Visible Roll20 sheet',overrides);
+      'Roll20 attributes',overrides);
     if(profileRecord.sheetLink){
       profileRecord.sheetLink.visibleStatAt=Date.now();
       profileRecord.sheetLink.visibleStatKeys=Object.fromEntries(
         ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
-          .map(section=>[section,Object.keys(snap[section]||{})]));
+          .map(section=>[section,Object.keys(visual[section]||{})]));
     }
     if(changed)autoPresentStatsUpdated();
     return changed;
@@ -2701,7 +2752,7 @@ function autoScheduleVisibleSheetStats(groups){
    const s=profile().stats;
    return '<span class="rbe-wheel-stat" title="Armor class">AC '+int(s.ac)+'</span>'+
      '<span class="rbe-wheel-stat" title="Walking speed">SPD '+int(s.speed)+' ft</span>'+
-     '<span class="rbe-wheel-stat" title="Initiative modifier">INIT '+signed(s.init)+'</span>';
+     '<span class="rbe-wheel-stat" title="Initiative modifier">INIT '+signedInitiative(s.init)+'</span>';
  }
  function radialWheelSVG(){
    const layout=radialLayout(),rings=layout.rings,radius=layout.radii;
@@ -3145,8 +3196,8 @@ function homeUI() {
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
    <div class="row"><input id="rbe-hp-adjust" type="number" value="5" class="mini" min="1" aria-label="HP adjustment">${button('− Damage','damage')} ${button('+ Heal','heal')} ${button('+ Temp HP','addTemp')}</div>
    <p class="hint">HUD HP is a local copy. While the character is controlled on this map, loaded Roll20 stats refresh in the background without opening a sheet. Edits here never write back.</p></div>
-  <div class="card"><div class="row between"><h3>Character statistics</h3><span class="hint">${p.sheetLink?.liveStatsAt?'Updated from Roll20 model':'Imported or locally set'}</span></div>
-   <div class="row"><span class="pill">Initiative ${signed(s.init)}</span><span class="pill">Proficiency ${signed(s.proficiency)}</span><span class="pill">Level ${int(s.level)}</span>
+  <div class="card"><div class="row between"><h3>Character statistics</h3><span class="hint">${p.sheetLink?.liveStatsAt?'Last updated from Roll20 ('+html(p.sheetLink?.statSources?.hp||'mixed sources')+')':'Imported or locally set'}</span></div>
+   <div class="row"><span class="pill">Initiative ${signedInitiative(s.init)}</span><span class="pill">Proficiency ${signed(s.proficiency)}</span><span class="pill">Level ${int(s.level)}</span>
    ${p.sheetDetails?.passivePerception?'<span class="pill">Passive Perception '+html(p.sheetDetails.passivePerception)+'</span>':''}</div>
    <div class="grid">${abilities.map(a=>{
      const score=p.abilityScores?.[a],mod=p.abilityMods?.[a];

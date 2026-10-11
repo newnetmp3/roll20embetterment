@@ -228,3 +228,34 @@ test('explicit Roll-labeled tool checks and Hit Dice are harvested without arbit
   assert.ok(actions.some(x=>x.kind==='generic'&&x.action==='roll'&&x.name==='D10 (Fighter)'&&/^Roll a d10/.test(x.ariaLabel)));
   assert.equal(actions.some(x=>x.name==='Short Rest'),false);
 });
+
+test('live 2024 values supersede stale named attrs only with explicit sheet priority',()=>{
+ const {h,fakeSheet}=env();
+ const current=[
+   'NIER He/Him','Fighter 7 - Echo Knight','INITIATIVE +2.14',
+   'HIT POINTS','82 / 84','0','Current','Max','Temp',
+   'ABILITIES','STR','18','+4','+7','Mod','Save','DEX','14','+2','+2','Mod','Save',
+   'CON','15','+2','+5','Mod','Save','INT','12','+1','+1','Mod','Save',
+   'WIS','15','+2','+2','Mod','Save','CHA','10','+0','+0','Mod','Save',
+   'AC/SPEED','ARMOR CLASS','17','SPEED (ft)','55','SKILLS'
+ ].join('\n');
+ fakeSheet.innerText=current;
+ const visual=h.beaconImportVisible(fakeSheet,'NIER');
+ assert.equal(visual.stats.hp,82);
+ assert.equal(visual.stats.ac,17);
+ assert.equal(visual.stats.speed,55);
+ assert.equal(visual.stats.init,2.14);
+ assert.equal(visual.abilityScores.str,18);
+ assert.equal(visual.abilityScores.cha,10);
+ const named=h.snapshotSheet({hp:{current:'69',max:'84'},ac:'10',speed:'30',
+   strength_mod:'4',initiative_bonus:'0'},'NIER');
+ const defaultMerge=h.mergeBeaconSnapshot(named,visual);
+ assert.equal(defaultMerge.stats.hp,69,'legacy unnamed merge stays named-first');
+ const live=h.mergeBeaconSnapshot(h.snapshotSheet({hp:{current:'69',max:'84'},ac:'10',speed:'30',
+   initiative_bonus:'0'},'NIER'),visual,{preferVisibleStats:true});
+ assert.equal(live.stats.hp,82);
+ assert.equal(live.stats.ac,17);
+ assert.equal(live.stats.speed,55);
+ assert.equal(live.stats.init,2.14);
+ assert.deepEqual({...live.abilityScores},{str:18,dex:14,con:15,int:12,wis:15,cha:10});
+});

@@ -376,11 +376,19 @@ function autoCandidateForCharacter(record){
   const candidates=sheetCandidates(document);
   const exact=candidates.find(x=>String(x.characterId||x.id||'')===String(record.characterId));
   if(exact)return exact;
-  const name=String(record.characterName||'').toLocaleLowerCase();
-  // Only popouts lack a Roll20 character id. Never bind a different
-  // embedded character merely because two characters share a display name.
-  const named=name?candidates.filter(x=>!x.characterId&&!!x.popoutWindow&&
-    String(x.name||'').toLocaleLowerCase()===name):[];
+  const name=String(record.characterName||'').trim().toLocaleLowerCase();
+  if(!name)return null;
+  // The embedded official 2024 iframe frequently has no data-charid.
+  // Accept a *unique* name-only candidate only if the character itself is
+  // unique among player-controlled characters. A same-name NPC or another
+  // player's sheet must never be mistaken for the selected player character.
+  const controlled=new Set(autoDiscoverControlledTokens()
+    .filter(x=>String(x.characterName||'').trim().toLocaleLowerCase()===name)
+    .map(x=>String(x.characterId)));
+  if(controlled.size!==1||!controlled.has(String(record.characterId)))return null;
+  const named=candidates.filter(x=>!x.characterId&&
+    (beaconRemoteCandidate(x)||x.kind==='Visible Roll20 sheet')&&
+    String(x.name||'').trim().toLocaleLowerCase()===name);
   return named.length===1?named[0]:null;
 }
 async function autoEnsureSheetCandidate(record){

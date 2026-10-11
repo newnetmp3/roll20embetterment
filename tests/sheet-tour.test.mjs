@@ -16,7 +16,7 @@ function harness(doc){
     localStorage:{getItem(k){return stored.get(k)||null},setItem(k,v){stored.set(k,v)}}
   };
   vm.createContext(scope);
-  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoRefreshCharacterStats,autoTokenHealthSnapshot,autoRefreshVisibleSheetStats,autoScheduleVisibleSheetStats,autoEnsureSheetCandidate,autoHideSheetDialog,autoReleaseSheetDialog,autoCloseSheetDialog,autoSheetOpeningShield,roll20CharacterSheetUrl,roll20LinkedCharacterId,openRoll20CharacterSheet,action,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
+  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoCandidateForCharacter,autoRefreshCharacterStats,autoTokenHealthSnapshot,autoRefreshVisibleSheetStats,autoScheduleVisibleSheetStats,autoEnsureSheetCandidate,autoHideSheetDialog,autoReleaseSheetDialog,autoCloseSheetDialog,autoSheetOpeningShield,roll20CharacterSheetUrl,roll20LinkedCharacterId,openRoll20CharacterSheet,action,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
   return {api:scope.api,intervals,doc:page,context:scope};
 }
 function tab(label,selected,change) {
@@ -601,4 +601,62 @@ test('HP-link normalization accepts whitespace in linked Roll20 attributes',()=>
  api.autoRefreshCharacterStats(groups);
  assert.equal(p.stats.hp,42);
  assert.match(p.sheetLink.statSources.hp,/Token Bar 1/);
+});
+
+test('unnamed official iframe binds only to one matching controlled character',()=>{
+ const {api,context}=harness();
+ const record={characterId:'char-nier',characterName:'Nier'};
+ const iframe={id:'beacon-1',name:'NIER',characterId:'',kind:'D&D 2024 sheet iframe',frame:{contentWindow:{}}};
+ context.iframeCandidate=iframe;
+ context.controlledRecords=[record];
+ vm.runInContext("sheetCandidates=()=>[iframeCandidate]; autoDiscoverControlledTokens=()=>controlledRecords;",context);
+ assert.equal(api.autoCandidateForCharacter(record),iframe);
+ context.controlledRecords=[record,{characterId:'second-nier',characterName:'Nier'}];
+ assert.equal(api.autoCandidateForCharacter(record),null,'ambiguous controlled character name must fail closed');
+ context.controlledRecords=[record];
+ context.extraIframe={...iframe,id:'beacon-2'};
+ vm.runInContext("sheetCandidates=()=>[iframeCandidate,extraIframe];",context);
+ assert.equal(api.autoCandidateForCharacter(record),null,'two matching open sheets must fail closed');
+ context.extraIframe={...iframe,characterId:'another-id'};
+ assert.equal(api.autoCandidateForCharacter(record),iframe,'known different sheet ID is excluded');
+});
+test('screenshot regression: visible Nier stats override 69 HP token, 10 AC, 30 speed and defaults',async()=>{
+ const {api,context}=harness(),p=api.profile();
+ p.name='Nier';p.stats.hp=69;p.stats.maxHp=84;p.stats.ac=10;p.stats.speed=30;p.stats.init=0;
+ const character={attribs:{toJSON:()=>[
+  {name:'hp',current:'69',max:'84'},
+  {name:'ac',current:'10',max:''},
+  {name:'speed',current:'30',max:''},
+  {name:'initiative_bonus',current:'0',max:''}
+ ]}};
+ const token=backboneModel('tok-nier',{type:'image',bar1_link:'attr-hp',bar1_value:'69',bar1_max:'84'});
+ character.attribs.models=[{id:'attr-hp',get:key=>key==='name'?'hp':''}];
+ const record={characterId:'char-nier',characterName:'Nier',character,model:token};
+ const iframe={id:'beacon-1',characterId:'',name:'NIER',kind:'D&D 2024 sheet iframe',
+   frame:{contentWindow:{}},root:{},score:2000};
+ context.targetIframe=iframe;
+ context.visibleSnapshot={
+   stats:{hp:82,maxHp:84,ac:17,speed:55,init:2.14},
+   abilityScores:{str:18,dex:14,con:15,int:12,wis:15,cha:10},
+   abilityMods:{str:4,dex:2,con:2,int:1,wis:2,cha:0},
+   saveBonuses:{str:7,dex:2,con:5,int:1,wis:2,cha:0},
+   coverage:{visibleFields:17,sections:['Combat','Abilities'],names:['HP','AC','Speed']},
+   details:{},resources:[],attacks:[],sheetRolls:[]
+ };
+ vm.runInContext("autoCandidateForCharacter=()=>targetIframe; sheetCandidates=()=>[targetIframe]; requestBeaconFrame=async()=>({fields:{hp:{current:'69',max:'84'},ac:'10',speed:'30'},visible:visibleSnapshot});",context);
+ assert.equal(await api.autoRefreshVisibleSheetStats(record,p),true);
+ assert.equal(p.stats.hp,82);assert.equal(p.stats.maxHp,84);
+ assert.equal(p.stats.ac,17);assert.equal(p.stats.speed,55);
+ assert.equal(p.stats.init,2.14);
+ assert.deepEqual({...p.abilityScores},{str:18,dex:14,con:15,int:12,wis:15,cha:10});
+ assert.equal(p.sheetLink.statSources.hp,'Visible official sheet');
+ assert.equal(p.sheetLink.statSources.ac,'Visible official sheet');
+ assert.equal(p.sheetLink.statSources.speed,'Visible official sheet');
+ assert.equal(p.sheetLink.statSources.init,'Visible official sheet');
+ const groups=new Map([['char-nier',{record,profile:p}]]);
+ api.autoRefreshCharacterStats(groups);
+ assert.equal(p.stats.hp,82,'background model must not restore stale HP');
+ assert.equal(p.stats.ac,17,'background model must not restore default AC');
+ assert.equal(p.stats.speed,55,'background model must not restore default speed');
+ assert.equal(p.abilityScores.str,18,'live STR score must survive model refresh');
 });

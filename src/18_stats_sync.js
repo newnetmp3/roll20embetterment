@@ -53,14 +53,20 @@ function autoRefreshCharacterStats(groups){
     const fields=autoCharacterAttributeFields(group.record.character);
     const snap=snapshotSheet(fields,group.record.characterName);
     const link=group.profile.sheetLink;
-    if(link?.visibleStatAt&&Date.now()-link.visibleStatAt<45000){
+    const protectedLive=link?.visibleStatAt&&Date.now()-link.visibleStatAt<45000;
+    if(protectedLive){
       for(const section of ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']){
         for(const key of link.visibleStatKeys?.[section]||[])delete snap[section]?.[key];
       }
     }
+    const protectedStats=new Set(protectedLive?link.visibleStatKeys?.stats||[]:[]);
     const token=autoTokenHealthSnapshot(group.record,group.profile);
-    if(token)Object.assign(snap.stats,token.stats);
-    const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
+    const overrides={};
+    if(token)for(const [key,value] of Object.entries(token.stats)){
+      // Protect a just-read official HP/max-HP from stale token health bars too.
+      if(protectedStats.has(key))continue;
+      snap.stats[key]=value;overrides[key]=token.source;
+    }
     if(applyLiveCharacterValues(group.profile,snap,characterId,'Roll20 attributes',overrides))updated++;
   }
   if(updated)autoPresentStatsUpdated();
@@ -79,18 +85,35 @@ async function autoRefreshVisibleSheetStats(record,profileRecord){
     const scan=beaconRemoteCandidate(live)?await requestBeaconFrame(live,false):
       {fields:readSheetFields(live.root),visible:beaconImportVisible(live.root,live.name)};
     const visual=scan.visible||beaconImportVisible({innerText:''},live.name);
-    const snap=mergeBeaconSnapshot(snapshotSheet(scan.fields||{},live.name),visual);
-    if(!Object.keys(snap.stats).length&&!Object.keys(snap.abilityScores).length)return false;
+    const snap=mergeBeaconSnapshot(snapshotSheet(scan.fields||{},live.name),visual,
+      {preferVisibleStats:true});
+    const visibleSections=['stats','abilityScores','abilityMods','saveBonuses','skillBonuses'];
+    const hasVisible=visibleSections.some(section=>Object.keys(visual[section]||{}).length);
+    // A remote read that only returns cached attributes does not prove that
+    // the 2024 sheet's current values were visible.
+    if(!hasVisible)return false;
+    const overrides={};
+    for(const section of visibleSections){
+      if(section!=='stats')continue;
+      for(const key of Object.keys(visual.stats||{}))
+        overrides[key]=beaconRemoteCandidate(live)?'Visible official sheet':'Visible Roll20 sheet';
+    }
     const token=autoTokenHealthSnapshot(record,profileRecord);
-    if(token)Object.assign(snap.stats,token.stats);
-    const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
+    if(token){
+      for(const [key,value] of Object.entries(token.stats)){
+        // Always prefer the current value printed on the open sheet over the
+        // token bar. Token bars can represent damage, temporary HP or be stale.
+        if(visual.stats?.[key]!==undefined)continue;
+        snap.stats[key]=value;overrides[key]=token.source;
+      }
+    }
     const changed=applyLiveCharacterValues(profileRecord,snap,charId,
-      beaconRemoteCandidate(live)?'Visible official sheet':'Visible Roll20 sheet',overrides);
+      'Roll20 attributes',overrides);
     if(profileRecord.sheetLink){
       profileRecord.sheetLink.visibleStatAt=Date.now();
       profileRecord.sheetLink.visibleStatKeys=Object.fromEntries(
         ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
-          .map(section=>[section,Object.keys(snap[section]||{})]));
+          .map(section=>[section,Object.keys(visual[section]||{})]));
     }
     if(changed)autoPresentStatsUpdated();
     return changed;

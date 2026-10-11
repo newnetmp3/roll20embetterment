@@ -1,7 +1,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.10',
+  version: '2.3.11',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -18,6 +18,12 @@ const int = (v, d=0) => { const n = Number(v); return Number.isFinite(n) ? Math.
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, int(v)));
 const short = (s, n=38) => String(s || '').length > n ? String(s).slice(0,n-1)+'…' : String(s||'');
 const signed = v => int(v) < 0 ? String(int(v)) : '+' + int(v);
+const signedInitiative = v => {
+  const n=Number(v);
+  if(!Number.isFinite(n))return '+0';
+  const rounded=Math.round(n*100)/100;
+  return (rounded<0?'':'+')+String(rounded);
+};
 const baseMacros = () => [
   {id:'d20', name:'D20 Roll', command:'/roll 1d20', favorite:true, category:'Dice'},
   {id:'adv', name:'Advantage', command:'/roll 2d20kh1', favorite:true, category:'Dice'},

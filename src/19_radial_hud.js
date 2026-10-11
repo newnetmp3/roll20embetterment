@@ -329,7 +329,7 @@
    const s=profile().stats;
    return '<span class="rbe-wheel-stat" title="Armor class">AC '+int(s.ac)+'</span>'+
      '<span class="rbe-wheel-stat" title="Walking speed">SPD '+int(s.speed)+' ft</span>'+
-     '<span class="rbe-wheel-stat" title="Initiative modifier">INIT '+signed(s.init)+'</span>';
+     '<span class="rbe-wheel-stat" title="Initiative modifier">INIT '+signedInitiative(s.init)+'</span>';
  }
  function radialWheelSVG(){
    const layout=radialLayout(),rings=layout.rings,radius=layout.radii;

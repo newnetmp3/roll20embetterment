@@ -262,7 +262,8 @@ function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,char
   if(!scan||!beaconRemoteCandidate(candidate))return false;
   const visual=scan.visible&&typeof scan.visible==='object'?scan.visible:
     beaconImportVisible({innerText:''},candidate.name);
-  const data=mergeBeaconSnapshot(snapshotSheet(scan.fields,candidate.name),visual);
+  const data=mergeBeaconSnapshot(snapshotSheet(scan.fields,candidate.name),visual,
+    {preferVisibleStats:true});
   if(!data.coverage.attributes&&!data.coverage.visibleFields)return false;
   data.name=candidate.name;
   const target=targetProfile||profile();

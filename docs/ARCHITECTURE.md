@@ -39,3 +39,7 @@ Full-runtime integration tests use `tests/_runtime.mjs` to load modules in exact
 - With a real player-owned, controlled Nier token, compare current HP and max HP, AC, speed, initiative and all six abilities to the values visible in the original sheet.
 - Verify model attribute names and timestamp/freshness against the official sheet; inspect which token bar (if any) is explicitly linked to HP.
 - Test iframe, popout, closed helper, manual import and native roll buttons separately. Automated mocks cannot verify Roll20's private UI event routing.
+
+## Visible-stat precedence (v2.3.11)
+
+Named-first merging is retained for ordinary/legacy imports. When a verified official 2024 iframe or visible sheet is actively being read, the caller sets `preferVisibleStats`. Only fields actually reported in the visible snapshot override cached named attributes; an explicitly linked or selected token HP bar fills gaps but must not replace an HP value visible on the sheet. `visibleStatKeys` tracks only fields genuinely returned by the visible reader to protect them from the background five-second model scan for a short interval. An ID-less iframe is eligible for current-player data only on a unique exact-name candidate and unique controlled-character match. This prevents accidentally binding an NPC or another same-name character.

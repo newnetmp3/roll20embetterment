@@ -104,6 +104,15 @@ function beaconImportVisible(scope,label='Open character sheet') {
     const temp=next.match(/^\s*(\d{1,4})(?:\s|$)/);
     if(temp){const n=num(temp[1],0,9999);if(n!==null){result.stats.tempHp=n;count('Combat','Temporary HP');}}
   }
+  // The 2024 sheet displays current values in its rendered header. Treat
+  // them as the live view, not an older attribute-cache default.
+  const initiative=text.match(/\bINITIATIVE\s*:?\s*([+-]?\s*\d{1,2}(?:\.\d{1,2})?)\b/i);
+  if(initiative){
+    const value=Number(initiative[1].replace(/\s/g,''));
+    if(Number.isFinite(value)&&value>=-30&&value<=30){
+      result.stats.init=value;count('Combat','Initiative');
+    }
+  }
   const ac=text.match(/\bARMOR\s*CLASS\s*:?\s*(\d{1,2})\b/i);
   if(ac){const n=num(ac[1],1,40);if(n!==null){result.stats.ac=n;count('Combat','AC');}}
   const speed=text.match(/\bSPEED\s*(?:\(\s*(?:ft|feet)\s*\))?\s*:?\s*(\d{1,3})\b/i);
@@ -174,10 +183,14 @@ function beaconImportVisible(scope,label='Open character sheet') {
   result.coverage.names=result.coverage.names.slice(0,120);
   return result;
 }
-function mergeBeaconSnapshot(named,visible){
+function mergeBeaconSnapshot(named,visible,{preferVisibleStats=false}={}){
+  // A live 2024 UI value outranks stale Roll20 attributes *only when the
+  // caller explicitly opts in*. Legacy snapshots retain named-first behavior.
+  const liveSections=new Set(['stats','abilityScores','abilityMods','saveBonuses','skillBonuses']);
   for(const section of ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','spellSlots','usedSlots']){
     for(const [k,v] of Object.entries(visible[section]||{})){
-      if(named[section]?.[k]===undefined)named[section][k]=v;
+      if(named[section]?.[k]===undefined||(preferVisibleStats&&liveSections.has(section)))
+        named[section][k]=v;
     }
   }
   named.details={...visible.details,...named.details};
