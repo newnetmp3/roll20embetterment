@@ -412,3 +412,19 @@ test('background partial seed cannot wipe a previously complete sheet import',as
   assert.equal(p.sheetRolls.length,1);
   assert.equal(p.sheetLink.importMode,'full-auto');
 });
+
+test('closed existing dialogs are eligible for automatic hiding when Roll20 reuses them',()=>{
+  const marks=new Map(),style={remove(){},textContent:''};
+  const open={setAttribute(k,v){marks.set('open:'+k,v)},removeAttribute() {},
+    getClientRects(){return [{width:10}]}};
+  const closed={setAttribute(k,v){marks.set('closed:'+k,v)},removeAttribute() {},
+    getClientRects(){return []}};
+  const doc={documentElement:{setAttribute(){},removeAttribute(){}},head:{appendChild(){}},
+    createElement(){return style},querySelectorAll(){return [open,closed]}};
+  const {api}=harness(doc);
+  const release=api.autoSheetOpeningShield();
+  assert.equal(marks.get('open:data-r20e-existing-dialog'),'true');
+  assert.equal(marks.has('closed:data-r20e-existing-dialog'),false);
+  assert.match(style.textContent,/:has\(\.characterdialog\)/);
+  release();
+});

@@ -390,11 +390,18 @@ function autoCandidateForCharacter(record){
 function autoSheetOpeningShield(){
   const doc=document,root=doc.documentElement;
   if(!root?.setAttribute||!doc.createElement||!doc.head?.appendChild)return ()=>{};
-  const existing=Array.from(doc.querySelectorAll?.('.ui-dialog,.characterdialog')||[]);
+  const existing=Array.from(doc.querySelectorAll?.('.ui-dialog,.characterdialog')||[])
+    .filter(node=>{
+      // A leftover closed jQuery dialog may be re-used for the new helper.
+      // Exclude only truly visible, player-owned windows from the shield.
+      const computed=window.getComputedStyle?.(node);
+      if(computed?.display==='none'||computed?.visibility==='hidden')return false;
+      return !node.getClientRects||node.getClientRects().length>0;
+    });
   for(const node of existing)node.setAttribute?.('data-r20e-existing-dialog','true');
   const css=doc.createElement('style');
   css.textContent=`
-html[data-r20e-opening-helper="true"] .ui-dialog:not([data-r20e-existing-dialog]),
+html[data-r20e-opening-helper="true"] .ui-dialog:not([data-r20e-existing-dialog]):has(.characterdialog),
 html[data-r20e-opening-helper="true"] .characterdialog:not([data-r20e-existing-dialog]){
   visibility:hidden!important;pointer-events:none!important;opacity:0!important;
   position:fixed!important;left:-20000px!important;top:0!important;
@@ -463,6 +470,11 @@ function openRoll20CharacterSheet(){
   const hidden=RB.autoHelperActive;
   if(hidden&&hidden.characterId===String(characterId)){
     hidden.reclaimed=true;
+    // A helper might currently display Advanced Tools: return to Character
+    // Sheet before exposing the reclaimed window to the player.
+    const tabs=sheetTourTabs(hidden.wrapper,RBE_SHEET_TOUR_MAIN,'.asv__header__nav__tabs_link');
+    const main=tabs.find(tab=>sheetTourLabel(tab)==='Character Sheet');
+    if(main&&!sheetTourActive(main))main.click?.();
     autoReleaseSheetDialog(hidden);
   }
   RB.autoCharacterRetryAfter=RB.autoCharacterRetryAfter||new Map();
