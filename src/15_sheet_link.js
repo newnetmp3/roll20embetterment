@@ -248,6 +248,7 @@ function applySheetSnapshot(p,s){
   for(const [n,v] of Object.entries(s.spellSlots))p.spellSlots[+n]=clamp(v,0,99);
   for(const [n,v] of Object.entries(s.usedSlots))p.usedSlots[+n]=clamp(v,0,p.spellSlots[+n]);
   for(const k of ['spells','inventory','resources','attacks','features','proficiencies','tools','sheetRolls']){
+    if(k==='sheetRolls'){p.sheetRolls=(s.sheetRolls||[]).slice(0,400);continue;}
     if(s[k].length||(p[k]||[]).some(x=>x.origin==='sheet'))p[k]=mergeSheetList(p[k],s[k]);
   }
   p.sheetLink={...(p.sheetLink||{}),name:s.name,edition:s.edition,lastSync:new Date().toISOString(),
