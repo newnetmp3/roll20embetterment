@@ -101,3 +101,7 @@ The radial Attack menu uses the weapon's official attack button and exposes its 
 When invoked, the editor sends only a validated semantic roll reference (kind, name, action and tab) to the authenticated official-sheet iframe/popout reader. The reader resolves that reference against the live sheet DOM and clicks Roll20's own button. This preserves Roll20's current roll mode/privacy, attack math, critical handling, spell behavior, resource prompts and native chat templates. If the helper sheet is closed, R20eb can reopen its associated controlled character sheet offscreen, perform the requested roll, and close the helper again. No roll formula or 2024 repeating macro is synthesized.
 
 Legacy 2014 commands continue to use their existing Roll20 macro command path.
+
+## Hidden helper-sheet bridge registration (2.3.2)
+
+When a native 2024 roll is requested while its character sheet is closed, R20eb may open Roll20's character dialog offscreen as a temporary helper. The discovered iframe is now registered in the editor's authenticated sheet-candidate list before any snapshot or roll invocation is sent. This ensures the editor accepts the helper reader's origin-checked reply instead of discarding it as an unknown frame. The same registration path is used when an already-open sheet is first discovered automatically.
