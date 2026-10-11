@@ -31,11 +31,12 @@ function beaconCollectRollActions(scope,tab=''){
   const panel=scope.querySelector?.('[role="tabpanel"]:not([style*="display: none"])')||scope;
   const out=[],seen=new Set(),push=(kind,name,action,button,meta={})=>{
     if(!button||!name)return;
-    const key=[kind,name,action,actualTab].join('|').toLowerCase();
+    const refTab=meta.global?'':actualTab,clean={...meta};delete clean.global;
+    const key=[kind,name,action,refTab].join('|').toLowerCase();
     if(seen.has(key))return;seen.add(key);
     out.push({id:'sheetroll:'+key.replace(/[^a-z0-9|_-]/g,'-').slice(0,180),origin:'sheet',
-      kind,name:name.slice(0,120),action,tab:String(actualTab||'').slice(0,80),
-      label:beaconRollText(button).slice(0,80),...meta});
+      kind,name:name.slice(0,120),action,tab:String(refTab||'').slice(0,80),
+      label:beaconRollText(button).slice(0,80),...clean});
   };
   for(const card of Array.from(panel.querySelectorAll?.('.attack-item')||[]).slice(0,120)){
     const name=beaconRollName(card,['.span--item-row-title','.attack-item__title-chat','.attack-item__title-col']);
@@ -49,16 +50,16 @@ function beaconCollectRollActions(scope,tab=''){
   }
   for(const row of Array.from(scope.querySelectorAll('.skill')).slice(0,80)){
     const button=row.querySelector?.('button.skill__name'),name=beaconRollText(button);
-    push('skill',name,'skill',button,{group:'Skills'});
+    push('skill',name,'skill',button,{group:'Skills',global:true});
   }
   for(const row of Array.from(scope.querySelectorAll('.inline-ability')).slice(0,20)){
     const text=beaconRollText(row),abbr=text.match(/\b(STR|DEX|CON|INT|WIS|CHA)\b/i)?.[1]?.toUpperCase();
     if(!abbr)continue;
-    push('ability',abbr,'ability',row.querySelector?.('.poly-button--ability button'),{group:'Abilities'});
-    push('save',abbr,'save',row.querySelector?.('.poly-button--compact-saving-throw button'),{group:'Saves'});
+    push('ability',abbr,'ability',row.querySelector?.('.poly-button--ability button'),{group:'Abilities',global:true});
+    push('save',abbr,'save',row.querySelector?.('.poly-button--compact-saving-throw button'),{group:'Saves',global:true});
   }
   const initiative=scope.querySelector?.('.initiative-btn button');
-  if(initiative)push('initiative','Initiative','initiative',initiative,{group:'Initiative'});
+  if(initiative)push('initiative','Initiative','initiative',initiative,{group:'Initiative',global:true});
   for(const card of Array.from(panel.querySelectorAll?.('.action-item')||[]).slice(0,160)){
     const name=beaconRollName(card,['.action-item__name','.span--item-row-title','.name-chat'])||
       beaconRollText(card).split(/\s+\d+d\d+/)[0].trim().slice(0,120);
