@@ -211,6 +211,15 @@ async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,cha
       applySheetSnapshot(targetProfile,mergeBeaconSnapshot(snapshotSheet(acc.fields,candidate.name),acc.visible));
     if(!didImport)throw new Error('No accessible values were found in the opened sheet.');
     targetProfile.sheetActions=(acc.rollActions||[]).slice(0,500);
+    const actionName=value=>String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    for(const attack of targetProfile.attacks||[]){
+      const match=targetProfile.sheetActions.find(a=>a.category==='attack'&&actionName(a.name)===actionName(attack.name));
+      if(match){attack.sheetRef=match.sheetRef;attack.sheetActionId=match.id;}
+    }
+    for(const spell of targetProfile.spells||[]){
+      const match=targetProfile.sheetActions.find(a=>/^spell-/.test(a.category)&&actionName(a.name)===actionName(spell.name));
+      if(match){spell.sheetRef=match.sheetRef;spell.sheetActionId=match.id;}
+    }
     targetProfile.sheetLink=targetProfile.sheetLink||{};
     targetProfile.sheetLink.source=candidate.id;
     targetProfile.sheetLink.tabsVisited=acc.tabs;
@@ -263,6 +272,39 @@ async function sheetTourStart() {
 // Automatic controlled-character discovery/import. Roll20's own runtime
 // relationships are authoritative: token -> represents -> character and
 // token/character controlledby -> current player. Names are presentation only.
+async function executeProfileSheetAction(action,targetProfile=profile()){
+  if(!action?.sheetRef||!targetProfile)return false;
+  let candidate=sheetCandidates(document).find(x=>x.id===targetProfile.sheetLink?.source)||
+    sheetCandidates(document).find(x=>String(x.characterId||'')===String(targetProfile.roll20CharacterId||''));
+  let opened=null,record=null;
+  if(!candidate&&targetProfile.roll20CharacterId){
+    const assignment=Object.values(RB.state.tokenAssignments||{}).find(x=>x.profileId===targetProfile.id);
+    const character=autoCharacterById(targetProfile.roll20CharacterId);
+    const model=autoActiveTokenModels().find(m=>String(m.id||m.get?.('id')||'')===String(assignment?.tokenId||''))||
+      autoActiveTokenModels().find(m=>String(m.get?.('represents')||'')===String(targetProfile.roll20CharacterId));
+    record={tokenId:String(assignment?.tokenId||model?.id||model?.get?.('id')||''),
+      tokenName:String(assignment?.tokenName||model?.get?.('name')||targetProfile.name),
+      characterId:targetProfile.roll20CharacterId,characterName:targetProfile.name,model,character};
+    opened=await autoEnsureSheetCandidate(record);
+    candidate=opened?.candidate||null;
+  }
+  if(!candidate||!beaconRemoteCandidate(candidate)){
+    toast('R20eb could not open the official Roll20 sheet control for this roll.');
+    return false;
+  }
+  try{
+    const ok=await requestBeaconAction(candidate,action.sheetRef);
+    if(!ok){toast('The matching Roll20 roll control was not found. Re-import the character sheet.');return false;}
+    record('Rolled from official sheet: '+action.name);
+    return true;
+  }catch(err){
+    console.warn('[R20eb] Official sheet roll failed',action,err);
+    toast('Official Roll20 roll failed: '+String(err.message||err).slice(0,120));
+    return false;
+  }finally{
+    if(opened?.opened&&record){await sheetTourDelay(250);autoCloseSheetDialog(record,opened.hidden);}
+  }
+}
 function autoCampaign(){
   return window.d20?.Campaign||window.Campaign||null;
 }
