@@ -61,6 +61,13 @@ function sheetUI() {
       '<p class="hint">Found '+options.length+' candidate sheet(s). <strong>'+int(options[RB.selectedSheet||0]?.readableFields)+' named attributes</strong> and <strong>'+int(options[RB.selectedSheet||0]?.visibleFields)+' visible values</strong> detected. Scanning automatically gathers the full scrollable Attributes list behind a frozen view and restores your position. Click <strong>Import visible attributes</strong> to apply the gathered values locally. For attacks and spells not exposed as attributes, switch to Character Sheet → Combat / Spells, then scan again.</p>':
       '<p class="hint">No sheets scanned yet. Click Import all sheet tabs to be prompted to open your character sheet.</p>')+
     '<label><input type="checkbox" data-sheet-auto '+(link?.auto?'checked':'')+'> Refresh while the linked sheet is open (every 12 seconds)</label>'+
+    '<label class="field">Health source<select data-hp-source>'+
+    [['auto','Auto · linked HP attribute'],['bar1','Token Bar 1'],['bar2','Token Bar 2'],['bar3','Token Bar 3']]
+      .map(([value,label])=>'<option value="'+value+'" '+((link?.hpSource||'auto')===value?'selected':'')+'>'+label+'</option>').join('')+
+    '</select></label>'+
+    '<p class="hint">If the health total is incorrect, select the token bar your game uses for HP. Auto recognizes only a linked HP attribute. Current sources: '+
+    html(Object.entries(link?.statSources||{}).filter(([key])=>['hp','maxHp','ac','speed','init'].includes(key))
+      .map(([key,value])=>key+' = '+value).join(' · ')||'No verified stats yet')+'</p>'+
     '<p class="hint">Local notes, macros, equipment, and custom spells are preserved. Imports are read-only local copies. Beacon fields only import when their values can be identified confidently.</p></div>'+
     '<div class="card"><h3>Import coverage</h3>'+
     (link?'<strong>'+html(link.name||p.name)+'</strong> <span class="pill">'+html(link.edition||'Sheet')+'</span>'+
