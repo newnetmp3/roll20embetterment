@@ -442,9 +442,10 @@ test('2024 spell wheel exposes native spell attack and damage buttons when impor
   ];
   const spellRoot=r.radialCategories().find(x=>x.id==='spells');
   const fire=spellRoot.children.find(x=>x.id==='lvl0').children.find(x=>x.label==='Fire Bolt');
-  assert.equal(fire.children.find(x=>x.label==='Attack').kind,'sheetRoll');
-  assert.equal(fire.children.find(x=>x.label==='Damage').kind,'sheetRoll');
-  assert.equal(fire.children.some(x=>x.label==='Cast'),false,'No guessed command should be fabricated');
+  assert.equal(fire.children.find(x=>x.label==='Roll attack').kind,'sheetRoll');
+  assert.equal(fire.children.find(x=>x.label==='Roll damage').kind,'sheetRoll');
+  assert.equal(fire.children.some(x=>x.label==='Cast in Roll20'),false,'No guessed command should be fabricated');
+  assert.equal(fire.children.find(x=>x.label==='Mark cast (local)').kind,'markCast');
 });
 test('executing a native sheet roll uses the official sheet bridge and never synthesizes chat dice',async()=>{
   const {r,sent,scope}=env(),p=r.profile(),called=[];
@@ -543,5 +544,22 @@ test('failed legacy cast chat action does not change local economy, concentratio
   doc.querySelector=()=>null;
   r.radialExecute({kind:'spell',value:'hex'});
   assert.equal(p.bonusUsed,false);assert.equal(p.concentration,'');
+  assert.equal(p.usedSlots[1],0);
+});
+
+test('official 2024 spell roll executes native button without declaring cast, concentration or slot use',async()=>{
+  const {r,sent,scope}=env(),p=r.profile();
+  p.spells=[{id:'guiding',name:'Guiding Bolt',level:1,castTime:'1 Action',command:'',concentration:true}];
+  p.spellSlots[1]=3;
+  p.sheetRolls=[{id:'guiding-hit',kind:'spell',name:'Guiding Bolt',action:'attack',tab:'Spells'}];
+  let calls=0;
+  scope.nativeRollHook=()=>{calls++;return Promise.resolve(true)};
+  vm.runInContext('executeOfficialSheetRoll=(ref)=>nativeRollHook(ref)',scope);
+  r.radialExecute({kind:'sheetRoll',value:'guiding-hit'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls,1);
+  assert.equal(sent.length,0);
+  assert.equal(p.actionUsed,false);
+  assert.equal(p.concentration,'');
   assert.equal(p.usedSlots[1],0);
 });
