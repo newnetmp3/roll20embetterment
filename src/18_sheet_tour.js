@@ -63,12 +63,16 @@ function sheetTourMergeVisible(target,source) {
   return target;
 }
 function sheetTourAccumulator() {
-  return {fields:{},visible:beaconImportVisible({innerText:''}),full:false,
+  return {fields:{},visible:beaconImportVisible({innerText:''}),rollActions:[],full:false,
     expected:0,scannedPages:0,tabs:[]};
 }
 function sheetTourAdd(acc,scan,label) {
   Object.assign(acc.fields,scan.fields||{});
   sheetTourMergeVisible(acc.visible,scan.visible);
+  const actionSeen=new Set(acc.rollActions.map(x=>x.id));
+  for(const action of scan.rollActions||scan.visible?.rollActions||[]){
+    if(action?.id&&!actionSeen.has(action.id)){acc.rollActions.push(action);actionSeen.add(action.id);}
+  }
   acc.scannedPages+=scan.scannedPages||1;
   acc.expected=Math.max(acc.expected,scan.expected||0);
   if(scan.full)acc.full=true;
@@ -82,6 +86,7 @@ async function sheetTourCollect(scope,acc,label,deep=true) {
   const batch=scroll?await sheetHarvestBeaconRows(scope):
     {fields:readSheetFields(scope),full:false,expected:sheetExpectedAttributeCount(scope),scannedPages:1};
   batch.visible=beaconImportVisible(scope,'Open character sheet');
+  batch.rollActions=batch.visible.rollActions||beaconDiscoverRollActions(scope);
   sheetTourAdd(acc,batch,label);
 }
 async function sheetTourFrameScan() {
@@ -201,6 +206,7 @@ async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,cha
       beaconFrameSnapshot(candidate,acc,{quiet:true,targetProfile,characterId}):
       applySheetSnapshot(targetProfile,mergeBeaconSnapshot(snapshotSheet(acc.fields,candidate.name),acc.visible));
     if(!didImport)throw new Error('No accessible values were found in the opened sheet.');
+    targetProfile.sheetActions=(acc.rollActions||[]).slice(0,500);
     targetProfile.sheetLink=targetProfile.sheetLink||{};
     targetProfile.sheetLink.source=candidate.id;
     targetProfile.sheetLink.tabsVisited=acc.tabs;
