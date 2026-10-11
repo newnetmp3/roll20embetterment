@@ -55,7 +55,7 @@ function sheetUI() {
     '<div class="row">'+button('Open original Roll20 sheet','openRoll20Sheet','','primary')+
     (journalUrl?
       '<a class="rbe-journal-link" href="'+html(journalUrl)+
-      '" data-action="openRoll20Sheet" title="Open via Roll20 in-game Journal handler">Open via Roll20 Journal ↗</a>':'')+
+      '" rel="nofollow" title="Open by clicking this link; Roll20 must handle it inside the tabletop">Open Journal link ↗</a>':'')+
     button('Import all sheet tabs','sheetTourAll')+button('Find open sheets','scanSheets')+button('② Import visible attributes','syncSheet')+'</div>'+
     '<p id="rbe-sheet-tour-status" role="status" class="hint">'+html(RB.sheetTourStatus||'Ready to import.')+'</p>'+
     (RB.sheetTourWaiting?'<div class="card"><strong>Open your character sheet in Roll20 now</strong><p class="hint">Open Journal → '+html(p.name)+' → Character Sheet, either embedded or in Roll20’s official popout. R20eb will detect it and automatically import the available tabs.</p>'+button('Cancel waiting','sheetTourCancel')+'</div>':'')+

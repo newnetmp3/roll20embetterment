@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.9 — Concentric Combat HUD
+# roll20 Embetterment 2.3.10 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -138,4 +138,10 @@ Background scanning refreshes **loaded Roll20 controlled-character model attribu
 
 ## Roll20 character button fallback (v2.3.9)
 
-**Roll20** on the wheel or minimized dock, and **Open original Roll20 sheet** in the Sheet panel, identify the linked character using the profile, selected token, token assignment or an exact unique controlled-character match. If the in-editor Roll20 model provides a native `view.showDialog` method, the same window opens normally and reclaims any automatic helper. When the older view method is unavailable, R20eb also tries the character model's own `showDialog()`, then triggers Roll20's in-game Journal link handler from the tabletop document. The special `journal.roll20.net/character/<character-id>` URL is **not an external page** and must never be opened as a new browser tab. The Sheet panel includes an in-game **Open via Roll20 Journal ↗** link as an alternate direct control. The link is constructed only from a validated Roll20 character ID; it never opens an arbitrary URL, and the importer does not manipulate an existing player-owned sheet.
+**Roll20** on the wheel or minimized dock, and **Open original Roll20 sheet** in the Sheet panel, identify the linked character using the profile, selected token, token assignment or an exact unique controlled-character match. If the in-editor Roll20 model provides a native `view.showDialog` method, the same window opens normally and reclaims any automatic helper. When the older view method is unavailable, R20eb also tries the character model's own `showDialog()`. If neither native method is available, R20eb **does not report a successful opening**: it opens its Sheet panel and provides an actual clickable **Open Journal link ↗**. Roll20 may handle that player click inside the VTT; if not, open the character from Roll20's Journal tab. A synthetic click was removed because it could not verify that the sheet actually opened. The special `journal.roll20.net/character/<character-id>` URL is **not a standalone public character page**. The link is constructed only from a validated Roll20 character ID; it never opens an arbitrary URL, and the importer does not manipulate an existing player-owned sheet.
+
+## Stabilization refactor (v2.3.10)
+
+The source now separates **sheet access/helper ownership** (`src/18_sheet_access.js`), **explicit tab touring and controlled-token discovery** (`src/18_sheet_tour.js`) and **read-only stat reconciliation** (`src/18_stats_sync.js`). Full-runtime tests load the same sorted source files as the production build, rather than maintaining a separate module list. The HP token-bar name normalizer now accepts whitespace and punctuation correctly, and the sheet opener avoids redirecting the active profile to a different character's selected token. The combat HUD appearance and saved state format remain unchanged.
+
+**Important:** This is a code cleanup, not proof that Jumpgate/2024 sheet opening or every displayed stat is correct. Loaded attributes may be stale; a real Roll20 browser check and a source-priority decision per attribute are still necessary. See `docs/ARCHITECTURE.md` and `docs/HANDOVER.md`.
