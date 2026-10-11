@@ -70,8 +70,12 @@ function sheetTourAdd(acc,scan,label) {
   Object.assign(acc.fields,scan.fields||{});
   sheetTourMergeVisible(acc.visible,scan.visible);
   const actionSeen=new Set(acc.rollActions.map(x=>x.id));
-  for(const action of scan.rollActions||scan.visible?.rollActions||[]){
-    if(action?.id&&!actionSeen.has(action.id)){acc.rollActions.push(action);actionSeen.add(action.id);}
+  for(const raw of scan.rollActions||scan.visible?.rollActions||[]){
+    if(!raw?.id||actionSeen.has(raw.id))continue;
+    const action={...raw,sheetRef:raw.sheetRef?{...raw.sheetRef}:null};
+    if(action.sheetRef&&label&&!/^(?:Current view|Character Sheet|Official sheet popout)$/i.test(label))
+      action.sheetRef.tab=label;
+    acc.rollActions.push(action);actionSeen.add(action.id);
   }
   acc.scannedPages+=scan.scannedPages||1;
   acc.expected=Math.max(acc.expected,scan.expected||0);
