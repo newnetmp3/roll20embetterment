@@ -3,8 +3,8 @@
 **Updated:** 2026-10-11  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified main baseline:** `1148313473bee5c6da3dbe434de8f22a3ecc3367` (v2.3.10, merged PR #24).  
-**Latest completed milestone:** v2.3.10 stabilization/refactor (PR #24 merged, 169 tests passed).  
+**Current verified feature baseline:** `7b9ed80ea3a9920ede5da4a90845dc7f6fa7f47a` (v2.3.11, merged PR #26).  
+**Latest completed milestone:** v2.3.11 visible D&D 2024 stat-source fix (PR #26 merged, 173 tests passed).  
 **Known unresolved issues:** Real Jumpgate 2024 sheet-opening behavior and authoritative HP/AC/ability syncing still require direct browser verification.  
 **Pending:** Live Roll20 Jumpgate/Firefox verification of sheet opening and actual HP/AC/speed correctness.  
 
@@ -112,7 +112,7 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 
 **Next:** Capture a controlled, read-only comparison for Nier (HP, AC, movement, initiative, six abilities) that records exact source names without sensitive tokens; verify the authoritative Roll20 values before extending mappings. Review `docs/ARCHITECTURE.md` first.
 
-## v2.3.11 — Nier stat mismatch correction (PR #26, CI verified)
+## v2.3.11 — Nier stat mismatch correction (PR #26 merged, CI verified)
 
 **User evidence:** Two screenshots from 2026-10-11 show official 2024 Nier sheet at 82/84 HP, AC 17, speed 55 ft, initiative +2.14, and six ability scores (18/14/15/12/15/10), while R20eb had 69/84 HP, AC 10, speed 30 ft, initiative +0 and blank scores.
 
@@ -125,4 +125,4 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 
 **Changes:** Trusted live 2024 scans opt in to a visible-value-first merge; visible HP takes precedence over token bars, which are now fallbacks; ID-less embedded candidates may match via unique exact character name and unique controlled-character identity; parse and render decimal initiative. Add screenshot-based regression fixtures and ambiguity checks. Named-first remains default for legacy data. This remains a read-only import.
 
-**CI verified:** PR #26 code head `e1036ce8f7263303d382c19a107ccec07a8dc708` passed **173 tests, 0 failures**, JavaScript validation and generated Tampermonkey distribution consistency. A screenshot-based regression also exposed stale token HP overriding a recent visible-sheet read; this was fixed before CI went green. **Live Firefox/Jumpgate QA remains required**: mocks cannot confirm iframe matching and postMessage from Roll20 itself. After merging, re-read main HEAD for the actual squash SHA.
+**CI verified:** PR #26 code head `e1036ce8f7263303d382c19a107ccec07a8dc708` passed **173 tests, 0 failures**, JavaScript validation and generated Tampermonkey distribution consistency. A screenshot-based regression also exposed stale token HP overriding a recent visible-sheet read; this was fixed before CI went green. **Live Firefox/Jumpgate QA remains required**: mocks cannot confirm iframe matching and postMessage from Roll20 itself. Merged main commit `7b9ed80ea3a9920ede5da4a90845dc7f6fa7f47a`.
