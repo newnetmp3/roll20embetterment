@@ -114,6 +114,53 @@ test('hidden textContent is not scanned when nothing is visible',()=>{
  assert.equal(data.coverage.visibleFields,0);
 });
 
+
+function officialIncrementer({id='',title='',value='',ariaMax=null,visible=true,official=true}={}){
+  const attrs={id,title,role:'spinbutton',...official?{'data-testid':'utility-incrementer__input'}:{}};
+  if(ariaMax!==null)attrs['aria-valuemax']=String(ariaMax);
+  return {id,type:'text',value:String(value),disabled:false,parentElement:null,
+    getAttribute(name){return attrs[name]??null;},closest(){return null;},
+    getClientRects(){return visible?[{}]:[];}};
+}
+function inputOnlyBeacon(inputs){
+  return {innerText:'',querySelectorAll(sel){return sel==='input'?inputs:[];},
+    querySelector(){return null;}};
+}
+test('actual 2024 Vue incrementers import 82/84 HP and STR 18 without panel text',()=>{
+  const {h}=env();
+  const hp=officialIncrementer({id:'hp-current',title:'Current Hitpoints',value:'82',ariaMax:84});
+  const str=officialIncrementer({id:'60J__jQcN-ohd8YX_aHEj',title:'STR',value:'18'});
+  const data=h.beaconImportVisible(inputOnlyBeacon([hp,str]),'NIER');
+  assert.equal(data.stats.hp,82);
+  assert.equal(data.stats.maxHp,84);
+  assert.equal(data.abilityScores.str,18);
+  assert.ok(data.coverage.visibleFields>=3);
+});
+test('explicit labelled HP max and temporary HP override current input aria maximum',()=>{
+  const {h}=env();
+  const inputs=[
+    officialIncrementer({id:'hp-current',title:'Current Hitpoints',value:'82',ariaMax:84}),
+    officialIncrementer({title:'Max Hitpoints',value:'86'}),
+    officialIncrementer({title:'Temporary Hitpoints',value:'7'})
+  ];
+  const data=h.beaconImportVisible(inputOnlyBeacon(inputs),'NIER');
+  assert.deepEqual({...data.stats},{hp:82,maxHp:86,tempHp:7});
+});
+test('hidden, invalid, unrelated and unlabelled inputs do not create false HP or abilities',()=>{
+  const {h}=env();
+  const inputs=[
+    officialIncrementer({id:'hp-current',title:'Current Hitpoints',value:'82',ariaMax:84,visible:false}),
+    officialIncrementer({title:'STR',value:'18',visible:false}),
+    officialIncrementer({title:'STR',value:'18',official:false}),
+    officialIncrementer({title:'DEX',value:'abc'}),
+    officialIncrementer({title:'WIS',value:'',ariaMax:20}),
+    officialIncrementer({title:'Current Hitpoints',value:'',ariaMax:84})
+  ];
+  const data=h.beaconImportVisible(inputOnlyBeacon(inputs),'NIER');
+  assert.deepEqual({...data.stats},{});
+  assert.deepEqual({...data.abilityScores},{});
+});
+
 function rollButton(text){
   return {innerText:text,textContent:text,disabled:false,click(){}};
 }
