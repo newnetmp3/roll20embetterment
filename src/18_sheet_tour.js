@@ -211,6 +211,14 @@ async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,cha
     targetProfile.sheetLink=targetProfile.sheetLink||{};
     targetProfile.sheetLink.source=candidate.id;
     targetProfile.sheetLink.tabsVisited=acc.tabs;
+    // A full tab import can be newer than the editor's cached attribute model.
+    // Retain its mapped values until the model catches up or a visible scan
+    // refreshes them, rather than snapping to stale defaults five seconds later.
+    const imported=mergeBeaconSnapshot(snapshotSheet(acc.fields,candidate.name),acc.visible);
+    targetProfile.sheetLink.visibleStatAt=Date.now();
+    targetProfile.sheetLink.visibleStatKeys=Object.fromEntries(
+      ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
+        .map(section=>[section,Object.keys(imported[section]||{})]));
     if(characterId){
       targetProfile.roll20CharacterId=String(characterId).slice(0,120);
       targetProfile.sheetLink.characterId=targetProfile.roll20CharacterId;
@@ -331,6 +339,12 @@ function autoRefreshCharacterStats(groups){
   for(const [characterId,group] of groups){
     const fields=autoCharacterAttributeFields(group.record.character);
     const snap=snapshotSheet(fields,group.record.characterName);
+    const link=group.profile.sheetLink;
+    if(link?.visibleStatAt&&Date.now()-link.visibleStatAt<45000){
+      for(const section of ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']){
+        for(const key of link.visibleStatKeys?.[section]||[])delete snap[section]?.[key];
+      }
+    }
     const token=autoTokenHealthSnapshot(group.record,group.profile);
     if(token)Object.assign(snap.stats,token.stats);
     const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
@@ -359,6 +373,12 @@ async function autoRefreshVisibleSheetStats(record,profileRecord){
     const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
     const changed=applyLiveCharacterValues(profileRecord,snap,charId,
       beaconRemoteCandidate(live)?'Visible official sheet':'Visible Roll20 sheet',overrides);
+    if(profileRecord.sheetLink){
+      profileRecord.sheetLink.visibleStatAt=Date.now();
+      profileRecord.sheetLink.visibleStatKeys=Object.fromEntries(
+        ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
+          .map(section=>[section,Object.keys(snap[section]||{})]));
+    }
     if(changed)autoPresentStatsUpdated();
     return changed;
   }catch(err){
