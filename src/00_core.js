@@ -1,7 +1,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.0',
+  version: '2.3.1',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -53,6 +53,11 @@ function normalizeProfile(p) {
   cleaned.id = String(p.id || d.id).slice(0,100);
   cleaned.name = String(p.name || d.name).slice(0,100);
   cleaned.roll20CharacterId=String(p.roll20CharacterId||'').slice(0,120);
+  cleaned.sheetActions=(Array.isArray(p.sheetActions)?p.sheetActions:[]).slice(0,500).map(a=>({
+    id:String(a?.id||'').slice(0,180),name:String(a?.name||'').slice(0,120),
+    category:String(a?.category||'roll').slice(0,40),detail:String(a?.detail||'').slice(0,180),
+    sheetRef:a?.sheetRef&&typeof a.sheetRef==='object'?JSON.parse(JSON.stringify(a.sheetRef)):null
+  })).filter(a=>a.id&&a.name&&a.sheetRef);
   for (const key of ['stats','abilityMods','skillBonuses','saveBonuses','currency','death']) cleaned[key] = {...d[key], ...(p[key] && typeof p[key] === 'object' && !Array.isArray(p[key]) ? p[key] : {})};
   for (const key of ['spells','inventory','resources','quests','conditions','sessionLog','macrosSlots','spellSlots','usedSlots','attacks','features','proficiencies','tools']) cleaned[key] = Array.isArray(p[key]) ? p[key].slice(0,key === 'sessionLog' ? 500 : 200) : d[key];
   cleaned.abilityScores={...d.abilityScores,...(p.abilityScores||{})};
