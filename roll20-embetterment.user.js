@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.6
+// @version      2.3.7
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.6',
+  version: '2.3.7',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -61,7 +61,7 @@ function initialState() {
   const p = newProfile();
   return {schema:1, settings:{theme:'bg3',visualMigration:1,scale:1,hotkeys:false,showBar:false,showHud:false,showFab:false,chatSearch:'',chatKind:'all',reducedMotion:false,alwaysOpen:false,radialMigration:2},
     profiles:[p], current:p.id, macros:baseMacros(), tokenAssignments:{},
-    ui:{panelX:null,panelY:null,panelWidth:520,lastTab:'Home',barCollapsed:false}};
+    ui:{panelX:null,panelY:null,dockX:null,dockY:null,panelWidth:520,lastTab:'Home',barCollapsed:false}};
 }
 function profile() { return RB.state.profiles.find(p=>p.id === RB.state.current) || RB.state.profiles[0]; }
 function normalizeProfile(p) {
@@ -1691,16 +1691,21 @@ function sheetTourCancel(){
   RB.sheetTourStatus='Import cancelled.';
   if(RB.visible&&RB.tab==='Sheet')render();
 }
-async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,characterId='',auto=false,seedFields=null}={}){
+async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,characterId='',auto=false,seedFields=null,helper=null}={}){
   if(!candidate||!targetProfile)return null;
   const acc=sheetTourAccumulator(),dialog=candidate.root||null;
   if(seedFields&&typeof seedFields==='object')Object.assign(acc.fields,seedFields);
   const tabs=dialog?sheetTourTabs(dialog,RBE_SHEET_TOUR_MAIN,'.asv__header__nav__tabs_link'):[];
   const original=tabs.find(sheetTourActive)||tabs[0]||null;
   const status=text=>{if(!quiet)sheetTourStatus(text);};
+  const assertPlayerNotReclaiming=()=>{
+    if(auto&&helper?.reclaimed)throw new Error('Player opened the character sheet; helper import cancelled.');
+  };
   try{
+    assertPlayerNotReclaiming();
     if(dialog)await sheetTourCollect(dialog,acc,'Current Roll20 view',false);
     const main=tabs.find(x=>sheetTourLabel(x)==='Character Sheet');
+    assertPlayerNotReclaiming();
     if(main&&!sheetTourActive(main)){main.click?.();await sheetTourDelay(250);}
     if(beaconRemoteCandidate(candidate)){
       status(candidate.popoutWindow?'Reading official popout tabs…':'Reading Combat, Spells, Inventory and Features…');
@@ -1717,6 +1722,7 @@ async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,cha
     for(const label of ['Bio & Info','Advanced Tools']){
       const tab=tabs.find(x=>sheetTourLabel(x)===label);
       if(!tab)continue;
+      assertPlayerNotReclaiming();
       if(!sheetTourActive(tab)){tab.click?.();await sheetTourDelay(280);}
       status('Reading '+label+'…');
       if(label==='Advanced Tools'){
@@ -1726,6 +1732,7 @@ async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,cha
       }
       await sheetTourCollect(dialog,acc,label,true);
     }
+    assertPlayerNotReclaiming();
     if(dialog?.isConnected===false)throw new Error('Character sheet closed during import.');
     const didImport=beaconRemoteCandidate(candidate)?
       beaconFrameSnapshot(candidate,acc,{quiet:true,targetProfile,characterId}):
@@ -1750,7 +1757,7 @@ async function sheetTourImportCandidate(candidate,targetProfile,{quiet=false,cha
     }
     return {candidate,profile:targetProfile,acc};
   }finally{
-    if(original&&original.isConnected!==false&&!sheetTourActive(original)){
+    if(!helper?.reclaimed&&original&&original.isConnected!==false&&!sheetTourActive(original)){
       original.click?.();await sheetTourDelay(180);
     }
   }
@@ -1908,30 +1915,94 @@ function autoCandidateForCharacter(record){
     String(x.name||'').toLocaleLowerCase()===name):[];
   return named.length===1?named[0]:null;
 }
-function autoHideSheetDialog(candidate){
+// Shield newly created Roll20 dialogs before opening an automatic helper.
+// Existing player-owned dialogs are excluded to avoid hiding a real sheet.
+function autoSheetOpeningShield(){
+  const doc=document,root=doc.documentElement;
+  if(!root?.setAttribute||!doc.createElement||!doc.head?.appendChild)return ()=>{};
+  const existing=Array.from(doc.querySelectorAll?.('.ui-dialog,.characterdialog')||[]);
+  for(const node of existing)node.setAttribute?.('data-r20e-existing-dialog','true');
+  const css=doc.createElement('style');
+  css.textContent=`
+html[data-r20e-opening-helper="true"] .ui-dialog:not([data-r20e-existing-dialog]),
+html[data-r20e-opening-helper="true"] .characterdialog:not([data-r20e-existing-dialog]){
+  visibility:hidden!important;pointer-events:none!important;opacity:0!important;
+  position:fixed!important;left:-20000px!important;top:0!important;
+}`;
+  doc.head.appendChild(css);
+  root.setAttribute('data-r20e-opening-helper','true');
+  return ()=>{
+    root.removeAttribute?.('data-r20e-opening-helper');
+    css.remove?.();
+    for(const node of existing)node.removeAttribute?.('data-r20e-existing-dialog');
+  };
+}
+function autoHideSheetDialog(candidate,record){
   const root=candidate?.root;if(!root)return null;
   const wrapper=root.closest?.('.ui-dialog')||root;
-  const prior=wrapper.style?.cssText||'';
+  if(!wrapper.style?.setProperty)return null;
+  const hidden={wrapper,characterId:String(record?.characterId||candidate.characterId||''),
+    priorStyle:wrapper.getAttribute?.('style')??null,
+    priorMarker:wrapper.getAttribute?.('data-r20e-auto-import')??null,
+    reclaimed:false,released:false};
   wrapper.setAttribute?.('data-r20e-auto-import','true');
-  if(wrapper.style){
-    wrapper.style.setProperty('position','fixed','important');
-    wrapper.style.setProperty('left','-20000px','important');
-    wrapper.style.setProperty('top','0','important');
-    wrapper.style.setProperty('opacity','0.001','important');
-    wrapper.style.setProperty('pointer-events','none','important');
+  wrapper.style.setProperty('position','fixed','important');
+  wrapper.style.setProperty('left','-20000px','important');
+  wrapper.style.setProperty('top','0','important');
+  wrapper.style.setProperty('visibility','hidden','important');
+  wrapper.style.setProperty('pointer-events','none','important');
+  RB.autoHelperActive=hidden;
+  return hidden;
+}
+function autoReleaseSheetDialog(hidden){
+  if(!hidden||hidden.released)return;
+  hidden.released=true;
+  const wrapper=hidden.wrapper;
+  if(wrapper){
+    if(hidden.priorStyle===null)wrapper.removeAttribute?.('style');
+    else wrapper.setAttribute?.('style',hidden.priorStyle);
+    if(hidden.priorMarker===null)wrapper.removeAttribute?.('data-r20e-auto-import');
+    else wrapper.setAttribute?.('data-r20e-auto-import',hidden.priorMarker);
   }
-  return {wrapper,prior};
+  if(RB.autoHelperActive===hidden)RB.autoHelperActive=null;
 }
 function autoCloseSheetDialog(record,hidden){
-  const wrapper=hidden?.wrapper;
+  if(!hidden)return;
+  // Restore inline positioning before closing. Otherwise Roll20 may reuse an
+  // invisible, pointer-disabled dialog for its next manual Journal open.
+  autoReleaseSheetDialog(hidden);
+  if(hidden.reclaimed)return;
   try{
-    if(typeof record.character?.view?.closeDialog==='function'){record.character.view.closeDialog();return;}
-  }catch{}
-  const close=wrapper?.querySelector?.('.ui-dialog-titlebar-close,button[aria-label="Close"],button[title="Close"]');
-  if(close){close.click?.();return;}
-  // If Roll20 changes its close control, keep the auto-opened helper sheet
-  // offscreen rather than surprising the player with a visible dialog.
-  if(wrapper)console.warn('[R20eb] Hidden import sheet could not be closed cleanly; leaving it offscreen until reload.');
+    if(typeof record.character?.view?.closeDialog==='function'){
+      record.character.view.closeDialog();return;
+    }
+  }catch(err){console.warn('[R20eb] Could not close automatic helper sheet',err);}
+  const close=hidden.wrapper?.querySelector?.('.ui-dialog-titlebar-close,button[aria-label="Close"],button[title="Close"]');
+  if(close?.click)close.click();
+  else console.warn('[R20eb] Automatic helper sheet could not be closed; styling restored for manual access.');
+}
+function openRoll20CharacterSheet(){
+  const p=profile(),characterId=p.roll20CharacterId||p.sheetLink?.characterId||
+    autoSelectedTokenAssignment()?.characterId||'';
+  const character=autoCharacterById(characterId);
+  if(typeof character?.view?.showDialog!=='function'){
+    toast('Select a controlled character token or open its sheet from the Roll20 Journal.');
+    return false;
+  }
+  // A deliberate player open wins over an in-progress hidden helper.
+  const hidden=RB.autoHelperActive;
+  if(hidden&&hidden.characterId===String(characterId)){
+    hidden.reclaimed=true;
+    autoReleaseSheetDialog(hidden);
+  }
+  RB.autoCharacterRetryAfter=RB.autoCharacterRetryAfter||new Map();
+  RB.autoCharacterRetryAfter.set(String(characterId),Date.now()+120000);
+  try{character.view.showDialog();return true;}
+  catch(err){
+    console.warn('[R20eb] Could not open the player character sheet',err);
+    toast('Roll20 could not open the character sheet. Try the Journal.');
+    return false;
+  }
 }
 async function autoEnsureSheetCandidate(record){
   const register=candidate=>{
@@ -1942,28 +2013,39 @@ async function autoEnsureSheetCandidate(record){
       (candidate.popoutWindow&&x.popoutWindow===candidate.popoutWindow))||candidate;
   };
   let candidate=autoCandidateForCharacter(record);
+  // Existing player-owned sheets must not be hidden or toured automatically.
   if(candidate)return {candidate:register(candidate),opened:false,hidden:null};
   const character=record.character||autoCharacterById(record.characterId);
   if(typeof character?.view?.showDialog!=='function')return null;
-  const focused=document.activeElement;
-  try{character.view.showDialog();}catch(err){
-    console.warn('[R20eb] Could not open controlled character sheet',record.characterName,err);return null;
-  }
-  let hidden=null;
-  for(let attempt=0;attempt<300;attempt++){
-    await sheetTourDelay(50);
-    candidate=autoCandidateForCharacter(record);
-    if(candidate){
-      candidate=register(candidate);
-      if(!hidden)hidden=autoHideSheetDialog(candidate);
-      try{focused?.focus?.({preventScroll:true});}catch{try{focused?.focus?.();}catch{}}
-      // Let the advanced-sheet reader finish booting offscreen.
-      await sheetTourDelay(350);
-      return {candidate,opened:true,hidden};
+  const focused=document.activeElement,removeShield=autoSheetOpeningShield();
+  let hidden=null,opened=false;
+  try{
+    character.view.showDialog();
+    opened=true;
+    // Hide synchronously whenever Roll20 creates the dialog immediately.
+    for(let attempt=0;attempt<120;attempt++){
+      candidate=autoCandidateForCharacter(record);
+      if(candidate){
+        candidate=register(candidate);
+        hidden=autoHideSheetDialog(candidate,record);
+        if(!hidden)break; // Never tour a helper that cannot be hidden.
+        try{focused?.focus?.({preventScroll:true});}catch{try{focused?.focus?.();}catch{}}
+        await sheetTourDelay(350);
+        return {candidate,opened:true,hidden};
+      }
+      await sheetTourDelay(50);
     }
+    try{character.view.closeDialog?.();}catch{}
+    return null;
+  }catch(err){
+    console.warn('[R20eb] Could not open hidden character sheet',record.characterName,err);
+    if(hidden)autoCloseSheetDialog({...record,character},hidden);
+    else if(opened)try{character.view.closeDialog?.();}catch{}
+    return null;
+  }finally{
+    removeShield();
+    try{focused?.focus?.({preventScroll:true});}catch{try{focused?.focus?.();}catch{}}
   }
-  try{focused?.focus?.({preventScroll:true});}catch{}
-  return null;
 }
 function autoSelectedTokenAssignment(){
   let selected=[];
@@ -1997,9 +2079,9 @@ async function autoImportControlledCharacters(){
       if((RB.autoCharacterRetryAfter.get(characterId)||0)>Date.now())continue;
       const directFields=autoCharacterAttributeFields(group.record.character);
       const opened=await autoEnsureSheetCandidate(group.record);
-      if(!opened){
-        // Import whatever Roll20 has already exposed through the controlled
-        // character model, but keep retrying later for the full tab tour.
+      if(!opened||!opened.opened){
+        // A user-opened sheet remains untouched by the background importer.
+        // Seed from the model only; user-initiated Import all tabs is separate.
         RB.autoCharacterDirectSeeded=RB.autoCharacterDirectSeeded||new Set();
         if(Object.keys(directFields).length&&!RB.autoCharacterDirectSeeded.has(characterId)){
           const snap=snapshotSheet(directFields,group.record.characterName);
@@ -2018,7 +2100,7 @@ async function autoImportControlledCharacters(){
       RB.sheetTourBusy=true;
       try{
         const result=await sheetTourImportCandidate(opened.candidate,group.profile,
-          {quiet:true,characterId,auto:true,seedFields:directFields});
+          {quiet:true,characterId,auto:true,seedFields:directFields,helper:opened.hidden});
         if(result){
           group.profile.sheetLink.tokenIds=group.tokens.slice(0,50);
           group.profile.sheetLink.importMode='full-auto';
@@ -2083,9 +2165,12 @@ function startAutoControlledCharacterImport(){
  #rbe-radial-layer .rbe-wheel-toolbar{pointer-events:auto;position:static;transform:none;display:flex;align-items:center;gap:4px;background:#19131be6;padding:5px;border:1px solid #91764b;border-radius:30px;white-space:nowrap}
  #rbe-radial-layer .rbe-wheel-toolbar button{border:0;background:transparent;color:#e6cb9d;font:600 12px system-ui;padding:4px 7px}
  #rbe-radial-layer .rbe-wheel-toolbar button:hover{background:#614a32}
- #rbe-radial-layer #rbe-radial-dock{position:fixed;bottom:15px;left:15px;display:flex;gap:6px;align-items:center;pointer-events:auto;background:#1c1720ec;border:2px ridge #a98956;border-radius:25px;box-shadow:0 4px 25px #000b;padding:6px}
+ #rbe-radial-layer #rbe-radial-dock{position:fixed;bottom:15px;left:15px;display:flex;gap:6px;align-items:center;pointer-events:auto;background:#1c1720ec;border:2px ridge #a98956;border-radius:25px;box-shadow:0 4px 25px #000b;padding:6px;max-width:calc(100vw - 12px)}
  #rbe-radial-layer #rbe-radial-dock button{color:#f9dfa8;background:#3a2b28;border-color:#977951;border-radius:24px;font:600 12px Georgia,serif}
  #rbe-radial-layer #rbe-radial-dock .rbe-dock-caption{font:11px system-ui;color:#d3bf9e;max-width:220px;padding:0 6px}
+ #rbe-radial-layer #rbe-radial-dock .rbe-dock-grip{cursor:grab;touch-action:none;user-select:none;color:#dfba79;border-right:1px solid #71583c;padding:3px 5px 3px 2px;font:700 16px system-ui}
+ #rbe-radial-layer #rbe-radial-dock .rbe-dock-grip:active{cursor:grabbing}
+ #rbe-radial-layer #rbe-radial-dock .rbe-dock-grip:focus-visible{outline:2px solid #f0ce9b;border-radius:5px}
  #rbe-radial-layer #rbe-token-tether{position:fixed;inset:0;width:100vw;height:100vh;overflow:visible;pointer-events:none}
  #rbe-radial-layer #rbe-tether-path{stroke:#c7a46c;stroke-width:2;stroke-dasharray:3 6;fill:none;opacity:.75}
  @keyframes rbe-ring-bloom{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
@@ -2216,6 +2301,7 @@ function startAutoControlledCharacterImport(){
      radialNode('more','MORE','⚙',[
        radialNode('newTurn','New turn','↻',[],'newTurn',''),
        radialNode('sheet','Sheet import','▤',[],'panel','Sheet'),
+       radialNode('nativeSheet','Roll20 sheet','▤',[],'openCharacter',''),
        radialNode('macros','Macros','⚙',[],'panel','Macros'),
        group('favorites','Favorites','★',RB.state.macros.filter(m=>m.favorite).map(m=>radialNode('m:'+m.id,m.name,'★',[],'macro',m.id))),
        radialNode('settings','Settings','⚙',[],'panel','Settings'),
@@ -2404,6 +2490,13 @@ function startAutoControlledCharacterImport(){
    target.focus();
    return true;
  }
+ function radialDockStyle(){
+   const u=RB.state?.ui||{};
+   if(!Number.isFinite(u.dockX)||!Number.isFinite(u.dockY))return '';
+   const x=clamp(u.dockX,0,Math.max(0,(window.innerWidth||1280)-80));
+   const y=clamp(u.dockY,0,Math.max(0,(window.innerHeight||900)-36));
+   return ' style="left:'+x+'px;top:'+y+'px;bottom:auto"';
+ }
  function radialHTML(){
    const r=RB.radial,active=r.anchor&&r.open,p=profile();
    const layout=radialLayout(),trail=layout.rings,parts=r.path.map((id,i)=>trail[i]?.find(x=>x.id===id)?.label||id);
@@ -2413,10 +2506,10 @@ function startAutoControlledCharacterImport(){
       <div class="rbe-wheel-title">${html(short(p.name,27))} · COMBAT</div>${radialWheelSVG()}
       <div class="rbe-wheel-footer">${radialHealthMarkup()}<div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
-      <button data-action="radialPanel" title="Open character sheet importer">▤ Sheet</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
+      <button data-action="radialOpenSheet" title="Open original Roll20 character sheet">▤ Roll20</button><button data-action="radialPanel" title="Open Embetterment sheet importer">⇣ Import</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
       <div class="rbe-wheel-info" title="Tab to enter wheel · Arrow keys or Home/End to move · Enter to choose · Esc to go back">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
      </div>`:''}
-    ${!active?`<div id="rbe-radial-dock"><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
+    ${!active?`<div id="rbe-radial-dock"${radialDockStyle()}><span class="rbe-dock-grip" data-dock-grip="true" role="button" tabindex="0" aria-label="Drag toolbar to reposition" title="Drag to reposition toolbar">⠿</span><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><button data-action="radialOpenSheet" title="Open the original Roll20 character sheet">▤ Sheet</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
    </div>`;
  }
  function radialPick(depth,index){
@@ -2505,6 +2598,7 @@ function startAutoControlledCharacterImport(){
      case 'spellInfo':toast(spell?`${spell.name}: ${[spell.castTime,spell.range,spell.duration,spell.notes].filter(Boolean).join(' · ').slice(0,300)}`:'No spell details imported.');break;
      case 'itemInfo':toast(item?`${item.name} · ${item.qty??1} carried · ${short(item.description||item.properties||'',220)}`:'No details imported.');break;
      case 'feature':toast(feature?`${feature.name}: ${short(feature.description||'Open your character sheet to activate this ability.',300)}`:'Feature unavailable.');break;
+     case 'openCharacter':success=openRoll20CharacterSheet();break;
      case 'panel':RB.tab=node.value;RB.state.ui.lastTab=node.value;RB.visible=true;success=true;break;
      case 'pin':RB.radial.pin=true;toast('Click the center of your token on the tabletop.');success=true;break;
      default:toast('No usable command for this selection.');break;
@@ -2754,8 +2848,8 @@ function sheetUI() {
       '</div><p class="hint">'+html(short(description(item),450))+'</p></div>').join('')+'</div>':
       '<p class="hint">Nothing accessible in the last scan.</p>')+'</div>';
   return '<div class="stack"><div class="card"><h2>Link character sheet</h2>'+
-    '<p class="hint">Import accessible character data in one run. Embetterment visits Character Sheet, Bio & Info, Advanced Tools → Attributes, and the available combat/spell sections, then restores the original tabs. Read-only; no rolls or sheet edits.</p>'+
-    '<div class="row">'+button('Import all sheet tabs','sheetTourAll','','primary')+button('Find open sheets','scanSheets')+button('② Import visible attributes','syncSheet')+'</div>'+
+    '<p class="hint">Open your original Roll20 sheet whenever you want. Manual full imports can visit its tabs; automatic background imports use temporary hidden helpers and never navigate a sheet you already opened. All imports are read-only.</p>'+
+    '<div class="row">'+button('Open original Roll20 sheet','openRoll20Sheet','','primary')+button('Import all sheet tabs','sheetTourAll')+button('Find open sheets','scanSheets')+button('② Import visible attributes','syncSheet')+'</div>'+
     '<p id="rbe-sheet-tour-status" role="status" class="hint">'+html(RB.sheetTourStatus||'Ready to import.')+'</p>'+
     (RB.sheetTourWaiting?'<div class="card"><strong>Open your character sheet in Roll20 now</strong><p class="hint">Open Journal → '+html(p.name)+' → Character Sheet, either embedded or in Roll20’s official popout. R20eb will detect it and automatically import the available tabs.</p>'+button('Cancel waiting','sheetTourCancel')+'</div>':'')+
     (options.length?'<label class="field">Open sheet<select data-sheet-pick>'+options.map((sheet,i)=>
@@ -3421,6 +3515,7 @@ function action(name, el) {
     case 'radialBack':RB.radial.path.pop();render();radialPosition();break;
     case 'radialHome':RB.radial.path=[];render();radialPosition();break;
     case 'radialPin':RB.radial.pin=true;toast('Click the center of your token on the tabletop.');break;
+    case 'radialOpenSheet':case 'openRoll20Sheet':openRoll20CharacterSheet();break;
     case 'radialPanel':RB.tab='Sheet';RB.state.ui.lastTab='Sheet';RB.visible=true;render();break;
     case 'radialToggle':RB.radial.open=!RB.radial.open;RB.radial.path=[];render();radialPosition();break;
     case 'open': case 'toggle': RB.visible=name==='open'?true:!RB.visible; render(); break;
@@ -3737,17 +3832,41 @@ function highlightPalette() {
     paletteOptions().length?'rbe-palette-option-'+RB.paletteSelection:'');
 }
 function onDragStart(e) {
-  if(e.target.closest('button,input,select,textarea'))return;
-  if(!e.target.closest('#rbe-header')||!RB.panel)return;
-  e.preventDefault();const r=RB.panel.getBoundingClientRect();RB.drag={x:e.clientX,y:e.clientY,left:r.left,top:r.top};
+  const grip=e.target.closest?.('[data-dock-grip]');
+  if(grip){
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    const dock=grip.closest?.('#rbe-radial-dock');
+    if(!dock)return;
+    e.preventDefault();
+    const rect=dock.getBoundingClientRect();
+    RB.drag={type:'dock',pointerId:e.pointerId,x:e.clientX,y:e.clientY,left:rect.left,top:rect.top};
+    return;
+  }
+  if(e.target.closest?.('button,input,select,textarea'))return;
+  if(!e.target.closest?.('#rbe-header')||!RB.panel)return;
+  e.preventDefault();const r=RB.panel.getBoundingClientRect();
+  RB.drag={type:'panel',pointerId:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top};
 }
 function onPointerMove(e) {
-  if(!RB.drag)return;
-  RB.state.ui.panelX=clamp(RB.drag.left+e.clientX-RB.drag.x,0,Math.max(0,window.innerWidth-100));
-  RB.state.ui.panelY=clamp(RB.drag.top+e.clientY-RB.drag.y,0,Math.max(0,window.innerHeight-70));
+  const drag=RB.drag;if(!drag||(drag.pointerId!==undefined&&e.pointerId!==drag.pointerId))return;
+  if(drag.type==='dock'){
+    const dock=RB.shadow?.querySelector?.('#rbe-radial-dock');
+    if(!dock){RB.drag=null;return;}
+    const rect=dock.getBoundingClientRect();
+    RB.state.ui.dockX=clamp(drag.left+e.clientX-drag.x,0,Math.max(0,window.innerWidth-rect.width));
+    RB.state.ui.dockY=clamp(drag.top+e.clientY-drag.y,0,Math.max(0,window.innerHeight-rect.height));
+    dock.style.left=RB.state.ui.dockX+'px';dock.style.top=RB.state.ui.dockY+'px';dock.style.bottom='auto';
+    return;
+  }
+  if(!RB.panel)return;
+  RB.state.ui.panelX=clamp(drag.left+e.clientX-drag.x,0,Math.max(0,window.innerWidth-100));
+  RB.state.ui.panelY=clamp(drag.top+e.clientY-drag.y,0,Math.max(0,window.innerHeight-70));
   RB.panel.style.left=RB.state.ui.panelX+'px';RB.panel.style.top=RB.state.ui.panelY+'px';RB.panel.style.right='auto';RB.panel.style.bottom='auto';
 }
-function onPointerUp() {if(RB.drag){RB.drag=null;save();}}
+function onPointerUp(e) {
+  if(!RB.drag||(RB.drag.pointerId!==undefined&&e?.pointerId!==RB.drag.pointerId))return;
+  RB.drag=null;save();
+}
 function boot() {
   if(document.getElementById('roll20-embetterment-host'))return;
   load();
