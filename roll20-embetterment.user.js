@@ -3058,6 +3058,9 @@ const button = (label,action,extra='',cls='') => `<button data-action="${html(ac
 const progress = (cur,max) => `<div class="hpbar"><span style="width:${max?Math.max(0,Math.min(100,cur/max*100)):0}%"></span></div>`;
 function sheetUI() {
   const p=profile(),link=p.sheetLink,options=RB.openSheets||[];
+  const journalUrl=typeof roll20LinkedCharacterId==='function'&&
+    typeof roll20CharacterSheetUrl==='function'?
+    roll20CharacterSheetUrl(roll20LinkedCharacterId()):'';
   const nativeButton=(label,ref,cls='small primary')=>
     button(label,'runNativeSheetRoll','data-id="'+html(ref.id)+'"'+(RB.nativeRollPending?.has(p.id+':'+ref.id)?' disabled':''),cls);
   const attackControls=item=>{
@@ -3077,8 +3080,8 @@ function sheetUI() {
   return '<div class="stack"><div class="card"><h2>Link character sheet</h2>'+
     '<p class="hint">Open your original Roll20 sheet whenever you want. Manual full imports may visit Character Sheet, Bio & Info and Advanced Tools → Attributes; automatic background imports use temporary hidden helpers and never navigate a sheet you already opened. All imports are read-only.</p>'+
     '<div class="row">'+button('Open original Roll20 sheet','openRoll20Sheet','','primary')+
-    (roll20CharacterSheetUrl(roll20LinkedCharacterId())?
-      '<a class="rbe-journal-link" href="'+html(roll20CharacterSheetUrl(roll20LinkedCharacterId()))+
+    (journalUrl?
+      '<a class="rbe-journal-link" href="'+html(journalUrl)+
       '" data-action="openRoll20Sheet" title="Open via Roll20 in-game Journal handler">Open via Roll20 Journal ↗</a>':'')+
     button('Import all sheet tabs','sheetTourAll')+button('Find open sheets','scanSheets')+button('② Import visible attributes','syncSheet')+'</div>'+
     '<p id="rbe-sheet-tour-status" role="status" class="hint">'+html(RB.sheetTourStatus||'Ready to import.')+'</p>'+
