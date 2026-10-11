@@ -25,12 +25,15 @@ function beaconRollName(card,selectors=[]){
 }
 function beaconCollectRollActions(scope,tab=''){
   if(!scope?.querySelectorAll)return [];
+  const active=beaconRollText(scope.querySelector?.('[role="tab"][aria-selected="true"]'));
+  const actualTab=/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(active)?active:
+    (/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(tab)?tab:'');
   const out=[],seen=new Set(),push=(kind,name,action,button,meta={})=>{
     if(!button||!name)return;
-    const key=[kind,name,action,tab].join('|').toLowerCase();
+    const key=[kind,name,action,actualTab].join('|').toLowerCase();
     if(seen.has(key))return;seen.add(key);
     out.push({id:'sheetroll:'+key.replace(/[^a-z0-9|_-]/g,'-').slice(0,180),origin:'sheet',
-      kind,name:name.slice(0,120),action,tab:String(tab||'').slice(0,80),
+      kind,name:name.slice(0,120),action,tab:String(actualTab||'').slice(0,80),
       label:beaconRollText(button).slice(0,80),...meta});
   };
   for(const card of Array.from(scope.querySelectorAll('.attack-item')).slice(0,120)){
