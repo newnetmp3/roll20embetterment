@@ -140,7 +140,7 @@ function snapshotSheet(input,label='Character'){
   const number=(...names)=>sheetNum(pick(...names));
   const snap={name:sheetText(pick('character_name','charactername','name')||label,100),attrs,edition:'Named/visible attributes',
     stats:{},abilityMods:{},abilityScores:{},saveBonuses:{},skillBonuses:{},spellSlots:{},usedSlots:{},currency:{},details:{},
-    spells:[],attacks:[],inventory:[],features:[],resources:[],proficiencies:[],tools:[],
+    spells:[],attacks:[],inventory:[],features:[],resources:[],proficiencies:[],tools:[],sheetRolls:[],
     coverage:{attributes:Object.keys(attrs).length,mapped:0,unmapped:[]}};
   const fields={hp:['hp','hit_points','hit_points_current','current_hp'],maxHp:['hp_max','hit_points_max','max_hp'],
     tempHp:['hp_temp','temporary_hit_points','temp_hp'],ac:['ac','armor_class'],speed:['speed','walking_speed','movement_speed'],
@@ -247,11 +247,11 @@ function applySheetSnapshot(p,s){
   if(s.inspiration!==undefined)p.inspiration=s.inspiration;
   for(const [n,v] of Object.entries(s.spellSlots))p.spellSlots[+n]=clamp(v,0,99);
   for(const [n,v] of Object.entries(s.usedSlots))p.usedSlots[+n]=clamp(v,0,p.spellSlots[+n]);
-  for(const k of ['spells','inventory','resources','attacks','features','proficiencies','tools']){
+  for(const k of ['spells','inventory','resources','attacks','features','proficiencies','tools','sheetRolls']){
     if(s[k].length||(p[k]||[]).some(x=>x.origin==='sheet'))p[k]=mergeSheetList(p[k],s[k]);
   }
   p.sheetLink={...(p.sheetLink||{}),name:s.name,edition:s.edition,lastSync:new Date().toISOString(),
-    coverage:s.coverage,counts:Object.fromEntries(['spells','inventory','resources','attacks','features','proficiencies','tools'].map(k=>[k,s[k].length]))};
+    coverage:s.coverage,counts:Object.fromEntries(['spells','inventory','resources','attacks','features','proficiencies','tools','sheetRolls'].map(k=>[k,(s[k]||[]).length]))};
   return true;
 }
 function scanSheets(){
