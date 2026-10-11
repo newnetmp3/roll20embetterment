@@ -38,21 +38,44 @@
  `;
  RB.radial={open:true,pin:false,path:[],pages:{},anchor:null,manual:null,source:'none',lastPosition:'',lastPresence:false};
  const radialNode=(id,label,glyph,children=[],kind='',value='',detail='',subtitle='')=>({id,label,glyph,children,kind,value,detail,subtitle});
+ function radialSheetRollRef(kind,name,action){
+   const same=(a,b)=>String(a||'').trim().toLocaleLowerCase()===String(b||'').trim().toLocaleLowerCase();
+   return (profile().sheetRolls||[]).find(r=>r.kind===kind&&r.action===action&&same(r.name,name))||null;
+ }
+ function radialSheetRollLeaves(list){
+   return list.slice(0,80).map(r=>radialNode('sr:'+r.id,
+     r.name+(r.action&&r.action!=='skill'&&r.action!=='ability'&&r.action!=='save'&&r.action!=='initiative'?' · '+r.action:''),
+     r.action==='damage'||r.action==='healing'?'✦':'⚄',[],'sheetRoll',r.id,
+     [r.group,r.tab,r.label].filter(Boolean).join(' · ')));
+ }
  function radialAttackLeaves(attacks){
-   return attacks.slice(0,32).map(a=>radialNode('a:'+a.id,a.name,'⚔',[
-     radialNode('roll','Roll','⚄',[],'attack',a.id),
-     radialNode('details','Details','⌕',[],'detail',a.id),
-     radialNode('sheet','Sheet','▤',[],'panel','Sheet')
-   ],'', '',[a.toHit,a.damage,a.damageType,a.range].filter(Boolean).join(' · '),
-   [a.toHit,a.range||a.damage].filter(Boolean).join(' · ')));
+   return attacks.slice(0,32).map(a=>{
+     const attackRef=radialSheetRollRef('attack',a.name,'attack');
+     const damageRef=radialSheetRollRef('attack',a.name,'damage');
+     return radialNode('a:'+a.id,a.name,'⚔',[
+       radialNode('roll','Attack','⚄',[],a.command?'attack':attackRef?'sheetRoll':'attack',a.command?a.id:attackRef?.id||a.id),
+       ...(damageRef?[radialNode('damage','Damage','✦',[],'sheetRoll',damageRef.id)]:[]),
+       radialNode('details','Details','⌕',[],'detail',a.id),
+       radialNode('sheet','Sheet','▤',[],'panel','Sheet')
+     ],'', '',[a.toHit,a.damage,a.damageType,a.range].filter(Boolean).join(' · '),
+     [a.toHit,a.range||a.damage].filter(Boolean).join(' · '));
+   });
  }
  function radialSpellLeaves(spells){
-   return spells.slice(0,38).map(s=>radialNode('s:'+s.id,s.name,'✧',[
-     radialNode('cast','Cast','✧',[],'spell',s.id),
-     radialNode('info','Info','⌕',[],'spellInfo',s.id),
-     ...(Number(s.level)>0?[radialNode('slot','Use slot','◈',[],'spendSlot',String(s.level))]:[])
-   ],'','',[s.castTime,s.range,s.duration].filter(Boolean).join(' · '),
-   [Number(s.level)?'L'+s.level:'Cantrip',s.concentration?'Conc.':null,s.castTime].filter(Boolean).join(' · ')));
+   return spells.slice(0,38).map(spell=>{
+     const attackRef=radialSheetRollRef('spell',spell.name,'attack');
+     const damageRef=radialSheetRollRef('spell',spell.name,'damage');
+     const actions=[
+       ...(spell.command?[radialNode('cast','Cast','✧',[],'spell',spell.id)]:[]),
+       ...(attackRef?[radialNode('attack','Attack','⚄',[],'sheetRoll',attackRef.id)]:[]),
+       ...(damageRef?[radialNode('damage','Damage','✦',[],'sheetRoll',damageRef.id)]:[]),
+       radialNode('info','Info','⌕',[],'spellInfo',spell.id),
+       ...(Number(spell.level)>0?[radialNode('slot','Use slot','◈',[],'spendSlot',String(spell.level))]:[])
+     ];
+     return radialNode('s:'+spell.id,spell.name,'✧',actions,'','',
+       [spell.castTime,spell.range,spell.duration].filter(Boolean).join(' · '),
+       [Number(spell.level)?'L'+spell.level:'Cantrip',spell.concentration?'Conc.':null,spell.castTime].filter(Boolean).join(' · '));
+   });
  }
  function radialItemLeaves(items){
    return items.slice(0,40).map(i=>radialNode('i:'+i.id,i.name,'◆',[
@@ -106,6 +129,7 @@
        radialNode('used','Mark spent','✓',[],'toggle','reactionUsed')
      ]),
      radialNode('checks','ROLLS','⚄',[
+       group('sheetRolls','Sheet Rolls','✥',radialSheetRollLeaves(p.sheetRolls||[])),
        group('skills','Skills','⚄',skillNames.map(n=>radialNode(n.toLowerCase(),n,'⚄',[],'skill',n))),
        group('saves','Saves','⛨',abilities.map(a=>radialNode(a,a.toUpperCase(),'⛨',[],'save',a))),
        group('abilities','Abilities','◆',abilities.map(a=>radialNode(a,a.toUpperCase(),'◆',[],'ability',a))),
@@ -329,6 +353,17 @@
      case 'attack':
        if(!attack?.command){toast('No safe Roll20 action for this weapon. Use its character sheet button.');break;}
        success=sendToRoll20(attack.command);if(success){p.actionUsed=true;record('Attacked: '+attack.name);}break;
+     case 'sheetRoll':{
+       const ref=(p.sheetRolls||[]).find(x=>x.id===node.value);
+       if(!ref){toast('This sheet roll is no longer available. Re-import the character sheet.');break;}
+       executeOfficialSheetRoll(ref,p).then(ok=>{
+         if(!ok){toast('Roll20 could not find that sheet roll control. R20eb will refresh it on the next full import.');return;}
+         if(ref.kind==='attack'&&ref.action==='attack')p.actionUsed=true;
+         record('Sheet roll: '+ref.name+(ref.action?' · '+ref.action:''));
+         RB.radial.path=[];save();render();radialPosition();
+       }).catch(err=>{console.warn('[R20eb] Native sheet roll failed',err);toast('Official sheet roll failed: '+String(err.message||err).slice(0,120));});
+       break;
+     }
      case 'spell':
        if(!spell?.command){toast('No Roll20 command for '+(spell?.name||'this spell')+'. Set it on the Spells tab.');break;}
        success=sendToRoll20(spell.command);
