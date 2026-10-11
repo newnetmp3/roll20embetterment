@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.12 — Concentric Combat HUD
+# roll20 Embetterment 2.3.13 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -164,3 +164,9 @@ The official 2024 sheet can display current/max/temporary HP in editable inputs.
 When the official sheet frame supplies named combat attributes but its rendered text has no recognized stats, the live reader now imports the named values rather than discarding the entire response. Token HP remains a fallback when the official scan provides no matching value. Unrecognized headless iframes are not used as proof of a player-opened sheet, and imported values never write to Roll20.
 
 **Browser check still required:** This was unit-tested using DOM fixtures, not a live Roll20 session. With Nier's official sheet open, check that R20eb shows 82/84 HP, AC 17, speed 55 ft, initiative +2.14, and all six ability scores. If HP still reads 69, select **Auto** under Sheet → Health source instead of forcing the stale Token Bar 1; inspect Sheet → Current sources.
+
+## Official 2024 Vue health and ability input detection (v2.3.13)
+
+The official sheet exposes live health in a Vue text incrementer with `id="hp-current"`, `title="Current Hitpoints"`, `value="82"`, and `aria-valuemax="84"`, and ability scores via `data-testid="utility-incrementer__input"` with titles like `STR` and live values like `18`. The importer now reads these exact labeled visible controls directly without depending on the surrounding panel text or unstable generated IDs. A separate explicitly labeled max-HP input takes priority over `aria-valuemax`. The old bounded-panel and inline-ability parsers remain as fallbacks.
+
+This is read-only and applies only to the official player-opened sheet. Hidden, invalid, unlabeled or non-official inputs are rejected. An input-only official sheet scan now produces stat coverage even if `innerText` is empty. Real browser retesting in Floorp/Roll20 is still required.
