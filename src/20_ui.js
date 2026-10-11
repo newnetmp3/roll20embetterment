@@ -103,8 +103,8 @@ function homeUI() {
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
    <div class="row"><input id="rbe-hp-adjust" type="number" value="5" class="mini" min="1" aria-label="HP adjustment">${button('− Damage','damage')} ${button('+ Heal','heal')} ${button('+ Temp HP','addTemp')}</div>
    <p class="hint">HUD HP is a local copy. While the character is controlled on this map, loaded Roll20 stats refresh in the background without opening a sheet. Edits here never write back.</p></div>
-  <div class="card"><div class="row between"><h3>Character statistics</h3><span class="hint">${p.sheetLink?.liveStatsAt?'Updated from Roll20 model':'Imported or locally set'}</span></div>
-   <div class="row"><span class="pill">Initiative ${signed(s.init)}</span><span class="pill">Proficiency ${signed(s.proficiency)}</span><span class="pill">Level ${int(s.level)}</span>
+  <div class="card"><div class="row between"><h3>Character statistics</h3><span class="hint">${p.sheetLink?.liveStatsAt?'Last updated from Roll20 ('+html(p.sheetLink?.statSources?.hp||'mixed sources')+')':'Imported or locally set'}</span></div>
+   <div class="row"><span class="pill">Initiative ${signedInitiative(s.init)}</span><span class="pill">Proficiency ${signed(s.proficiency)}</span><span class="pill">Level ${int(s.level)}</span>
    ${p.sheetDetails?.passivePerception?'<span class="pill">Passive Perception '+html(p.sheetDetails.passivePerception)+'</span>':''}</div>
    <div class="grid">${abilities.map(a=>{
      const score=p.abilityScores?.[a],mod=p.abilityMods?.[a];
