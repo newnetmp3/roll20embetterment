@@ -10,7 +10,7 @@
 | 4 | Secure official native weapon/spell/skill/tool rolls, closed-sheet helper | ✅ v2.3.2 | Live QA |
 | 5 | Unified Sheet/palette/wheel official native roll controls | ✅ v2.3.3 PR #16 | 128 tests passing; continue live QA |
 | 6 | Native-roll pending feedback and duplicate-click protection | ✅ v2.3.4 PR #17 | 130 passing tests; live Roll20 QA remains |
-| 7 | Spell roll versus casting semantics, safe local turn/resource reminders | 🧪 v2.3.5 PR pending | Test: explicit local Mark cast, native rolls independent, manual slots |
+| 7 | Spell roll versus casting semantics, safe local turn/resource reminders | ✅ v2.3.5 PR #18 | 136 tests passing; live Roll20 QA remains |
 | 8 | Keyboard accessibility, wheel density, palette navigation | ⬜ planned | QA + implementation |
 | 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🔍 live QA | Browser fixtures |
 | 10 | Release/version automation and reproducible install | ⬜ planned | CI tags |

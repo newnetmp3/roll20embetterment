@@ -5,8 +5,8 @@
 **Default branch:** `main`  
 **Current main baseline:** `128b6a16fa00f14e2d82099276842c2df9d96ddf` (v2.3.4, PR #17)  
 **Previous milestone:** v2.3.3 (PR #16, 128 tests green).  
-**Latest completed milestone:** v2.3.4 (PR #17, 130 tests green) — native roll feedback and duplicate-click protection.  
-**In progress:** v2.3.5 — explicit casting, roll and slot distinctions.
+**Latest completed milestone:** v2.3.5 (PR #18, CI 136 tests green) — separate casting, official rolls, and local reminders.  
+**Verified previous main baseline:** `128b6a16fa00f14e2d82099276842c2df9d96ddf` (v2.3.4); verify main HEAD again after merge.
 
 ## Resume process
 
@@ -42,13 +42,13 @@
 - Preserve the native authenticated Roll20 frame bridge and read-only character sheet semantics.
 - **Verified CI:** 130 tests passed, 0 failures, generated userscript and JavaScript syntax checks green (head `ed32372c5ba2fc6994df36c7f21f29b4037d419b`).
 
-## v2.3.5 delivery (pending CI and merge)
+## v2.3.5 delivery (PR #18, CI verified)
 
 - Separate **Cast in Roll20** (working command required), **Mark cast (local)** (explicit local record), **Roll attack / Roll damage** (native verified sheet controls), and **Use slot (local)** (manual expenditure).
 - Share local casting classification (Action / Bonus Action / Reaction only for explicitly labeled casting times) across wheel, Sheet/Spells panel, palette and macros. Unknown casting times are not guessed.
 - Local concentration reminder is set only on explicit Mark cast or successfully sent legacy cast commands; native 2024 attack/damage rolls leave reminders and slots untouched.
 - Add regression tests for native 2024 spell without a cast command, bonus/reaction/ritual economy, successful/failed legacy commands, UI and palette.
-- Pending: GitHub Actions verification and in-browser Jumpgate/legacy QA. Update this section with exact CI results and merge SHA once verified.
+- **CI verified:** PR #18 head `6249f818de42ed1201a7d3942e8e3fa5ac5e4bea`: **136 tests passed, 0 failed**, generated userscript clean and JavaScript syntax check green. **Pending:** live Jumpgate iframe/popout and legacy 2014 browser QA. The merge SHA is not embedded here: verify the current `main` ref when resuming.
 
 ## Next milestone
 
