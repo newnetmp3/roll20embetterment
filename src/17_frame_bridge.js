@@ -244,8 +244,19 @@ async function executeOfficialSheetRoll(ref,targetProfile=profile()){
     candidate=opened?.candidate||null;
   }
   if(!candidate||!beaconRemoteCandidate(candidate))return false;
-  try{return await requestBeaconAction(candidate,ref);}
-  finally{if(opened?.opened)autoCloseSheetDialog({character:opened.candidate?.character||autoCharacterById(charId)},opened.hidden);}
+  try{
+    let lastError=null;
+    for(let attempt=0;attempt<3;attempt++){
+      try{return await requestBeaconAction(candidate,ref);}
+      catch(err){
+        lastError=err;
+        if(attempt<2)await new Promise(resolve=>setTimeout(resolve,350+attempt*350));
+      }
+    }
+    throw lastError||new Error('Official sheet roll failed.');
+  }finally{
+    if(opened?.opened)autoCloseSheetDialog({character:autoCharacterById(charId)},opened.hidden);
+  }
 }
 function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,characterId=''}={}){
   if(!scan||!beaconRemoteCandidate(candidate))return false;
