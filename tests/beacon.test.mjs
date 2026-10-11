@@ -40,7 +40,7 @@ function env(text=visible){
   localStorage:{getItem(k){return store.get(k)||null},setItem(k,v){store.set(k,v)}}
  };
  vm.createContext(scope);
- vm.runInContext(script+'\nload();RB.visible=true;RB.shadow={innerHTML:"",querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.h={RB,profile,scanSheets,syncSheet,beaconImportVisible,mergeBeaconSnapshot,snapshotSheet,beaconVisibleText,sheetUI,readSheetFields};',scope);
+ vm.runInContext(script+'\nload();RB.visible=true;RB.shadow={innerHTML:"",querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.h={RB,profile,scanSheets,syncSheet,beaconImportVisible,mergeBeaconSnapshot,snapshotSheet,beaconVisibleText,sheetUI,readSheetFields,beaconDiscoverRollActions,beaconResolveRollAction};',scope);
  return {h:scope.h,fakeSheet,store};
 }
 test('Beacon 2024 visible stats reflect Nier screenshot values',()=>{
@@ -112,4 +112,49 @@ test('hidden textContent is not scanned when nothing is visible',()=>{
   textContent:'HIT POINTS 999 / 999 ARMOR CLASS 30',innerText:''
  },'Blank');
  assert.equal(data.coverage.visibleFields,0);
+});
+
+test('official 2024 attack rows produce safe hit and damage action references',()=>{
+ const {h}=env();
+ const hit={textContent:'+7 Attack',disabled:false},damage={textContent:'1d6+4',disabled:false};
+ const title={textContent:'Handaxe'};
+ const row={id:'attack-uuid-viewAttackBlock',textContent:'Handaxe Melee 5 ft +7 Attack 1d6+4',
+   querySelector(sel){if(sel==='.span--item-row-title')return title;if(sel==='.poly-button--hit-dc button')return hit;return null},
+   querySelectorAll(sel){return sel==='.poly-button--damage button'?[damage]:[]}};
+ const scope={querySelectorAll(sel){
+   if(sel==='.attack-item')return [row];
+   return [];
+ }};
+ const actions=h.beaconDiscoverRollActions(scope);
+ const attack=actions.find(x=>x.category==='attack'),dmg=actions.find(x=>x.category==='damage');
+ assert.equal(attack.name,'Handaxe');assert.equal(attack.detail,'+7 Attack');
+ assert.deepEqual({...attack.sheetRef},{kind:'attack-row',rowId:'attack-uuid-viewAttackBlock',control:'hit'});
+ assert.equal(dmg.name,'Handaxe Damage');assert.equal(dmg.detail,'1d6+4');
+});
+test('accessible skill/tool Roll labels and ability/save buttons are imported as roll actions',()=>{
+ const {h}=env();
+ const skill={textContent:'Acrobatics',getAttribute(k){return k==='aria-label'?'Roll a Acrobatics check':''}};
+ const abilityParent={textContent:'STR +4 Mod +7 Proficient Save',parentElement:null};
+ const ability={textContent:'+4',parentElement:abilityParent};
+ const save={textContent:'+7',parentElement:abilityParent};
+ const scope={querySelectorAll(sel){
+   if(sel==='.attack-item'||sel==='.spell-item')return [];
+   if(sel.includes('[aria-label^="Roll "]'))return [skill];
+   if(sel==='.ability-button')return [ability];
+   if(sel==='.save-button')return [save];
+   if(sel==='button')return [];
+   return [];
+ }};
+ const actions=h.beaconDiscoverRollActions(scope);
+ assert.ok(actions.some(x=>x.name==='Acrobatics'&&x.sheetRef.kind==='aria'));
+ assert.ok(actions.some(x=>x.name==='STR Check'&&x.sheetRef.control==='ability'));
+ assert.ok(actions.some(x=>x.name==='STR Save'&&x.sheetRef.control==='save'));
+});
+test('safe action resolver locates attack row hit and damage buttons without synthesizing a macro',()=>{
+ const {h}=env();const hit={},damage={};
+ const row={querySelector(sel){return sel==='.poly-button--hit-dc button'?hit:null},
+   querySelectorAll(sel){return sel==='.poly-button--damage button'?[damage]:[]}};
+ const scope={getElementById(id){return id==='row-1'?row:null},querySelectorAll(){return []}};
+ assert.equal(h.beaconResolveRollAction({kind:'attack-row',rowId:'row-1',control:'hit'},scope),hit);
+ assert.equal(h.beaconResolveRollAction({kind:'attack-row',rowId:'row-1',control:'damage',index:0},scope),damage);
 });
