@@ -3,8 +3,8 @@
 **Updated:** 2026-10-11  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Verified baseline:** `d4d6a8e8d07be38c1a87371fb4e56448440ec339` (v2.3.2)  
-**Current milestone:** v2.3.3 — unify official 2024 native rolls across the Sheet panel, combat wheel and command palette.
+**Starting baseline:** `d4d6a8e8d07be38c1a87371fb4e56448440ec339` (v2.3.2)  
+**Latest completed milestone:** v2.3.3 — unified official 2024 native rolls across Sheet panel, wheel and command palette in PR #16.
 
 ## Resume process
 
@@ -21,7 +21,7 @@
 - Official 2024 native button roll execution for weapons/spells/skills/saves/tools/features/hit dice, and legacy 2014 macro support.
 - Local-only resource reminders/notes; character sheets are not modified.
 
-## In-flight v2.3.3
+## v2.3.3 delivery (PR #16)
 
 - Expose native weapon Attack and Damage controls from the Sheet panel alongside the complete native-roll inventory.
 - Make the searchable command palette able to invoke official sheet-roll references without synthesizing formulas; prefer official Skills/Saves with existing local fallback.
@@ -29,7 +29,7 @@
 - Add regression tests for UI button availability, palette results, bridge dispatch and safe fallback.
 - Refresh version metadata, README and generated Tampermonkey distribution.
 
-**CI:** Pending for this feature branch; v2.3.2 baseline PR #15 reported 125 passing tests.  
+**CI verified:** PR #16 head `5de47e95b73155dc0f4049f42d6ab372cd94d92c` passed **128 tests, 0 failures**, generated-userscript check and JavaScript syntax check. Baseline v2.3.2 PR #15 passed 125 tests.  
 **Remaining live testing:** Official Jumpgate / 2024 iframe/popout, closed-sheet helper, selected token identity and legacy 2014. Automated DOM mocks do not replace these checks.
 
 ## Next milestone

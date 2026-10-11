@@ -8,7 +8,7 @@
 | 2 | Jumpgate tracking and full 2024 attribute/sheet tab tours | ✅ merged | Live QA |
 | 3 | Player-controlled multi-character auto-import and profile switching | ✅ v2.3.0 | Live QA |
 | 4 | Secure official native weapon/spell/skill/tool rolls, closed-sheet helper | ✅ v2.3.2 | Live QA |
-| 5 | Unified Sheet/palette/wheel official native roll controls | 🟡 v2.3.3 in progress | Tests, CI, merge |
+| 5 | Unified Sheet/palette/wheel official native roll controls | ✅ v2.3.3 PR #16 | 128 tests passing; continue live QA |
 | 6 | Native-roll pending feedback and duplicate-click protection | ⬜ planned | Next milestone |
 | 7 | Spell roll versus casting semantics, safe local turn/resource reminders | ⬜ planned | Design + tests |
 | 8 | Keyboard accessibility, wheel density, palette navigation | ⬜ planned | QA + implementation |
