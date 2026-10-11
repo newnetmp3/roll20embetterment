@@ -82,7 +82,8 @@ function roll20CharacterSheetUrl(characterId){
 }
 function roll20LinkedCharacterId(){
   const p=profile();
-  const selected=autoSelectedTokenAssignment()?.characterId;
+  const selectedAssignment=autoSelectedTokenAssignment();
+  const selected=selectedAssignment?.profileId===p.id?selectedAssignment.characterId:'';
   const owned=Object.values(RB.state?.tokenAssignments||{})
     .filter(item=>item?.profileId===p.id&&roll20CharacterSheetUrl(item.characterId));
   // A linked profile is authoritative, even when there is no selected token.
@@ -126,24 +127,10 @@ function openRoll20CharacterSheet(){
     try{fn.call(owner);return true;}
     catch(err){console.warn('[R20eb] Roll20 native sheet opening unavailable',err);}
   }
-  // Journal URLs are special VTT-intercepted links. Their hostname does not
-  // resolve as a standalone external sheet, so NEVER window.open this URL.
-  // Dispatch a click from the light DOM where Roll20 delegates its handlers.
-  const doc=document,body=doc.body;
-  if(body?.appendChild&&doc.createElement){
-    const link=doc.createElement('a');
-    link.href=url;
-    link.textContent='Open linked Roll20 sheet';
-    link.style.display='none';
-    link.addEventListener?.('click',event=>event.preventDefault());
-    try{
-      body.appendChild(link);
-      link.click();
-      return true;
-    }catch(err){console.warn('[R20eb] Roll20 Journal link activation failed',err);}
-    finally{link.remove?.();}
-  }
+  // A programmatic click on a hidden link cannot prove a sheet opened.
+  // Actual user interaction with a Journal link may work in Roll20.
+  // Never report success when the native opening methods are unavailable.
   RB.tab='Sheet';RB.state.ui.lastTab='Sheet';RB.visible=true;render();
-  toast('Unable to open the sheet automatically. Use the Roll20 Journal.');
+  toast('Roll20 did not expose a working sheet opener. Use the Journal link in R20eb Sheet, or the Roll20 Journal tab.');
   return false;
 }

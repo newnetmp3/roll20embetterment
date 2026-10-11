@@ -18,7 +18,7 @@ function autoTokenHealthSnapshot(record,profileRecord){
   const choice=String(profileRecord?.sheetLink?.hpSource||'auto');
   if(!['auto','bar1','bar2','bar3'].includes(choice))return null;
   const attributes=character?.attribs?.models||[];
-  const normalized=name=>String(name||'').toLowerCase().replace(/[\\s.-]+/g,'_');
+  const normalized=name=>String(name||'').toLowerCase().replace(/[\s.-]+/g,'_');
   const names=new Set(['hp','hit_points','hit_points_current','current_hp','hp_current','current_hit_points']);
   const linkedName=id=>{
     for(const attr of attributes){
