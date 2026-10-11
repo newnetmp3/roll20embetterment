@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.11
+// @version      2.3.12
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.11',
+  version: '2.3.12',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -1142,6 +1142,73 @@ function beaconCollectRollActions(scope,tab=''){
   }
   return out.slice(0,400);
 }
+// Actual Roll20 2024 HP/ability values are often editable <input> values.
+// innerText excludes form values, so the visible-text adapter alone can show
+// empty scores and stale token HP even while the sheet is open. Only inspect
+// visible controls in the player-opened sheet; never the headless VTT iframe.
+function beaconVisibleFormValues(scope) {
+  const root=scope?.nodeType===9?scope.body:scope;
+  const result={stats:{},abilityScores:{},abilityMods:{},saveBonuses:{}};
+  if(!root?.querySelectorAll)return result;
+  const usable=el=>!!el&&el.type!=='hidden'&&!el.disabled&&
+    !el.closest?.('[hidden],[inert],[aria-hidden="true"]')&&
+    (!el.getClientRects||el.getClientRects().length>0);
+  const integer=(value,min,max)=>{
+    const raw=String(value??'').trim();
+    if(!/^[+-]?\d{1,4}$/.test(raw))return null;
+    const n=Number(raw);
+    return Number.isInteger(n)&&n>=min&&n<=max?n:null;
+  };
+  const inputs=Array.from(root.querySelectorAll('input')||[]).slice(0,600).filter(usable);
+  // Find the smallest bounded panel with the literal HIT POINTS, Current and
+  // Max headings. The first three visible numeric inputs represent current,
+  // maximum and temporary HP in the official 2024 editor. Never use numbers
+  // from a whole game dialog or an unrelated resource panel.
+  for(const input of inputs){
+    let node=input.parentElement;
+    for(let depth=0;node&&node!==root&&depth<9;node=node.parentElement,depth++){
+      const text=beaconVisibleText(node);
+      if(text.length>900)break;
+      if(!/\bHIT\s*POINTS\b/i.test(text)||!/\bCurrent\b/i.test(text)||!/\bMax\b/i.test(text))continue;
+      const panelInputs=Array.from(node.querySelectorAll?.('input')||[]).filter(usable);
+      if(panelInputs.length<2||panelInputs.length>7)continue;
+      const hp=integer(panelInputs[0].value,0,9999),maxHp=integer(panelInputs[1].value,1,9999);
+      if(hp===null||maxHp===null||hp>maxHp+999)continue;
+      result.stats.hp=hp;result.stats.maxHp=maxHp;
+      const temp=integer(panelInputs[2]?.value,0,9999);
+      if(temp!==null)result.stats.tempHp=temp;
+      break;
+    }
+    if(result.stats.hp!==undefined)break;
+  }
+  // Ability score editors are inside the official .inline-ability row. The
+  // displayed modifier and saving throw are official roll buttons, not
+  // editable score inputs; read those without making up a derived bonus.
+  for(const row of Array.from(root.querySelectorAll('.inline-ability')||[]).slice(0,12)){
+    const abbr=beaconRollText(row).match(/\b(STR|DEX|CON|INT|WIS|CHA)\b/i)?.[1]?.toLowerCase();
+    if(!abbr)continue;
+    const scoreInput=Array.from(row.querySelectorAll?.('input')||[]).find(usable);
+    const score=integer(scoreInput?.value,1,30);
+    const mod=integer(beaconRollText(row.querySelector?.('.poly-button--ability button')),-15,20);
+    const save=integer(beaconRollText(row.querySelector?.('.poly-button--compact-saving-throw button')),-15,30);
+    if(score!==null&&(mod===null||Math.abs(Math.floor((score-10)/2)-mod)<=1))
+      result.abilityScores[abbr]=score;
+    if(mod!==null)result.abilityMods[abbr]=mod;
+    if(save!==null)result.saveBonuses[abbr]=save;
+  }
+  // Initiative is a live official button even when the header's text order
+  // prevents the generic INITIATIVE regex from finding the value.
+  const initButton=root.querySelector?.('.initiative-btn button');
+  if(initButton){
+    const raw=beaconRollText(initButton),match=raw.match(/^[+−-]?\s*\d{1,2}(?:\.\d{1,2})?$/);
+    if(match){
+      const value=Number(raw.replace(/[−\s]/g,c=>c==='−'?'-':''));
+      if(Number.isFinite(value)&&value>=-30&&value<=30)result.stats.init=value;
+    }
+  }
+  return result;
+}
+
 function beaconImportVisible(scope,label='Open character sheet') {
   const text=beaconVisibleText(scope);
   const result={name:label,stats:{},abilityScores:{},abilityMods:{},saveBonuses:{},
@@ -1197,6 +1264,17 @@ function beaconImportVisible(scope,label='Open character sheet') {
     const key=m[1].toLowerCase();
     result.abilityScores[key]=score;result.abilityMods[key]=mod;result.saveBonuses[key]=save;
     count('Abilities',m[1]+'/save');
+  }
+  // Prefer current, visible form controls over text parsing, because innerText
+  // does not expose <input>. Keep unsupported fields absent, not zeroed.
+  const liveControls=beaconVisibleFormValues(scope);
+  for(const section of ['stats','abilityScores','abilityMods','saveBonuses']){
+    for(const [key,value] of Object.entries(liveControls[section])){
+      if(result[section][key]===value)continue;
+      const wasPresent=result[section][key]!==undefined;
+      result[section][key]=value;
+      if(!wasPresent)count(section==='stats'?'Combat':'Abilities',key);
+    }
   }
   const skills=beaconRegion(text,/\bSKILLS\b/i,[/\bCOMBAT\b/i,/\bSPELLS\b/i,/\bINVENTORY\b/i,/\bFEATURES\b/i,/\bRESOURCES\b/i],3800);
   for(const skill of skillNames){
@@ -2372,9 +2450,12 @@ async function autoRefreshVisibleSheetStats(record,profileRecord){
       {preferVisibleStats:true});
     const visibleSections=['stats','abilityScores','abilityMods','saveBonuses','skillBonuses'];
     const hasVisible=visibleSections.some(section=>Object.keys(visual[section]||{}).length);
-    // A remote read that only returns cached attributes does not prove that
-    // the 2024 sheet's current values were visible.
-    if(!hasVisible)return false;
+    // A live frame may expose named attributes while its editable values
+    // remain absent from innerText. Those named values are still useful as a
+    // fallback; do not silently drop them and keep showing token-bar defaults.
+    const hasNamed=['stats','abilityScores','abilityMods','saveBonuses','skillBonuses']
+      .some(section=>Object.keys(snap[section]||{}).length>0);
+    if(!hasVisible&&!hasNamed)return false;
     const overrides={};
     for(const section of visibleSections){
       if(section!=='stats')continue;
@@ -2386,13 +2467,13 @@ async function autoRefreshVisibleSheetStats(record,profileRecord){
       for(const [key,value] of Object.entries(token.stats)){
         // Always prefer the current value printed on the open sheet over the
         // token bar. Token bars can represent damage, temporary HP or be stale.
-        if(visual.stats?.[key]!==undefined)continue;
+        if(visual.stats?.[key]!==undefined||snap.stats[key]!==undefined)continue;
         snap.stats[key]=value;overrides[key]=token.source;
       }
     }
     const changed=applyLiveCharacterValues(profileRecord,snap,charId,
       'Roll20 attributes',overrides);
-    if(profileRecord.sheetLink){
+    if(hasVisible&&profileRecord.sheetLink){
       profileRecord.sheetLink.visibleStatAt=Date.now();
       profileRecord.sheetLink.visibleStatKeys=Object.fromEntries(
         ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
