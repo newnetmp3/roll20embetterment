@@ -458,3 +458,18 @@ test('executing a native sheet roll uses the official sheet bridge and never syn
   assert.equal(called[0].name,'Handaxe');assert.equal(called[0].action,'attack');
   assert.equal(p.actionUsed,true);
 });
+
+test('standard Skills Saves Abilities and Initiative entries prefer official sheet buttons when available',()=>{
+  const {r}=env(),p=r.profile();
+  p.sheetRolls=[
+    {id:'acro',kind:'skill',name:'Acrobatics',action:'skill',label:'Acrobatics'},
+    {id:'str-save',kind:'save',name:'STR',action:'save',label:'+7'},
+    {id:'str-check',kind:'ability',name:'STR',action:'ability',label:'+4'},
+    {id:'init-native',kind:'initiative',name:'Initiative',action:'initiative',label:'+2'}
+  ];
+  const root=r.radialCategories().find(x=>x.id==='checks');
+  assert.equal(root.children.find(x=>x.id==='skills').children.find(x=>x.label==='Acrobatics').kind,'sheetRoll');
+  assert.equal(root.children.find(x=>x.id==='saves').children.find(x=>x.label==='STR').value,'str-save');
+  assert.equal(root.children.find(x=>x.id==='abilities').children.find(x=>x.label==='STR').value,'str-check');
+  assert.equal(root.children.find(x=>x.id==='initiative').value,'init-native');
+});
