@@ -111,3 +111,18 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 - **Verified:** PR #24 final head `9cda8e3de6b7e80dd4ecd911fe59e21a0a96349c`; merged as `1148313473bee5c6da3dbe434de8f22a3ecc3367`. GitHub Actions: 169 tests passed, 0 failed; `npm run check` and generated userscript consistency green.
 
 **Next:** Capture a controlled, read-only comparison for Nier (HP, AC, movement, initiative, six abilities) that records exact source names without sensitive tokens; verify the authoritative Roll20 values before extending mappings. Review `docs/ARCHITECTURE.md` first.
+
+## v2.3.11 — Nier stat mismatch correction (PR pending CI)
+
+**User evidence:** Two screenshots from 2026-10-11 show official 2024 Nier sheet at 82/84 HP, AC 17, speed 55 ft, initiative +2.14, and six ability scores (18/14/15/12/15/10), while R20eb had 69/84 HP, AC 10, speed 30 ft, initiative +0 and blank scores.
+
+**Root causes identified in code:**
+
+1. `mergeBeaconSnapshot` previously preserved stale *named* values over newer visible 2024 text even in a confirmed live read.
+2. `autoRefreshVisibleSheetStats` then unconditionally applied linked token-bar health over the visible character HP, even if the bar was stale or represented something else.
+3. `autoCandidateForCharacter` ignored embedded 2024 iframes with no character ID (but a visible exact player-character name), preventing nonintrusive live refresh.
+4. Initiative +2.14 had no visible text parser and the HUD truncated decimal values.
+
+**Changes:** Trusted live 2024 scans opt in to a visible-value-first merge; visible HP takes precedence over token bars, which are now fallbacks; ID-less embedded candidates may match via unique exact character name and unique controlled-character identity; parse and render decimal initiative. Add screenshot-based regression fixtures and ambiguity checks. Named-first remains default for legacy data. This remains a read-only import.
+
+**Verification pending:** GitHub Actions, generated userscript, and especially live Roll20 iframe reader values. If any number still differs, inspect the candidate match, frame message, and visible extraction in that order, rather than adding more field-name aliases.

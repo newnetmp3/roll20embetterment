@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.10 — Concentric Combat HUD
+# roll20 Embetterment 2.3.11 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -145,3 +145,13 @@ Background scanning refreshes **loaded Roll20 controlled-character model attribu
 The source now separates **sheet access/helper ownership** (`src/18_sheet_access.js`), **explicit tab touring and controlled-token discovery** (`src/18_sheet_tour.js`) and **read-only stat reconciliation** (`src/18_stats_sync.js`). Full-runtime tests load the same sorted source files as the production build, rather than maintaining a separate module list. The HP token-bar name normalizer now accepts whitespace and punctuation correctly, and the sheet opener avoids redirecting the active profile to a different character's selected token. The combat HUD appearance and saved state format remain unchanged.
 
 **Important:** This is a code cleanup, not proof that Jumpgate/2024 sheet opening or every displayed stat is correct. Loaded attributes may be stale; a real Roll20 browser check and a source-priority decision per attribute are still necessary. See `docs/ARCHITECTURE.md` and `docs/HANDOVER.md`.
+
+## Visible D&D 2024 combat-stat reconciliation (v2.3.11)
+
+When the controlled character's official 2024 sheet is **already open**, R20eb matches its embedded iframe to the character by ID, or by a unique exact character name when Roll20 does not expose an ID. Matching by name is only permitted when exactly one controlled character and one open candidate share that name; ambiguous matches are ignored. The read-only iframe reader never changes sheet tabs or character values.
+
+An **actually visible** 2024 value now takes precedence over stale named attributes and token bars. When the visible sheet reports HP, AC, speed, initiative, or ability scores/modifiers/saves, those numbers are used; token HP bars remain fallbacks for values the visible sheet does not expose. The background model refresh temporarily protects fields collected from a recent visible scan. The initiative display supports fractional modifiers such as +2.14. Legacy attribute-only imports retain their existing named-first behavior. Local notes, attacks, spells and manual resource usage are untouched.
+
+### Regression example: Nier
+
+The supplied screenshots show **82/84 HP, AC 17, speed 55 ft, initiative +2.14, STR 18, DEX 14, CON 15, INT 12, WIS 15, CHA 10** on the official sheet, versus **69/84 HP, AC 10, speed 30 ft, initiative +0 and absent scores** in R20eb. Automated tests now assert the corrected live source-priority and safe iframe association against that case. Live Firefox/Jumpgate verification is still required to confirm the bridge returns the expected DOM values; the tests cannot simulate Roll20's private cross-origin implementation.
