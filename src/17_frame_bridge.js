@@ -112,12 +112,13 @@ function onBeaconFrameMessage(event){
     sheetPrefetchAttributes(candidate);
     return;
   }
-  if(message.type!=='snapshot'||typeof message.id!=='string')return;
+  if(!['snapshot','action-result'].includes(message.type)||typeof message.id!=='string')return;
   const pending=rbeFramePending.get(message.id);
   if(!pending||pending.target!==event.source)return;
   rbeFramePending.delete(message.id);clearTimeout(pending.timeout);
   candidate.lastSeen=Date.now();
   if(message.error)return pending.reject(new Error(String(message.error).slice(0,160)));
+  if(message.type==='action-result')return pending.resolve(!!message.ok);
   const fields=sheetAttributes(message.fields);
   if(Object.keys(fields).length>6000)return pending.reject(new Error('Character sheet returned too many fields'));
   const visible=message.visible&&typeof message.visible==='object'?message.visible:
@@ -144,6 +145,41 @@ function requestBeaconFrame(candidate,deep=false,options={}){
       target.postMessage({bridge:RBE_BRIDGE_MARKER,type:'scan',id,deep:!!deep,tour:!!options.tour},RBE_BEACON_ORIGIN);
     }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
   });
+}
+
+function requestBeaconAction(candidate,sheetRef){
+  return new Promise((resolve,reject)=>{
+    const target=candidate?.frame?.contentWindow||candidate?.popoutWindow;
+    if(!target)return reject(new Error('Official character sheet reader is not available'));
+    if(candidate.frame&&!beaconFrameUrlOkay(candidate.frame))
+      return reject(new Error('Unrecognized character sheet iframe origin'));
+    if(candidate.popoutWindow&&candidate.origin!==RBE_BEACON_ORIGIN)
+      return reject(new Error('Unrecognized character sheet popout origin'));
+    const id='rbea'+(++rbeFrameCounter);
+    const timeout=setTimeout(()=>{
+      rbeFramePending.delete(id);
+      reject(new Error('Official sheet action timed out'));
+    },12000);
+    rbeFramePending.set(id,{target,candidateId:candidate.id,resolve,reject,timeout,kind:'action'});
+    try{
+      target.postMessage({bridge:RBE_BRIDGE_MARKER,type:'execute',id,
+        sheetRef:sheetRef&&typeof sheetRef==='object'?sheetRef:null},RBE_BEACON_ORIGIN);
+    }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
+  });
+}
+async function beaconExecuteSheetAction(sheetRef){
+  if(!sheetRef||typeof sheetRef!=='object')return false;
+  let control=beaconResolveRollAction(sheetRef,document);
+  if(!control&&sheetRef.tab){
+    const tabs=sheetTourTabs(document,RBE_SHEET_TOUR_INNER,
+      '.layout-tabbed-panel__tab-link[role="tab"],[role="tab"],nav a,[class*="tabs"] a,button');
+    const tab=tabs.find(x=>sheetTourLabel(x).toLowerCase()===String(sheetRef.tab).toLowerCase());
+    if(tab&&!sheetTourActive(tab)){tab.click?.();await sheetTourDelay(180);}
+    control=beaconResolveRollAction(sheetRef,document);
+  }
+  if(!control||control.disabled)return false;
+  control.click?.();
+  return true;
 }
 function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,characterId=''}={}){
   if(!scan||!beaconRemoteCandidate(candidate))return false;
@@ -172,9 +208,14 @@ async function beaconFrameReadRequest(event){
   const peer=beaconReaderPeer();
   if(event.origin!==RBE_EDITOR_ORIGIN||!peer||event.source!==peer)return;
   const message=event.data;
-  if(!message||message.bridge!==RBE_BRIDGE_MARKER||message.type!=='scan'||
-    typeof message.id!=='string'||message.id.length>100)return;
+  if(!message||message.bridge!==RBE_BRIDGE_MARKER||
+    !['scan','execute'].includes(message.type)||typeof message.id!=='string'||message.id.length>100)return;
   try{
+    if(message.type==='execute'){
+      const ok=await beaconExecuteSheetAction(message.sheetRef);
+      peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'action-result',id:message.id,ok},RBE_EDITOR_ORIGIN);
+      return;
+    }
     const scope=document.body;
     const scan=message.tour?await sheetTourFrameScan():(message.deep?await sheetHarvestBeaconRows(scope):{
       fields:readSheetFields(scope),full:false,expected:sheetExpectedAttributeCount(scope),scannedPages:1
