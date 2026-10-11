@@ -13,10 +13,61 @@ function beaconRegion(text,start,ends=[],limit=2400) {
   for(const re of ends){const m=tail.match(re);if(m)end=Math.min(end,m.index);}
   return region.slice(0,lead+end);
 }
+function beaconRollText(el){
+  return String(el?.innerText??el?.textContent??'').replace(/\s+/g,' ').trim();
+}
+function beaconRollName(card,selectors=[]){
+  for(const selector of selectors){
+    const el=card?.querySelector?.(selector),value=beaconRollText(el);
+    if(value)return value.slice(0,120);
+  }
+  return '';
+}
+function beaconCollectRollActions(scope,tab=''){
+  if(!scope?.querySelectorAll)return [];
+  const out=[],seen=new Set(),push=(kind,name,action,button,meta={})=>{
+    if(!button||!name)return;
+    const key=[kind,name,action,tab].join('|').toLowerCase();
+    if(seen.has(key))return;seen.add(key);
+    out.push({id:'sheetroll:'+key.replace(/[^a-z0-9|_-]/g,'-').slice(0,180),origin:'sheet',
+      kind,name:name.slice(0,120),action,tab:String(tab||'').slice(0,80),
+      label:beaconRollText(button).slice(0,80),...meta});
+  };
+  for(const card of Array.from(scope.querySelectorAll('.attack-item')).slice(0,120)){
+    const name=beaconRollName(card,['.span--item-row-title','.attack-item__title-chat','.attack-item__title-col']);
+    push('attack',name,'attack',card.querySelector?.('.poly-button--hit-dc button'),{group:'Attacks'});
+    push('attack',name,'damage',card.querySelector?.('.poly-button--damage button'),{group:'Attacks'});
+  }
+  for(const card of Array.from(scope.querySelectorAll('.spell-item')).slice(0,160)){
+    const name=beaconRollName(card,['.spell-item__name.span--item-row-title','.spell-item__name','.spell-item__name--wrapper']);
+    push('spell',name,'attack',card.querySelector?.('.poly-button--hit-dc button'),{group:'Spells'});
+    push('spell',name,'damage',card.querySelector?.('.poly-button--damage button'),{group:'Spells'});
+  }
+  for(const row of Array.from(scope.querySelectorAll('.skill')).slice(0,80)){
+    const button=row.querySelector?.('button.skill__name'),name=beaconRollText(button);
+    push('skill',name,'skill',button,{group:'Skills'});
+  }
+  for(const row of Array.from(scope.querySelectorAll('.inline-ability')).slice(0,20)){
+    const text=beaconRollText(row),abbr=text.match(/\b(STR|DEX|CON|INT|WIS|CHA)\b/i)?.[1]?.toUpperCase();
+    if(!abbr)continue;
+    push('ability',abbr,'ability',row.querySelector?.('.poly-button--ability button'),{group:'Abilities'});
+    push('save',abbr,'save',row.querySelector?.('.poly-button--compact-saving-throw button'),{group:'Saves'});
+  }
+  const initiative=scope.querySelector?.('.initiative-btn button');
+  if(initiative)push('initiative','Initiative','initiative',initiative,{group:'Initiative'});
+  for(const card of Array.from(scope.querySelectorAll('.action-item')).slice(0,160)){
+    const name=beaconRollName(card,['.action-item__name','.span--item-row-title','.name-chat'])||
+      beaconRollText(card).split(/\s+\d+d\d+/)[0].trim().slice(0,120);
+    push('action',name,'healing',card.querySelector?.('.poly-button--healing button'),{group:'Actions'});
+    push('action',name,'attack',card.querySelector?.('.poly-button--hit-dc button'),{group:'Actions'});
+    push('action',name,'damage',card.querySelector?.('.poly-button--damage button'),{group:'Actions'});
+  }
+  return out.slice(0,400);
+}
 function beaconImportVisible(scope,label='Open character sheet') {
   const text=beaconVisibleText(scope);
   const result={name:label,stats:{},abilityScores:{},abilityMods:{},saveBonuses:{},
-    skillBonuses:{},spellSlots:{},usedSlots:{},resources:[],attacks:[],details:{},
+    skillBonuses:{},spellSlots:{},usedSlots:{},resources:[],attacks:[],sheetRolls:beaconCollectRollActions(scope),details:{},
     coverage:{visibleFields:0,sections:[],names:[]},signature:text.slice(0,35000)};
   if(!text.trim())return result;
   const count=(group,name)=>{result.coverage.visibleFields++;if(!result.coverage.sections.includes(group))result.coverage.sections.push(group);result.coverage.names.push(name);};
@@ -121,6 +172,7 @@ function mergeBeaconSnapshot(named,visible){
       if(!existing.has(x.name.toLowerCase())){named[section].push(x);existing.add(x.name.toLowerCase());}
     }
   }
+  named.sheetRolls=Array.isArray(visible.sheetRolls)?visible.sheetRolls.slice(0,400):[];
   if((!named.name||/^(?:Open character sheet|Character Sheet)$/i.test(named.name))&&visible.name)named.name=visible.name;
   named.coverage.visibleFields=visible.coverage.visibleFields;
   named.coverage.visibleSections=visible.coverage.sections;
