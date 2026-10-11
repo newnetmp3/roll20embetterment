@@ -112,7 +112,7 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 
 **Next:** Capture a controlled, read-only comparison for Nier (HP, AC, movement, initiative, six abilities) that records exact source names without sensitive tokens; verify the authoritative Roll20 values before extending mappings. Review `docs/ARCHITECTURE.md` first.
 
-## v2.3.11 — Nier stat mismatch correction (PR pending CI)
+## v2.3.11 — Nier stat mismatch correction (PR #26, CI verified)
 
 **User evidence:** Two screenshots from 2026-10-11 show official 2024 Nier sheet at 82/84 HP, AC 17, speed 55 ft, initiative +2.14, and six ability scores (18/14/15/12/15/10), while R20eb had 69/84 HP, AC 10, speed 30 ft, initiative +0 and blank scores.
 
@@ -125,4 +125,4 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 
 **Changes:** Trusted live 2024 scans opt in to a visible-value-first merge; visible HP takes precedence over token bars, which are now fallbacks; ID-less embedded candidates may match via unique exact character name and unique controlled-character identity; parse and render decimal initiative. Add screenshot-based regression fixtures and ambiguity checks. Named-first remains default for legacy data. This remains a read-only import.
 
-**Verification pending:** GitHub Actions, generated userscript, and especially live Roll20 iframe reader values. If any number still differs, inspect the candidate match, frame message, and visible extraction in that order, rather than adding more field-name aliases.
+**CI verified:** PR #26 code head `e1036ce8f7263303d382c19a107ccec07a8dc708` passed **173 tests, 0 failures**, JavaScript validation and generated Tampermonkey distribution consistency. A screenshot-based regression also exposed stale token HP overriding a recent visible-sheet read; this was fixed before CI went green. **Live Firefox/Jumpgate QA remains required**: mocks cannot confirm iframe matching and postMessage from Roll20 itself. After merging, re-read main HEAD for the actual squash SHA.

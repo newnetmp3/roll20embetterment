@@ -12,7 +12,7 @@
 | 6 | Native-roll pending feedback and duplicate-click protection | ✅ v2.3.4 PR #17 | 130 passing tests; live Roll20 QA remains |
 | 7 | Spell roll versus casting semantics, safe local turn/resource reminders | ✅ v2.3.5 PR #18 | 136 tests passing; live Roll20 QA remains |
 | 8 | Keyboard accessibility, wheel density, palette navigation | ✅ v2.3.6 PR #19 | 140 tests passing; live density/keyboard QA remains |
-| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧪 v2.3.11 source-priority fix pending CI | Screenshot regression for 2024 HP, AC, speed, initiative, six scores; live iframe/browser QA still required |
+| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧪 v2.3.11 PR #26, CI verified | 173 passing tests; screenshot stat priority fixed in mocks; live iframe/browser QA still required |
 | 10 | Release/version automation and reproducible install | ⬜ planned | CI tags |
 
 **Next actionable milestone:** Verify v2.3.11 on a live open Nier 2024 sheet. Confirm iframe candidate detection, remote visible snapshot and priority behavior; then continue the Roll20 2014/2024 browser integration matrix.
