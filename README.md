@@ -92,6 +92,8 @@ Supported official-sheet roll surfaces include:
 - ability checks,
 - saving throws,
 - initiative,
+- tool proficiency checks,
+- Hit Dice and other native controls whose accessible label explicitly identifies them as a **Roll** action,
 - rollable action/feature cards, including **Healing**, attack and damage controls.
 
 The radial Attack menu uses the weapon's official attack button and exposes its official damage button separately. Spell entries similarly expose their native roll controls. The ROLLS section also contains **Sheet Rolls**, which provides every harvested native roll action that is not otherwise conveniently surfaced.
