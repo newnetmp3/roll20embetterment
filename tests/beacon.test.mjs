@@ -40,7 +40,7 @@ function env(text=visible){
   localStorage:{getItem(k){return store.get(k)||null},setItem(k,v){store.set(k,v)}}
  };
  vm.createContext(scope);
- vm.runInContext(script+'\nload();RB.visible=true;RB.shadow={innerHTML:"",querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.h={RB,profile,scanSheets,syncSheet,beaconImportVisible,mergeBeaconSnapshot,snapshotSheet,beaconVisibleText,sheetUI,readSheetFields};',scope);
+ vm.runInContext(script+'\nload();RB.visible=true;RB.shadow={innerHTML:"",querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.h={RB,profile,scanSheets,syncSheet,beaconImportVisible,beaconCollectRollActions,mergeBeaconSnapshot,snapshotSheet,beaconVisibleText,sheetUI,readSheetFields};',scope);
  return {h:scope.h,fakeSheet,store};
 }
 test('Beacon 2024 visible stats reflect Nier screenshot values',()=>{
@@ -112,4 +112,119 @@ test('hidden textContent is not scanned when nothing is visible',()=>{
   textContent:'HIT POINTS 999 / 999 ARMOR CLASS 30',innerText:''
  },'Blank');
  assert.equal(data.coverage.visibleFields,0);
+});
+
+function rollButton(text){
+  return {innerText:text,textContent:text,disabled:false,click(){}};
+}
+function namedCard(name,buttons,nameSelector){
+  return {querySelector(selector){
+    if(selector===nameSelector)return {innerText:name,textContent:name};
+    return buttons[selector]||null;
+  }};
+}
+test('official 2024 Combat controls harvest separate native attack and damage actions',()=>{
+  const {h}=env();
+  const attack=rollButton('+7 Attack'),damage=rollButton('1d6+4');
+  const handaxe=namedCard('Handaxe',{
+    '.poly-button--hit-dc button':attack,
+    '.poly-button--damage button':damage
+  },'.span--item-row-title');
+  const panel={querySelectorAll(selector){return selector==='.attack-item'?[handaxe]:[]}};
+  const scope={
+    querySelector(selector){
+      if(selector==='[role="tab"][aria-selected="true"]')return {innerText:'Combat'};
+      if(selector==='[role="tabpanel"]:not([style*="display: none"])')return panel;
+      return null;
+    },
+    querySelectorAll(selector){return []}
+  };
+  const actions=h.beaconCollectRollActions(scope);
+  assert.equal(actions.length,2);
+  assert.deepEqual(Array.from(actions,x=>[x.kind,x.name,x.action,x.label,x.tab]),[
+    ['attack','Handaxe','attack','+7 Attack','Combat'],
+    ['attack','Handaxe','damage','1d6+4','Combat']
+  ]);
+  assert.notEqual(actions[0].id,actions[1].id);
+});
+test('official 2024 sheet-wide skill ability save and initiative rolls are harvested once without tab identity',()=>{
+  const {h}=env();
+  const skillButton=rollButton('Acrobatics');
+  const skill={querySelector(sel){return sel==='button.skill__name'?skillButton:null}};
+  const abilityButton=rollButton('+4'),saveButton=rollButton('+7');
+  const ability={innerText:'STR 18 +4 +7',textContent:'STR 18 +4 +7',
+    querySelector(sel){
+      if(sel==='.poly-button--ability button')return abilityButton;
+      if(sel==='.poly-button--compact-saving-throw button')return saveButton;
+      return null;
+    }};
+  const initiative=rollButton('+2.14');
+  const scope={
+    querySelector(selector){
+      if(selector==='[role="tab"][aria-selected="true"]')return {innerText:'Spells'};
+      if(selector==='[role="tabpanel"]:not([style*="display: none"])')return {querySelectorAll(){return []}};
+      if(selector==='.initiative-btn button')return initiative;
+      return null;
+    },
+    querySelectorAll(selector){
+      if(selector==='.skill')return [skill];
+      if(selector==='.inline-ability')return [ability];
+      return [];
+    }
+  };
+  const actions=h.beaconCollectRollActions(scope);
+  assert.ok(actions.some(x=>x.kind==='skill'&&x.name==='Acrobatics'&&x.tab===''));
+  assert.ok(actions.some(x=>x.kind==='ability'&&x.name==='STR'&&x.tab===''));
+  assert.ok(actions.some(x=>x.kind==='save'&&x.name==='STR'&&x.tab===''));
+  assert.ok(actions.some(x=>x.kind==='initiative'&&x.name==='Initiative'&&x.tab===''));
+});
+test('official 2024 spell and healing controls are harvested as executable sheet actions',()=>{
+  const {h}=env();
+  const spellAttack=rollButton('+8 Attack'),spellDamage=rollButton('2d10');
+  const spell=namedCard('Fire Bolt',{
+    '.poly-button--hit-dc button':spellAttack,
+    '.poly-button--damage button':spellDamage
+  },'.spell-item__name.span--item-row-title');
+  const heal=rollButton('2d4+4');
+  const action=namedCard('Second Wind',{
+    '.poly-button--healing button':heal
+  },'.action-item__name');
+  const panel={querySelectorAll(selector){
+    if(selector==='.spell-item')return [spell];
+    if(selector==='.action-item')return [action];
+    return [];
+  }};
+  const scope={
+    querySelector(selector){
+      if(selector==='[role="tab"][aria-selected="true"]')return {innerText:'Spells'};
+      if(selector==='[role="tabpanel"]:not([style*="display: none"])')return panel;
+      return null;
+    },
+    querySelectorAll(){return []}
+  };
+  const actions=h.beaconCollectRollActions(scope);
+  assert.ok(actions.some(x=>x.kind==='spell'&&x.name==='Fire Bolt'&&x.action==='attack'));
+  assert.ok(actions.some(x=>x.kind==='spell'&&x.name==='Fire Bolt'&&x.action==='damage'));
+  assert.ok(actions.some(x=>x.kind==='action'&&x.name==='Second Wind'&&x.action==='healing'));
+});
+
+test('explicit Roll-labeled tool checks and Hit Dice are harvested without arbitrary button access',()=>{
+  const {h}=env();
+  const make=(text,aria)=>({innerText:text,textContent:text,
+    getAttribute(name){return name==='aria-label'?aria:null},disabled:false,click(){}});
+  const tool=make('Guitar (or any string variation)','Roll a Guitar (or any string variation) check');
+  const hitDie=make('D10 (Fighter)','Roll a d10 hit die for Fighter');
+  const notARoll=make('Short Rest','Short Rest');
+  const scope={
+    querySelector(selector){
+      if(selector==='[role="tabpanel"]:not([style*="display: none"])')return {querySelectorAll(){return []}};
+      return null;
+    },
+    querySelectorAll(selector){return selector==='button[aria-label]'?[tool,hitDie,notARoll]:[]}
+  };
+  const actions=h.beaconCollectRollActions(scope);
+  assert.equal(actions.length,2);
+  assert.ok(actions.some(x=>x.kind==='generic'&&x.action==='roll'&&x.name==='Guitar (or any string variation)'&&/^Roll a Guitar/.test(x.ariaLabel)));
+  assert.ok(actions.some(x=>x.kind==='generic'&&x.action==='roll'&&x.name==='D10 (Fighter)'&&/^Roll a d10/.test(x.ariaLabel)));
+  assert.equal(actions.some(x=>x.name==='Short Rest'),false);
 });

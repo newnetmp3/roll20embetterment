@@ -79,3 +79,25 @@ Each represented character ID gets its own persistent R20eb profile. Multiple to
 For each newly discovered controlled character, R20eb first reads any Roll20 character attributes already available through the controlled character model. It then attempts a **full import**. If the character sheet is not already open, R20eb invokes Roll20's own character-view dialog, moves the helper dialog offscreen, preserves keyboard focus, runs the normal full Character Sheet / Bio & Info / Advanced Tools + official D&D 2024 tab tour, and closes the helper dialog afterward. If the full sheet cannot be opened yet, model attributes are imported as a partial seed and R20eb retries the full import later. This is read-only: no character attributes, token settings, attacks, spells, inventory, or Roll20 sheet values are changed.
 
 Discovery repeats periodically so page changes, newly spawned controlled tokens, and additional represented characters are picked up. A character is fully imported at most once per page load unless the user explicitly requests another controlled-character scan from **Debug → Rescan controlled characters**.
+
+## Native official-sheet rolls from the combat wheel (2.3.1)
+
+R20eb no longer treats official D&D 2024 attacks as informational-only when the sheet exposes an actual roll control. During the full sheet tour it harvests **semantic references** to the official sheet's rendered roll buttons rather than copying transient DOM nodes or inventing Roll20 macros.
+
+Supported official-sheet roll surfaces include:
+
+- weapon/attack cards: **Attack / Hit-DC** and **Damage**,
+- spell cards: **Attack / Hit-DC** and **Damage**,
+- skill checks,
+- ability checks,
+- saving throws,
+- initiative,
+- tool proficiency checks,
+- Hit Dice and other native controls whose accessible label explicitly identifies them as a **Roll** action,
+- rollable action/feature cards, including **Healing**, attack and damage controls.
+
+The radial Attack menu uses the weapon's official attack button and exposes its official damage button separately. Spell entries similarly expose their native roll controls. The ROLLS section also contains **Sheet Rolls**, which provides every harvested native roll action that is not otherwise conveniently surfaced.
+
+When invoked, the editor sends only a validated semantic roll reference (kind, name, action and tab) to the authenticated official-sheet iframe/popout reader. The reader resolves that reference against the live sheet DOM and clicks Roll20's own button. This preserves Roll20's current roll mode/privacy, attack math, critical handling, spell behavior, resource prompts and native chat templates. If the helper sheet is closed, R20eb can reopen its associated controlled character sheet offscreen, perform the requested roll, and close the helper again. No roll formula or 2024 repeating macro is synthesized.
+
+Legacy 2014 commands continue to use their existing Roll20 macro command path.

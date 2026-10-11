@@ -16,7 +16,7 @@ function harness(){
     localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}}
   };
   vm.createContext(context);
-  vm.runInContext(script+'\nload(); globalThis.h={RB,findSheetForms,requestBeaconFrame,onBeaconFrameMessage,beaconFrameSnapshot,beaconFrameReadRequest,isBeaconSheetDocument,isBeaconFrame,isBeaconPopout,isRoll20Editor,beaconPopoutCandidates,beaconRemoteCandidate};',context);
+  vm.runInContext(script+'\nload(); globalThis.h={RB,findSheetForms,requestBeaconFrame,onBeaconFrameMessage,beaconFrameSnapshot,beaconFrameReadRequest,isBeaconSheetDocument,isBeaconFrame,isBeaconPopout,isRoll20Editor,beaconPopoutCandidates,beaconRemoteCandidate,requestBeaconAction,beaconFindRollButton,beaconInvokeRollRef,executeOfficialSheetRoll};',context);
   return {h:context.h,events,context};
 }
 function sheetFixture(){
@@ -161,4 +161,96 @@ test('registered popout can answer the same read-only snapshot requests as an if
   assert.equal(profile.name,'Captain Rowan');
   assert.equal(profile.stats.hp,31);
   assert.equal(profile.stats.maxHp,42);
+});
+
+test('editor sends native sheet roll invocation only to the authenticated official sheet window',async()=>{
+  const {h}=harness(),f=sheetFixture();
+  h.RB.openSheets=h.findSheetForms(f.doc);
+  const candidate=h.RB.openSheets[0],ref={id:'sheetroll:handaxe',kind:'attack',name:'Handaxe',action:'attack',tab:'Combat'};
+  const promise=h.requestBeaconAction(candidate,ref);
+  const request=f.sent.at(-1);
+  assert.equal(request.origin,'https://advanced-sheets.production.roll20preflight.net');
+  assert.equal(request.data.type,'invoke');
+  assert.equal(request.data.ref.name,'Handaxe');
+  h.onBeaconFrameMessage({origin:'https://evil.example',source:f.frame.contentWindow,
+    data:{bridge:request.data.bridge,type:'invokeResult',id:request.data.id,ok:true}});
+  let settled=false;promise.then(()=>settled=true);
+  await Promise.resolve();assert.equal(settled,false);
+  h.onBeaconFrameMessage({origin:'https://advanced-sheets.production.roll20preflight.net',source:f.frame.contentWindow,
+    data:{bridge:request.data.bridge,type:'invokeResult',id:request.data.id,ok:true}});
+  assert.equal(await promise,true);
+});
+test('official sheet reader resolves the actual Handaxe attack button semantically and clicks it',async()=>{
+  const {h,context}=harness(),clicks=[];
+  const hit={disabled:false,click(){clicks.push('attack')}},damage={disabled:false,click(){clicks.push('damage')}};
+  const title={innerText:'Handaxe',textContent:'Handaxe'};
+  const card={querySelector(selector){
+    if(selector==='.span--item-row-title')return title;
+    if(selector==='.poly-button--hit-dc button')return hit;
+    if(selector==='.poly-button--damage button')return damage;
+    return null;
+  }};
+  context.document.querySelectorAll=selector=>selector==='.attack-item'?[card]:[];
+  context.document.querySelector=()=>null;
+  const attackRef={kind:'attack',name:'Handaxe',action:'attack',tab:'Combat'};
+  const damageRef={kind:'attack',name:'Handaxe',action:'damage',tab:'Combat'};
+  assert.equal(h.beaconFindRollButton(attackRef),hit);
+  assert.equal(h.beaconFindRollButton(damageRef),damage);
+  assert.equal(await h.beaconInvokeRollRef(attackRef),true);
+  assert.equal(await h.beaconInvokeRollRef(damageRef),true);
+  assert.deepEqual(clicks,['attack','damage']);
+});
+test('sheet reader supports skill ability save initiative spell and healing roll locators',()=>{
+  const {h,context}=harness();
+  const btn=name=>({name,disabled:false,click(){}});
+  const skillButton=btn('skill'),abilityButton=btn('ability'),saveButton=btn('save'),initiativeButton=btn('initiative');
+  const spellAttack=btn('spellAttack'),spellDamage=btn('spellDamage'),heal=btn('heal');
+  const skill={innerText:'Acrobatics',textContent:'Acrobatics'};
+  const ability={innerText:'STR 18 +4 +7',textContent:'STR 18 +4 +7',querySelector(sel){
+    return sel==='.poly-button--ability button'?abilityButton:
+      sel==='.poly-button--compact-saving-throw button'?saveButton:null;
+  }};
+  const spell={querySelector(sel){
+    if(sel==='.spell-item__name.span--item-row-title')return {innerText:'Fire Bolt',textContent:'Fire Bolt'};
+    if(sel==='.poly-button--hit-dc button')return spellAttack;
+    if(sel==='.poly-button--damage button')return spellDamage;
+    return null;
+  }};
+  const action={querySelector(sel){
+    if(sel==='.action-item__name')return {innerText:'Second Wind',textContent:'Second Wind'};
+    if(sel==='.poly-button--healing button')return heal;
+    return null;
+  }};
+  context.document.querySelectorAll=selector=>{
+    if(selector==='.skill button.skill__name')return [skill];
+    if(selector==='.inline-ability')return [ability];
+    if(selector==='.spell-item')return [spell];
+    if(selector==='.action-item')return [action];
+    return [];
+  };
+  context.document.querySelector=selector=>selector==='.initiative-btn button'?initiativeButton:null;
+  assert.equal(h.beaconFindRollButton({kind:'skill',name:'Acrobatics',action:'skill'}),skill);
+  assert.equal(h.beaconFindRollButton({kind:'ability',name:'STR',action:'ability'}),abilityButton);
+  assert.equal(h.beaconFindRollButton({kind:'save',name:'STR',action:'save'}),saveButton);
+  assert.equal(h.beaconFindRollButton({kind:'initiative',name:'Initiative',action:'initiative'}),initiativeButton);
+  assert.equal(h.beaconFindRollButton({kind:'spell',name:'Fire Bolt',action:'attack'}),spellAttack);
+  assert.equal(h.beaconFindRollButton({kind:'spell',name:'Fire Bolt',action:'damage'}),spellDamage);
+  assert.equal(h.beaconFindRollButton({kind:'action',name:'Second Wind',action:'healing'}),heal);
+});
+test('invalid or fabricated sheet roll references are never executed',async()=>{
+  const {h}=harness();
+  assert.equal(h.beaconFindRollButton({kind:'javascript',name:'x',action:'eval'}),null);
+  assert.equal(await h.beaconInvokeRollRef({kind:'attack',name:'',action:'attack'}),false);
+});
+
+test('generic Roll-labeled controls resolve by exact accessible label only',()=>{
+  const {h,context}=harness();
+  const hitDie={getAttribute(name){return name==='aria-label'?'Roll a d10 hit die for Fighter':null},disabled:false,click(){}};
+  const rest={getAttribute(name){return name==='aria-label'?'Short Rest':null},disabled:false,click(){}};
+  context.document.querySelectorAll=selector=>selector==='button[aria-label]'?[hitDie,rest]:[];
+  context.document.querySelector=()=>null;
+  assert.equal(h.beaconFindRollButton({kind:'generic',name:'D10 (Fighter)',action:'roll',
+    ariaLabel:'Roll a d10 hit die for Fighter'}),hitDie);
+  assert.equal(h.beaconFindRollButton({kind:'generic',name:'Short Rest',action:'roll',
+    ariaLabel:'Short Rest'}),null);
 });

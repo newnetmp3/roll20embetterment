@@ -22,7 +22,7 @@ function env(){
     localStorage:{getItem(k){return saved.get(k)||null},setItem(k,v){saved.set(k,v)}}
   };
   vm.createContext(scope);vm.runInContext(script,scope);
-  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition,radialLabelLines,radialLabelRotation,radialLabelMarkup,radialVisiblePage,radialLayout,radialViewportBounds,radialLabelsFit,radialJumpgateToken,radialTokenNameScore,radialTokenRectCenter,radialWatchJumpgate,radialHealthMarkup,radialEnsureNativeTokenCleanup,radialMarkPlayerOverlay};",scope);
+  vm.runInContext("load(); RB.shadow={innerHTML:'',querySelector(){return null},querySelectorAll(){return []}};RB.root={style:{setProperty(){}},setAttribute(){}};globalThis.r={RB,profile,radialRadii,radialOuterRadius,radialSector,radialPoint,radialCategories,radialTreeRings,radialWheelSVG,radialCanvasToken,radialDomToken,radialExecute,radialPick,radialHTML,radialPosition,radialLabelLines,radialLabelRotation,radialLabelMarkup,radialVisiblePage,radialLayout,radialViewportBounds,radialLabelsFit,radialJumpgateToken,radialTokenNameScore,radialTokenRectCenter,radialWatchJumpgate,radialHealthMarkup,radialEnsureNativeTokenCleanup,radialMarkPlayerOverlay,radialSheetRollRef,radialSheetRollLeaves};",scope);
   return {r:scope.r,sent,field,doc,scope};
 }
 test('rings progressively contract the original circle and grow concentric choices',()=>{
@@ -401,4 +401,75 @@ test('matched Jumpgate player overlay is marked for native chrome suppression',(
   assert.equal(overlay.attrs['data-r20e-player-token'],'true');
   assert.equal(found.source,'player-token');
   assert.equal(found.overlay,undefined,'DOM element must not leak into anchor object');
+});
+
+test('2024 Handaxe wheel exposes native Attack and Damage actions instead of a dead Roll command',()=>{
+  const {r}=env(),p=r.profile();
+  p.attacks=[{id:'handaxe',name:'Handaxe',toHit:'+7',damage:'1d6+4',range:'5 ft',command:''}];
+  p.sheetRolls=[
+    {id:'roll-handaxe-attack',origin:'sheet',kind:'attack',name:'Handaxe',action:'attack',tab:'Combat',label:'+7 Attack'},
+    {id:'roll-handaxe-damage',origin:'sheet',kind:'attack',name:'Handaxe',action:'damage',tab:'Combat',label:'1d6+4'}
+  ];
+  const handaxe=r.radialCategories()[0].children.find(x=>x.id==='all').children.find(x=>x.label==='Handaxe');
+  assert.ok(handaxe);
+  const attack=handaxe.children.find(x=>x.label==='Attack'),damage=handaxe.children.find(x=>x.label==='Damage');
+  assert.equal(attack.kind,'sheetRoll');assert.equal(attack.value,'roll-handaxe-attack');
+  assert.equal(damage.kind,'sheetRoll');assert.equal(damage.value,'roll-handaxe-damage');
+  assert.equal(handaxe.children.some(x=>x.label==='Roll'&&x.kind==='attack'),false);
+});
+test('Sheet Rolls wheel group exposes every harvested roll kind with unambiguous labels',()=>{
+  const {r}=env(),p=r.profile();
+  p.sheetRolls=[
+    {id:'skill',kind:'skill',name:'Acrobatics',action:'skill',label:'Acrobatics'},
+    {id:'ability',kind:'ability',name:'STR',action:'ability',label:'+4'},
+    {id:'save',kind:'save',name:'STR',action:'save',label:'+7'},
+    {id:'init',kind:'initiative',name:'Initiative',action:'initiative',label:'+2'},
+    {id:'heal',kind:'action',name:'Second Wind',action:'healing',label:'1d10+7'}
+  ];
+  const rolls=r.radialCategories().find(x=>x.id==='checks');
+  const native=rolls.children.find(x=>x.id==='sheetRolls').children;
+  assert.deepEqual(Array.from(native,x=>x.label),[
+    'Acrobatics · Check','STR · Check','STR · Save','Initiative · Roll','Second Wind · Healing'
+  ]);
+  assert.ok(native.every(x=>x.kind==='sheetRoll'));
+});
+test('2024 spell wheel exposes native spell attack and damage buttons when imported',()=>{
+  const {r}=env(),p=r.profile();
+  p.spells=[{id:'firebolt',name:'Fire Bolt',level:0,castTime:'1 Action',command:''}];
+  p.sheetRolls=[
+    {id:'fire-atk',kind:'spell',name:'Fire Bolt',action:'attack',tab:'Spells',label:'+8 Attack'},
+    {id:'fire-dmg',kind:'spell',name:'Fire Bolt',action:'damage',tab:'Spells',label:'2d10'}
+  ];
+  const spellRoot=r.radialCategories().find(x=>x.id==='spells');
+  const fire=spellRoot.children.find(x=>x.id==='lvl0').children.find(x=>x.label==='Fire Bolt');
+  assert.equal(fire.children.find(x=>x.label==='Attack').kind,'sheetRoll');
+  assert.equal(fire.children.find(x=>x.label==='Damage').kind,'sheetRoll');
+  assert.equal(fire.children.some(x=>x.label==='Cast'),false,'No guessed command should be fabricated');
+});
+test('executing a native sheet roll uses the official sheet bridge and never synthesizes chat dice',async()=>{
+  const {r,sent,scope}=env(),p=r.profile(),called=[];
+  p.sheetRolls=[{id:'handaxe-native',kind:'attack',name:'Handaxe',action:'attack',tab:'Combat',label:'+7 Attack'}];
+  scope.nativeRollHook=(ref)=>{called.push({...ref});return Promise.resolve(true)};
+  vm.runInContext('executeOfficialSheetRoll=(ref)=>nativeRollHook(ref)',scope);
+  r.radialExecute({kind:'sheetRoll',value:'handaxe-native'});
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(sent.length,0);
+  assert.equal(called.length,1);
+  assert.equal(called[0].name,'Handaxe');assert.equal(called[0].action,'attack');
+  assert.equal(p.actionUsed,true);
+});
+
+test('standard Skills Saves Abilities and Initiative entries prefer official sheet buttons when available',()=>{
+  const {r}=env(),p=r.profile();
+  p.sheetRolls=[
+    {id:'acro',kind:'skill',name:'Acrobatics',action:'skill',label:'Acrobatics'},
+    {id:'str-save',kind:'save',name:'STR',action:'save',label:'+7'},
+    {id:'str-check',kind:'ability',name:'STR',action:'ability',label:'+4'},
+    {id:'init-native',kind:'initiative',name:'Initiative',action:'initiative',label:'+2'}
+  ];
+  const root=r.radialCategories().find(x=>x.id==='checks');
+  assert.equal(root.children.find(x=>x.id==='skills').children.find(x=>x.label==='Acrobatics').kind,'sheetRoll');
+  assert.equal(root.children.find(x=>x.id==='saves').children.find(x=>x.label==='STR').value,'str-save');
+  assert.equal(root.children.find(x=>x.id==='abilities').children.find(x=>x.label==='STR').value,'str-check');
+  assert.equal(root.children.find(x=>x.id==='initiative').value,'init-native');
 });
