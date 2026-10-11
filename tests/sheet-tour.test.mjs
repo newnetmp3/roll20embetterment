@@ -585,3 +585,25 @@ test('visible official 2024 sheet values override stale model stats without tour
  assert.equal(p.stats.speed,35);assert.equal(p.abilityScores.dex,17);
  assert.equal(p.sheetLink.statSources.hp,'Visible official sheet');
 });
+
+test('a fresher open-sheet HP and AC never flicker back to stale cached model values',async()=>{
+ const {api,context}=harness(),p=api.profile();
+ p.stats.hp=24;p.stats.ac=17;
+ const character={attribs:{toJSON:()=>[{name:'hp',current:'24',max:'84'},{name:'ac',current:'17',max:''}]}};
+ const record={characterId:'char-nier',characterName:'Nier',character,
+   model:backboneModel('tok',{type:'image'})};
+ const candidate={id:'char-nier',characterId:'char-nier',name:'Nier',
+   frame:{contentWindow:{}},root:{},score:2000};
+ context.candidateHook=candidate;
+ vm.runInContext("autoCandidateForCharacter=()=>candidateHook; sheetCandidates=()=>[candidateHook]; requestBeaconFrame=async()=>({fields:{},visible:{stats:{hp:62,maxHp:84,ac:19},details:{},coverage:{visibleFields:3,sections:['Combat'],names:['HP','AC']},resources:[],attacks:[],sheetRolls:[]}});",context);
+ await api.autoRefreshVisibleSheetStats(record,p);
+ assert.equal(p.stats.hp,62);assert.equal(p.stats.ac,19);
+ const group=new Map([['char-nier',{record,profile:p}]]);
+ api.autoRefreshCharacterStats(group);
+ assert.equal(p.stats.hp,62,'stale model HP cannot override a fresh visible sheet');
+ assert.equal(p.stats.ac,19,'stale model AC cannot override a fresh visible sheet');
+ p.sheetLink.visibleStatAt=Date.now()-60000;
+ api.autoRefreshCharacterStats(group);
+ assert.equal(p.stats.hp,24,'after source expires model becomes fallback');
+ assert.equal(p.stats.ac,17);
+});
