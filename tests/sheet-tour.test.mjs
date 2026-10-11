@@ -462,90 +462,78 @@ test('live controlled-character stats refresh after full import without another 
 });
 
 
-function journalPage(){
- const clicked=[];
- const document={
-   querySelectorAll(){return []},
-   body:{appendChild(node){node.isAttached=true}},
-   createElement(tag){
-     assert.equal(tag,'a');
-     const element={style:{},handlers:{},addEventListener(type,fn){this.handlers[type]=fn},
-       click(){const event={preventDefault(){event.prevented=true}};this.handlers.click?.(event);
-         clicked.push({url:this.href,prevented:!!event.prevented})},
-       remove(){this.isAttached=false}};
-     return element;
-   }
- };
- return {document,clicked};
-}
-test('Roll20 wheel dispatches in-VTT Journal link without opening a broken browser tab',()=>{
- const {document,clicked}=journalPage(),{api,context}=harness(document);
- api.profile().name='Nier';api.profile().roll20CharacterId='-nier2024';
- context.window.open=()=>{throw Error('External journal window must never open')};
- assert.equal(api.openRoll20CharacterSheet(),true);
- assert.deepEqual(clicked,[{url:'https://journal.roll20.net/character/-nier2024',prevented:true}]);
- assert.match(api.sheetUI(),/data-action="openRoll20Sheet"/);
- assert.match(api.sheetUI(),/Open via Roll20 Journal/);
- assert.doesNotMatch(api.sheetUI(),/target="_blank"/);
+// Native Roll20 sheet opening is testable. Synthetic click dispatch is not
+// proof Roll20's browser will open anything, so fallback is intentionally manual.
+test('Roll20 sheet button never reports success from an unverified synthetic Journal click',()=>{
+ const {api,context}=harness();
+ api.profile().roll20CharacterId='-nier2024';
+ let created=0;
+ context.document.body={appendChild(){throw Error('Synthetic Journal click not permitted')}};
+ context.document.createElement=()=>{created++;return {}};
+ assert.equal(api.openRoll20CharacterSheet(),false);
+ assert.equal(created,0);
+ assert.equal(api.RB.visible,true);
+ assert.equal(api.RB.tab,'Sheet');
+ const markup=api.sheetUI();
+ assert.match(markup,/Open Journal link/);
+ assert.match(markup,/href="https:\/\/journal.roll20.net\/character\/-nier2024"/);
+ assert.doesNotMatch(markup,/data-action="openRoll20Sheet" title=/);
 });
-test('full wheel and dock share Roll20 sheet-opening action',()=>{
- const {document,clicked}=journalPage(),{api,context}=harness(document);
+test('full wheel sheet action provides manual fallback instead of fake success',()=>{
+ const {api}=harness();
  api.profile().roll20CharacterId='NierId';
  api.action('radialOpenSheet',{dataset:{}});
- assert.equal(clicked.length,1);
- assert.equal(clicked[0].url,'https://journal.roll20.net/character/NierId');
+ assert.equal(api.RB.tab,'Sheet');
+ assert.equal(api.RB.visible,true);
 });
-test('native showDialog on legacy view is preferred to the Journal link',()=>{
- const {document,clicked}=journalPage(),{api,context}=harness(document);
+test('native showDialog on legacy view is preferred',()=>{
+ const {api,context}=harness();
  api.profile().roll20CharacterId='legacy-sheet';
  let shows=0;context.nativeChar={view:{showDialog(){shows++}}};
  vm.runInContext("autoCharacterById=()=>nativeChar;",context);
  assert.equal(api.openRoll20CharacterSheet(),true);
- assert.equal(shows,1);assert.equal(clicked.length,0);
+ assert.equal(shows,1);
 });
-test('native showDialog directly on character model is accepted',()=>{
- const {document,clicked}=journalPage(),{api,context}=harness(document);
+test('native showDialog directly on character model is supported',()=>{
+ const {api,context}=harness();
  api.profile().roll20CharacterId='new-model';
  let shows=0;context.nativeChar={showDialog(){shows++}};
  vm.runInContext("autoCharacterById=()=>nativeChar;",context);
  assert.equal(api.openRoll20CharacterSheet(),true);
- assert.equal(shows,1);assert.equal(clicked.length,0);
+ assert.equal(shows,1);
 });
-test('failed native display retries safely via the Roll20 in-VTT link',()=>{
- const {document,clicked}=journalPage(),{api,context}=harness(document);
+test('failed native opening shows manual fallback instead of pretending it opened',()=>{
+ const {api,context}=harness();
  api.profile().roll20CharacterId='beacon-sheet';
  context.nativeChar={view:{showDialog(){throw Error('View not ready')}}};
  vm.runInContext("autoCharacterById=()=>nativeChar;",context);
- assert.equal(api.openRoll20CharacterSheet(),true);
- assert.equal(clicked[0].url,'https://journal.roll20.net/character/beacon-sheet');
+ assert.equal(api.openRoll20CharacterSheet(),false);
+ assert.equal(api.RB.tab,'Sheet');
 });
-test('current profile character ID resolves even when model/view and token selection are absent',()=>{
- const {document,clicked}=journalPage(),{api}=harness(document);
- const p=api.profile();p.name='Nier';
+test('profile-linked character ID is resolved without an active token selection',()=>{
+ const {api}=harness(),p=api.profile();p.name='Nier';
  api.RB.state.tokenAssignments={a:{profileId:p.id,characterId:'linked-token-a'},
    b:{profileId:p.id,characterId:'linked-token-a'}};
  assert.equal(api.roll20LinkedCharacterId(),'linked-token-a');
- assert.equal(api.openRoll20CharacterSheet(),true);
- assert.equal(clicked[0].url,'https://journal.roll20.net/character/linked-token-a');
+ assert.equal(api.roll20CharacterSheetUrl('linked-token-a'),
+   'https://journal.roll20.net/character/linked-token-a');
 });
-test('missing or ambiguous character mappings cannot open arbitrary or malformed URLs',()=>{
- const {document,clicked}=journalPage(),{api}=harness(document);
- api.profile().name='Nier';
- assert.equal(api.openRoll20CharacterSheet(),false);
- api.RB.state.tokenAssignments={a:{profileId:api.profile().id,characterId:'char-one'},
-   b:{profileId:api.profile().id,characterId:'char-two'}};
+test('selected token for another profile cannot redirect the active sheet',()=>{
+ const {api,context}=harness(),p=api.profile();p.name='Nier';
+ const other=vm.runInContext('newProfile("Other")',context);
+ api.RB.state.profiles.push(other);
+ api.RB.state.tokenAssignments={alien:{tokenId:'alien',profileId:other.id,characterId:'npc-42'}};
+ context.window.d20={engine:{selected:()=>[{model:{id:'alien'}}]}};
  assert.equal(api.roll20LinkedCharacterId(),'');
+});
+test('ambiguous or malformed character IDs cannot select random sheets',()=>{
+ const {api}=harness(),p=api.profile();p.name='Nier';
  assert.equal(api.openRoll20CharacterSheet(),false);
- assert.equal(clicked.length,0);
+ api.RB.state.tokenAssignments={a:{profileId:p.id,characterId:'char-one'},
+   b:{profileId:p.id,characterId:'char-two'}};
+ assert.equal(api.roll20LinkedCharacterId(),'');
  assert.equal(api.roll20CharacterSheetUrl('char/../../bad'),'');
  assert.equal(api.roll20CharacterSheetUrl('https://evil.example'),'');
-});
-test('unavailable DOM/native sheet opening explains the fallback instead of launching a browser tab',()=>{
- const {api}=harness();
- api.profile().roll20CharacterId='-nier';
- assert.equal(api.openRoll20CharacterSheet(),false);
- assert.equal(api.RB.visible,true);
- assert.equal(api.RB.tab,'Sheet');
 });
 test('HP tracks the linked token bar instead of stale character attributes',()=>{
  const {api}=harness(),p=api.profile();
@@ -606,4 +594,16 @@ test('a fresher open-sheet HP and AC never flicker back to stale cached model va
  api.autoRefreshCharacterStats(group);
  assert.equal(p.stats.hp,24,'after source expires model becomes fallback');
  assert.equal(p.stats.ac,17);
+});
+
+test('HP-link normalization accepts whitespace in linked Roll20 attributes',()=>{
+ const {api}=harness(),p=api.profile();
+ p.stats.hp=18;
+ const model=backboneModel('tok-nier',{bar1_link:'attribute-id',bar1_value:'42',bar1_max:'84'});
+ const attr={id:'attribute-id',get:key=>key==='name'?'Hit Points Current':null};
+ const character={attribs:{models:[attr],toJSON:()=>[{name:'hp',current:'18',max:'84'}]}};
+ const groups=new Map([['char',{record:{model,character,characterId:'char',characterName:'Nier'},profile:p}]]);
+ api.autoRefreshCharacterStats(groups);
+ assert.equal(p.stats.hp,42);
+ assert.match(p.sheetLink.statSources.hp,/Token Bar 1/);
 });
