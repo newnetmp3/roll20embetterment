@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.11 — Concentric Combat HUD
+# roll20 Embetterment 2.3.12 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -155,3 +155,12 @@ An **actually visible** 2024 value now takes precedence over stale named attribu
 ### Regression example: Nier
 
 The supplied screenshots show **82/84 HP, AC 17, speed 55 ft, initiative +2.14, STR 18, DEX 14, CON 15, INT 12, WIS 15, CHA 10** on the official sheet, versus **69/84 HP, AC 10, speed 30 ft, initiative +0 and absent scores** in R20eb. Automated tests now assert the corrected live source-priority and safe iframe association against that case. Live Firefox/Jumpgate verification is still required to confirm the bridge returns the expected DOM values; the tests cannot simulate Roll20's private cross-origin implementation.
+
+
+## Official 2024 input-value and named-frame fallback (v2.3.12)
+
+The official 2024 sheet can display current/max/temporary HP in editable inputs. Those values are **not included in DOM `innerText`**. The read-only adapter now looks for a bounded **HIT POINTS / Current / Max** panel and reads its visible inputs directly. It also reads visible score inputs in the known official `.inline-ability` rows and the official initiative roll button. Invalid, invisible, or unrecognized values are ignored rather than treated as zero.
+
+When the official sheet frame supplies named combat attributes but its rendered text has no recognized stats, the live reader now imports the named values rather than discarding the entire response. Token HP remains a fallback when the official scan provides no matching value. Unrecognized headless iframes are not used as proof of a player-opened sheet, and imported values never write to Roll20.
+
+**Browser check still required:** This was unit-tested using DOM fixtures, not a live Roll20 session. With Nier's official sheet open, check that R20eb shows 82/84 HP, AC 17, speed 55 ft, initiative +2.14, and all six ability scores. If HP still reads 69, select **Auto** under Sheet → Health source instead of forcing the stale Token Bar 1; inspect Sheet → Current sources.
