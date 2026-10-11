@@ -76,9 +76,13 @@ function action(name, el) {
     }
     case 'runSheetAction':{
       const chosen=(p.attacks||[]).find(x=>x.id===id);
-      if(chosen?.command)sendToRoll20(chosen.command);
-      else toast('No accessible Roll20 attack button. Roll from the original character sheet.');break;
+      const native=chosen&&!chosen.command?radialSheetRollRef('attack',chosen.name,'attack'):null;
+      if(chosen?.command)radialExecute({kind:'attack',value:chosen.id});
+      else if(native)radialExecute({kind:'sheetRoll',value:native.id});
+      else toast('No accessible Roll20 attack button. Roll from the original character sheet.');
+      break;
     }
+    case 'runNativeSheetRoll':radialExecute({kind:'sheetRoll',value:id});break;
     case 'slot':executeSlot(ix);break;
     case 'runMacro':runMacro(id);break;
     case 'editMacro':RB.editMacro=id;render();break;
@@ -197,8 +201,12 @@ function navigatePalette(kind,id) {
   if(kind==='tab'){RB.tab=id;RB.state.ui.lastTab=id;RB.visible=true;save();render();}
   else if(kind==='macro') {runMacro(id);render();}
   else if(kind==='spell')useSpell(id);
-  else if(kind==='attack'){const a=(profile().attacks||[]).find(x=>x.id===id);if(a?.command)sendToRoll20(a.command);else toast('Sheet action button unavailable.');}
-  else if(kind==='skill'||kind==='save') {quickRoll(kind,id);render();}
+  else if(kind==='attack'||kind==='sheetRoll')radialExecute({kind,value:id});
+  else if(kind==='skill'||kind==='save') {
+    const ref=radialSheetRollRef(kind,kind==='save'?id.toUpperCase():id,kind);
+    if(ref)radialExecute({kind:'sheetRoll',value:ref.id});
+    else {quickRoll(kind,id);render();}
+  }
 }
 function onClick(e) {
   const control=e.target.closest('[data-action]');

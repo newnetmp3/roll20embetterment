@@ -20,7 +20,7 @@ function environment(query='?id=123'){
     confirm:()=>true,prompt:()=>null,window:{innerWidth:1200,innerHeight:900}
   };
   vm.createContext(scope);vm.runInContext(program,scope);
-  vm.runInContext('load(); RB.shadow={querySelector(){return null},querySelectorAll(){return []},innerHTML:""}; RB.root={style:{setProperty(){}},setAttribute(){}}; globalThis.h={RB,profile,makeRoll,quickRoll,sendToRoll20,executeSlot,applyDamage,rest,html,save,load,setValue,newProfile,render,notesMarkdown,baseMacros,action,rollsUI,homeUI,inventoryUI,spellListHTML,normalizeProfile,clearImportedSheetData,resetCurrentProfileData,debugUI,filterChatMessages,onKeyDown,keepEmbettermentKeysLocal}',scope);
+  vm.runInContext('load(); RB.shadow={querySelector(){return null},querySelectorAll(){return []},innerHTML:""}; RB.root={style:{setProperty(){}},setAttribute(){}}; globalThis.h={RB,profile,makeRoll,quickRoll,sendToRoll20,executeSlot,applyDamage,rest,html,save,load,setValue,newProfile,render,notesMarkdown,baseMacros,action,rollsUI,homeUI,inventoryUI,spellListHTML,normalizeProfile,clearImportedSheetData,resetCurrentProfileData,debugUI,filterChatMessages,onKeyDown,keepEmbettermentKeysLocal,sheetUI,paletteEntries,navigatePalette}',scope);
   return {h:scope.h,scope,store,sent,toasts,setDraft(v){draft=v},getDraft(){return draft},setChatAvailable(v){allowed=v}};
 }
 test('initializes per-campaign key and a local profile with 8 action slots',()=>{const {h}=environment();assert.match(h.RB.key,/123$/);assert.equal(h.profile().macrosSlots.length,8);assert.equal(h.RB.state.profiles.length,1);});
@@ -110,4 +110,51 @@ test('clearing current R20eb character data preserves profile identity but reset
   assert.equal(out.stats.hp,10);assert.equal(out.sheetLink,null);
   assert.equal(e.h.profile(),out);
   assert.equal(e.sent.length,0,'full local reset must not submit anything to Roll20');
+});
+
+test('Sheet panel renders official weapon hit, damage and other native roll buttons',()=>{
+  const {h}=environment(),p=h.profile();
+  p.attacks=[{id:'axe',name:'Handaxe',command:''},{id:'blank',name:'Unmapped',command:''}];
+  p.sheetRolls=[{id:'hit',kind:'attack',name:'Handaxe',action:'attack',tab:'Combat'},
+    {id:'dmg',kind:'attack',name:'Handaxe',action:'damage',tab:'Combat'},
+    {id:'tool',kind:'tool',name:'Thieves Tools',action:'roll',tab:'Skills & Tools'}];
+  const ui=h.sheetUI();
+  assert.match(ui,/Attack · official/);assert.match(ui,/Damage · official/);
+  assert.match(ui,/Official sheet rolls \(3\)/);
+  for(const id of ['hit','dmg','tool'])assert.match(ui,new RegExp('data-action="runNativeSheetRoll" data-id="'+id+'"'));
+  assert.doesNotMatch(ui,/data-action="runSheetAction" data-id="blank"/);
+});
+test('Sheet and palette native actions share bridge and never generate chat roll formulas',async()=>{
+  const {h,scope,sent}=environment(),p=h.profile(),called=[];
+  p.attacks=[{id:'axe',name:'Handaxe',command:''}];
+  p.sheetRolls=[{id:'hit',kind:'attack',name:'Handaxe',action:'attack',tab:'Combat'},
+    {id:'dmg',kind:'attack',name:'Handaxe',action:'damage',tab:'Combat'},
+    {id:'tool',kind:'tool',name:'Thieves Tools',action:'roll',tab:'Skills & Tools'}];
+  scope.nativeRollHook=ref=>{called.push({...ref});return Promise.resolve(true)};
+  vm.runInContext('executeOfficialSheetRoll=(ref)=>nativeRollHook(ref)',scope);
+  const entries=h.paletteEntries();
+  assert.equal(entries.find(x=>x.name==='Attack: Handaxe · official')?.value,'hit');
+  assert.ok(entries.some(x=>x.name.includes('Thieves Tools')&&x.kind==='sheetRoll'));
+  assert.equal(entries.filter(x=>x.value==='hit').length,1);
+  h.action('runSheetAction',{dataset:{id:'axe'}});
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(p.actionUsed,true);
+  h.navigatePalette('sheetRoll','dmg');
+  await Promise.resolve();await Promise.resolve();
+  h.action('runNativeSheetRoll',{dataset:{id:'tool'}});
+  await Promise.resolve();await Promise.resolve();
+  assert.deepEqual(called.map(x=>x.id),['hit','dmg','tool']);
+  assert.equal(sent.length,0);
+});
+test('palette uses official save and skill controls with legacy fallback',async()=>{
+  const {h,scope,sent}=environment(),p=h.profile(),called=[];
+  p.sheetRolls=[{id:'save-str',kind:'save',name:'STR',action:'save'},
+    {id:'acro',kind:'skill',name:'Acrobatics',action:'skill'}];
+  scope.nativeRollHook=ref=>{called.push(ref.id);return Promise.resolve(true)};
+  vm.runInContext('executeOfficialSheetRoll=(ref)=>nativeRollHook(ref)',scope);
+  h.navigatePalette('save','str');h.navigatePalette('skill','Acrobatics');
+  await Promise.resolve();await Promise.resolve();
+  assert.deepEqual(called,['save-str','acro']);
+  h.navigatePalette('skill','Perception');
+  assert.equal(sent.length,1);
 });
