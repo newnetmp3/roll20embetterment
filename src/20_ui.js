@@ -6,6 +6,9 @@ const STYLE = `
 :host([data-theme="violet"]){--bg:#1e182a;--panel:#2b2039;--raised:#3b2b4e;--border:#705682;--text:#f5eafb;--muted:#ccb9d7;--accent:#e3adff;--green:#85d4ae;--red:#ff94aa;--shadow:0 16px 52px #15091fcc}
 *{box-sizing:border-box}button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.45}input,textarea,select{color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;min-width:0}input[type="checkbox"]{width:auto}input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}textarea{width:100%;min-height:80px;resize:vertical}select{max-width:100%}label{color:var(--muted);font-size:.85em}button{background:var(--raised);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:7px 11px;white-space:nowrap}button:hover{border-color:var(--accent);filter:brightness(1.13)}button.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:700}button.small{padding:3px 7px;font-size:.87em}button.warn{color:var(--red)}button.on{background:#466d5f;border-color:var(--green);color:white}h2,h3{margin:0 0 9px;line-height:1.3;font-weight:650}h2{font-size:1.18em}h3{font-size:1em;color:var(--accent)}p{margin:0 0 10px}.muted,.hint{color:var(--muted)}.hint{font-size:.86em}.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.between{justify-content:space-between}.grow{flex:1;min-width:0}.stack{display:flex;flex-direction:column;gap:8px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px}.card{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:11px;min-width:0}.pill{padding:2px 8px;border-radius:30px;font-size:.79em;background:var(--raised);border:1px solid var(--border)}.stat{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}.field{display:flex;flex-direction:column;gap:3px;flex:1 1 95px;min-width:86px}.field input{width:100%}.field.narrow{flex:0 0 88px}.mini{width:68px;text-align:center}.wide{width:100%}.sep{height:1px;background:var(--border);margin:10px 0}.scroll{max-height:190px;overflow:auto}.list-entry{padding:8px 0;border-top:1px solid var(--border)}.list-entry:first-child{border-top:none}.barslot{min-width:63px;max-width:113px;flex:1;padding:7px 5px;text-align:center;overflow:hidden;text-overflow:ellipsis}.barslot .index{font-size:.75em;color:var(--muted)}
 #rbe-fab,#rbe-bar,#rbe-hud,#rbe-panel,#rbe-palette,#rbe-toast,#rbe-copy-modal{pointer-events:auto;color:var(--text);font-size:calc(14px * var(--scale,1))}
+#rbe-native-roll-feedback{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:10;max-width:min(530px,calc(100vw - 24px));padding:10px 16px;border-radius:10px;background:var(--panel);border:1px solid var(--accent);box-shadow:var(--shadow);font-weight:650;text-align:center;pointer-events:none;color:var(--text)}
+#rbe-native-roll-feedback.is-success{border-color:var(--green)}#rbe-native-roll-feedback.is-error{border-color:var(--red)}
+
 #rbe-fab{position:fixed;bottom:14px;left:14px;padding:12px;border:1px solid var(--accent);border-radius:15px;background:var(--bg);color:var(--accent);box-shadow:var(--shadow);font-weight:800}
 #rbe-hud{position:fixed;left:14px;bottom:78px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;box-shadow:var(--shadow);max-width:min(380px,calc(100vw - 24px));min-width:195px}
 #rbe-hud .hpbar{height:7px;background:var(--raised);border-radius:8px;overflow:hidden;margin:6px 0}#rbe-hud .hpbar>span{display:block;height:100%;background:var(--red)}
@@ -26,18 +29,20 @@ const button = (label,action,extra='',cls='') => `<button data-action="${html(ac
 const progress = (cur,max) => `<div class="hpbar"><span style="width:${max?Math.max(0,Math.min(100,cur/max*100)):0}%"></span></div>`;
 function sheetUI() {
   const p=profile(),link=p.sheetLink,options=RB.openSheets||[];
+  const nativeButton=(label,ref,cls='small primary')=>
+    button(label,'runNativeSheetRoll','data-id="'+html(ref.id)+'"'+(RB.nativeRollPending?.has(p.id+':'+ref.id)?' disabled':''),cls);
   const attackControls=item=>{
     const attackRef=radialSheetRollRef('attack',item.name,'attack'),damageRef=radialSheetRollRef('attack',item.name,'damage');
     return (item.command?button('Attack','runSheetAction','data-id="'+html(item.id)+'"','small primary'):
-      attackRef?button('Attack · official','runNativeSheetRoll','data-id="'+html(attackRef.id)+'"','small primary'):'')+
-      (damageRef?button('Damage · official','runNativeSheetRoll','data-id="'+html(damageRef.id)+'"','small'):'');
+      attackRef?nativeButton('Attack · official',attackRef):'')+
+      (damageRef?nativeButton('Damage · official',damageRef,'small'):'');
   };
   const section=(title,items,description,withRoll='')=>
     '<div class="card"><h3>'+title+' ('+items.length+')</h3>'+
     (items.length?'<div class="scroll">'+items.map(item=>
       '<div class="list-entry"><div class="row"><strong class="grow">'+html(item.name)+'</strong>'+
       (withRoll==='attack'?attackControls(item):withRoll==='native'?
-        button('Roll · official','runNativeSheetRoll','data-id="'+html(item.id)+'"','small primary'):'')+
+        nativeButton('Roll · official',item):'')+
       '</div><p class="hint">'+html(short(description(item),450))+'</p></div>').join('')+'</div>':
       '<p class="hint">Nothing accessible in the last scan.</p>')+'</div>';
   return '<div class="stack"><div class="card"><h2>Link character sheet</h2>'+
@@ -276,6 +281,14 @@ function themeHeading(tab) {
   return `<div class="rbe-section-heading"><div><h2>${html(title)}</h2><small>${html(description)}</small></div><span class="rbe-section-mark" aria-hidden="true">${glyph}</span></div>`;
 }
 const THEME_TAB_GLYPHS={Home:'♜',Sheet:'✥',Rolls:'⚄',Macros:'⚔',Spells:'✧',Inventory:'◆',Journal:'✎',Chat:'☷',Reference:'❖',Settings:'⚙',Debug:'⌘'};
+function nativeRollStatusMarkup(){
+  const s=RB.nativeRollStatus,n=RB.nativeRollPending?.size||0;
+  if(!s)return '';
+  const state=n?'pending':s.state;
+  const message=n>1?'Rolling '+n+' official sheet actions…':n?'Rolling official sheet: '+s.label:
+    s.state==='success'?'Roll20 received: '+s.label:'Official sheet roll not completed: '+s.label;
+  return '<div id="rbe-native-roll-feedback" class="is-'+state+'" role="status" aria-live="polite">'+html(short(message,180))+'</div>';
+}
 function render() {
   if (!RB.shadow || !RB.state) return;
   const s=RB.state.settings; RB.root.style.setProperty('--scale',s.scale); RB.root.setAttribute('data-theme',s.theme); RB.root.setAttribute('data-reduced-motion',String(!!s.reducedMotion));
@@ -283,7 +296,7 @@ function render() {
   const panels={Home:homeUI,Sheet:sheetUI,Rolls:rollsUI,Macros:macroUI,Spells:spellsUI,Inventory:inventoryUI,Journal:journalUI,Chat:chatUI,Reference:referenceUI,Settings:settingsUI,Debug:debugUI};
   RB.shadow.innerHTML=`<style>${STYLE}${BG3_STYLE}${RADIAL_STYLE}</style>${s.showFab?`<button id="rbe-fab" data-action="toggle" title="roll20 Embetterment — Alt+Shift+E">⚔ R20E</button>`:''}${hudUI()}${barUI()}
   ${RB.visible?`<section id="rbe-panel" role="complementary" aria-label="roll20 Embetterment"><header id="rbe-header">${s.theme==='bg3'?'<span class="rbe-header-crest" aria-hidden="true">✥</span><span class="rbe-header-copy"><strong>roll20 <em>Embetterment</em></strong><span class="rbe-header-sub">Adventurer’s Companion</span></span>':'<strong>⚔ roll20 Embetterment</strong>'}<div class="row">${button('⌕','openPalette','title="Command palette"','small')}${button('—','close','title="Minimize"','small')}</div></header><nav id="rbe-tabs">${tabs.map(t=>`<button data-action="tab" data-value="${t}" class="${t===RB.tab?'active':''}" title="${html(t)}">${s.theme==='bg3'?`<span class="rbe-nav-glyph" aria-hidden="true">${THEME_TAB_GLYPHS[t]}</span><span class="rbe-nav-label">${html(t)}</span>`:html(t)}</button>`).join('')}</nav><div id="rbe-body" data-panel="${html(RB.tab)}">${s.theme==='bg3'?themeHeading(RB.tab):''}${(panels[RB.tab]||homeUI)()}</div></section>`:''}
-  ${radialHTML()}${paletteUI()}${modalUI()}<div id="rbe-toast" role="status" hidden></div>`;
+  ${radialHTML()}${paletteUI()}${modalUI()}${nativeRollStatusMarkup()}<div id="rbe-toast" role="status" hidden></div>`;
   RB.panel=RB.shadow.querySelector('#rbe-panel');
   const u=RB.state.ui;
   if (RB.panel) { RB.panel.style.setProperty('--panel-width',(clamp(u.panelWidth||520,360,920))+'px'); if (Number.isFinite(u.panelX)&&Number.isFinite(u.panelY)) {RB.panel.style.left=u.panelX+'px';RB.panel.style.top=u.panelY+'px';RB.panel.style.right='auto';RB.panel.style.bottom='auto';} }
