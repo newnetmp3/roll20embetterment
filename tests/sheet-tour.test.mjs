@@ -6,7 +6,7 @@ import {join,resolve} from 'node:path';
 
 const root=resolve(import.meta.dirname,'..');
 const modules=['00_core.js','10_roll20_bridge.js','14_beacon_dom.js','15_sheet_link.js',
-  '16_beacon_visible.js','17_frame_bridge.js','18_sheet_tour.js','19_radial_hud.js',
+  '16_beacon_visible.js','17_frame_bridge.js','18_sheet_access.js','18_sheet_tour.js','18_stats_sync.js','19_radial_hud.js',
   '20_ui.js','25_bg3_theme.js','30_events.js'];
 const script=modules.map(x=>readFileSync(join(root,'src',x),'utf8')).join('\n');
 function harness(doc){
