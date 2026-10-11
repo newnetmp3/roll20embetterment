@@ -112,12 +112,13 @@ function onBeaconFrameMessage(event){
     sheetPrefetchAttributes(candidate);
     return;
   }
-  if(message.type!=='snapshot'||typeof message.id!=='string')return;
+  if(!['snapshot','invokeResult'].includes(message.type)||typeof message.id!=='string')return;
   const pending=rbeFramePending.get(message.id);
   if(!pending||pending.target!==event.source)return;
   rbeFramePending.delete(message.id);clearTimeout(pending.timeout);
   candidate.lastSeen=Date.now();
   if(message.error)return pending.reject(new Error(String(message.error).slice(0,160)));
+  if(message.type==='invokeResult')return pending.resolve(!!message.ok);
   const fields=sheetAttributes(message.fields);
   if(Object.keys(fields).length>6000)return pending.reject(new Error('Character sheet returned too many fields'));
   const visible=message.visible&&typeof message.visible==='object'?message.visible:
@@ -144,6 +145,101 @@ function requestBeaconFrame(candidate,deep=false,options={}){
       target.postMessage({bridge:RBE_BRIDGE_MARKER,type:'scan',id,deep:!!deep,tour:!!options.tour},RBE_BEACON_ORIGIN);
     }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
   });
+}
+function requestBeaconAction(candidate,ref){
+  return new Promise((resolve,reject)=>{
+    const target=candidate?.frame?.contentWindow||candidate?.popoutWindow;
+    if(!target)return reject(new Error('Official character sheet reader is not available'));
+    if(candidate.frame&&!beaconFrameUrlOkay(candidate.frame))
+      return reject(new Error('Unrecognized character sheet iframe origin'));
+    if(candidate.popoutWindow&&candidate.origin!==RBE_BEACON_ORIGIN)
+      return reject(new Error('Unrecognized character sheet popout origin'));
+    const id='rbea'+(++rbeFrameCounter),timeout=setTimeout(()=>{
+      rbeFramePending.delete(id);reject(new Error('Official sheet roll action timed out.'));
+    },12000);
+    rbeFramePending.set(id,{target,candidateId:candidate.id,resolve,reject,timeout});
+    try{target.postMessage({bridge:RBE_BRIDGE_MARKER,type:'invoke',id,ref},RBE_BEACON_ORIGIN);}
+    catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
+  });
+}
+function beaconRollRefOkay(ref){
+  return !!ref&&typeof ref==='object'&&
+    ['attack','spell','skill','ability','save','initiative','action'].includes(String(ref.kind||''))&&
+    ['attack','damage','skill','ability','save','initiative','healing'].includes(String(ref.action||''))&&
+    typeof ref.name==='string'&&ref.name.length>0&&ref.name.length<=120;
+}
+function beaconFindRollButton(ref){
+  if(!beaconRollRefOkay(ref))return null;
+  const same=(a,b)=>String(a||'').replace(/\s+/g,' ').trim().toLocaleLowerCase()===
+    String(b||'').replace(/\s+/g,' ').trim().toLocaleLowerCase();
+  const namedCard=(selector,name,nameSelectors)=>{
+    for(const card of Array.from(document.querySelectorAll?.(selector)||[]).slice(0,220)){
+      const cardName=nameSelectors.map(sel=>beaconRollText(card.querySelector?.(sel))).find(Boolean);
+      if(same(cardName,name))return card;
+    }
+    return null;
+  };
+  if(ref.kind==='attack'){
+    const card=namedCard('.attack-item',ref.name,['.span--item-row-title','.attack-item__title-chat','.attack-item__title-col']);
+    return card?.querySelector?.(ref.action==='damage'?'.poly-button--damage button':'.poly-button--hit-dc button')||null;
+  }
+  if(ref.kind==='spell'){
+    const card=namedCard('.spell-item',ref.name,['.spell-item__name.span--item-row-title','.spell-item__name','.spell-item__name--wrapper']);
+    return card?.querySelector?.(ref.action==='damage'?'.poly-button--damage button':'.poly-button--hit-dc button')||null;
+  }
+  if(ref.kind==='skill'){
+    return Array.from(document.querySelectorAll?.('.skill button.skill__name')||[]).find(b=>same(beaconRollText(b),ref.name))||null;
+  }
+  if(ref.kind==='ability'||ref.kind==='save'){
+    for(const row of Array.from(document.querySelectorAll?.('.inline-ability')||[]).slice(0,20)){
+      if(new RegExp('(?:^|\\s)'+String(ref.name).replace(/[^A-Za-z]/g,'')+'(?:\\s|$)','i').test(beaconRollText(row)))
+        return row.querySelector?.(ref.kind==='save'?'.poly-button--compact-saving-throw button':'.poly-button--ability button')||null;
+    }
+    return null;
+  }
+  if(ref.kind==='initiative')return document.querySelector?.('.initiative-btn button')||null;
+  if(ref.kind==='action'){
+    const card=namedCard('.action-item',ref.name,['.action-item__name','.span--item-row-title','.name-chat']);
+    const selector=ref.action==='healing'?'.poly-button--healing button':
+      ref.action==='damage'?'.poly-button--damage button':'.poly-button--hit-dc button';
+    return card?.querySelector?.(selector)||null;
+  }
+  return null;
+}
+async function beaconInvokeRollRef(ref){
+  if(!beaconRollRefOkay(ref))return false;
+  let button=beaconFindRollButton(ref);
+  let original=null;
+  if(!button&&ref.tab){
+    const tabs=sheetTourTabs(document,RBE_SHEET_TOUR_INNER,
+      '.layout-tabbed-panel__tab-link[role="tab"],[role="tab"],nav a,[class*="tabs"] a,button');
+    original=tabs.find(sheetTourActive)||null;
+    const target=tabs.find(x=>sheetTourLabel(x).toLocaleLowerCase()===String(ref.tab).toLocaleLowerCase());
+    if(target&&!sheetTourActive(target)){target.click?.();await sheetTourDelay(180);}
+    button=beaconFindRollButton(ref);
+  }
+  if(!button||button.disabled)return false;
+  button.click();
+  if(original&&original.isConnected!==false&&!sheetTourActive(original)){
+    await sheetTourDelay(150);original.click?.();
+  }
+  return true;
+}
+async function executeOfficialSheetRoll(ref,targetProfile=profile()){
+  if(!beaconRollRefOkay(ref))return false;
+  const charId=targetProfile.roll20CharacterId||targetProfile.sheetLink?.characterId||'';
+  let candidate=sheetCandidates(document).find(x=>x.id===targetProfile.sheetLink?.source)||
+    sheetCandidates(document).find(x=>charId&&String(x.characterId||x.id||'')===String(charId));
+  let opened=null;
+  if(!candidate&&charId&&typeof autoEnsureSheetCandidate==='function'){
+    const character=autoCharacterById(charId);
+    opened=await autoEnsureSheetCandidate({characterId:charId,characterName:targetProfile.name,
+      tokenName:targetProfile.name,character});
+    candidate=opened?.candidate||null;
+  }
+  if(!candidate||!beaconRemoteCandidate(candidate))return false;
+  try{return await requestBeaconAction(candidate,ref);}
+  finally{if(opened?.opened)autoCloseSheetDialog({character:opened.candidate?.character||autoCharacterById(charId)},opened.hidden);}
 }
 function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,characterId=''}={}){
   if(!scan||!beaconRemoteCandidate(candidate))return false;
@@ -172,8 +268,17 @@ async function beaconFrameReadRequest(event){
   const peer=beaconReaderPeer();
   if(event.origin!==RBE_EDITOR_ORIGIN||!peer||event.source!==peer)return;
   const message=event.data;
-  if(!message||message.bridge!==RBE_BRIDGE_MARKER||message.type!=='scan'||
-    typeof message.id!=='string'||message.id.length>100)return;
+  if(!message||message.bridge!==RBE_BRIDGE_MARKER||typeof message.id!=='string'||message.id.length>100)return;
+  if(message.type==='invoke'){
+    try{
+      const ok=await beaconInvokeRollRef(message.ref);
+      peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'invokeResult',id:message.id,ok},RBE_EDITOR_ORIGIN);
+    }catch(err){
+      peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'invokeResult',id:message.id,error:String(err.message||err).slice(0,160)},RBE_EDITOR_ORIGIN);
+    }
+    return;
+  }
+  if(message.type!=='scan')return;
   try{
     const scope=document.body;
     const scan=message.tour?await sheetTourFrameScan():(message.deep?await sheetHarvestBeaconRows(scope):{
