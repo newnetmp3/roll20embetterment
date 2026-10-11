@@ -37,6 +37,8 @@
  @media(max-width:600px){#rbe-radial-layer .rbe-wheel-info{max-width:330px;font-size:10px}#rbe-radial-layer .rbe-wheel-toolbar button{font-size:11px;padding:4px 5px}}
  `;
  RB.radial={open:true,pin:false,path:[],pages:{},anchor:null,manual:null,source:'none',lastPosition:'',lastPresence:false};
+ RB.nativeRollPending=new Set();
+ RB.nativeRollStatus=null;
  const radialNode=(id,label,glyph,children=[],kind='',value='',detail='',subtitle='')=>({id,label,glyph,children,kind,value,detail,subtitle});
  function radialSheetRollRef(kind,name,action){
    const same=(a,b)=>String(a||'').trim().toLocaleLowerCase()===String(b||'').trim().toLocaleLowerCase();
@@ -375,12 +377,39 @@
      case 'sheetRoll':{
        const ref=(p.sheetRolls||[]).find(x=>x.id===node.value);
        if(!ref){toast('This sheet roll is no longer available. Re-import the character sheet.');break;}
+       // Key by character AND roll reference: the same sheet action cannot be sent twice while
+       // its authenticated iframe/helper-sheet request is still outstanding.
+       const requestKey=p.id+':'+ref.id;
+       if(RB.nativeRollPending.has(requestKey)){toast('This official sheet roll is already in progress.');break;}
+       RB.nativeRollPending.add(requestKey);
+       const label=String(ref.name||'Roll')+' · '+String(ref.action||'Roll');
+       RB.nativeRollStatus={key:requestKey,state:'pending',label};
+       render();radialPosition();
        executeOfficialSheetRoll(ref,p).then(ok=>{
-         if(!ok){toast('Roll20 could not find that sheet roll control. R20eb will refresh it on the next full import.');return;}
+         if(!ok){
+           if(RB.nativeRollStatus?.key===requestKey)RB.nativeRollStatus={key:requestKey,state:'error',label};
+           toast('Roll20 could not find that sheet roll control. Re-import the character sheet if this persists.');
+           return;
+         }
          if(ref.kind==='attack'&&ref.action==='attack')p.actionUsed=true;
          record('Sheet roll: '+ref.name+(ref.action?' · '+ref.action:''));
-         RB.radial.path=[];save();render();radialPosition();
-       }).catch(err=>{console.warn('[R20eb] Native sheet roll failed',err);toast('Official sheet roll failed: '+String(err.message||err).slice(0,120));});
+         if(RB.nativeRollStatus?.key===requestKey)RB.nativeRollStatus={key:requestKey,state:'success',label};
+         RB.radial.path=[];save();
+       }).catch(err=>{
+         if(RB.nativeRollStatus?.key===requestKey)RB.nativeRollStatus={key:requestKey,state:'error',label};
+         console.warn('[R20eb] Native sheet roll failed',err);
+         toast('Official sheet roll failed: '+String(err.message||err).slice(0,120));
+       }).finally(()=>{
+         RB.nativeRollPending.delete(requestKey);
+         render();radialPosition();
+         const completed=RB.nativeRollStatus;
+         if(RB.nativeRollPending.size===0&&completed?.key===requestKey)
+           setTimeout(()=>{
+             if(RB.nativeRollPending.size===0&&RB.nativeRollStatus===completed){
+               RB.nativeRollStatus=null;render();radialPosition();
+             }
+           },6000);
+       });
        break;
      }
      case 'spell':

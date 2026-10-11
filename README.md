@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.3 — Concentric Combat HUD
+# roll20 Embetterment 2.3.4 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -109,4 +109,9 @@ When a native 2024 roll is requested while its character sheet is closed, R20eb 
 ## Sheet panel and command palette native-roll parity (2.3.3)
 
 The Sheet panel now offers official 2024 weapon Attack and Damage buttons even without old-style macro commands, as well as a separate list of all native sheet rolls. The command palette (Alt+Shift+K) supports native weapon and spell attacks/damage, skills, saves, tools, Hit Dice and rollable features with explicit labels. Both interfaces use the existing verified official-sheet bridge, including the hidden helper when a sheet is closed. No 2024 roll formulas are synthesized; no authoritative character resources are changed.
+
+
+## Native roll progress and duplicate prevention (2.3.4)
+
+An official D&D 2024 roll now shows visible, screen-reader-accessible **rolling / received / not completed** feedback. While an action is waiting for Roll20's authenticated embedded/popout or offscreen helper sheet, R20eb ignores duplicate invocations of that same character + roll reference and disables its matching Sheet-panel button. Different native roll actions may still run separately. Successful and failed requests release the in-flight guard, allowing normal retry. The result indicator clears after a few seconds. No character-sheet values or official roll formulas are modified.
 

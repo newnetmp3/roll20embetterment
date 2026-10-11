@@ -473,3 +473,38 @@ test('standard Skills Saves Abilities and Initiative entries prefer official she
   assert.equal(root.children.find(x=>x.id==='abilities').children.find(x=>x.label==='STR').value,'str-check');
   assert.equal(root.children.find(x=>x.id==='initiative').value,'init-native');
 });
+
+test('native sheet roll shows progress and ignores repeat clicks until the request resolves',async()=>{
+  const {r,scope,sent}=env(),p=r.profile();let finish,calls=0;
+  p.sheetRolls=[{id:'axe-hit',kind:'attack',name:'Handaxe',action:'attack',tab:'Combat'}];
+  scope.nativeRollHook=()=>{calls++;return new Promise(resolve=>{finish=resolve})};
+  vm.runInContext('executeOfficialSheetRoll=(ref)=>nativeRollHook(ref)',scope);
+  r.radialExecute({kind:'sheetRoll',value:'axe-hit'});
+  r.radialExecute({kind:'sheetRoll',value:'axe-hit'});
+  assert.equal(calls,1,'Second click must never send another native roll');
+  assert.equal(r.RB.nativeRollPending.size,1);
+  assert.match(r.RB.shadow.innerHTML,/Rolling official sheet: Handaxe/);
+  assert.match(r.RB.shadow.innerHTML,/aria-live="polite"/);
+  assert.equal(sent.length,0);
+  finish(true);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(r.RB.nativeRollPending.size,0);
+  assert.equal(p.actionUsed,true);
+  assert.match(r.RB.shadow.innerHTML,/Roll20 received: Handaxe/);
+  r.radialExecute({kind:'sheetRoll',value:'axe-hit'});
+  assert.equal(calls,2,'Resolved native actions can be retried');
+});
+test('failed official sheet rolls release the guard without spending an action',async()=>{
+  const {r,scope,sent}=env(),p=r.profile();let calls=0;
+  p.sheetRolls=[{id:'axe-hit',kind:'attack',name:'Handaxe',action:'attack',tab:'Combat'}];
+  scope.nativeRollHook=()=>{calls++;return Promise.resolve(false)};
+  vm.runInContext('executeOfficialSheetRoll=(ref)=>nativeRollHook(ref)',scope);
+  r.radialExecute({kind:'sheetRoll',value:'axe-hit'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(r.RB.nativeRollPending.size,0);
+  assert.equal(p.actionUsed,false);
+  assert.match(r.RB.shadow.innerHTML,/Official sheet roll not completed/);
+  r.radialExecute({kind:'sheetRoll',value:'axe-hit'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls,2);
+  assert.equal(sent.length,0);
+});
