@@ -391,3 +391,24 @@ test('background import seeds model fields but never tours an existing manual sh
   assert.equal(api.profile().stats.hp,24);
   assert.equal(api.profile().sheetLink.importMode,'partial-model');
 });
+
+test('background partial seed cannot wipe a previously complete sheet import',async()=>{
+  const {api,context}=harness();
+  context.location.hostname='app.roll20.net';context.location.pathname='/editor/123';
+  context.window.currentPlayer={id:'player-1'};
+  const character=backboneModel('char-a',{name:'Aria',controlledby:'player-1'});
+  character.attribs={toJSON:()=>[{name:'hp',current:'25',max:'28'}]};
+  const token=backboneModel('tok-a',{name:'Aria',type:'image',represents:'char-a',controlledby:''});
+  context.window.d20={Campaign:{activePage(){return {thegraphics:{models:[token]}}},
+    characters:{get:()=>character}}};
+  const p=api.profile();
+  p.roll20CharacterId='char-a';
+  p.sheetLink={characterId:'char-a',importMode:'full-auto',tabsVisited:['Combat','Spells']};
+  p.spells=[{id:'sheet:spell',origin:'sheet',name:'Shield'}];
+  p.sheetRolls=[{id:'native-roll',kind:'spell',name:'Shield',action:'roll'}];
+  vm.runInContext("autoEnsureSheetCandidate=async()=>({opened:false,candidate:{id:'char-a'},hidden:null});",context);
+  await api.autoImportControlledCharacters();
+  assert.equal(p.spells.length,1);
+  assert.equal(p.sheetRolls.length,1);
+  assert.equal(p.sheetLink.importMode,'full-auto');
+});

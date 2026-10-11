@@ -553,7 +553,11 @@ async function autoImportControlledCharacters(){
         // A user-opened sheet remains untouched by the background importer.
         // Seed from the model only; user-initiated Import all tabs is separate.
         RB.autoCharacterDirectSeeded=RB.autoCharacterDirectSeeded||new Set();
-        if(Object.keys(directFields).length&&!RB.autoCharacterDirectSeeded.has(characterId)){
+        // A partial model seed must not replace a previous complete import's
+        // spells, attacks, or other native sheet controls with an empty snapshot.
+        const hasFullImport=group.profile.sheetLink?.importMode==='full-auto'||
+          !!(group.profile.sheetLink?.tabsVisited?.length);
+        if(!hasFullImport&&Object.keys(directFields).length&&!RB.autoCharacterDirectSeeded.has(characterId)){
           const snap=snapshotSheet(directFields,group.record.characterName);
           if(applySheetSnapshot(group.profile,snap)){
             group.profile.roll20CharacterId=characterId;
