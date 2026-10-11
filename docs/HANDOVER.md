@@ -126,3 +126,13 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 **Changes:** Trusted live 2024 scans opt in to a visible-value-first merge; visible HP takes precedence over token bars, which are now fallbacks; ID-less embedded candidates may match via unique exact character name and unique controlled-character identity; parse and render decimal initiative. Add screenshot-based regression fixtures and ambiguity checks. Named-first remains default for legacy data. This remains a read-only import.
 
 **CI verified:** PR #26 code head `e1036ce8f7263303d382c19a107ccec07a8dc708` passed **173 tests, 0 failures**, JavaScript validation and generated Tampermonkey distribution consistency. A screenshot-based regression also exposed stale token HP overriding a recent visible-sheet read; this was fixed before CI went green. **Live Firefox/Jumpgate QA remains required**: mocks cannot confirm iframe matching and postMessage from Roll20 itself. Merged main commit `7b9ed80ea3a9920ede5da4a90845dc7f6fa7f47a`.
+
+
+## v2.3.12 — Editable 2024 stat controls and frame fallback (PR #28, CI verified)
+
+- The 2026-10-11 VTT HTML capture contains a **hidden headless 2024 iframe**, not the player's actual sheet control values; it cannot establish that a character sheet is open or reveal fresh HP.
+- The existing visible-sheet parser read `innerText` only. Numeric inputs in the official 2024 HIT POINTS panel and inline ability rows are not part of `innerText`, so HP and score imports can be missing even while the sheet is open.
+- Added a read-only bounded HP panel input reader (Current/Max/Temp), known `.inline-ability` score/roll-button reader and official initiative roll-button fallback. Hidden inputs and unsupported/invalid values are rejected; no page background traversal or sheet writes.
+- When a live player-owned official frame returns named attributes but no parsed visible stats, import the named stats rather than treating it as empty. Token bar HP is only a fallback for genuinely missing frame fields; do not set freshness protection for named-only snapshots.
+- Added regression tests for input values absent from `innerText`, invisible controls and named-frame HP taking precedence over stale token-bar values.
+- **CI verified:** PR #28 head `a1bc636c8deafed83cc82fbafc3ed97bb63d245d`, **176 tests, 0 failures**, `npm run check` and generated-userscript consistency green (Actions run 38174945102). Live Firefox/Jumpgate retest remains required because the shared HTML is the VTT shell, not the iframe's internal form markup. Do not declare live HP correct until visual QA.

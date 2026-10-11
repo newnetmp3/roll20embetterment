@@ -259,3 +259,46 @@ test('live 2024 values supersede stale named attrs only with explicit sheet prio
  assert.equal(live.stats.init,2.14);
  assert.deepEqual({...live.abilityScores},{str:18,dex:14,con:15,int:12,wis:15,cha:10});
 });
+
+
+test('official 2024 input values are imported when innerText omits editable HP and score values',()=>{
+ const {h,fakeSheet}=env('NIER\nHIT POINTS\nCurrent\nMax\nTemp\nABILITIES\nSTR\nMod\nSave');
+ const hpPanel={innerText:'HIT POINTS\nCurrent\nMax\nTemp\nDamage',parentElement:fakeSheet,
+   querySelectorAll(sel){return sel==='input'?hpInputs:[]}};
+ const numeric=(value,parent)=>({value:String(value),type:'number',parentElement:parent,
+   getClientRects(){return [{}]},closest(){return null}});
+ const hpInputs=[82,84,0,1].map(v=>numeric(v,hpPanel));
+ const ability={innerText:'STR\nMod\nSave',querySelectorAll(sel){
+   return sel==='input'?[abilityInput]:[];
+ },querySelector(sel){
+   if(sel==='.poly-button--ability button')return {innerText:'+4'};
+   if(sel==='.poly-button--compact-saving-throw button')return {innerText:'+7'};
+   return null;
+ }};
+ const abilityInput=numeric(18,ability);
+ fakeSheet.querySelectorAll=sel=>{
+   if(sel==='input')return [...hpInputs,abilityInput];
+   if(sel==='.inline-ability')return [ability];
+   return [];
+ };
+ fakeSheet.querySelector=sel=>sel==='.initiative-btn button'?{innerText:'+2.14'}:null;
+ const data=h.beaconImportVisible(fakeSheet,'NIER');
+ assert.equal(data.stats.hp,82);assert.equal(data.stats.maxHp,84);
+ assert.equal(data.stats.tempHp,0);assert.equal(data.stats.init,2.14);
+ assert.equal(data.abilityScores.str,18);
+ assert.equal(data.abilityMods.str,4);assert.equal(data.saveBonuses.str,7);
+});
+
+test('hidden and unrelated resource inputs cannot be mistaken for visible character HP',()=>{
+ const {h,fakeSheet}=env('NIER\nHIT POINTS\nCurrent\nMax\nTemp');
+ const panel={innerText:'HIT POINTS\nCurrent\nMax\nTemp',parentElement:fakeSheet,
+   querySelectorAll(sel){return sel==='input'?hidden:[]}};
+ const hidden=[69,84,0].map(value=>({
+   value:String(value),parentElement:panel,type:'number',
+   getClientRects(){return []},closest(){return null}
+ }));
+ fakeSheet.querySelectorAll=sel=>sel==='input'?hidden:[];
+ const data=h.beaconImportVisible(fakeSheet,'NIER');
+ assert.equal(data.stats.hp,undefined);
+ assert.equal(data.stats.maxHp,undefined);
+});

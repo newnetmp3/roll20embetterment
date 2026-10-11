@@ -89,9 +89,12 @@ async function autoRefreshVisibleSheetStats(record,profileRecord){
       {preferVisibleStats:true});
     const visibleSections=['stats','abilityScores','abilityMods','saveBonuses','skillBonuses'];
     const hasVisible=visibleSections.some(section=>Object.keys(visual[section]||{}).length);
-    // A remote read that only returns cached attributes does not prove that
-    // the 2024 sheet's current values were visible.
-    if(!hasVisible)return false;
+    // A live frame may expose named attributes while its editable values
+    // remain absent from innerText. Those named values are still useful as a
+    // fallback; do not silently drop them and keep showing token-bar defaults.
+    const hasNamed=['stats','abilityScores','abilityMods','saveBonuses','skillBonuses']
+      .some(section=>Object.keys(snap[section]||{}).length>0);
+    if(!hasVisible&&!hasNamed)return false;
     const overrides={};
     for(const section of visibleSections){
       if(section!=='stats')continue;
@@ -103,13 +106,13 @@ async function autoRefreshVisibleSheetStats(record,profileRecord){
       for(const [key,value] of Object.entries(token.stats)){
         // Always prefer the current value printed on the open sheet over the
         // token bar. Token bars can represent damage, temporary HP or be stale.
-        if(visual.stats?.[key]!==undefined)continue;
+        if(visual.stats?.[key]!==undefined||snap.stats[key]!==undefined)continue;
         snap.stats[key]=value;overrides[key]=token.source;
       }
     }
     const changed=applyLiveCharacterValues(profileRecord,snap,charId,
       'Roll20 attributes',overrides);
-    if(profileRecord.sheetLink){
+    if(hasVisible&&profileRecord.sheetLink){
       profileRecord.sheetLink.visibleStatAt=Date.now();
       profileRecord.sheetLink.visibleStatKeys=Object.fromEntries(
         ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
