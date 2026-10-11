@@ -109,8 +109,8 @@ test('footer follows outer radius as choices expand and collapse',()=>{
     assert.equal(r.radialOuterRadius(i+1),outer);
     const rendered=r.radialHTML();
     assert.ok(rendered.includes('--rbe-outer-radius:'+outer+'px'));
-    assert.match(rendered,/class="rbe-wheel-footer"><div class="rbe-wheel-health"[^>]*>.*<div class="rbe-wheel-toolbar">/);
-    assert.match(rendered,/class="rbe-wheel-info"(?:\s|>)/);
+    assert.match(rendered,/class="rbe-wheel-footer"><div class="rbe-wheel-stats"><div class="rbe-wheel-health"[^>]*>.*<div class="rbe-wheel-toolbar">/);
+    assert.doesNotMatch(rendered,/rbe-wheel-info|Choose an action/);
   }
   r.RB.radial.path.pop();
   assert.match(r.radialHTML(),/--rbe-outer-radius:201px/);
@@ -119,7 +119,7 @@ test('footer is outside the last ring, not fixed over ring segments',()=>{
   const css=readFileSync(join(root,'src','19_radial_hud.js'),'utf8');
   assert.match(css,/\.rbe-wheel-footer\{[^}]*top:calc\(50% \+ var\(--rbe-outer-radius,112px\) \+ 12px\)/);
   assert.doesNotMatch(css,/\.rbe-wheel-toolbar\{[^}]*bottom:/);
-  assert.doesNotMatch(css,/\.rbe-wheel-info\{[^}]*bottom:/);
+  assert.doesNotMatch(css,/\.rbe-wheel-info\{/);
 });
 
 test('positioning reserves toolbar space near the bottom of the viewport',()=>{
@@ -349,6 +349,7 @@ test('HP gauge moved from wheel center to footer and keeps temp HP',()=>{
   assert.doesNotMatch(svg,/84\/84/,'HP text must not cover the token center');
   assert.doesNotMatch(svg,/rbe-center|rbe-core/);
   assert.match(markup,/class="rbe-wheel-health"/);
+  assert.match(markup,/class="rbe-wheel-stat"/);
   assert.match(markup,/84\/84 \+7 temp/);
   assert.match(markup,/--rbe-hp-percent:100\.0%/);
   assert.ok(markup.indexOf('rbe-wheel-health')<markup.indexOf('rbe-wheel-toolbar'));
@@ -625,4 +626,16 @@ test('dragging the minimized dock persists and restores its screen position',()=
     pointerType:'mouse',button:0,clientX:5,clientY:5,preventDefault(){throw Error('No button dragging')}});
   assert.equal(r.RB.drag,null);
   assert.equal(JSON.stringify(r.RB.state.ui),before);
+});
+
+test('combat wheel shows latest HP AC speed and initiative without Choose an action footer',()=>{
+ const {r}=env(),p=r.profile();
+ p.stats.hp=21;p.stats.maxHp=84;p.stats.ac=19;p.stats.speed=35;p.stats.init=4;
+ r.RB.radial.anchor={x:600,y:400};
+ const markup=r.radialHTML();
+ assert.match(markup,/21\/84/);
+ assert.match(markup,/AC 19/);assert.match(markup,/SPD 35 ft/);
+ assert.match(markup,/INIT \+4/);
+ assert.doesNotMatch(markup,/Choose an action|rbe-wheel-info/);
+ assert.match(markup,/data-action="radialOpenSheet"/);
 });

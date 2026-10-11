@@ -13,7 +13,7 @@ function env(){
   setTimeout(){},clearTimeout(){},setInterval(){},window:{},document:{querySelectorAll(){return []}},
   localStorage:{getItem(k){return store.get(k)||null},setItem(k,v){store.set(k,v)}}};
  vm.createContext(scope);
- vm.runInContext(source+'\nload();globalThis.expose={RB,profile,snapshotSheet,applySheetSnapshot,readSheetFields,parseSheetPaste,syncSheet,sheetUI,render,homeUI,readVisibleSheetName};',scope);
+ vm.runInContext(source+'\nload();globalThis.expose={RB,profile,snapshotSheet,applySheetSnapshot,applyLiveCharacterValues,readSheetFields,parseSheetPaste,syncSheet,sheetUI,render,homeUI,readVisibleSheetName};',scope);
  return scope.expose;
 }
 const sample={character_name:'Thorin',class:'Paladin',level:'7',race:'Dwarf',hp:{current:'32',max:'56'},
@@ -122,4 +122,49 @@ test('sheet picker reports readable attribute count and sync instruction',()=>{
  assert.match(ui,/Nier · 17 named \/ 0 visible/);
  assert.match(ui,/Import visible attributes/);
  assert.match(ui,/Advanced Tools/);
+});
+
+test('2024 and 2014 numeric alias variants import combat stats, modifiers and skills',()=>{
+ const a=env(),s=a.snapshotSheet({
+  'hit-points-current':'18','hit-points-maximum':'47','temporary_hp':'6',
+  'armor.class.total':'19','walking-speed':'35 ft',
+  'initiative_modifier':'+4','prof_bonus':'+3','total_level':'8',
+  'strength_score':'17','strength_bonus':'+3','strength_saving_throw_bonus':'+6',
+  'sleight_of_hand_bonus':'+8','passive_perception':'17',class_name:'Rogue'
+ });
+ assert.equal(s.stats.hp,18);assert.equal(s.stats.maxHp,47);
+ assert.equal(s.stats.tempHp,6);assert.equal(s.stats.ac,19);
+ assert.equal(s.stats.speed,35);assert.equal(s.stats.init,4);
+ assert.equal(s.stats.proficiency,3);assert.equal(s.stats.level,8);
+ assert.equal(s.abilityScores.str,17);assert.equal(s.abilityMods.str,3);
+ assert.equal(s.saveBonuses.str,6);assert.equal(s.skillBonuses['Sleight of Hand'],8);
+ assert.equal(s.details.passivePerception,'17');assert.equal(s.details.class,'Rogue');
+});
+test('read-only live merge updates present values and preserves imported actions and local resources',()=>{
+ const a=env(),p=a.profile();
+ p.stats.hp=50;p.stats.maxHp=60;p.stats.ac=17;p.stats.speed=30;
+ p.usedSlots[1]=2;p.spellSlots[1]=3;p.notes='keep these notes';
+ p.spells=[{id:'s',name:'Bless',origin:'sheet'}];
+ p.attacks=[{id:'a',name:'Sword',origin:'sheet'}];
+ p.sheetRolls=[{id:'r',kind:'attack',name:'Sword'}];
+ p.sheetLink={importMode:'full-auto',tabsVisited:['Combat'],name:'Nier'};
+ const snap=a.snapshotSheet({hp:{current:'12',max:'60'},ac:'21',walking_speed:'40',
+  dexterity_mod:'4',perception_bonus:'9',gp:'250'},'Nier');
+ assert.equal(a.applyLiveCharacterValues(p,snap,'char-a'),true);
+ assert.equal(p.stats.hp,12);assert.equal(p.stats.ac,21);assert.equal(p.stats.speed,40);
+ assert.equal(p.stats.maxHp,60);assert.equal(p.abilityMods.dex,4);
+ assert.equal(p.skillBonuses.Perception,9);assert.equal(p.currency.gp,250);
+ assert.equal(p.usedSlots[1],2);assert.equal(p.spellSlots[1],3);
+ assert.equal(p.spells.length,1);assert.equal(p.attacks.length,1);assert.equal(p.sheetRolls.length,1);
+ assert.equal(p.notes,'keep these notes');assert.equal(p.sheetLink.importMode,'full-auto');
+ assert.equal(p.sheetLink.name,'Nier');assert.equal(p.sheetLink.characterId,'char-a');
+ assert.equal(a.applyLiveCharacterValues(p,snap,'char-a'),false,'unchanged values should not require a rerender');
+});
+test('missing or invalid Roll20 values never overwrite existing live stats',()=>{
+ const a=env(),p=a.profile();
+ p.stats.hp=39;p.stats.ac=18;p.stats.speed=30;
+ const snap=a.snapshotSheet({hit_points_current:'',armor_class:'-',speed:'unknown',
+   dexterity_mod:'',perception_bonus:'not a bonus'});
+ a.applyLiveCharacterValues(p,snap,'char-1');
+ assert.equal(p.stats.hp,39);assert.equal(p.stats.ac,18);assert.equal(p.stats.speed,30);
 });
