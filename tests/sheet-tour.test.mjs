@@ -21,7 +21,7 @@ function harness(doc){
     localStorage:{getItem(k){return stored.get(k)||null},setItem(k,v){stored.set(k,v)}}
   };
   vm.createContext(scope);
-  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoEnsureSheetCandidate,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
+  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoEnsureSheetCandidate,autoHideSheetDialog,autoReleaseSheetDialog,autoCloseSheetDialog,autoSheetOpeningShield,openRoll20CharacterSheet,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
   return {api:scope.api,intervals,doc:page,context:scope};
 }
 function tab(label,selected,change) {
@@ -251,7 +251,7 @@ test('automatic import processes each represented character once even with multi
   const tokens=[backboneModel('tok-a',{name:'Aria',type:'image',represents:'char-a',controlledby:''}),backboneModel('tok-a2',{name:'Aria Copy',type:'image',represents:'char-a',controlledby:''}),backboneModel('tok-b',{name:'Borin',type:'image',represents:'char-b',controlledby:''})];
   context.window.d20={Campaign:{activePage(){return {thegraphics:{models:tokens}}},characters:{get(id){return chars.get(id)||null}}}};
   const imported=[];context.importedHook=(characterId,profileId,assignedId)=>imported.push({characterId,profileId,assignedId});
-  vm.runInContext("autoEnsureSheetCandidate=async record=>({candidate:{id:record.characterId,characterId:record.characterId,name:record.characterName,root:{isConnected:true,querySelectorAll(){return []}},frame:null,popoutWindow:null},opened:false,hidden:null}); sheetTourImportCandidate=async(candidate,target,opts)=>{importedHook(candidate.id,target.id,opts.characterId);target.sheetLink={name:candidate.name,source:candidate.id,characterId:opts.characterId};return {candidate,profile:target,acc:{tabs:['Combat']}};};",context);
+  vm.runInContext("autoEnsureSheetCandidate=async record=>({candidate:{id:record.characterId,characterId:record.characterId,name:record.characterName,root:{isConnected:true,querySelectorAll(){return []}},frame:null,popoutWindow:null},opened:true,hidden:null}); sheetTourImportCandidate=async(candidate,target,opts)=>{importedHook(candidate.id,target.id,opts.characterId);target.sheetLink={name:candidate.name,source:candidate.id,characterId:opts.characterId};return {candidate,profile:target,acc:{tabs:['Combat']}};};",context);
   await api.autoImportControlledCharacters();
   assert.equal(imported.length,2);assert.deepEqual(Array.from(imported,x=>x.characterId).sort(),['char-a','char-b']);
   assert.equal(api.RB.state.tokenAssignments['tok-a'].profileId,api.RB.state.tokenAssignments['tok-a2'].profileId);
@@ -292,4 +292,139 @@ test('existing or hidden helper sheet is registered before cross-frame import/ro
   assert.equal(result.candidate,target);
   assert.equal(api.RB.openSheets.length,1);
   assert.equal(api.RB.openSheets[0],target);
+});
+
+test('hidden import shield excludes existing user-owned character dialogs and cleans up',()=>{
+  const existingAttrs=new Map();
+  const oldDialog={setAttribute(k,v){existingAttrs.set(k,v)},removeAttribute(k){existingAttrs.delete(k)}};
+  const rootAttrs=new Map(),root={setAttribute(k,v){rootAttrs.set(k,v)},removeAttribute(k){rootAttrs.delete(k)}};
+  const style={textContent:'',remove(){style.removed=true}};
+  const doc={documentElement:root,head:{appendChild(node){assert.equal(node,style)}},
+    createElement(){return style},
+    querySelectorAll(){return [oldDialog]}};
+  const {api,context}=harness(doc);
+  const done=api.autoSheetOpeningShield();
+  assert.equal(rootAttrs.get('data-r20e-opening-helper'),'true');
+  assert.equal(existingAttrs.get('data-r20e-existing-dialog'),'true');
+  assert.match(style.textContent,/visibility:hidden!important/);
+  assert.match(style.textContent,/:not\(\[data-r20e-existing-dialog\]\)/);
+  done();
+  assert.equal(rootAttrs.has('data-r20e-opening-helper'),false);
+  assert.equal(existingAttrs.has('data-r20e-existing-dialog'),false);
+  assert.equal(style.removed,true);
+});
+test('an automatically opened helper hides before tab tour then restores original Roll20 window styles',async()=>{
+  const {api,context}=harness();
+  const attrs=new Map([['style','left:18px;top:50px;'],['data-r20e-existing','keep']]);
+  const writes=[];
+  const wrapper={
+    style:{setProperty(k,v,priority){writes.push([k,v,priority])}},
+    getAttribute(k){return attrs.get(k)??null},
+    setAttribute(k,v){attrs.set(k,v)},removeAttribute(k){attrs.delete(k)},
+    querySelector(){return null}
+  };
+  const candidate={id:'char-a',characterId:'char-a',name:'Aria',
+    root:{closest(){return wrapper}},frame:{contentWindow:{}},popoutWindow:null};
+  let visible=false,closes=0;
+  const character={view:{showDialog(){visible=true},closeDialog(){visible=false;closes++}}};
+  context.testCandidate=candidate;
+  vm.runInContext("autoCandidateForCharacter=()=>testVisible?testCandidate:null; sheetCandidates=()=>testVisible?[testCandidate]:[];",context);
+  context.testVisible=false;
+  character.view.showDialog=()=>{context.testVisible=true};
+  const result=await api.autoEnsureSheetCandidate({characterId:'char-a',characterName:'Aria',character});
+  assert.equal(result.opened,true);
+  assert.ok(result.hidden);
+  assert.ok(writes.some(x=>x[0]==='left'&&x[1]==='-20000px'));
+  assert.ok(writes.some(x=>x[0]==='visibility'&&x[1]==='hidden'));
+  assert.equal(attrs.get('data-r20e-auto-import'),'true');
+  api.autoCloseSheetDialog({character},result.hidden);
+  assert.equal(attrs.get('style'),'left:18px;top:50px;');
+  assert.equal(attrs.has('data-r20e-auto-import'),false);
+  assert.equal(closes,1);
+  assert.equal(api.RB.autoHelperActive,null);
+});
+test('existing player-opened sheets are never turned into hidden automatic helpers',async()=>{
+  const {api,context}=harness();
+  let attempts=0;
+  context.testCandidate={id:'char-a',characterId:'char-a',root:{}};
+  vm.runInContext("autoCandidateForCharacter=()=>testCandidate; sheetCandidates=()=>[testCandidate];",context);
+  const candidate=await api.autoEnsureSheetCandidate({characterId:'char-a',characterName:'Aria',
+    character:{view:{showDialog(){attempts++}}}});
+  assert.equal(candidate.opened,false);
+  assert.equal(candidate.hidden,null);
+  assert.equal(attempts,0);
+});
+test('manual Open Roll20 sheet reclaims the helper and prevents automatic close',()=>{
+  const {api,context}=harness();
+  let shows=0,closes=0;
+  const char={view:{showDialog(){shows++},closeDialog(){closes++}}};
+  const attrs=new Map([['style','left:10px']]),wrapper={
+    style:{setProperty(){}},
+    getAttribute:k=>attrs.get(k)??null,
+    setAttribute(k,v){attrs.set(k,v)},removeAttribute(k){attrs.delete(k)}
+  };
+  const hidden=api.autoHideSheetDialog({characterId:'char-a',root:{closest(){return wrapper}}},{characterId:'char-a'});
+  api.profile().roll20CharacterId='char-a';
+  context.openChar=char;
+  vm.runInContext("autoCharacterById=()=>openChar;",context);
+  assert.equal(api.openRoll20CharacterSheet(),true);
+  assert.equal(shows,1);
+  assert.equal(attrs.get('style'),'left:10px');
+  assert.equal(hidden.reclaimed,true);
+  api.autoCloseSheetDialog({character:char},hidden);
+  assert.equal(closes,0,'automatic cleanup must not close player-reclaimed sheet');
+});
+test('background import seeds model fields but never tours an existing manual sheet',async()=>{
+  const {api,context}=harness();
+  context.location.hostname='app.roll20.net';context.location.pathname='/editor/123';
+  context.window.currentPlayer={id:'player-1'};
+  const character=backboneModel('char-a',{name:'Aria',controlledby:'player-1'});
+  character.attribs={toJSON:()=>[{name:'hp',current:'24',max:'28'}]};
+  const token=backboneModel('tok-a',{name:'Aria',type:'image',represents:'char-a',controlledby:''});
+  context.window.d20={Campaign:{activePage(){return {thegraphics:{models:[token]}}},
+    characters:{get:()=>character}}};
+  let visited=0;
+  vm.runInContext("autoEnsureSheetCandidate=async()=>({opened:false,candidate:{id:'char-a'},hidden:null}); sheetTourImportCandidate=async()=>{backgroundVisitHook();};",context);
+  context.backgroundVisitHook=()=>visited++;
+  await api.autoImportControlledCharacters();
+  assert.equal(visited,0);
+  assert.equal(api.profile().stats.hp,24);
+  assert.equal(api.profile().sheetLink.importMode,'partial-model');
+});
+
+test('background partial seed cannot wipe a previously complete sheet import',async()=>{
+  const {api,context}=harness();
+  context.location.hostname='app.roll20.net';context.location.pathname='/editor/123';
+  context.window.currentPlayer={id:'player-1'};
+  const character=backboneModel('char-a',{name:'Aria',controlledby:'player-1'});
+  character.attribs={toJSON:()=>[{name:'hp',current:'25',max:'28'}]};
+  const token=backboneModel('tok-a',{name:'Aria',type:'image',represents:'char-a',controlledby:''});
+  context.window.d20={Campaign:{activePage(){return {thegraphics:{models:[token]}}},
+    characters:{get:()=>character}}};
+  const p=api.profile();
+  p.roll20CharacterId='char-a';
+  p.sheetLink={characterId:'char-a',importMode:'full-auto',tabsVisited:['Combat','Spells']};
+  p.spells=[{id:'sheet:spell',origin:'sheet',name:'Shield'}];
+  p.sheetRolls=[{id:'native-roll',kind:'spell',name:'Shield',action:'roll'}];
+  vm.runInContext("autoEnsureSheetCandidate=async()=>({opened:false,candidate:{id:'char-a'},hidden:null});",context);
+  await api.autoImportControlledCharacters();
+  assert.equal(p.spells.length,1);
+  assert.equal(p.sheetRolls.length,1);
+  assert.equal(p.sheetLink.importMode,'full-auto');
+});
+
+test('closed existing dialogs are eligible for automatic hiding when Roll20 reuses them',()=>{
+  const marks=new Map(),style={remove(){},textContent:''};
+  const open={setAttribute(k,v){marks.set('open:'+k,v)},removeAttribute() {},
+    getClientRects(){return [{width:10}]}};
+  const closed={setAttribute(k,v){marks.set('closed:'+k,v)},removeAttribute() {},
+    getClientRects(){return []}};
+  const doc={documentElement:{setAttribute(){},removeAttribute(){}},head:{appendChild(){}},
+    createElement(){return style},querySelectorAll(){return [open,closed]}};
+  const {api}=harness(doc);
+  const release=api.autoSheetOpeningShield();
+  assert.equal(marks.get('open:data-r20e-existing-dialog'),'true');
+  assert.equal(marks.has('closed:data-r20e-existing-dialog'),false);
+  assert.match(style.textContent,/:has\(\.characterdialog\)/);
+  release();
 });

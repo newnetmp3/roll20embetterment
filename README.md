@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.6 — Concentric Combat HUD
+# roll20 Embetterment 2.3.7 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -123,3 +123,9 @@ The SPELLS wheel and Spells panel distinguish **Cast in Roll20** (only when a wo
 ## Combat wheel and palette keyboard accessibility (2.3.6)
 
 Each visible combat ring has one Tab stop. Use **Left/Up** and **Right/Down** to move between wedges (including Previous/Next pagination), **Home/End** for the first/last wedge, and **Enter/Space** to select. Keyboard expansion moves focus into the new outer ring, and **Escape** backs out one ring. The command palette now exposes combobox/listbox semantics with an active option for screen readers, supports Home/End and PageUp/PageDown navigation, handles zero results without a negative selection, and closes before Escape affects the underlying wheel. Keyboard events inside R20eb inputs stay local rather than reaching Roll20 shortcuts.
+
+## Hidden import, original character-sheet access and movable wheel dock (2.3.7)
+
+Background imports no longer take over a sheet you already opened. If the player has the original Roll20 character sheet open, R20eb seeds available character-model fields without changing the player's selected tabs; **Import all sheet tabs** remains an intentional manual operation. When an automatic full import opens a temporary helper, R20eb hides newly created dialogs before the browser paints them, tours the helper offscreen and restores its original style before closing. A failed/unsupported helper is closed instead of left on the tabletop. **Open original Roll20 sheet** in the Sheet panel, **Roll20** on the wheel toolbar, and **Sheet** on the minimized dock use Roll20's own character view. Opening it during a helper import reclaims the window so R20eb does not close it. When no controlled character ID or accessible Roll20 view is present, use the Journal manually.
+
+The minimized **Open wheel / Pin / Sheet** dock now has a visible ⠿ grip. Drag that grip to reposition the dock; its position is saved per campaign in browser-local state. Dragging buttons does not move the dock, and the position is clamped to the viewport while dragging. The full wheel's control footer still follows the ring.

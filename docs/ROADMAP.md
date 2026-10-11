@@ -12,9 +12,9 @@
 | 6 | Native-roll pending feedback and duplicate-click protection | ✅ v2.3.4 PR #17 | 130 passing tests; live Roll20 QA remains |
 | 7 | Spell roll versus casting semantics, safe local turn/resource reminders | ✅ v2.3.5 PR #18 | 136 tests passing; live Roll20 QA remains |
 | 8 | Keyboard accessibility, wheel density, palette navigation | ✅ v2.3.6 PR #19 | 140 tests passing; live density/keyboard QA remains |
-| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🔍 live QA | Browser fixtures |
+| 9 | Real Roll20 integration matrix (iframe, popout, helper, legacy 2014) | 🧪 v2.3.7 PR #20 | Helper isolation/manual opening/draggable dock: 150 tests; live QA remains |
 | 10 | Release/version automation and reproducible install | ⬜ planned | CI tags |
 
-**Next actionable milestone:** Run the real Roll20 browser integration matrix across Jumpgate iframe, official 2024 popout, hidden helper and legacy 2014 sheets; prioritize defects from live QA.
+**Next actionable milestone:** Verify v2.3.7 hidden-helper isolation and draggable dock in live Roll20, then expand 2014/2024 iframe/popout integration tests and release automation.
 
 **Rolling update contract:** Every development PR refreshes both this roadmap and `docs/HANDOVER.md`; a milestone becomes ✅ only after verified checks and merge.

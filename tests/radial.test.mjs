@@ -590,3 +590,39 @@ test('keyboard focus moves around radial wedges and into newly expanded rings',(
   onKeyDown(ev('Escape'));assert.equal(r.RB.radial.path.length,0);
   assert.match(calls.at(-1),/data-depth="0"/);
 });
+
+test('minimized toolbar provides a draggable grip and direct Roll20 sheet button',()=>{
+  const {r}=env();
+  r.RB.radial.open=false;r.RB.radial.anchor=null;
+  const html=r.radialHTML();
+  assert.match(html,/data-dock-grip="true"/);
+  assert.match(html,/Drag toolbar to reposition/);
+  assert.match(html,/data-action="radialOpenSheet"/);
+});
+test('dragging the minimized dock persists and restores its screen position',()=>{
+  const {r,scope}=env(),style={};
+  const dock={getBoundingClientRect(){return {left:15,top:600,width:310,height:42}},style};
+  const grip={closest(sel){return sel==='#rbe-radial-dock'?dock:null}};
+  const down=vm.runInContext('onDragStart',scope);
+  const move=vm.runInContext('onPointerMove',scope);
+  const up=vm.runInContext('onPointerUp',scope);
+  r.RB.shadow.querySelector=sel=>sel==='#rbe-radial-dock'?dock:null;
+  let prevented=0;
+  down({target:{closest(sel){return sel==='[data-dock-grip]'?grip:null}},pointerId:4,pointerType:'mouse',button:0,
+    clientX:30,clientY:612,preventDefault(){prevented++}});
+  assert.equal(prevented,1);
+  assert.equal(r.RB.drag.type,'dock');
+  move({pointerId:4,clientX:250,clientY:370});
+  assert.equal(r.RB.state.ui.dockX,235);
+  assert.equal(r.RB.state.ui.dockY,358);
+  assert.equal(style.left,'235px');
+  up({pointerId:4});
+  assert.equal(r.RB.drag,null);
+  r.RB.radial.open=false;
+  assert.match(r.radialHTML(),/style="left:235px;top:358px;bottom:auto"/);
+  const before=JSON.stringify(r.RB.state.ui);
+  down({target:{closest(sel){return sel==='button,input,select,textarea'?{}:null}},pointerId:5,
+    pointerType:'mouse',button:0,clientX:5,clientY:5,preventDefault(){throw Error('No button dragging')}});
+  assert.equal(r.RB.drag,null);
+  assert.equal(JSON.stringify(r.RB.state.ui),before);
+});
