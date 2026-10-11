@@ -262,7 +262,7 @@ function snapshotSheet(input,label='Character'){
 // Read-only live sync: never replace imported native sheet-roll controls,
 // spell lists or local notes with a partial, currently loaded attribute model.
 // Only fields actually present on Roll20 replace the corresponding local value.
-function applyLiveCharacterValues(p,s,characterId='',source='Roll20 attributes'){
+function applyLiveCharacterValues(p,s,characterId='',source='Roll20 attributes',sourceOverrides={}){
   if(!p||!s)return false;
   let changed=false;
   const merge=(target,source)=>{
@@ -300,8 +300,9 @@ function applyLiveCharacterValues(p,s,characterId='',source='Roll20 attributes')
   if(!p.sheetLink.statSources)p.sheetLink.statSources={};
   for(const [key,value] of Object.entries(s.stats||{})){
     if(value===undefined||value===null)continue;
-    if(p.sheetLink.statSources[key]!==source){
-      p.sheetLink.statSources[key]=source;changed=true;
+    const chosenSource=sourceOverrides[key]||source;
+    if(p.sheetLink.statSources[key]!==chosenSource){
+      p.sheetLink.statSources[key]=chosenSource;changed=true;
     }
   }
   if(changed)p.sheetLink.liveStatsAt=new Date().toISOString();

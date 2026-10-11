@@ -330,14 +330,11 @@ function autoRefreshCharacterStats(groups){
   let updated=0;
   for(const [characterId,group] of groups){
     const fields=autoCharacterAttributeFields(group.record.character);
-    let changed=false;
-    if(Object.keys(fields).length){
-      changed=applyLiveCharacterValues(group.profile,
-        snapshotSheet(fields,group.record.characterName),characterId,'Roll20 attributes')||changed;
-    }
+    const snap=snapshotSheet(fields,group.record.characterName);
     const token=autoTokenHealthSnapshot(group.record,group.profile);
-    if(token)changed=applyLiveCharacterValues(group.profile,token,characterId,token.source)||changed;
-    if(changed)updated++;
+    if(token)Object.assign(snap.stats,token.stats);
+    const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
+    if(applyLiveCharacterValues(group.profile,snap,characterId,'Roll20 attributes',overrides))updated++;
   }
   if(updated)autoPresentStatsUpdated();
   return updated;
@@ -357,10 +354,11 @@ async function autoRefreshVisibleSheetStats(record,profileRecord){
     const visual=scan.visible||beaconImportVisible({innerText:''},live.name);
     const snap=mergeBeaconSnapshot(snapshotSheet(scan.fields||{},live.name),visual);
     if(!Object.keys(snap.stats).length&&!Object.keys(snap.abilityScores).length)return false;
-    let changed=applyLiveCharacterValues(profileRecord,snap,charId,
-      beaconRemoteCandidate(live)?'Visible official sheet':'Visible Roll20 sheet');
     const token=autoTokenHealthSnapshot(record,profileRecord);
-    if(token)changed=applyLiveCharacterValues(profileRecord,token,charId,token.source)||changed;
+    if(token)Object.assign(snap.stats,token.stats);
+    const overrides=token?Object.fromEntries(Object.keys(token.stats).map(k=>[k,token.source])):{};
+    const changed=applyLiveCharacterValues(profileRecord,snap,charId,
+      beaconRemoteCandidate(live)?'Visible official sheet':'Visible Roll20 sheet',overrides);
     if(changed)autoPresentStatsUpdated();
     return changed;
   }catch(err){
