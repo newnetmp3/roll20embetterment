@@ -13,11 +13,130 @@ function beaconRegion(text,start,ends=[],limit=2400) {
   for(const re of ends){const m=tail.match(re);if(m)end=Math.min(end,m.index);}
   return region.slice(0,lead+end);
 }
+
+function beaconActionNorm(value){return String(value??'').replace(/\s+/g,' ').trim();}
+function beaconActionId(category,name,detail=''){
+  return 'sheet:action:'+String(category||'roll').toLowerCase().replace(/[^a-z0-9]+/g,'-')+':'+
+    beaconActionNorm(name+' '+detail).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,120);
+}
+function beaconRowName(row){
+  const selectors=['.span--item-row-title','.item-item__title','.spell-item__title','.feature-item__title',
+    '[class*="__title"] h3','[class*="__title"] h4','[class*="__title"]'];
+  for(const selector of selectors){
+    const el=row?.querySelector?.(selector),name=beaconActionNorm(el?.textContent);
+    if(name&&name.length<=120&&!/^(?:Attacks|Spells|Damage|Hit \/ DC)$/i.test(name))return name;
+  }
+  const text=beaconActionNorm(row?.textContent);
+  return text.split(/\s{2,}|(?=\b(?:Melee|Ranged|Spell Attack|Action|Bonus Action|Reaction)\b)/)[0].slice(0,120);
+}
+function beaconPushAction(out,seen,action){
+  if(!action?.name||!action?.sheetRef)return;
+  action.id=action.id||beaconActionId(action.category,action.name,action.detail);
+  if(seen.has(action.id))return;
+  seen.add(action.id);out.push(action);
+}
+function beaconDiscoverRollActions(scope=document){
+  const out=[],seen=new Set();
+  const q=(root,selector)=>Array.from(root?.querySelectorAll?.(selector)||[]);
+  // Official 2024 attack rows expose stable UUID viewAttackBlock ids.
+  for(const row of q(scope,'.attack-item')){
+    const name=beaconRowName(row);if(!name)continue;
+    const rowId=String(row.id||'').slice(0,180);
+    const hit=row.querySelector?.('.poly-button--hit-dc button');
+    if(hit){
+      const detail=beaconActionNorm(hit.textContent)||'Attack';
+      beaconPushAction(out,seen,{name,category:'attack',detail,
+        sheetRef:rowId?{kind:'attack-row',rowId,control:'hit'}:{kind:'named-row',rowType:'attack-item',name,control:'hit'}});
+    }
+    q(row,'.poly-button--damage button').forEach((button,index)=>{
+      const detail=beaconActionNorm(button.textContent)||'Damage';
+      beaconPushAction(out,seen,{name:name+' Damage',category:'damage',detail,
+        sheetRef:rowId?{kind:'attack-row',rowId,control:'damage',index}:{kind:'named-row',rowType:'attack-item',name,control:'damage',index}});
+    });
+  }
+  // Spell cards use the same hit/DC and damage controls but currently have no stable row id.
+  for(const row of q(scope,'.spell-item')){
+    const name=beaconRowName(row);if(!name)continue;
+    const hit=row.querySelector?.('.poly-button--hit-dc button');
+    if(hit){
+      const detail=beaconActionNorm(hit.textContent);
+      beaconPushAction(out,seen,{name,category:/Attack/i.test(detail)?'spell-attack':'spell-roll',detail,
+        sheetRef:{kind:'named-row',rowType:'spell-item',name,control:'hit'}});
+    }
+    q(row,'.poly-button--damage button').forEach((button,index)=>{
+      const detail=beaconActionNorm(button.textContent)||'Damage';
+      beaconPushAction(out,seen,{name:name+' Damage',category:'damage',detail,
+        sheetRef:{kind:'named-row',rowType:'spell-item',name,control:'damage',index}});
+    });
+  }
+  // Skills and tools advertise an explicit accessible Roll label.
+  for(const button of q(scope,'button[aria-label^="Roll "],[role="button"][aria-label^="Roll "]')){
+    const aria=beaconActionNorm(button.getAttribute?.('aria-label')),name=beaconActionNorm(button.textContent)||aria.replace(/^Roll (?:a |an )?/i,'').replace(/\s+check$/i,'');
+    const category=/hit die/i.test(aria)?'hit-die':/check/i.test(aria)?'check':'roll';
+    beaconPushAction(out,seen,{name,category,detail:aria,sheetRef:{kind:'aria',ariaLabel:aria}});
+  }
+  // Ability checks and saves are distinct native buttons in the official sheet.
+  for(const control of [['.ability-button','ability'],['.save-button','save']]){
+    q(scope,control[0]).forEach(button=>{
+      let cur=button,ability='';
+      for(let i=0;i<5&&cur;i++,cur=cur.parentElement){
+        const m=beaconActionNorm(cur.textContent).match(/\b(STR|DEX|CON|INT|WIS|CHA)\b/);
+        if(m){ability=m[1];break;}
+      }
+      if(!ability)return;
+      const detail=beaconActionNorm(button.textContent);
+      beaconPushAction(out,seen,{name:ability+(control[1]==='save'?' Save':' Check'),category:control[1],detail,
+        sheetRef:{kind:'ability',ability,control:control[1]}});
+    });
+  }
+  // Initiative has no dedicated aria-label in current official-sheet markup.
+  for(const button of q(scope,'button')){
+    const text=beaconActionNorm(button.textContent);
+    if(!/^(?:Initiative|Init)\b/i.test(text))continue;
+    beaconPushAction(out,seen,{name:'Initiative',category:'initiative',detail:text,
+      sheetRef:{kind:'initiative'}});
+  }
+  return out.slice(0,500);
+}
+function beaconResolveRollAction(ref,scope=document){
+  if(!ref||typeof ref!=='object')return null;
+  if(ref.kind==='attack-row'){
+    const row=scope.getElementById?.(String(ref.rowId||''));if(!row)return null;
+    if(ref.control==='hit')return row.querySelector?.('.poly-button--hit-dc button')||null;
+    if(ref.control==='damage')return qsa(row,'.poly-button--damage button')[Math.max(0,int(ref.index))]||null;
+  }
+  if(ref.kind==='named-row'){
+    const selector=ref.rowType==='spell-item'?'.spell-item':ref.rowType==='attack-item'?'.attack-item':null;
+    if(!selector)return null;
+    const wanted=beaconActionNorm(ref.name).toLowerCase();
+    const row=Array.from(scope.querySelectorAll?.(selector)||[]).find(x=>beaconRowName(x).toLowerCase()===wanted);
+    if(!row)return null;
+    if(ref.control==='hit')return row.querySelector?.('.poly-button--hit-dc button')||null;
+    if(ref.control==='damage')return Array.from(row.querySelectorAll?.('.poly-button--damage button')||[])[Math.max(0,int(ref.index))]||null;
+  }
+  if(ref.kind==='aria'){
+    const wanted=beaconActionNorm(ref.ariaLabel);
+    return Array.from(scope.querySelectorAll?.('button[aria-label],[role="button"][aria-label]')||[])
+      .find(x=>beaconActionNorm(x.getAttribute?.('aria-label'))===wanted)||null;
+  }
+  if(ref.kind==='ability'){
+    const cls=ref.control==='save'?'.save-button':'.ability-button',ability=String(ref.ability||'').toUpperCase();
+    return Array.from(scope.querySelectorAll?.(cls)||[]).find(button=>{
+      let cur=button;
+      for(let i=0;i<5&&cur;i++,cur=cur.parentElement)if(new RegExp('\\b'+ability+'\\b').test(beaconActionNorm(cur.textContent)))return true;
+      return false;
+    })||null;
+  }
+  if(ref.kind==='initiative')return Array.from(scope.querySelectorAll?.('button')||[])
+    .find(x=>/^(?:Initiative|Init)\b/i.test(beaconActionNorm(x.textContent)))||null;
+  return null;
+}
+function qsa(root,selector){return Array.from(root?.querySelectorAll?.(selector)||[]);}
 function beaconImportVisible(scope,label='Open character sheet') {
   const text=beaconVisibleText(scope);
   const result={name:label,stats:{},abilityScores:{},abilityMods:{},saveBonuses:{},
     skillBonuses:{},spellSlots:{},usedSlots:{},resources:[],attacks:[],details:{},
-    coverage:{visibleFields:0,sections:[],names:[]},signature:text.slice(0,35000)};
+    coverage:{visibleFields:0,sections:[],names:[]},rollActions:beaconDiscoverRollActions(scope),signature:text.slice(0,35000)};
   if(!text.trim())return result;
   const count=(group,name)=>{result.coverage.visibleFields++;if(!result.coverage.sections.includes(group))result.coverage.sections.push(group);result.coverage.names.push(name);};
   const num=(value,min,max)=>{const n=Number(value);return Number.isInteger(n)&&n>=min&&n<=max?n:null;};
