@@ -77,11 +77,12 @@
      const attackRef=radialSheetRollRef('spell',spell.name,'attack');
      const damageRef=radialSheetRollRef('spell',spell.name,'damage');
      const actions=[
-       ...(spell.command?[radialNode('cast','Cast','✧',[],'spell',spell.id)]:[]),
-       ...(attackRef?[radialNode('attack','Attack','⚄',[],'sheetRoll',attackRef.id)]:[]),
-       ...(damageRef?[radialNode('damage','Damage','✦',[],'sheetRoll',damageRef.id)]:[]),
+       ...(spell.command?[radialNode('cast','Cast in Roll20','✧',[],'spell',spell.id)]:[]),
+       radialNode('markCast','Mark cast (local)','✓',[],'markCast',spell.id),
+       ...(attackRef?[radialNode('attack','Roll attack','⚄',[],'sheetRoll',attackRef.id)]:[]),
+       ...(damageRef?[radialNode('damage','Roll damage','✦',[],'sheetRoll',damageRef.id)]:[]),
        radialNode('info','Info','⌕',[],'spellInfo',spell.id),
-       ...(Number(spell.level)>0?[radialNode('slot','Use slot','◈',[],'spendSlot',String(spell.level))]:[])
+       ...(Number(spell.level)>0?[radialNode('slot','Use L'+spell.level+' slot (local)','◈',[],'spendSlot',String(spell.level))]:[])
      ];
      return radialNode('s:'+spell.id,spell.name,'✧',actions,'','',
        [spell.castTime,spell.range,spell.duration].filter(Boolean).join(' · '),
@@ -413,10 +414,10 @@
        break;
      }
      case 'spell':
-       if(!spell?.command){toast('No Roll20 command for '+(spell?.name||'this spell')+'. Set it on the Spells tab.');break;}
-       success=sendToRoll20(spell.command);
-       if(success){if(/bonus/i.test(spell.castTime||''))p.bonusUsed=true;else p.actionUsed=true;
-         if(spell.concentration)p.concentration=spell.name;record('Cast '+spell.name);}
+       success=castSpellCommand(spell);
+       break;
+     case 'markCast':
+       success=markSpellCastLocal(spell);
        break;
      case 'macro':{const m=RB.state.macros.find(m=>m.id===node.value);if(m){success=sendToRoll20(m.command);if(success)record('Macro '+m.name);}break;}
      case 'initiative':quickRoll('initiative','');success=true;break;

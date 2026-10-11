@@ -508,3 +508,40 @@ test('failed official sheet rolls release the guard without spending an action',
   assert.equal(calls,2);
   assert.equal(sent.length,0);
 });
+
+test('official 2024 spells expose mark-cast separately from native rolls and slots',()=>{
+  const {r,sent}=env(),p=r.profile();
+  p.spells=[{id:'bless',name:'Bless',level:1,castTime:'1 Action',concentration:true,command:''}];
+  p.spellSlots[1]=3;
+  p.sheetRolls=[{id:'bless-hit',kind:'spell',name:'Bless',action:'attack',tab:'Spells'},
+    {id:'bless-dmg',kind:'spell',name:'Bless',action:'damage',tab:'Spells'}];
+  const spell=r.radialCategories().find(x=>x.id==='spells').children.find(x=>x.id==='all').children[0];
+  assert.deepEqual(Array.from(spell.children,x=>x.kind),['markCast','sheetRoll','sheetRoll','spellInfo','spendSlot']);
+  r.radialExecute({kind:'markCast',value:'bless'});
+  assert.equal(p.actionUsed,true);
+  assert.equal(p.concentration,'Bless');
+  assert.equal(p.usedSlots[1],0);
+  assert.equal(sent.length,0);
+});
+test('local spell casting reminders use explicit bonus/reaction times, not inferred costs',()=>{
+  const {r,sent}=env(),p=r.profile();
+  p.spells=[{id:'shield',name:'Shield',level:1,castTime:'1 Reaction',command:''},
+    {id:'misty',name:'Misty Step',level:2,castTime:'1 Bonus Action',command:''},
+    {id:'ritual',name:'Detect Magic',level:1,castTime:'10 minutes',command:''}];
+  r.radialExecute({kind:'markCast',value:'shield'});
+  assert.equal(p.reactionUsed,true);assert.equal(p.actionUsed,false);assert.equal(p.bonusUsed,false);
+  r.radialExecute({kind:'markCast',value:'misty'});
+  assert.equal(p.bonusUsed,true);assert.equal(p.actionUsed,false);
+  r.radialExecute({kind:'markCast',value:'ritual'});
+  assert.equal(p.actionUsed,false);assert.equal(p.usedSlots[1],0);assert.equal(p.usedSlots[2],0);
+  assert.equal(sent.length,0);
+});
+test('failed legacy cast chat action does not change local economy, concentration or slots',()=>{
+  const {r,doc}=env(),p=r.profile();
+  p.spells=[{id:'hex',name:'Hex',level:1,castTime:'1 Bonus Action',concentration:true,command:'/roll 1d20'}];
+  p.spellSlots[1]=2;
+  doc.querySelector=()=>null;
+  r.radialExecute({kind:'spell',value:'hex'});
+  assert.equal(p.bonusUsed,false);assert.equal(p.concentration,'');
+  assert.equal(p.usedSlots[1],0);
+});

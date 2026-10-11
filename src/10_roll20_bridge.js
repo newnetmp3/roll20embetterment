@@ -59,17 +59,35 @@ function executeSlot(slot) {
     useSpell(s.id);
   }
 }
-function useSpell(id) {
-  const p=profile(), spell=p.spells.find(s=>s.id===id);
-  if (!spell) return;
-  // No automatic slot expenditure: cantrips/rituals/free casts complicate this.
-  if (spell.command) {if (sendToRoll20(spell.command)) record('Cast/used '+spell.name);}
-  else {toast('No Roll20 command set for '+spell.name+'. Add one using Edit.');}
-  if (spell.concentration && spell.command) {
-    p.concentration=spell.name; save();
-    toast('Concentrating on '+spell.name+' (local reminder).');
+// A cast reminder is local: no native roll control or authoritative sheet is modified.
+function markSpellCastLocal(spell) {
+  if (!spell) return false;
+  const p=profile(), timing=String(spell.castTime||'').toLowerCase();
+  // Do not guess action economy for minutes, rituals, or an unknown casting time.
+  if (/\breaction\b/.test(timing)) p.reactionUsed=true;
+  else if (/\bbonus\s+action\b/.test(timing)) p.bonusUsed=true;
+  else if (/\baction\b/.test(timing)) p.actionUsed=true;
+  if (spell.concentration) p.concentration=spell.name;
+  const level=clamp(spell.level,0,9);
+  record('Cast reminder (local): '+spell.name);
+  toast('Marked '+spell.name+' cast locally.'+
+    (level?' No slot spent; use a level '+level+' slot separately if needed.':''));
+  return true;
+}
+function castSpellCommand(spell) {
+  if (!spell) return false;
+  if (!spell.command) {
+    toast('No Roll20 cast command for '+spell.name+'. Use Mark cast (local) or the official sheet.');
+    return false;
   }
-  render();
+  if (!sendToRoll20(spell.command)) return false;
+  return markSpellCastLocal(spell);
+}
+function useSpell(id) {
+  const spell=profile().spells.find(s=>s.id===id);
+  const success=castSpellCommand(spell);
+  if (success) {save();render();}
+  return success;
 }
 function applyDamage(dmg) {
   const p=profile(); let n=clamp(dmg,0,100000); if (!n) return;

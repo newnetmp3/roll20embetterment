@@ -123,14 +123,21 @@ function macroListHTML(macros) {
 }
 function spellsUI() {
   const p=profile(), editing=p.spells.find(s=>s.id===RB.editSpell);
-  return `<div class="stack"><div class="card"><h2>Spell slots (local)</h2><div class="grid">${Array.from({length:9},(_,i)=>i+1).map(i=>`<div class="stack"><label>Level ${i}</label><div class="row"><input class="mini" type="number" min="0" max="99" data-slot-max="${i}" value="${p.spellSlots[i]}"><input class="mini" type="number" min="0" max="99" data-slot-used="${i}" value="${p.usedSlots[i]}"></div><span class="hint">Total / used</span>${button('Use','useSlot',`data-index="${i}"`,'small')}${button('Restore','restoreSlot',`data-index="${i}"`,'small')}</div>`).join('')}</div><p class="hint">Tracking is local. Casting does not automatically use a spell slot (rituals, free casts, etc.). Use the slot buttons when appropriate.</p></div>
+  return `<div class="stack"><div class="card"><h2>Spell slots (local)</h2><div class="grid">${Array.from({length:9},(_,i)=>i+1).map(i=>`<div class="stack"><label>Level ${i}</label><div class="row"><input class="mini" type="number" min="0" max="99" data-slot-max="${i}" value="${p.spellSlots[i]}"><input class="mini" type="number" min="0" max="99" data-slot-used="${i}" value="${p.usedSlots[i]}"></div><span class="hint">Total / used</span>${button('Use','useSlot',`data-index="${i}"`,'small')}${button('Restore','restoreSlot',`data-index="${i}"`,'small')}</div>`).join('')}</div><p class="hint">Local reminders only: a native Attack or Damage roll is not a cast. Mark cast separately to note your turn and concentration. Slot expenditure is always manual (rituals and free casts may not use one). Nothing here changes your Roll20 sheet.</p></div>
   <div class="card"><h3>${editing?'Edit spell':'Add spell / feature'}</h3><div class="row"><label class="field">Name<input id="rbe-spell-name" value="${html(editing?.name||'')}"></label><label class="field narrow">Level (0–9)<input id="rbe-spell-level" type="number" min="0" max="9" value="${editing?.level??0}"></label><label class="field">Range / target<input id="rbe-spell-range" value="${html(editing?.range||'')}"></label></div>
   <label class="field">Roll20 cast command (optional)<input id="rbe-spell-command" placeholder="%{selected|repeating_spell-...}" value="${html(editing?.command||'')}"></label><label class="field">Notes / components<textarea id="rbe-spell-notes" rows="2">${html(editing?.notes||'')}</textarea></label><div class="row"><label><input type="checkbox" id="rbe-spell-conc" ${editing?.concentration?'checked':''}> Concentration</label>${button(editing?'Save spell':'Add spell','saveSpell','', 'primary')}${editing?button('Cancel edit','cancelSpell'):''}</div></div>
   <div class="card"><h3>Spellbook (${p.spells.length})</h3><input class="wide" id="rbe-spell-search" placeholder="Search spells and notes" value="${html(RB.spellSearch||'')}"><div id="rbe-spell-results">${spellListHTML()}</div></div></div>`;
 }
+function spellNativeRollButton(spell,action,label) {
+  const ref=radialSheetRollRef('spell',spell.name,action);
+  if(!ref)return '';
+  const busy=RB.nativeRollPending.has(profile().id+':'+ref.id);
+  return button(label+' (official)','runNativeSheetRoll',
+    'data-id="'+html(ref.id)+'"'+(busy?' disabled':''),'small');
+}
 function spellListHTML() {
   const p=profile(), q=(RB.spellSearch||'').toLowerCase();
-  return p.spells.filter(s=>(s.name+' '+(s.notes||'')).toLowerCase().includes(q)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).map(s=>`<div class="list-entry"><div class="row"><strong class="grow">${html(s.name)}</strong><span class="pill">${s.level?'Level '+s.level:'Cantrip'}</span>${s.concentration?'<span class="pill">Concentration</span>':''}${s.origin==='sheet'?'<span class="pill">Sheet</span>':''}${s.prepared?'<span class="pill">Prepared</span>':''}${button('Cast','castSpell',`data-id="${html(s.id)}"`,'small primary')}${button('Edit','editSpell',`data-id="${html(s.id)}"`,'small')}${button('✕','deleteSpell',`data-id="${html(s.id)}"`,'small warn')}</div><p class="hint">${html([s.range,s.castTime,s.duration,s.components,s.school].filter(Boolean).join(' · '))}${s.notes?' • '+html(short(s.notes,140)):''}</p></div>`).join('')||'<p class="hint">No spells yet. Add spells and optionally link their sheet macros.</p>';
+  return p.spells.filter(s=>(s.name+' '+(s.notes||'')).toLowerCase().includes(q)).sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).map(s=>`<div class="list-entry"><div class="row"><strong class="grow">${html(s.name)}</strong><span class="pill">${s.level?'Level '+s.level:'Cantrip'}</span>${s.concentration?'<span class="pill">Concentration</span>':''}${s.origin==='sheet'?'<span class="pill">Sheet</span>':''}${s.prepared?'<span class="pill">Prepared</span>':''}${s.command?button('Cast via Roll20','castSpell',`data-id="${html(s.id)}"`,'small primary'):''}${button('Mark cast (local)','markCast',`data-id="${html(s.id)}"`,'small')}${spellNativeRollButton(s,'attack','Roll attack')}${spellNativeRollButton(s,'damage','Roll damage')}${button('Edit','editSpell',`data-id="${html(s.id)}"`,'small')}${button('✕','deleteSpell',`data-id="${html(s.id)}"`,'small warn')}</div><p class="hint">${html([s.range,s.castTime,s.duration,s.components,s.school].filter(Boolean).join(' · '))}${s.notes?' • '+html(short(s.notes,140)):''}</p></div>`).join('')||'<p class="hint">No spells yet. Add spells and optionally link their sheet macros.</p>';
 }
 function inventoryUI() {
   const p=profile(), weight=p.inventory.reduce((acc,x)=>acc+Math.max(0,Number(x.qty)||0)*Math.max(0,Number(x.weight)||0),0);
@@ -223,7 +230,10 @@ function paletteEntries() {
   const covered=new Set(attackEntries.filter(x=>x.kind==='sheetRoll').map(x=>x.value));
   return [...tabs.map(t=>({name:'Open '+t,kind:'tab',value:t})),
     ...RB.state.macros.map(m=>({name:'Macro: '+m.name,kind:'macro',value:m.id})),
-    ...p.spells.map(s=>({name:'Spell: '+s.name,kind:'spell',value:s.id})),
+    ...p.spells.flatMap(s=>[
+      ...(s.command?[{name:'Cast via Roll20: '+s.name,kind:'spell',value:s.id}]:[]),
+      {name:'Mark cast (local): '+s.name,kind:'markCast',value:s.id}
+    ]),
     ...attackEntries,
     ...native.filter(r=>!covered.has(r.id)).map(r=>({name:officialSheetRollLabel(r),kind:'sheetRoll',value:r.id})),
     ...skillNames.map(n=>({name:'Skill: '+n,kind:'skill',value:n})),

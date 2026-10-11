@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.4 — Concentric Combat HUD
+# roll20 Embetterment 2.3.5 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -13,7 +13,7 @@ The main interface is a **token-anchored, Baldur's Gate 3–inspired combat whee
 
 ## Action safety
 - Rolls are sent through the visible Roll20 chat form, not a hidden API. Unsent drafts are preserved.
-- Sheet-linked attacks and spells require an imported working Roll20 action command. 2024 sheet buttons that do not expose one are **not synthesized**. The HUD prompts you to use the original sheet.
+- Native D&D 2024 Attack/Damage controls use Roll20's actual official sheet buttons; missing controls are never synthesized. Sending a legacy cast macro, marking a local cast, and spending a local slot are separate decisions.
 - Item use and spell slots are tracked only through explicit selections. The HUD never assumes the DM has approved an action or modifies Roll20 character attributes.
 - The wheel's action, bonus-action, reaction, concentration, and movement trackers are **local reminders**. They do not enforce official turn rules.
 - Automatic anchor tracking is best-effort and depends on what the Roll20 engine exposes. **Screen-space pinning is the fallback**, not real token tracking.
@@ -115,3 +115,7 @@ The Sheet panel now offers official 2024 weapon Attack and Damage buttons even w
 
 An official D&D 2024 roll now shows visible, screen-reader-accessible **rolling / received / not completed** feedback. While an action is waiting for Roll20's authenticated embedded/popout or offscreen helper sheet, R20eb ignores duplicate invocations of that same character + roll reference and disables its matching Sheet-panel button. Different native roll actions may still run separately. Successful and failed requests release the in-flight guard, allowing normal retry. The result indicator clears after a few seconds. No character-sheet values or official roll formulas are modified.
 
+
+## Explicit spellcasting and local combat reminders (2.3.5)
+
+The SPELLS wheel and Spells panel distinguish **Cast in Roll20** (only when a working chat command exists), **Mark cast (local)** (available even for official 2024 spells without a cast command), **Roll attack / Roll damage** (only when genuine official sheet buttons were imported), and **Use level N slot (local)**. The command palette follows the same distinction. Native sheet attack/damage rolls never imply a cast or spend a slot. Mark cast records the turn action type if the imported casting time explicitly says Action, Bonus Action, or Reaction, and starts a local concentration reminder only for concentration spells. Unknown casting times are not guessed. No slot is consumed automatically, including from Roll20 macros; spell slots remain explicit manual local controls. This companion does not cast a spell inside the 2024 sheet unless that sheet actually exposes a supported executable cast control.

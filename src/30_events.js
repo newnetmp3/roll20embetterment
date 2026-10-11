@@ -109,6 +109,7 @@ function action(name, el) {
     case 'cancelSpell':RB.editSpell=null;render();break;
     case 'deleteSpell':if(confirm('Remove this local spell?')){p.spells=p.spells.filter(x=>x.id!==id);p.macrosSlots=p.macrosSlots.map(x=>x==='spell:'+id?'':x);changedProfile();}break;
     case 'castSpell':useSpell(id);break;
+    case 'markCast':radialExecute({kind:'markCast',value:id});break;
     case 'useSlot':if(ix>0&&ix<10&&p.usedSlots[ix]<p.spellSlots[ix]){p.usedSlots[ix]++;changedProfile();}else toast('No spell slots available at that level.');break;
     case 'restoreSlot':if(ix>0&&ix<10){p.usedSlots[ix]=Math.max(0,p.usedSlots[ix]-1);changedProfile();}break;
     case 'addResource':{const r=prompt('Resource name?','Lay on Hands');if(!r?.trim())break;const max=clamp(prompt('Maximum uses or points?','5'),0,99999);p.resources.push({id:uid(),name:r.trim().slice(0,120),max,current:max,reset:'long'});changedProfile();break;}
@@ -201,6 +202,7 @@ function navigatePalette(kind,id) {
   if(kind==='tab'){RB.tab=id;RB.state.ui.lastTab=id;RB.visible=true;save();render();}
   else if(kind==='macro') {runMacro(id);render();}
   else if(kind==='spell')useSpell(id);
+  else if(kind==='markCast')radialExecute({kind:'markCast',value:id});
   else if(kind==='attack'||kind==='sheetRoll')radialExecute({kind,value:id});
   else if(kind==='skill'||kind==='save') {
     const ref=radialSheetRollRef(kind,kind==='save'?id.toUpperCase():id,kind);
