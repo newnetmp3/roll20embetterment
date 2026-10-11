@@ -21,7 +21,7 @@ function harness(doc){
     localStorage:{getItem(k){return stored.get(k)||null},setItem(k,v){stored.set(k,v)}}
   };
   vm.createContext(scope);
-  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoEnsureSheetCandidate,autoHideSheetDialog,autoReleaseSheetDialog,autoCloseSheetDialog,autoSheetOpeningShield,openRoll20CharacterSheet,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
+  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoRefreshCharacterStats,autoEnsureSheetCandidate,autoHideSheetDialog,autoReleaseSheetDialog,autoCloseSheetDialog,autoSheetOpeningShield,openRoll20CharacterSheet,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
   return {api:scope.api,intervals,doc:page,context:scope};
 }
 function tab(label,selected,change) {
@@ -427,4 +427,36 @@ test('closed existing dialogs are eligible for automatic hiding when Roll20 reus
   assert.equal(marks.has('closed:data-r20e-existing-dialog'),false);
   assert.match(style.textContent,/:has\(\.characterdialog\)/);
   release();
+});
+
+test('live controlled-character stats refresh after full import without another sheet tour',async()=>{
+ const {api,context}=harness();
+ context.location.hostname='app.roll20.net';context.location.pathname='/editor/123';
+ context.window.currentPlayer={id:'player-1'};context.window.is_gm=false;
+ let hp='56',ac='16',speed='30',tourCount=0;
+ const character=backboneModel('char-a',{name:'Nier',controlledby:'player-1'});
+ character.attribs={toJSON:()=>[
+  {name:'hp',current:hp,max:'84'},
+  {name:'ac',current:ac,max:''},
+  {name:'speed',current:speed,max:''},
+  {name:'dexterity_mod',current:'+4',max:''},
+  {name:'initiative_bonus',current:'+4',max:''}
+ ]};
+ const token=backboneModel('tok-a',{name:'Nier',type:'image',represents:'char-a',controlledby:''});
+ context.window.d20={Campaign:{activePage(){return {thegraphics:{models:[token]}}},
+   characters:{get:()=>character}}};
+ context.importHook=()=>tourCount++;
+ vm.runInContext("autoEnsureSheetCandidate=async()=>({opened:true,hidden:{},candidate:{id:'char-a'}}); sheetTourImportCandidate=async(candidate,target)=>{importHook();target.sheetLink={importMode:'full-auto',tabsVisited:['Combat'],name:'Nier'};return {candidate,profile:target}}; autoCloseSheetDialog=()=>{};",context);
+ await api.autoImportControlledCharacters();
+ const p=api.profile();
+ assert.equal(p.stats.hp,56);assert.equal(p.stats.maxHp,84);
+ assert.equal(p.stats.ac,16);assert.equal(p.stats.speed,30);
+ assert.equal(p.stats.init,4);assert.equal(p.abilityMods.dex,4);
+ assert.equal(tourCount,1);
+ hp='21';ac='19';speed='35';
+ await api.autoImportControlledCharacters();
+ assert.equal(tourCount,1,'already imported character must not open or tour a sheet again');
+ assert.equal(p.stats.hp,21);assert.equal(p.stats.maxHp,84);
+ assert.equal(p.stats.ac,19);assert.equal(p.stats.speed,35);
+ assert.equal(p.sheetLink.importMode,'full-auto');
 });

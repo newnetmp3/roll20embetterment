@@ -23,8 +23,9 @@
  #rbe-radial-layer .rbe-wheel-health.is-wounded .rbe-wheel-health-fill{background:linear-gradient(90deg,#a16b28,#d6a047)}
  #rbe-radial-layer .rbe-wheel-health.is-critical .rbe-wheel-health-fill{background:linear-gradient(90deg,#8e252b,#c84a4e)}
  #rbe-radial-layer .rbe-wheel-health-text{position:relative;z-index:1;padding:0 8px}
- #rbe-radial-layer .rbe-wheel-info{position:static;transform:none;white-space:nowrap;max-width:500px;overflow:hidden;text-overflow:ellipsis;padding:5px 12px;background:#151115dc;border:1px solid #8d754b;border-radius:20px;color:#f0d6a7;font:12px Georgia,serif;pointer-events:none}
  #rbe-radial-layer .rbe-wheel-toolbar{pointer-events:auto;position:static;transform:none;display:flex;align-items:center;gap:4px;background:#19131be6;padding:5px;border:1px solid #91764b;border-radius:30px;white-space:nowrap}
+ #rbe-radial-layer .rbe-wheel-stats{display:flex;align-items:center;gap:5px;justify-content:center;flex-wrap:wrap}
+ #rbe-radial-layer .rbe-wheel-stat{background:#1b151aef;border:1px solid #846e4c;border-radius:14px;padding:3px 8px;font:600 11px system-ui;color:#edd2a0;white-space:nowrap}
  #rbe-radial-layer .rbe-wheel-toolbar button{border:0;background:transparent;color:#e6cb9d;font:600 12px system-ui;padding:4px 7px}
  #rbe-radial-layer .rbe-wheel-toolbar button:hover{background:#614a32}
  #rbe-radial-layer #rbe-radial-dock{position:fixed;bottom:15px;left:15px;display:flex;gap:6px;align-items:center;pointer-events:auto;background:#1c1720ec;border:2px ridge #a98956;border-radius:25px;box-shadow:0 4px 25px #000b;padding:6px;max-width:calc(100vw - 12px)}
@@ -37,7 +38,7 @@
  #rbe-radial-layer #rbe-tether-path{stroke:#c7a46c;stroke-width:2;stroke-dasharray:3 6;fill:none;opacity:.75}
  @keyframes rbe-ring-bloom{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
  :host([data-reduced-motion="true"]) #rbe-radial-wheel .rbe-ring{animation:none!important}
- @media(max-width:600px){#rbe-radial-layer .rbe-wheel-info{max-width:330px;font-size:10px}#rbe-radial-layer .rbe-wheel-toolbar button{font-size:11px;padding:4px 5px}}
+ @media(max-width:600px){#rbe-radial-layer .rbe-wheel-toolbar button{font-size:11px;padding:4px 5px}#rbe-radial-layer .rbe-wheel-stat{font-size:10px;padding:3px 5px}}
  `;
  RB.radial={open:true,pin:false,path:[],pages:{},anchor:null,manual:null,source:'none',lastPosition:'',lastPresence:false};
  RB.nativeRollPending=new Set();
@@ -324,6 +325,12 @@
    const label=hp+'/'+max+(temp?' +'+temp+' temp':'');
    return `<div class="rbe-wheel-health${state}" role="progressbar" aria-label="Hit points ${html(label)}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${Math.min(hp,max)}" style="--rbe-hp-percent:${percent.toFixed(1)}%"><span class="rbe-wheel-health-fill" aria-hidden="true"></span><span class="rbe-wheel-health-text">${html(label)}</span></div>`;
  }
+ function radialStatsMarkup(){
+   const s=profile().stats;
+   return '<span class="rbe-wheel-stat" title="Armor class">AC '+int(s.ac)+'</span>'+
+     '<span class="rbe-wheel-stat" title="Walking speed">SPD '+int(s.speed)+' ft</span>'+
+     '<span class="rbe-wheel-stat" title="Initiative modifier">INIT '+signed(s.init)+'</span>';
+ }
  function radialWheelSVG(){
    const layout=radialLayout(),rings=layout.rings,radius=layout.radii;
    const content=rings.map((items,d)=>{
@@ -361,15 +368,14 @@
  }
  function radialHTML(){
    const r=RB.radial,active=r.anchor&&r.open,p=profile();
-   const layout=radialLayout(),trail=layout.rings,parts=r.path.map((id,i)=>trail[i]?.find(x=>x.id===id)?.label||id);
-   const outerRadius=layout.outer;
+   const layout=radialLayout(),outerRadius=layout.outer;
    return `<div id="rbe-radial-layer"><svg id="rbe-token-tether" aria-hidden="true"><path id="rbe-tether-path" d=""></path></svg>
     ${active?`<div id="rbe-radial-wheel" style="left:${Math.round(r.anchor.x)}px;top:${Math.round(r.anchor.y)}px;--rbe-outer-radius:${outerRadius}px;--rbe-wheel-size:${layout.diameter}px">
       <div class="rbe-wheel-title">${html(short(p.name,27))} · COMBAT</div>${radialWheelSVG()}
-      <div class="rbe-wheel-footer">${radialHealthMarkup()}<div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
+      <div class="rbe-wheel-footer"><div class="rbe-wheel-stats">${radialHealthMarkup()}${radialStatsMarkup()}</div><div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
       <button data-action="radialOpenSheet" title="Open original Roll20 character sheet">▤ Roll20</button><button data-action="radialPanel" title="Open Embetterment sheet importer">⇣ Import</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
-      <div class="rbe-wheel-info" title="Tab to enter wheel · Arrow keys or Home/End to move · Enter to choose · Esc to go back">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
+      </div>
      </div>`:''}
     ${!active?`<div id="rbe-radial-dock"${radialDockStyle()}><span class="rbe-dock-grip" data-dock-grip="true" role="button" tabindex="0" aria-label="Drag toolbar to reposition" title="Drag to reposition toolbar">⠿</span><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><button data-action="radialOpenSheet" title="Open the original Roll20 character sheet">▤ Sheet</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
    </div>`;
@@ -604,7 +610,7 @@
    if(!wheel||!r.anchor)return;
    // Clamp the full wheel including its footer, not just the SVG.
    const layout=radialLayout(),outer=layout.outer,bounds=layout.bounds;
-   const above=outer+45,below=outer+126;
+   const above=outer+45,below=outer+98;
    const scale=Math.max(0.1,Math.min(1,
      (bounds.width-12)/layout.diameter,
      (bounds.height-12)/(above+below)));

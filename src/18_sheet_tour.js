@@ -280,7 +280,9 @@ function autoCharacterById(id){
     campaign.activeCharacters?.()?.find?.(x=>String(x.id||x.get?.('id')||'')===String(id))||null;
 }
 function autoCharacterAttributeFields(character){
-  const rows=character?.attribs?.toJSON?.()||character?.attribs?.models?.map?.(x=>x.toJSON?.()||x.attributes)||[];
+  const collection=character?.attribs;
+  const rows=collection?.toJSON?.()||
+    collection?.models?.map?.(x=>x.toJSON?.()||x.attributes)||[];
   const fields={};
   for(const row of Array.isArray(rows)?rows:[]){
     const name=String(row?.name||'').trim();
@@ -288,6 +290,23 @@ function autoCharacterAttributeFields(character){
     fields[name]={current:row.current??'',max:row.max??''};
   }
   return fields;
+}
+function autoRefreshCharacterStats(groups){
+  let updated=0;
+  for(const [characterId,group] of groups){
+    const fields=autoCharacterAttributeFields(group.record.character);
+    if(!Object.keys(fields).length)continue;
+    const snap=snapshotSheet(fields,group.record.characterName);
+    if(applyLiveCharacterValues(group.profile,snap,characterId))updated++;
+  }
+  if(updated){
+    save();
+    // Do not replace focused text inputs or disrupt manual imports.
+    if(RB.visible&&!RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
+    else if(RB.radial?.anchor)render();
+    if(RB.shadow&&RB.radial?.anchor)radialPosition();
+  }
+  return updated;
 }
 function autoActiveTokenModels(){
   const campaign=autoCampaign(),page=campaign?.activePage?.();
@@ -551,6 +570,9 @@ async function autoImportControlledCharacters(){
   const records=autoDiscoverControlledTokens();
   if(!records.length)return;
   const groups=autoAssignControlledTokens(records);
+  // Unlike full imports, numeric stats keep refreshing from loaded Roll20
+  // models every scan, even after a character has been fully imported.
+  autoRefreshCharacterStats(groups);
   RB.autoCharacterImportBusy=true;
   RB.autoCharacterImported=RB.autoCharacterImported||new Set();
   let imported=0;
@@ -564,21 +586,8 @@ async function autoImportControlledCharacters(){
       if(!opened||!opened.opened){
         // A user-opened sheet remains untouched by the background importer.
         // Seed from the model only; user-initiated Import all tabs is separate.
-        RB.autoCharacterDirectSeeded=RB.autoCharacterDirectSeeded||new Set();
-        // A partial model seed must not replace a previous complete import's
-        // spells, attacks, or other native sheet controls with an empty snapshot.
-        const hasFullImport=group.profile.sheetLink?.importMode==='full-auto'||
-          !!(group.profile.sheetLink?.tabsVisited?.length);
-        if(!hasFullImport&&Object.keys(directFields).length&&!RB.autoCharacterDirectSeeded.has(characterId)){
-          const snap=snapshotSheet(directFields,group.record.characterName);
-          if(applySheetSnapshot(group.profile,snap)){
-            group.profile.roll20CharacterId=characterId;
-            group.profile.sheetLink.characterId=characterId;
-            group.profile.sheetLink.source='auto:character-model';
-            group.profile.sheetLink.importMode='partial-model';
-            RB.autoCharacterDirectSeeded.add(characterId);save();
-          }
-        }
+        // autoRefreshCharacterStats has already merged the available fields.
+        // A partial read must never overwrite imported actions or sheet rolls.
         RB.autoCharacterRetryAfter.set(characterId,Date.now()+30000);
         console.warn('[R20eb] Full controlled character sheet could not be opened yet:',group.record.characterName);
         continue;

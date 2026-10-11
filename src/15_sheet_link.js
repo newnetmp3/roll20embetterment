@@ -135,29 +135,55 @@ function sheetCandidates(doc=document){
   return out.sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,25);
 }
 function snapshotSheet(input,label='Character'){
-  const attrs=sheetAttributes(input),values=Object.fromEntries(Object.entries(attrs).map(([key,val])=>[key.toLowerCase(),val]));
+  const attrs=sheetAttributes(input),values={};
+  // Roll20 editions vary between underscores, spaces, dashes and dots in keys.
+  // Preserve original names and accept their normalized forms without guessing
+  // which arbitrary values represent hit points or other combat statistics.
+  for(const [key,val] of Object.entries(attrs)){
+    const low=key.toLowerCase(),canonical=low.replace(/[\s.\-]+/g,'_');
+    values[low]=val;if(!(canonical in values))values[canonical]=val;
+  }
   const pick=(...names)=>names.map(k=>values[k.toLowerCase()]?.current).find(v=>v!==undefined&&v!=='');
   const number=(...names)=>sheetNum(pick(...names));
   const snap={name:sheetText(pick('character_name','charactername','name')||label,100),attrs,edition:'Named/visible attributes',
     stats:{},abilityMods:{},abilityScores:{},saveBonuses:{},skillBonuses:{},spellSlots:{},usedSlots:{},currency:{},details:{},
     spells:[],attacks:[],inventory:[],features:[],resources:[],proficiencies:[],tools:[],sheetRolls:[],
     coverage:{attributes:Object.keys(attrs).length,mapped:0,unmapped:[]}};
-  const fields={hp:['hp','hit_points','hit_points_current','current_hp'],maxHp:['hp_max','hit_points_max','max_hp'],
-    tempHp:['hp_temp','temporary_hit_points','temp_hp'],ac:['ac','armor_class'],speed:['speed','walking_speed','movement_speed'],
-    init:['initiative_bonus','init_bonus'],proficiency:['pb','proficiency_bonus'],level:['level','character_level','base_level']};
-  for(const [k,names] of Object.entries(fields)){const n=number(...names);if(n!==null)snap.stats[k]=n;}
-  if(snap.stats.maxHp===undefined){const max=sheetNum(values.hp?.max||values.hit_points?.max);if(max!==null)snap.stats.maxHp=max;}
+  const fields={
+    hp:['hp','hit_points','hit_points_current','current_hp','hp_current','current_hit_points','hp_remaining'],
+    maxHp:['hp_max','hit_points_max','max_hp','max_hit_points','hit_points_maximum','hit_points_total','hp_total'],
+    tempHp:['hp_temp','temporary_hit_points','temp_hp','temporary_hp','temp_hit_points','temp_hit_points_current'],
+    ac:['ac','armor_class','armor_class_total','ac_total','total_armor_class'],
+    speed:['speed','walking_speed','movement_speed','walk_speed','speed_walk','movement_speed_walk','speed_walking'],
+    init:['initiative_bonus','init_bonus','initiative_mod','initiative_modifier','initiative'],
+    proficiency:['pb','proficiency_bonus','prof_bonus'],level:['level','character_level','base_level','total_level']
+  };
+  for(const [k,names] of Object.entries(fields)){
+    const n=number(...names);
+    if(n!==null)snap.stats[k]=n;
+  }
+  // Speed on some sheets is stored as "30 ft" rather than a bare number.
+  if(snap.stats.speed===undefined){
+    const value=pick(...fields.speed),m=String(value??'').match(/^\s*(\d{1,3})\s*(?:ft\.?|feet)?\s*$/i);
+    if(m)snap.stats.speed=Number(m[1]);
+  }
+  if(snap.stats.maxHp===undefined){
+    for(const name of fields.hp){
+      const max=sheetNum(values[name]?.max);
+      if(max!==null){snap.stats.maxHp=max;break;}
+    }
+  }
   for(const [abbr,long] of Object.entries(sheetFull)){
-    const s=number(long,long+'_score',abbr+'_score');
-    const m=number(long+'_mod',long+'_bonus',abbr+'_mod');
-    const sv=number(long+'_save_bonus',long+'_saving_throw_bonus',abbr+'_save_bonus');
+    const s=number(long,long+'_score',abbr+'_score',abbr);
+    const m=number(long+'_mod',long+'_bonus',abbr+'_mod',abbr+'_bonus');
+    const sv=number(long+'_save_bonus',long+'_saving_throw_bonus',abbr+'_save_bonus',abbr+'_saving_throw_bonus');
     if(s!==null)snap.abilityScores[abbr]=s;
     if(m!==null)snap.abilityMods[abbr]=m;
     if(sv!==null)snap.saveBonuses[abbr]=sv;
   }
   for(const skill of skillNames){
     const slug=skill.toLowerCase().replaceAll(' ','_');
-    const v=number(slug+'_bonus',slug+'_mod');
+    const v=number(slug+'_bonus',slug+'_mod',slug+'_total');
     if(v!==null)snap.skillBonuses[skill]=v;
   }
   for(const k of ['cp','sp','ep','gp','pp']){const v=number(k,k+'_coins');if(v!==null)snap.currency[k]=v;}
@@ -228,10 +254,51 @@ function snapshotSheet(input,label='Character'){
   const known=new Set(Object.values(fields).flat().concat(Object.values(details).flat(),['inspiration','heroic_inspiration','hp_max','hp','cp','sp','ep','gp','pp'],
     ...Object.values(sheetFull).map(long=>[long,long+'_score',long+'_mod',long+'_bonus',long+'_save_bonus',long+'_saving_throw_bonus']),
     ...skillNames.map(n=>[n.toLowerCase().replaceAll(' ','_')+'_bonus',n.toLowerCase().replaceAll(' ','_')+'_mod'])));
-  const unknown=Object.keys(attrs).filter(k=>!known.has(k.toLowerCase())&&!k.startsWith('repeating_')&&!/^lvl[1-9]_slots_/.test(k));
+  const unknown=Object.keys(attrs).filter(k=>!known.has(k.toLowerCase().replace(/[\s.\-]+/g,'_'))&&!k.startsWith('repeating_')&&!/^lvl[1-9]_slots_/.test(k));
   snap.coverage.unmapped=unknown.slice(0,250);
   snap.coverage.mapped=Object.keys(attrs).length-unknown.length;
   return snap;
+}
+// Read-only live sync: never replace imported native sheet-roll controls,
+// spell lists or local notes with a partial, currently loaded attribute model.
+// Only fields actually present on Roll20 replace the corresponding local value.
+function applyLiveCharacterValues(p,s,characterId=''){
+  if(!p||!s)return false;
+  let changed=false;
+  const merge=(target,source)=>{
+    for(const [key,value] of Object.entries(source||{})){
+      if(value===undefined||value===null)continue;
+      if(target[key]!==value){target[key]=value;changed=true;}
+    }
+  };
+  merge(p.stats,s.stats);
+  merge(p.abilityScores,s.abilityScores);
+  merge(p.abilityMods,s.abilityMods);
+  merge(p.saveBonuses,s.saveBonuses);
+  merge(p.skillBonuses,s.skillBonuses);
+  merge(p.sheetDetails,s.details);
+  merge(p.currency,s.currency);
+  if(s.inspiration!==undefined&&p.inspiration!==s.inspiration){
+    p.inspiration=s.inspiration;changed=true;
+  }
+  // Spell slots are not part of this live read: local manual usage must not
+  // be overwritten by stale total/remaining values in an attribute cache.
+  const hasMappedData=['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
+    .some(section=>Object.keys(s[section]||{}).length>0)||s.inspiration!==undefined;
+  if(!hasMappedData)return changed;
+  if(!p.sheetLink){
+    p.sheetLink={name:s.name||p.name,edition:'Roll20 model attributes',
+      source:'auto:character-model',importMode:'partial-model'};
+    changed=true;
+  }
+  if(characterId&&p.roll20CharacterId!==String(characterId)){
+    p.roll20CharacterId=String(characterId);changed=true;
+  }
+  if(characterId&&p.sheetLink.characterId!==String(characterId)){
+    p.sheetLink.characterId=String(characterId);changed=true;
+  }
+  if(changed)p.sheetLink.liveStatsAt=new Date().toISOString();
+  return changed;
 }
 function mergeSheetList(previous,incoming){
   const map=new Map((Array.isArray(previous)?previous:[]).map(item=>[item.id,item]));

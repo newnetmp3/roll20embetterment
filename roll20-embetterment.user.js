@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.7
+// @version      2.3.8
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.7',
+  version: '2.3.8',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -716,29 +716,55 @@ function sheetCandidates(doc=document){
   return out.sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,25);
 }
 function snapshotSheet(input,label='Character'){
-  const attrs=sheetAttributes(input),values=Object.fromEntries(Object.entries(attrs).map(([key,val])=>[key.toLowerCase(),val]));
+  const attrs=sheetAttributes(input),values={};
+  // Roll20 editions vary between underscores, spaces, dashes and dots in keys.
+  // Preserve original names and accept their normalized forms without guessing
+  // which arbitrary values represent hit points or other combat statistics.
+  for(const [key,val] of Object.entries(attrs)){
+    const low=key.toLowerCase(),canonical=low.replace(/[\s.\-]+/g,'_');
+    values[low]=val;if(!(canonical in values))values[canonical]=val;
+  }
   const pick=(...names)=>names.map(k=>values[k.toLowerCase()]?.current).find(v=>v!==undefined&&v!=='');
   const number=(...names)=>sheetNum(pick(...names));
   const snap={name:sheetText(pick('character_name','charactername','name')||label,100),attrs,edition:'Named/visible attributes',
     stats:{},abilityMods:{},abilityScores:{},saveBonuses:{},skillBonuses:{},spellSlots:{},usedSlots:{},currency:{},details:{},
     spells:[],attacks:[],inventory:[],features:[],resources:[],proficiencies:[],tools:[],sheetRolls:[],
     coverage:{attributes:Object.keys(attrs).length,mapped:0,unmapped:[]}};
-  const fields={hp:['hp','hit_points','hit_points_current','current_hp'],maxHp:['hp_max','hit_points_max','max_hp'],
-    tempHp:['hp_temp','temporary_hit_points','temp_hp'],ac:['ac','armor_class'],speed:['speed','walking_speed','movement_speed'],
-    init:['initiative_bonus','init_bonus'],proficiency:['pb','proficiency_bonus'],level:['level','character_level','base_level']};
-  for(const [k,names] of Object.entries(fields)){const n=number(...names);if(n!==null)snap.stats[k]=n;}
-  if(snap.stats.maxHp===undefined){const max=sheetNum(values.hp?.max||values.hit_points?.max);if(max!==null)snap.stats.maxHp=max;}
+  const fields={
+    hp:['hp','hit_points','hit_points_current','current_hp','hp_current','current_hit_points','hp_remaining'],
+    maxHp:['hp_max','hit_points_max','max_hp','max_hit_points','hit_points_maximum','hit_points_total','hp_total'],
+    tempHp:['hp_temp','temporary_hit_points','temp_hp','temporary_hp','temp_hit_points','temp_hit_points_current'],
+    ac:['ac','armor_class','armor_class_total','ac_total','total_armor_class'],
+    speed:['speed','walking_speed','movement_speed','walk_speed','speed_walk','movement_speed_walk','speed_walking'],
+    init:['initiative_bonus','init_bonus','initiative_mod','initiative_modifier','initiative'],
+    proficiency:['pb','proficiency_bonus','prof_bonus'],level:['level','character_level','base_level','total_level']
+  };
+  for(const [k,names] of Object.entries(fields)){
+    const n=number(...names);
+    if(n!==null)snap.stats[k]=n;
+  }
+  // Speed on some sheets is stored as "30 ft" rather than a bare number.
+  if(snap.stats.speed===undefined){
+    const value=pick(...fields.speed),m=String(value??'').match(/^\s*(\d{1,3})\s*(?:ft\.?|feet)?\s*$/i);
+    if(m)snap.stats.speed=Number(m[1]);
+  }
+  if(snap.stats.maxHp===undefined){
+    for(const name of fields.hp){
+      const max=sheetNum(values[name]?.max);
+      if(max!==null){snap.stats.maxHp=max;break;}
+    }
+  }
   for(const [abbr,long] of Object.entries(sheetFull)){
-    const s=number(long,long+'_score',abbr+'_score');
-    const m=number(long+'_mod',long+'_bonus',abbr+'_mod');
-    const sv=number(long+'_save_bonus',long+'_saving_throw_bonus',abbr+'_save_bonus');
+    const s=number(long,long+'_score',abbr+'_score',abbr);
+    const m=number(long+'_mod',long+'_bonus',abbr+'_mod',abbr+'_bonus');
+    const sv=number(long+'_save_bonus',long+'_saving_throw_bonus',abbr+'_save_bonus',abbr+'_saving_throw_bonus');
     if(s!==null)snap.abilityScores[abbr]=s;
     if(m!==null)snap.abilityMods[abbr]=m;
     if(sv!==null)snap.saveBonuses[abbr]=sv;
   }
   for(const skill of skillNames){
     const slug=skill.toLowerCase().replaceAll(' ','_');
-    const v=number(slug+'_bonus',slug+'_mod');
+    const v=number(slug+'_bonus',slug+'_mod',slug+'_total');
     if(v!==null)snap.skillBonuses[skill]=v;
   }
   for(const k of ['cp','sp','ep','gp','pp']){const v=number(k,k+'_coins');if(v!==null)snap.currency[k]=v;}
@@ -809,10 +835,51 @@ function snapshotSheet(input,label='Character'){
   const known=new Set(Object.values(fields).flat().concat(Object.values(details).flat(),['inspiration','heroic_inspiration','hp_max','hp','cp','sp','ep','gp','pp'],
     ...Object.values(sheetFull).map(long=>[long,long+'_score',long+'_mod',long+'_bonus',long+'_save_bonus',long+'_saving_throw_bonus']),
     ...skillNames.map(n=>[n.toLowerCase().replaceAll(' ','_')+'_bonus',n.toLowerCase().replaceAll(' ','_')+'_mod'])));
-  const unknown=Object.keys(attrs).filter(k=>!known.has(k.toLowerCase())&&!k.startsWith('repeating_')&&!/^lvl[1-9]_slots_/.test(k));
+  const unknown=Object.keys(attrs).filter(k=>!known.has(k.toLowerCase().replace(/[\s.\-]+/g,'_'))&&!k.startsWith('repeating_')&&!/^lvl[1-9]_slots_/.test(k));
   snap.coverage.unmapped=unknown.slice(0,250);
   snap.coverage.mapped=Object.keys(attrs).length-unknown.length;
   return snap;
+}
+// Read-only live sync: never replace imported native sheet-roll controls,
+// spell lists or local notes with a partial, currently loaded attribute model.
+// Only fields actually present on Roll20 replace the corresponding local value.
+function applyLiveCharacterValues(p,s,characterId=''){
+  if(!p||!s)return false;
+  let changed=false;
+  const merge=(target,source)=>{
+    for(const [key,value] of Object.entries(source||{})){
+      if(value===undefined||value===null)continue;
+      if(target[key]!==value){target[key]=value;changed=true;}
+    }
+  };
+  merge(p.stats,s.stats);
+  merge(p.abilityScores,s.abilityScores);
+  merge(p.abilityMods,s.abilityMods);
+  merge(p.saveBonuses,s.saveBonuses);
+  merge(p.skillBonuses,s.skillBonuses);
+  merge(p.sheetDetails,s.details);
+  merge(p.currency,s.currency);
+  if(s.inspiration!==undefined&&p.inspiration!==s.inspiration){
+    p.inspiration=s.inspiration;changed=true;
+  }
+  // Spell slots are not part of this live read: local manual usage must not
+  // be overwritten by stale total/remaining values in an attribute cache.
+  const hasMappedData=['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','details','currency']
+    .some(section=>Object.keys(s[section]||{}).length>0)||s.inspiration!==undefined;
+  if(!hasMappedData)return changed;
+  if(!p.sheetLink){
+    p.sheetLink={name:s.name||p.name,edition:'Roll20 model attributes',
+      source:'auto:character-model',importMode:'partial-model'};
+    changed=true;
+  }
+  if(characterId&&p.roll20CharacterId!==String(characterId)){
+    p.roll20CharacterId=String(characterId);changed=true;
+  }
+  if(characterId&&p.sheetLink.characterId!==String(characterId)){
+    p.sheetLink.characterId=String(characterId);changed=true;
+  }
+  if(changed)p.sheetLink.liveStatsAt=new Date().toISOString();
+  return changed;
 }
 function mergeSheetList(previous,incoming){
   const map=new Map((Array.isArray(previous)?previous:[]).map(item=>[item.id,item]));
@@ -1810,7 +1877,9 @@ function autoCharacterById(id){
     campaign.activeCharacters?.()?.find?.(x=>String(x.id||x.get?.('id')||'')===String(id))||null;
 }
 function autoCharacterAttributeFields(character){
-  const rows=character?.attribs?.toJSON?.()||character?.attribs?.models?.map?.(x=>x.toJSON?.()||x.attributes)||[];
+  const collection=character?.attribs;
+  const rows=collection?.toJSON?.()||
+    collection?.models?.map?.(x=>x.toJSON?.()||x.attributes)||[];
   const fields={};
   for(const row of Array.isArray(rows)?rows:[]){
     const name=String(row?.name||'').trim();
@@ -1818,6 +1887,23 @@ function autoCharacterAttributeFields(character){
     fields[name]={current:row.current??'',max:row.max??''};
   }
   return fields;
+}
+function autoRefreshCharacterStats(groups){
+  let updated=0;
+  for(const [characterId,group] of groups){
+    const fields=autoCharacterAttributeFields(group.record.character);
+    if(!Object.keys(fields).length)continue;
+    const snap=snapshotSheet(fields,group.record.characterName);
+    if(applyLiveCharacterValues(group.profile,snap,characterId))updated++;
+  }
+  if(updated){
+    save();
+    // Do not replace focused text inputs or disrupt manual imports.
+    if(RB.visible&&!RB.shadow?.activeElement?.matches?.('input,textarea,select'))render();
+    else if(RB.radial?.anchor)render();
+    if(RB.shadow&&RB.radial?.anchor)radialPosition();
+  }
+  return updated;
 }
 function autoActiveTokenModels(){
   const campaign=autoCampaign(),page=campaign?.activePage?.();
@@ -2081,6 +2167,9 @@ async function autoImportControlledCharacters(){
   const records=autoDiscoverControlledTokens();
   if(!records.length)return;
   const groups=autoAssignControlledTokens(records);
+  // Unlike full imports, numeric stats keep refreshing from loaded Roll20
+  // models every scan, even after a character has been fully imported.
+  autoRefreshCharacterStats(groups);
   RB.autoCharacterImportBusy=true;
   RB.autoCharacterImported=RB.autoCharacterImported||new Set();
   let imported=0;
@@ -2094,21 +2183,8 @@ async function autoImportControlledCharacters(){
       if(!opened||!opened.opened){
         // A user-opened sheet remains untouched by the background importer.
         // Seed from the model only; user-initiated Import all tabs is separate.
-        RB.autoCharacterDirectSeeded=RB.autoCharacterDirectSeeded||new Set();
-        // A partial model seed must not replace a previous complete import's
-        // spells, attacks, or other native sheet controls with an empty snapshot.
-        const hasFullImport=group.profile.sheetLink?.importMode==='full-auto'||
-          !!(group.profile.sheetLink?.tabsVisited?.length);
-        if(!hasFullImport&&Object.keys(directFields).length&&!RB.autoCharacterDirectSeeded.has(characterId)){
-          const snap=snapshotSheet(directFields,group.record.characterName);
-          if(applySheetSnapshot(group.profile,snap)){
-            group.profile.roll20CharacterId=characterId;
-            group.profile.sheetLink.characterId=characterId;
-            group.profile.sheetLink.source='auto:character-model';
-            group.profile.sheetLink.importMode='partial-model';
-            RB.autoCharacterDirectSeeded.add(characterId);save();
-          }
-        }
+        // autoRefreshCharacterStats has already merged the available fields.
+        // A partial read must never overwrite imported actions or sheet rolls.
         RB.autoCharacterRetryAfter.set(characterId,Date.now()+30000);
         console.warn('[R20eb] Full controlled character sheet could not be opened yet:',group.record.characterName);
         continue;
@@ -2177,8 +2253,9 @@ function startAutoControlledCharacterImport(){
  #rbe-radial-layer .rbe-wheel-health.is-wounded .rbe-wheel-health-fill{background:linear-gradient(90deg,#a16b28,#d6a047)}
  #rbe-radial-layer .rbe-wheel-health.is-critical .rbe-wheel-health-fill{background:linear-gradient(90deg,#8e252b,#c84a4e)}
  #rbe-radial-layer .rbe-wheel-health-text{position:relative;z-index:1;padding:0 8px}
- #rbe-radial-layer .rbe-wheel-info{position:static;transform:none;white-space:nowrap;max-width:500px;overflow:hidden;text-overflow:ellipsis;padding:5px 12px;background:#151115dc;border:1px solid #8d754b;border-radius:20px;color:#f0d6a7;font:12px Georgia,serif;pointer-events:none}
  #rbe-radial-layer .rbe-wheel-toolbar{pointer-events:auto;position:static;transform:none;display:flex;align-items:center;gap:4px;background:#19131be6;padding:5px;border:1px solid #91764b;border-radius:30px;white-space:nowrap}
+ #rbe-radial-layer .rbe-wheel-stats{display:flex;align-items:center;gap:5px;justify-content:center;flex-wrap:wrap}
+ #rbe-radial-layer .rbe-wheel-stat{background:#1b151aef;border:1px solid #846e4c;border-radius:14px;padding:3px 8px;font:600 11px system-ui;color:#edd2a0;white-space:nowrap}
  #rbe-radial-layer .rbe-wheel-toolbar button{border:0;background:transparent;color:#e6cb9d;font:600 12px system-ui;padding:4px 7px}
  #rbe-radial-layer .rbe-wheel-toolbar button:hover{background:#614a32}
  #rbe-radial-layer #rbe-radial-dock{position:fixed;bottom:15px;left:15px;display:flex;gap:6px;align-items:center;pointer-events:auto;background:#1c1720ec;border:2px ridge #a98956;border-radius:25px;box-shadow:0 4px 25px #000b;padding:6px;max-width:calc(100vw - 12px)}
@@ -2191,7 +2268,7 @@ function startAutoControlledCharacterImport(){
  #rbe-radial-layer #rbe-tether-path{stroke:#c7a46c;stroke-width:2;stroke-dasharray:3 6;fill:none;opacity:.75}
  @keyframes rbe-ring-bloom{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
  :host([data-reduced-motion="true"]) #rbe-radial-wheel .rbe-ring{animation:none!important}
- @media(max-width:600px){#rbe-radial-layer .rbe-wheel-info{max-width:330px;font-size:10px}#rbe-radial-layer .rbe-wheel-toolbar button{font-size:11px;padding:4px 5px}}
+ @media(max-width:600px){#rbe-radial-layer .rbe-wheel-toolbar button{font-size:11px;padding:4px 5px}#rbe-radial-layer .rbe-wheel-stat{font-size:10px;padding:3px 5px}}
  `;
  RB.radial={open:true,pin:false,path:[],pages:{},anchor:null,manual:null,source:'none',lastPosition:'',lastPresence:false};
  RB.nativeRollPending=new Set();
@@ -2478,6 +2555,12 @@ function startAutoControlledCharacterImport(){
    const label=hp+'/'+max+(temp?' +'+temp+' temp':'');
    return `<div class="rbe-wheel-health${state}" role="progressbar" aria-label="Hit points ${html(label)}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${Math.min(hp,max)}" style="--rbe-hp-percent:${percent.toFixed(1)}%"><span class="rbe-wheel-health-fill" aria-hidden="true"></span><span class="rbe-wheel-health-text">${html(label)}</span></div>`;
  }
+ function radialStatsMarkup(){
+   const s=profile().stats;
+   return '<span class="rbe-wheel-stat" title="Armor class">AC '+int(s.ac)+'</span>'+
+     '<span class="rbe-wheel-stat" title="Walking speed">SPD '+int(s.speed)+' ft</span>'+
+     '<span class="rbe-wheel-stat" title="Initiative modifier">INIT '+signed(s.init)+'</span>';
+ }
  function radialWheelSVG(){
    const layout=radialLayout(),rings=layout.rings,radius=layout.radii;
    const content=rings.map((items,d)=>{
@@ -2515,15 +2598,14 @@ function startAutoControlledCharacterImport(){
  }
  function radialHTML(){
    const r=RB.radial,active=r.anchor&&r.open,p=profile();
-   const layout=radialLayout(),trail=layout.rings,parts=r.path.map((id,i)=>trail[i]?.find(x=>x.id===id)?.label||id);
-   const outerRadius=layout.outer;
+   const layout=radialLayout(),outerRadius=layout.outer;
    return `<div id="rbe-radial-layer"><svg id="rbe-token-tether" aria-hidden="true"><path id="rbe-tether-path" d=""></path></svg>
     ${active?`<div id="rbe-radial-wheel" style="left:${Math.round(r.anchor.x)}px;top:${Math.round(r.anchor.y)}px;--rbe-outer-radius:${outerRadius}px;--rbe-wheel-size:${layout.diameter}px">
       <div class="rbe-wheel-title">${html(short(p.name,27))} · COMBAT</div>${radialWheelSVG()}
-      <div class="rbe-wheel-footer">${radialHealthMarkup()}<div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
+      <div class="rbe-wheel-footer"><div class="rbe-wheel-stats">${radialHealthMarkup()}${radialStatsMarkup()}</div><div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
       <button data-action="radialOpenSheet" title="Open original Roll20 character sheet">▤ Roll20</button><button data-action="radialPanel" title="Open Embetterment sheet importer">⇣ Import</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
-      <div class="rbe-wheel-info" title="Tab to enter wheel · Arrow keys or Home/End to move · Enter to choose · Esc to go back">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
+      </div>
      </div>`:''}
     ${!active?`<div id="rbe-radial-dock"${radialDockStyle()}><span class="rbe-dock-grip" data-dock-grip="true" role="button" tabindex="0" aria-label="Drag toolbar to reposition" title="Drag to reposition toolbar">⠿</span><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><button data-action="radialOpenSheet" title="Open the original Roll20 character sheet">▤ Sheet</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
    </div>`;
@@ -2758,7 +2840,7 @@ function startAutoControlledCharacterImport(){
    if(!wheel||!r.anchor)return;
    // Clamp the full wheel including its footer, not just the SVG.
    const layout=radialLayout(),outer=layout.outer,bounds=layout.bounds;
-   const above=outer+45,below=outer+126;
+   const above=outer+45,below=outer+98;
    const scale=Math.max(0.1,Math.min(1,
      (bounds.width-12)/layout.diameter,
      (bounds.height-12)/(above+below)));
@@ -2904,7 +2986,15 @@ function homeUI() {
   <div class="card"><div class="row between"><strong>Hit Points <span class="stat">${int(s.hp)} / ${int(s.maxHp)}</span></strong><span class="hint">Temp: ${int(s.tempHp)} • AC ${int(s.ac)} • Speed ${int(s.speed)} ft</span></div>${progress(s.hp,s.maxHp)}
    <div class="row">${field('Current HP','stats.hp',s.hp,{cls:'narrow'})}${field('Max HP','stats.maxHp',s.maxHp,{cls:'narrow'})}${field('Temp HP','stats.tempHp',s.tempHp,{cls:'narrow'})}${field('AC','stats.ac',s.ac,{cls:'narrow'})}${field('Speed','stats.speed',s.speed,{cls:'narrow'})}</div>
    <div class="row"><input id="rbe-hp-adjust" type="number" value="5" class="mini" min="1" aria-label="HP adjustment">${button('− Damage','damage')} ${button('+ Heal','heal')} ${button('+ Temp HP','addTemp')}</div>
-   <p class="hint">HUD HP is a local copy. The Sheet tab can refresh it from Roll20; edits here never write back.</p></div>
+   <p class="hint">HUD HP is a local copy. While the character is controlled on this map, loaded Roll20 stats refresh in the background without opening a sheet. Edits here never write back.</p></div>
+  <div class="card"><div class="row between"><h3>Character statistics</h3><span class="hint">${p.sheetLink?.liveStatsAt?'Updated from Roll20 model':'Imported or locally set'}</span></div>
+   <div class="row"><span class="pill">Initiative ${signed(s.init)}</span><span class="pill">Proficiency ${signed(s.proficiency)}</span><span class="pill">Level ${int(s.level)}</span>
+   ${p.sheetDetails?.passivePerception?'<span class="pill">Passive Perception '+html(p.sheetDetails.passivePerception)+'</span>':''}</div>
+   <div class="grid">${abilities.map(a=>{
+     const score=p.abilityScores?.[a],mod=p.abilityMods?.[a];
+     return '<div class="card"><strong>'+a.toUpperCase()+'</strong><div class="stat">'+(score===undefined?'—':int(score))+'</div><span class="hint">Mod '+(score===undefined&&!mod?'—':signed(mod))+'</span></div>';
+   }).join('')}</div>
+   <p class="hint">Ability saves and all imported skill bonuses are available under Rolls. Missing fields are not guessed.</p></div>
   <div class="card"><h3>Turn assistant</h3><div class="row">${toggle('Action','actionUsed',p.actionUsed)}${toggle('Bonus action','bonusUsed',p.bonusUsed)}${toggle('Reaction','reactionUsed',p.reactionUsed)}${button('New turn ↻','newTurn')}</div>
    <div class="row">${field('Movement used (ft)','movementUsed',p.movementUsed,{cls:'narrow'})}<span class="muted">Remaining: <strong>${Math.max(0,int(s.speed)-int(p.movementUsed))} ft</strong></span></div>
    <div class="row">${button(p.inspiration?'★ Inspiration ON':'☆ Inspiration OFF','inspiration','',p.inspiration?'on':'')}${button('Short rest','shortRest')}${button('Long rest','longRest')}</div></div>
