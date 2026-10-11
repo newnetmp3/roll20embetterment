@@ -1,7 +1,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.6',
+  version: '2.3.7',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -43,7 +43,7 @@ function initialState() {
   const p = newProfile();
   return {schema:1, settings:{theme:'bg3',visualMigration:1,scale:1,hotkeys:false,showBar:false,showHud:false,showFab:false,chatSearch:'',chatKind:'all',reducedMotion:false,alwaysOpen:false,radialMigration:2},
     profiles:[p], current:p.id, macros:baseMacros(), tokenAssignments:{},
-    ui:{panelX:null,panelY:null,panelWidth:520,lastTab:'Home',barCollapsed:false}};
+    ui:{panelX:null,panelY:null,dockX:null,dockY:null,panelWidth:520,lastTab:'Home',barCollapsed:false}};
 }
 function profile() { return RB.state.profiles.find(p=>p.id === RB.state.current) || RB.state.profiles[0]; }
 function normalizeProfile(p) {

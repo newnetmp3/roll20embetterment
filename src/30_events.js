@@ -14,6 +14,7 @@ function action(name, el) {
     case 'radialBack':RB.radial.path.pop();render();radialPosition();break;
     case 'radialHome':RB.radial.path=[];render();radialPosition();break;
     case 'radialPin':RB.radial.pin=true;toast('Click the center of your token on the tabletop.');break;
+    case 'radialOpenSheet':case 'openRoll20Sheet':openRoll20CharacterSheet();break;
     case 'radialPanel':RB.tab='Sheet';RB.state.ui.lastTab='Sheet';RB.visible=true;render();break;
     case 'radialToggle':RB.radial.open=!RB.radial.open;RB.radial.path=[];render();radialPosition();break;
     case 'open': case 'toggle': RB.visible=name==='open'?true:!RB.visible; render(); break;
@@ -330,17 +331,41 @@ function highlightPalette() {
     paletteOptions().length?'rbe-palette-option-'+RB.paletteSelection:'');
 }
 function onDragStart(e) {
-  if(e.target.closest('button,input,select,textarea'))return;
-  if(!e.target.closest('#rbe-header')||!RB.panel)return;
-  e.preventDefault();const r=RB.panel.getBoundingClientRect();RB.drag={x:e.clientX,y:e.clientY,left:r.left,top:r.top};
+  const grip=e.target.closest?.('[data-dock-grip]');
+  if(grip){
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    const dock=grip.closest?.('#rbe-radial-dock');
+    if(!dock)return;
+    e.preventDefault();
+    const rect=dock.getBoundingClientRect();
+    RB.drag={type:'dock',pointerId:e.pointerId,x:e.clientX,y:e.clientY,left:rect.left,top:rect.top};
+    return;
+  }
+  if(e.target.closest?.('button,input,select,textarea'))return;
+  if(!e.target.closest?.('#rbe-header')||!RB.panel)return;
+  e.preventDefault();const r=RB.panel.getBoundingClientRect();
+  RB.drag={type:'panel',pointerId:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top};
 }
 function onPointerMove(e) {
-  if(!RB.drag)return;
-  RB.state.ui.panelX=clamp(RB.drag.left+e.clientX-RB.drag.x,0,Math.max(0,window.innerWidth-100));
-  RB.state.ui.panelY=clamp(RB.drag.top+e.clientY-RB.drag.y,0,Math.max(0,window.innerHeight-70));
+  const drag=RB.drag;if(!drag||(drag.pointerId!==undefined&&e.pointerId!==drag.pointerId))return;
+  if(drag.type==='dock'){
+    const dock=RB.shadow?.querySelector?.('#rbe-radial-dock');
+    if(!dock){RB.drag=null;return;}
+    const rect=dock.getBoundingClientRect();
+    RB.state.ui.dockX=clamp(drag.left+e.clientX-drag.x,0,Math.max(0,window.innerWidth-rect.width));
+    RB.state.ui.dockY=clamp(drag.top+e.clientY-drag.y,0,Math.max(0,window.innerHeight-rect.height));
+    dock.style.left=RB.state.ui.dockX+'px';dock.style.top=RB.state.ui.dockY+'px';dock.style.bottom='auto';
+    return;
+  }
+  if(!RB.panel)return;
+  RB.state.ui.panelX=clamp(drag.left+e.clientX-drag.x,0,Math.max(0,window.innerWidth-100));
+  RB.state.ui.panelY=clamp(drag.top+e.clientY-drag.y,0,Math.max(0,window.innerHeight-70));
   RB.panel.style.left=RB.state.ui.panelX+'px';RB.panel.style.top=RB.state.ui.panelY+'px';RB.panel.style.right='auto';RB.panel.style.bottom='auto';
 }
-function onPointerUp() {if(RB.drag){RB.drag=null;save();}}
+function onPointerUp(e) {
+  if(!RB.drag||(RB.drag.pointerId!==undefined&&e?.pointerId!==RB.drag.pointerId))return;
+  RB.drag=null;save();
+}
 function boot() {
   if(document.getElementById('roll20-embetterment-host'))return;
   load();

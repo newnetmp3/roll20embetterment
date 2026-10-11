@@ -27,9 +27,12 @@
  #rbe-radial-layer .rbe-wheel-toolbar{pointer-events:auto;position:static;transform:none;display:flex;align-items:center;gap:4px;background:#19131be6;padding:5px;border:1px solid #91764b;border-radius:30px;white-space:nowrap}
  #rbe-radial-layer .rbe-wheel-toolbar button{border:0;background:transparent;color:#e6cb9d;font:600 12px system-ui;padding:4px 7px}
  #rbe-radial-layer .rbe-wheel-toolbar button:hover{background:#614a32}
- #rbe-radial-layer #rbe-radial-dock{position:fixed;bottom:15px;left:15px;display:flex;gap:6px;align-items:center;pointer-events:auto;background:#1c1720ec;border:2px ridge #a98956;border-radius:25px;box-shadow:0 4px 25px #000b;padding:6px}
+ #rbe-radial-layer #rbe-radial-dock{position:fixed;bottom:15px;left:15px;display:flex;gap:6px;align-items:center;pointer-events:auto;background:#1c1720ec;border:2px ridge #a98956;border-radius:25px;box-shadow:0 4px 25px #000b;padding:6px;max-width:calc(100vw - 12px)}
  #rbe-radial-layer #rbe-radial-dock button{color:#f9dfa8;background:#3a2b28;border-color:#977951;border-radius:24px;font:600 12px Georgia,serif}
  #rbe-radial-layer #rbe-radial-dock .rbe-dock-caption{font:11px system-ui;color:#d3bf9e;max-width:220px;padding:0 6px}
+ #rbe-radial-layer #rbe-radial-dock .rbe-dock-grip{cursor:grab;touch-action:none;user-select:none;color:#dfba79;border-right:1px solid #71583c;padding:3px 5px 3px 2px;font:700 16px system-ui}
+ #rbe-radial-layer #rbe-radial-dock .rbe-dock-grip:active{cursor:grabbing}
+ #rbe-radial-layer #rbe-radial-dock .rbe-dock-grip:focus-visible{outline:2px solid #f0ce9b;border-radius:5px}
  #rbe-radial-layer #rbe-token-tether{position:fixed;inset:0;width:100vw;height:100vh;overflow:visible;pointer-events:none}
  #rbe-radial-layer #rbe-tether-path{stroke:#c7a46c;stroke-width:2;stroke-dasharray:3 6;fill:none;opacity:.75}
  @keyframes rbe-ring-bloom{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
@@ -160,6 +163,7 @@
      radialNode('more','MORE','⚙',[
        radialNode('newTurn','New turn','↻',[],'newTurn',''),
        radialNode('sheet','Sheet import','▤',[],'panel','Sheet'),
+       radialNode('nativeSheet','Roll20 sheet','▤',[],'openCharacter',''),
        radialNode('macros','Macros','⚙',[],'panel','Macros'),
        group('favorites','Favorites','★',RB.state.macros.filter(m=>m.favorite).map(m=>radialNode('m:'+m.id,m.name,'★',[],'macro',m.id))),
        radialNode('settings','Settings','⚙',[],'panel','Settings'),
@@ -348,6 +352,13 @@
    target.focus();
    return true;
  }
+ function radialDockStyle(){
+   const u=RB.state?.ui||{};
+   if(!Number.isFinite(u.dockX)||!Number.isFinite(u.dockY))return '';
+   const x=clamp(u.dockX,0,Math.max(0,(window.innerWidth||1280)-80));
+   const y=clamp(u.dockY,0,Math.max(0,(window.innerHeight||900)-36));
+   return ' style="left:'+x+'px;top:'+y+'px;bottom:auto"';
+ }
  function radialHTML(){
    const r=RB.radial,active=r.anchor&&r.open,p=profile();
    const layout=radialLayout(),trail=layout.rings,parts=r.path.map((id,i)=>trail[i]?.find(x=>x.id===id)?.label||id);
@@ -357,10 +368,10 @@
       <div class="rbe-wheel-title">${html(short(p.name,27))} · COMBAT</div>${radialWheelSVG()}
       <div class="rbe-wheel-footer">${radialHealthMarkup()}<div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
-      <button data-action="radialPanel" title="Open character sheet importer">▤ Sheet</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
+      <button data-action="radialOpenSheet" title="Open original Roll20 character sheet">▤ Roll20</button><button data-action="radialPanel" title="Open Embetterment sheet importer">⇣ Import</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
       <div class="rbe-wheel-info" title="Tab to enter wheel · Arrow keys or Home/End to move · Enter to choose · Esc to go back">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
      </div>`:''}
-    ${!active?`<div id="rbe-radial-dock"><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
+    ${!active?`<div id="rbe-radial-dock"${radialDockStyle()}><span class="rbe-dock-grip" data-dock-grip="true" role="button" tabindex="0" aria-label="Drag toolbar to reposition" title="Drag to reposition toolbar">⠿</span><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><button data-action="radialOpenSheet" title="Open the original Roll20 character sheet">▤ Sheet</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
    </div>`;
  }
  function radialPick(depth,index){
@@ -449,6 +460,7 @@
      case 'spellInfo':toast(spell?`${spell.name}: ${[spell.castTime,spell.range,spell.duration,spell.notes].filter(Boolean).join(' · ').slice(0,300)}`:'No spell details imported.');break;
      case 'itemInfo':toast(item?`${item.name} · ${item.qty??1} carried · ${short(item.description||item.properties||'',220)}`:'No details imported.');break;
      case 'feature':toast(feature?`${feature.name}: ${short(feature.description||'Open your character sheet to activate this ability.',300)}`:'Feature unavailable.');break;
+     case 'openCharacter':success=openRoll20CharacterSheet();break;
      case 'panel':RB.tab=node.value;RB.state.ui.lastTab=node.value;RB.visible=true;success=true;break;
      case 'pin':RB.radial.pin=true;toast('Click the center of your token on the tabletop.');success=true;break;
      default:toast('No usable command for this selection.');break;
