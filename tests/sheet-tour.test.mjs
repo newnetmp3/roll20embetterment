@@ -21,7 +21,7 @@ function harness(doc){
     localStorage:{getItem(k){return stored.get(k)||null},setItem(k,v){stored.set(k,v)}}
   };
   vm.createContext(scope);
-  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoRefreshCharacterStats,autoEnsureSheetCandidate,autoHideSheetDialog,autoReleaseSheetDialog,autoCloseSheetDialog,autoSheetOpeningShield,openRoll20CharacterSheet,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
+  vm.runInContext(script+'\nload();globalThis.api={RB,profile,sheetTourTabs,sheetTourActive,sheetTourMergeVisible,sheetTourAccumulator,sheetTourAdd,sheetTourFrameScan,sheetTourStart,sheetTourImportCandidate,sheetTourCancel,sheetTourPromptOpen,sheetUI,autoDiscoverControlledTokens,autoTokenRecord,autoCharacterAttributeFields,autoAssignControlledTokens,autoProfileForCharacter,autoRefreshCharacterStats,autoEnsureSheetCandidate,autoHideSheetDialog,autoReleaseSheetDialog,autoCloseSheetDialog,autoSheetOpeningShield,roll20CharacterSheetUrl,roll20LinkedCharacterId,openRoll20CharacterSheet,action,autoSelectedTokenAssignment,autoActivateSelectedTokenProfile,autoImportControlledCharacters,startAutoControlledCharacterImport};',scope);
   return {api:scope.api,intervals,doc:page,context:scope};
 }
 function tab(label,selected,change) {
@@ -459,4 +459,80 @@ test('live controlled-character stats refresh after full import without another 
  assert.equal(p.stats.hp,21);assert.equal(p.stats.maxHp,84);
  assert.equal(p.stats.ac,19);assert.equal(p.stats.speed,35);
  assert.equal(p.sheetLink.importMode,'full-auto');
+});
+
+test('Roll20 wheel opens official Journal link when current character has no native view',()=>{
+  const {api,context}=harness();
+  const calls=[],handle={opener:context.window};
+  api.profile().name='Nier';
+  api.profile().roll20CharacterId='-nier2024';
+  context.window.open=(...args)=>{calls.push(args);return handle};
+  assert.equal(api.openRoll20CharacterSheet(),true);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0][0],'https://journal.roll20.net/character/-nier2024');
+  assert.equal(calls[0][1],'_blank');
+  assert.equal(handle.opener,null);
+  assert.match(api.sheetUI(),/href="https:\/\/journal.roll20.net\/character\/-nier2024"/);
+  assert.match(api.sheetUI(),/rel="noopener noreferrer"/);
+  assert.match(api.sheetUI(),/Open Journal link/);
+});
+test('visible full wheel button dispatch uses linked character fallback, not the token editor',()=>{
+  const {api,context}=harness();
+  const opened=[];api.profile().roll20CharacterId='NierId';
+  context.window.open=url=>{opened.push(url);return {}};
+  api.action('radialOpenSheet',{dataset:{},matches(){return false}});
+  assert.deepEqual(opened,['https://journal.roll20.net/character/NierId']);
+});
+test('native in-editor showDialog remains preferred over opening a separate Journal tab',()=>{
+  const {api,context}=harness();
+  api.profile().roll20CharacterId='legacy-sheet';
+  let shows=0;
+  context.nativeChar={view:{showDialog(){shows++}}};
+  vm.runInContext("autoCharacterById=()=>nativeChar;",context);
+  context.window.open=()=>{throw Error('Should open native sheet instead')};
+  assert.equal(api.openRoll20CharacterSheet(),true);
+  assert.equal(shows,1);
+});
+test('failed native sheet display retries via official Journal URL',()=>{
+  const {api,context}=harness();
+  api.profile().roll20CharacterId='beacon-sheet';
+  context.nativeChar={view:{showDialog(){throw Error('Roll20 view not ready')}}};
+  vm.runInContext("autoCharacterById=()=>nativeChar;",context);
+  const opened=[];
+  context.window.open=url=>{opened.push(url);return {}};
+  assert.equal(api.openRoll20CharacterSheet(),true);
+  assert.deepEqual(opened,['https://journal.roll20.net/character/beacon-sheet']);
+});
+test('character ID resolves from assigned player profile without a selected token or model view',()=>{
+  const {api,context}=harness();
+  const p=api.profile();p.name='Nier';
+  api.RB.state.tokenAssignments={a:{profileId:p.id,characterId:'linked-token-a'},
+    b:{profileId:p.id,characterId:'linked-token-a'}};
+  assert.equal(api.roll20LinkedCharacterId(),'linked-token-a');
+  const urls=[];context.window.open=url=>{urls.push(url);return {}};
+  assert.equal(api.openRoll20CharacterSheet(),true);
+  assert.equal(urls[0],'https://journal.roll20.net/character/linked-token-a');
+});
+test('missing or ambiguous character mappings do not open a random NPC sheet',()=>{
+  const {api,context}=harness();
+  api.profile().name='Nier';
+  let opened=0;context.window.open=()=>{opened++;return {}};
+  assert.equal(api.openRoll20CharacterSheet(),false);
+  api.RB.state.tokenAssignments={a:{profileId:api.profile().id,characterId:'char-one'},
+    b:{profileId:api.profile().id,characterId:'char-two'}};
+  assert.equal(api.roll20LinkedCharacterId(),'');
+  assert.equal(api.openRoll20CharacterSheet(),false);
+  assert.equal(opened,0);
+  assert.equal(api.roll20CharacterSheetUrl('char/../../bad'),'');
+  assert.equal(api.roll20CharacterSheetUrl('https://evil.example'),'');
+});
+test('popup-blocked native fallback displays a clickable official Journal anchor',()=>{
+  const {api,context}=harness();
+  api.profile().roll20CharacterId='-nier';
+  context.window.open=()=>null;
+  assert.equal(api.openRoll20CharacterSheet(),false);
+  assert.equal(api.RB.visible,true);
+  assert.equal(api.RB.tab,'Sheet');
+  assert.match(api.sheetUI(),/Open Journal link/);
+  assert.match(api.sheetUI(),/target="_blank"/);
 });
