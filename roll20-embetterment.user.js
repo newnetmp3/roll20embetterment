@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.0
+// @version      2.3.1
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.0',
+  version: '2.3.1',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -49,7 +49,7 @@ const baseMacros = () => [
 function newProfile(name='Adventurer') {
   return {id:uid(), name, roll20CharacterId:'', stats:{hp:10,maxHp:10,tempHp:0,ac:10,speed:30,init:0,proficiency:2,level:1},
     abilityMods:{str:0,dex:0,con:0,int:0,wis:0,cha:0}, skillBonuses:{}, saveBonuses:{},
-    abilityScores:{},sheetDetails:{},sheetLink:null,attacks:[],features:[],proficiencies:[],tools:[],
+    abilityScores:{},sheetDetails:{},sheetLink:null,attacks:[],features:[],proficiencies:[],tools:[],sheetRolls:[],
     spellSlots:[0,0,0,0,0,0,0,0,0,0], usedSlots:[0,0,0,0,0,0,0,0,0,0],
     spells:[], inventory:[], macrosSlots:['macro:d20','macro:adv','macro:dis','macro:initiative','macro:damage','macro:perception','macro:save','macro:whisper'],
     resources:[{id:uid(),name:'Hit Dice',current:1,max:1,reset:'long'}],
@@ -72,7 +72,7 @@ function normalizeProfile(p) {
   cleaned.name = String(p.name || d.name).slice(0,100);
   cleaned.roll20CharacterId=String(p.roll20CharacterId||'').slice(0,120);
   for (const key of ['stats','abilityMods','skillBonuses','saveBonuses','currency','death']) cleaned[key] = {...d[key], ...(p[key] && typeof p[key] === 'object' && !Array.isArray(p[key]) ? p[key] : {})};
-  for (const key of ['spells','inventory','resources','quests','conditions','sessionLog','macrosSlots','spellSlots','usedSlots','attacks','features','proficiencies','tools']) cleaned[key] = Array.isArray(p[key]) ? p[key].slice(0,key === 'sessionLog' ? 500 : 200) : d[key];
+  for (const key of ['spells','inventory','resources','quests','conditions','sessionLog','macrosSlots','spellSlots','usedSlots','attacks','features','proficiencies','tools','sheetRolls']) cleaned[key] = Array.isArray(p[key]) ? p[key].slice(0,key === 'sessionLog' ? 500 : 200) : d[key];
   cleaned.abilityScores={...d.abilityScores,...(p.abilityScores||{})};
   cleaned.sheetDetails={...d.sheetDetails,...(p.sheetDetails||{})};
   cleaned.sheetLink=p.sheetLink && typeof p.sheetLink==='object'?p.sheetLink:null;
@@ -111,7 +111,7 @@ function clearImportedSheetData() {
   p.spellSlots=[...d.spellSlots];
   p.usedSlots=[...d.usedSlots];
   p.inspiration=false;
-  for(const key of ['spells','inventory','resources','attacks','features','proficiencies','tools'])
+  for(const key of ['spells','inventory','resources','attacks','features','proficiencies','tools','sheetRolls'])
     p[key]=(p[key]||[]).filter(x=>x?.origin!=='sheet');
   p.macrosSlots=(p.macrosSlots||d.macrosSlots).map(value=>{
     if(value?.startsWith('spell:')&&sheetSpellIds.has(value.slice(6)))return '';
@@ -703,7 +703,7 @@ function snapshotSheet(input,label='Character'){
   const number=(...names)=>sheetNum(pick(...names));
   const snap={name:sheetText(pick('character_name','charactername','name')||label,100),attrs,edition:'Named/visible attributes',
     stats:{},abilityMods:{},abilityScores:{},saveBonuses:{},skillBonuses:{},spellSlots:{},usedSlots:{},currency:{},details:{},
-    spells:[],attacks:[],inventory:[],features:[],resources:[],proficiencies:[],tools:[],
+    spells:[],attacks:[],inventory:[],features:[],resources:[],proficiencies:[],tools:[],sheetRolls:[],
     coverage:{attributes:Object.keys(attrs).length,mapped:0,unmapped:[]}};
   const fields={hp:['hp','hit_points','hit_points_current','current_hp'],maxHp:['hp_max','hit_points_max','max_hp'],
     tempHp:['hp_temp','temporary_hit_points','temp_hp'],ac:['ac','armor_class'],speed:['speed','walking_speed','movement_speed'],
@@ -810,11 +810,11 @@ function applySheetSnapshot(p,s){
   if(s.inspiration!==undefined)p.inspiration=s.inspiration;
   for(const [n,v] of Object.entries(s.spellSlots))p.spellSlots[+n]=clamp(v,0,99);
   for(const [n,v] of Object.entries(s.usedSlots))p.usedSlots[+n]=clamp(v,0,p.spellSlots[+n]);
-  for(const k of ['spells','inventory','resources','attacks','features','proficiencies','tools']){
+  for(const k of ['spells','inventory','resources','attacks','features','proficiencies','tools','sheetRolls']){
     if(s[k].length||(p[k]||[]).some(x=>x.origin==='sheet'))p[k]=mergeSheetList(p[k],s[k]);
   }
   p.sheetLink={...(p.sheetLink||{}),name:s.name,edition:s.edition,lastSync:new Date().toISOString(),
-    coverage:s.coverage,counts:Object.fromEntries(['spells','inventory','resources','attacks','features','proficiencies','tools'].map(k=>[k,s[k].length]))};
+    coverage:s.coverage,counts:Object.fromEntries(['spells','inventory','resources','attacks','features','proficiencies','tools','sheetRolls'].map(k=>[k,(s[k]||[]).length]))};
   return true;
 }
 function scanSheets(){
@@ -976,10 +976,66 @@ function beaconRegion(text,start,ends=[],limit=2400) {
   for(const re of ends){const m=tail.match(re);if(m)end=Math.min(end,m.index);}
   return region.slice(0,lead+end);
 }
+function beaconRollText(el){
+  return String(el?.innerText??el?.textContent??'').replace(/\s+/g,' ').trim();
+}
+function beaconRollName(card,selectors=[]){
+  for(const selector of selectors){
+    const el=card?.querySelector?.(selector),value=beaconRollText(el);
+    if(value)return value.slice(0,120);
+  }
+  return '';
+}
+function beaconCollectRollActions(scope,tab=''){
+  if(!scope?.querySelectorAll)return [];
+  const active=beaconRollText(scope.querySelector?.('[role="tab"][aria-selected="true"]'));
+  const actualTab=/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(active)?active:
+    (/^(?:Combat|Skills & Tools|Spells|Inventory|Features & Traits|Notes|About)$/i.test(tab)?tab:'');
+  const panel=scope.querySelector?.('[role="tabpanel"]:not([style*="display: none"])')||scope;
+  const out=[],seen=new Set(),push=(kind,name,action,button,meta={})=>{
+    if(!button||!name)return;
+    const refTab=meta.global?'':actualTab,clean={...meta};delete clean.global;
+    const key=[kind,name,action,refTab].join('|').toLowerCase();
+    if(seen.has(key))return;seen.add(key);
+    out.push({id:'sheetroll:'+key.replace(/[^a-z0-9|_-]/g,'-').slice(0,180),origin:'sheet',
+      kind,name:name.slice(0,120),action,tab:String(refTab||'').slice(0,80),
+      label:beaconRollText(button).slice(0,80),...clean});
+  };
+  for(const card of Array.from(panel.querySelectorAll?.('.attack-item')||[]).slice(0,120)){
+    const name=beaconRollName(card,['.span--item-row-title','.attack-item__title-chat','.attack-item__title-col']);
+    push('attack',name,'attack',card.querySelector?.('.poly-button--hit-dc button'),{group:'Attacks'});
+    push('attack',name,'damage',card.querySelector?.('.poly-button--damage button'),{group:'Attacks'});
+  }
+  for(const card of Array.from(panel.querySelectorAll?.('.spell-item')||[]).slice(0,160)){
+    const name=beaconRollName(card,['.spell-item__name.span--item-row-title','.spell-item__name','.spell-item__name--wrapper']);
+    push('spell',name,'attack',card.querySelector?.('.poly-button--hit-dc button'),{group:'Spells'});
+    push('spell',name,'damage',card.querySelector?.('.poly-button--damage button'),{group:'Spells'});
+  }
+  for(const row of Array.from(scope.querySelectorAll('.skill')).slice(0,80)){
+    const button=row.querySelector?.('button.skill__name'),name=beaconRollText(button);
+    push('skill',name,'skill',button,{group:'Skills',global:true});
+  }
+  for(const row of Array.from(scope.querySelectorAll('.inline-ability')).slice(0,20)){
+    const text=beaconRollText(row),abbr=text.match(/\b(STR|DEX|CON|INT|WIS|CHA)\b/i)?.[1]?.toUpperCase();
+    if(!abbr)continue;
+    push('ability',abbr,'ability',row.querySelector?.('.poly-button--ability button'),{group:'Abilities',global:true});
+    push('save',abbr,'save',row.querySelector?.('.poly-button--compact-saving-throw button'),{group:'Saves',global:true});
+  }
+  const initiative=scope.querySelector?.('.initiative-btn button');
+  if(initiative)push('initiative','Initiative','initiative',initiative,{group:'Initiative',global:true});
+  for(const card of Array.from(panel.querySelectorAll?.('.action-item')||[]).slice(0,160)){
+    const name=beaconRollName(card,['.action-item__name','.span--item-row-title','.name-chat'])||
+      beaconRollText(card).split(/\s+\d+d\d+/)[0].trim().slice(0,120);
+    push('action',name,'healing',card.querySelector?.('.poly-button--healing button'),{group:'Actions'});
+    push('action',name,'attack',card.querySelector?.('.poly-button--hit-dc button'),{group:'Actions'});
+    push('action',name,'damage',card.querySelector?.('.poly-button--damage button'),{group:'Actions'});
+  }
+  return out.slice(0,400);
+}
 function beaconImportVisible(scope,label='Open character sheet') {
   const text=beaconVisibleText(scope);
   const result={name:label,stats:{},abilityScores:{},abilityMods:{},saveBonuses:{},
-    skillBonuses:{},spellSlots:{},usedSlots:{},resources:[],attacks:[],details:{},
+    skillBonuses:{},spellSlots:{},usedSlots:{},resources:[],attacks:[],sheetRolls:beaconCollectRollActions(scope),details:{},
     coverage:{visibleFields:0,sections:[],names:[]},signature:text.slice(0,35000)};
   if(!text.trim())return result;
   const count=(group,name)=>{result.coverage.visibleFields++;if(!result.coverage.sections.includes(group))result.coverage.sections.push(group);result.coverage.names.push(name);};
@@ -1084,6 +1140,7 @@ function mergeBeaconSnapshot(named,visible){
       if(!existing.has(x.name.toLowerCase())){named[section].push(x);existing.add(x.name.toLowerCase());}
     }
   }
+  named.sheetRolls=Array.isArray(visible.sheetRolls)?visible.sheetRolls.slice(0,400):[];
   if((!named.name||/^(?:Open character sheet|Character Sheet)$/i.test(named.name))&&visible.name)named.name=visible.name;
   named.coverage.visibleFields=visible.coverage.visibleFields;
   named.coverage.visibleSections=visible.coverage.sections;
@@ -1207,12 +1264,13 @@ function onBeaconFrameMessage(event){
     sheetPrefetchAttributes(candidate);
     return;
   }
-  if(message.type!=='snapshot'||typeof message.id!=='string')return;
+  if(!['snapshot','invokeResult'].includes(message.type)||typeof message.id!=='string')return;
   const pending=rbeFramePending.get(message.id);
   if(!pending||pending.target!==event.source)return;
   rbeFramePending.delete(message.id);clearTimeout(pending.timeout);
   candidate.lastSeen=Date.now();
   if(message.error)return pending.reject(new Error(String(message.error).slice(0,160)));
+  if(message.type==='invokeResult')return pending.resolve(!!message.ok);
   const fields=sheetAttributes(message.fields);
   if(Object.keys(fields).length>6000)return pending.reject(new Error('Character sheet returned too many fields'));
   const visible=message.visible&&typeof message.visible==='object'?message.visible:
@@ -1239,6 +1297,101 @@ function requestBeaconFrame(candidate,deep=false,options={}){
       target.postMessage({bridge:RBE_BRIDGE_MARKER,type:'scan',id,deep:!!deep,tour:!!options.tour},RBE_BEACON_ORIGIN);
     }catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
   });
+}
+function requestBeaconAction(candidate,ref){
+  return new Promise((resolve,reject)=>{
+    const target=candidate?.frame?.contentWindow||candidate?.popoutWindow;
+    if(!target)return reject(new Error('Official character sheet reader is not available'));
+    if(candidate.frame&&!beaconFrameUrlOkay(candidate.frame))
+      return reject(new Error('Unrecognized character sheet iframe origin'));
+    if(candidate.popoutWindow&&candidate.origin!==RBE_BEACON_ORIGIN)
+      return reject(new Error('Unrecognized character sheet popout origin'));
+    const id='rbea'+(++rbeFrameCounter),timeout=setTimeout(()=>{
+      rbeFramePending.delete(id);reject(new Error('Official sheet roll action timed out.'));
+    },12000);
+    rbeFramePending.set(id,{target,candidateId:candidate.id,resolve,reject,timeout});
+    try{target.postMessage({bridge:RBE_BRIDGE_MARKER,type:'invoke',id,ref},RBE_BEACON_ORIGIN);}
+    catch(err){rbeFramePending.delete(id);clearTimeout(timeout);reject(err);}
+  });
+}
+function beaconRollRefOkay(ref){
+  return !!ref&&typeof ref==='object'&&
+    ['attack','spell','skill','ability','save','initiative','action'].includes(String(ref.kind||''))&&
+    ['attack','damage','skill','ability','save','initiative','healing'].includes(String(ref.action||''))&&
+    typeof ref.name==='string'&&ref.name.length>0&&ref.name.length<=120;
+}
+function beaconFindRollButton(ref){
+  if(!beaconRollRefOkay(ref))return null;
+  const same=(a,b)=>String(a||'').replace(/\s+/g,' ').trim().toLocaleLowerCase()===
+    String(b||'').replace(/\s+/g,' ').trim().toLocaleLowerCase();
+  const namedCard=(selector,name,nameSelectors)=>{
+    for(const card of Array.from(document.querySelectorAll?.(selector)||[]).slice(0,220)){
+      const cardName=nameSelectors.map(sel=>beaconRollText(card.querySelector?.(sel))).find(Boolean);
+      if(same(cardName,name))return card;
+    }
+    return null;
+  };
+  if(ref.kind==='attack'){
+    const card=namedCard('.attack-item',ref.name,['.span--item-row-title','.attack-item__title-chat','.attack-item__title-col']);
+    return card?.querySelector?.(ref.action==='damage'?'.poly-button--damage button':'.poly-button--hit-dc button')||null;
+  }
+  if(ref.kind==='spell'){
+    const card=namedCard('.spell-item',ref.name,['.spell-item__name.span--item-row-title','.spell-item__name','.spell-item__name--wrapper']);
+    return card?.querySelector?.(ref.action==='damage'?'.poly-button--damage button':'.poly-button--hit-dc button')||null;
+  }
+  if(ref.kind==='skill'){
+    return Array.from(document.querySelectorAll?.('.skill button.skill__name')||[]).find(b=>same(beaconRollText(b),ref.name))||null;
+  }
+  if(ref.kind==='ability'||ref.kind==='save'){
+    for(const row of Array.from(document.querySelectorAll?.('.inline-ability')||[]).slice(0,20)){
+      if(new RegExp('(?:^|\\s)'+String(ref.name).replace(/[^A-Za-z]/g,'')+'(?:\\s|$)','i').test(beaconRollText(row)))
+        return row.querySelector?.(ref.kind==='save'?'.poly-button--compact-saving-throw button':'.poly-button--ability button')||null;
+    }
+    return null;
+  }
+  if(ref.kind==='initiative')return document.querySelector?.('.initiative-btn button')||null;
+  if(ref.kind==='action'){
+    const card=namedCard('.action-item',ref.name,['.action-item__name','.span--item-row-title','.name-chat']);
+    const selector=ref.action==='healing'?'.poly-button--healing button':
+      ref.action==='damage'?'.poly-button--damage button':'.poly-button--hit-dc button';
+    return card?.querySelector?.(selector)||null;
+  }
+  return null;
+}
+async function beaconInvokeRollRef(ref){
+  if(!beaconRollRefOkay(ref))return false;
+  let button=beaconFindRollButton(ref);
+  let original=null;
+  if(!button&&ref.tab){
+    const tabs=sheetTourTabs(document,RBE_SHEET_TOUR_INNER,
+      '.layout-tabbed-panel__tab-link[role="tab"],[role="tab"],nav a,[class*="tabs"] a,button');
+    original=tabs.find(sheetTourActive)||null;
+    const target=tabs.find(x=>sheetTourLabel(x).toLocaleLowerCase()===String(ref.tab).toLocaleLowerCase());
+    if(target&&!sheetTourActive(target)){target.click?.();await sheetTourDelay(180);}
+    button=beaconFindRollButton(ref);
+  }
+  if(!button||button.disabled)return false;
+  button.click();
+  if(original&&original.isConnected!==false&&!sheetTourActive(original)){
+    await sheetTourDelay(150);original.click?.();
+  }
+  return true;
+}
+async function executeOfficialSheetRoll(ref,targetProfile=profile()){
+  if(!beaconRollRefOkay(ref))return false;
+  const charId=targetProfile.roll20CharacterId||targetProfile.sheetLink?.characterId||'';
+  let candidate=sheetCandidates(document).find(x=>x.id===targetProfile.sheetLink?.source)||
+    sheetCandidates(document).find(x=>charId&&String(x.characterId||x.id||'')===String(charId));
+  let opened=null;
+  if(!candidate&&charId&&typeof autoEnsureSheetCandidate==='function'){
+    const character=autoCharacterById(charId);
+    opened=await autoEnsureSheetCandidate({characterId:charId,characterName:targetProfile.name,
+      tokenName:targetProfile.name,character});
+    candidate=opened?.candidate||null;
+  }
+  if(!candidate||!beaconRemoteCandidate(candidate))return false;
+  try{return await requestBeaconAction(candidate,ref);}
+  finally{if(opened?.opened)autoCloseSheetDialog({character:opened.candidate?.character||autoCharacterById(charId)},opened.hidden);}
 }
 function beaconFrameSnapshot(candidate,scan,{quiet=false,targetProfile=null,characterId=''}={}){
   if(!scan||!beaconRemoteCandidate(candidate))return false;
@@ -1267,8 +1420,17 @@ async function beaconFrameReadRequest(event){
   const peer=beaconReaderPeer();
   if(event.origin!==RBE_EDITOR_ORIGIN||!peer||event.source!==peer)return;
   const message=event.data;
-  if(!message||message.bridge!==RBE_BRIDGE_MARKER||message.type!=='scan'||
-    typeof message.id!=='string'||message.id.length>100)return;
+  if(!message||message.bridge!==RBE_BRIDGE_MARKER||typeof message.id!=='string'||message.id.length>100)return;
+  if(message.type==='invoke'){
+    try{
+      const ok=await beaconInvokeRollRef(message.ref);
+      peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'invokeResult',id:message.id,ok},RBE_EDITOR_ORIGIN);
+    }catch(err){
+      peer.postMessage({bridge:RBE_BRIDGE_MARKER,type:'invokeResult',id:message.id,error:String(err.message||err).slice(0,160)},RBE_EDITOR_ORIGIN);
+    }
+    return;
+  }
+  if(message.type!=='scan')return;
   try{
     const scope=document.body;
     const scan=message.tour?await sheetTourFrameScan():(message.deep?await sheetHarvestBeaconRows(scope):{
@@ -1365,7 +1527,7 @@ function sheetTourMergeVisible(target,source) {
   for(const k of ['stats','abilityScores','abilityMods','saveBonuses','skillBonuses','spellSlots','usedSlots','details']){
     Object.assign(target[k],source[k]||{});
   }
-  for(const key of ['attacks','resources','spells','inventory','features','proficiencies','tools']){
+  for(const key of ['attacks','resources','spells','inventory','features','proficiencies','tools','sheetRolls']){
     const list=Array.isArray(source[key])?source[key]:[];
     if(!Array.isArray(target[key]))target[key]=[];
     const existing=new Set(target[key].map(x=>x.id||x.name));
@@ -1878,21 +2040,46 @@ function startAutoControlledCharacterImport(){
  `;
  RB.radial={open:true,pin:false,path:[],pages:{},anchor:null,manual:null,source:'none',lastPosition:'',lastPresence:false};
  const radialNode=(id,label,glyph,children=[],kind='',value='',detail='',subtitle='')=>({id,label,glyph,children,kind,value,detail,subtitle});
+ function radialSheetRollRef(kind,name,action){
+   const same=(a,b)=>String(a||'').trim().toLocaleLowerCase()===String(b||'').trim().toLocaleLowerCase();
+   return (profile().sheetRolls||[]).find(r=>r.kind===kind&&r.action===action&&same(r.name,name))||null;
+ }
+ function radialSheetRollLeaves(list){
+   const actionLabel=value=>({attack:'Attack',damage:'Damage',skill:'Check',ability:'Check',
+     save:'Save',initiative:'Roll',healing:'Healing'}[value]||String(value||'Roll'));
+   return list.slice(0,80).map(r=>radialNode('sr:'+r.id,
+     r.name+' · '+actionLabel(r.action),
+     r.action==='damage'||r.action==='healing'?'✦':'⚄',[],'sheetRoll',r.id,
+     [r.group,r.tab,r.label].filter(Boolean).join(' · ')));
+ }
  function radialAttackLeaves(attacks){
-   return attacks.slice(0,32).map(a=>radialNode('a:'+a.id,a.name,'⚔',[
-     radialNode('roll','Roll','⚄',[],'attack',a.id),
-     radialNode('details','Details','⌕',[],'detail',a.id),
-     radialNode('sheet','Sheet','▤',[],'panel','Sheet')
-   ],'', '',[a.toHit,a.damage,a.damageType,a.range].filter(Boolean).join(' · '),
-   [a.toHit,a.range||a.damage].filter(Boolean).join(' · ')));
+   return attacks.slice(0,32).map(a=>{
+     const attackRef=radialSheetRollRef('attack',a.name,'attack');
+     const damageRef=radialSheetRollRef('attack',a.name,'damage');
+     return radialNode('a:'+a.id,a.name,'⚔',[
+       radialNode('roll','Attack','⚄',[],a.command?'attack':attackRef?'sheetRoll':'attack',a.command?a.id:attackRef?.id||a.id),
+       ...(damageRef?[radialNode('damage','Damage','✦',[],'sheetRoll',damageRef.id)]:[]),
+       radialNode('details','Details','⌕',[],'detail',a.id),
+       radialNode('sheet','Sheet','▤',[],'panel','Sheet')
+     ],'', '',[a.toHit,a.damage,a.damageType,a.range].filter(Boolean).join(' · '),
+     [a.toHit,a.range||a.damage].filter(Boolean).join(' · '));
+   });
  }
  function radialSpellLeaves(spells){
-   return spells.slice(0,38).map(s=>radialNode('s:'+s.id,s.name,'✧',[
-     radialNode('cast','Cast','✧',[],'spell',s.id),
-     radialNode('info','Info','⌕',[],'spellInfo',s.id),
-     ...(Number(s.level)>0?[radialNode('slot','Use slot','◈',[],'spendSlot',String(s.level))]:[])
-   ],'','',[s.castTime,s.range,s.duration].filter(Boolean).join(' · '),
-   [Number(s.level)?'L'+s.level:'Cantrip',s.concentration?'Conc.':null,s.castTime].filter(Boolean).join(' · ')));
+   return spells.slice(0,38).map(spell=>{
+     const attackRef=radialSheetRollRef('spell',spell.name,'attack');
+     const damageRef=radialSheetRollRef('spell',spell.name,'damage');
+     const actions=[
+       ...(spell.command?[radialNode('cast','Cast','✧',[],'spell',spell.id)]:[]),
+       ...(attackRef?[radialNode('attack','Attack','⚄',[],'sheetRoll',attackRef.id)]:[]),
+       ...(damageRef?[radialNode('damage','Damage','✦',[],'sheetRoll',damageRef.id)]:[]),
+       radialNode('info','Info','⌕',[],'spellInfo',spell.id),
+       ...(Number(spell.level)>0?[radialNode('slot','Use slot','◈',[],'spendSlot',String(spell.level))]:[])
+     ];
+     return radialNode('s:'+spell.id,spell.name,'✧',actions,'','',
+       [spell.castTime,spell.range,spell.duration].filter(Boolean).join(' · '),
+       [Number(spell.level)?'L'+spell.level:'Cantrip',spell.concentration?'Conc.':null,spell.castTime].filter(Boolean).join(' · '));
+   });
  }
  function radialItemLeaves(items){
    return items.slice(0,40).map(i=>radialNode('i:'+i.id,i.name,'◆',[
@@ -1946,6 +2133,7 @@ function startAutoControlledCharacterImport(){
        radialNode('used','Mark spent','✓',[],'toggle','reactionUsed')
      ]),
      radialNode('checks','ROLLS','⚄',[
+       group('sheetRolls','Sheet Rolls','✥',radialSheetRollLeaves(p.sheetRolls||[])),
        group('skills','Skills','⚄',skillNames.map(n=>radialNode(n.toLowerCase(),n,'⚄',[],'skill',n))),
        group('saves','Saves','⛨',abilities.map(a=>radialNode(a,a.toUpperCase(),'⛨',[],'save',a))),
        group('abilities','Abilities','◆',abilities.map(a=>radialNode(a,a.toUpperCase(),'◆',[],'ability',a))),
@@ -2169,6 +2357,17 @@ function startAutoControlledCharacterImport(){
      case 'attack':
        if(!attack?.command){toast('No safe Roll20 action for this weapon. Use its character sheet button.');break;}
        success=sendToRoll20(attack.command);if(success){p.actionUsed=true;record('Attacked: '+attack.name);}break;
+     case 'sheetRoll':{
+       const ref=(p.sheetRolls||[]).find(x=>x.id===node.value);
+       if(!ref){toast('This sheet roll is no longer available. Re-import the character sheet.');break;}
+       executeOfficialSheetRoll(ref,p).then(ok=>{
+         if(!ok){toast('Roll20 could not find that sheet roll control. R20eb will refresh it on the next full import.');return;}
+         if(ref.kind==='attack'&&ref.action==='attack')p.actionUsed=true;
+         record('Sheet roll: '+ref.name+(ref.action?' · '+ref.action:''));
+         RB.radial.path=[];save();render();radialPosition();
+       }).catch(err=>{console.warn('[R20eb] Native sheet roll failed',err);toast('Official sheet roll failed: '+String(err.message||err).slice(0,120));});
+       break;
+     }
      case 'spell':
        if(!spell?.command){toast('No Roll20 command for '+(spell?.name||'this spell')+'. Set it on the Spells tab.');break;}
        success=sendToRoll20(spell.command);
