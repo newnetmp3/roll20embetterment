@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      2.3.5
+// @version      2.3.6
 // @description  Token-anchored concentric D&D 5e combat HUD with sheet-linked actions, spells and resources.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -19,7 +19,7 @@
 // roll20 Embetterment - core and player profiles
 'use strict';
 const RB = {
-  version: '2.3.5',
+  version: '2.3.6',
   prefix: 'r20e',
   key: 'roll20-embetterment:' + (new URLSearchParams(location.search).get('id') || location.pathname.match(/(?:setcampaign|editor)\/(\d+)/)?.[1] || 'editor'),
   state: null, root: null, shadow: null, panel: null, tab: 'Home', visible: false,
@@ -2385,14 +2385,24 @@ function startAutoControlledCharacterImport(){
        const gap=Math.min(2.4,step*.12),start=-90+i*step+gap,end=-90+(i+1)*step-gap;
        const mid=radialPoint((inner+outer)*.5,angle),rotation=radialLabelRotation(angle);
        const detail=[node.label,node.subtitle,node.detail].filter(Boolean).join(' · ');
-       return `<g class="rbe-wedge ${chosen?'is-selected':''} ${muted?'is-muted':''}" data-action="radialPick" data-depth="${d}" data-index="${i}" role="button" tabindex="0" aria-label="${html(detail)}" aria-selected="${!!chosen}"><title>${html(detail)}</title><path d="${radialSector(inner,outer,start,end)}"></path><g transform="translate(${mid.x.toFixed(1)} ${mid.y.toFixed(1)}) rotate(${rotation.toFixed(1)})">${radialLabelMarkup(node,step,inner,outer,angle)}</g></g>`;
+       return `<g class="rbe-wedge ${chosen?'is-selected':''} ${muted?'is-muted':''}" data-action="radialPick" data-depth="${d}" data-index="${i}" role="button" tabindex="${i===0?0:-1}" aria-label="${html(detail)}" aria-pressed="${!!chosen}" aria-keyshortcuts="Enter Space ArrowLeft ArrowRight ArrowUp ArrowDown Home End"><title>${html(detail)}</title><path d="${radialSector(inner,outer,start,end)}"></path><g transform="translate(${mid.x.toFixed(1)} ${mid.y.toFixed(1)}) rotate(${rotation.toFixed(1)})">${radialLabelMarkup(node,step,inner,outer,angle)}</g></g>`;
      }).join('');
-     return `<g class="rbe-ring" data-ring="${d}" style="animation-delay:${d*35}ms">${nodes}</g>`;
+     return `<g class="rbe-ring" data-ring="${d}" role="group" aria-label="Combat wheel level ${d+1}" style="animation-delay:${d*35}ms">${nodes}</g>`;
    }).join('');
    return `<svg class="rbe-wheel" viewBox="${(-layout.diameter/2).toFixed(1)} ${(-layout.diameter/2).toFixed(1)} ${layout.diameter.toFixed(1)} ${layout.diameter.toFixed(1)}" aria-label="Concentric combat action menu" role="group">
      <defs><radialGradient id="rbe-wedge-metal"><stop stop-color="#53402b" offset="0"/><stop stop-color="#211a22" offset=".75"/><stop stop-color="#130f17" offset="1"/></radialGradient>
      <linearGradient id="rbe-wedge-selected"><stop stop-color="#b9914f"/><stop stop-color="#5c3a21" offset=".53"/><stop stop-color="#332332" offset="1"/></linearGradient></defs>
      ${content}</svg>`;
+ }
+ // Keep keyboard focus in the wheel even when a ring is rebuilt after selecting a wedge.
+ function radialFocusWedge(depth,index){
+   const items=radialTreeRings()[depth]||[];
+   if(!items.length)return false;
+   const next=((index%items.length)+items.length)%items.length;
+   const target=RB.shadow?.querySelector?.('#rbe-radial-wheel [data-action="radialPick"][data-depth="'+depth+'"][data-index="'+next+'"]');
+   if(!target?.focus)return false;
+   target.focus();
+   return true;
  }
  function radialHTML(){
    const r=RB.radial,active=r.anchor&&r.open,p=profile();
@@ -2404,7 +2414,7 @@ function startAutoControlledCharacterImport(){
       <div class="rbe-wheel-footer">${radialHealthMarkup()}<div class="rbe-wheel-toolbar"><button data-action="radialBack" ${r.path.length?'':'disabled'} title="One ring back">← Back</button>
       <button data-action="radialHome" title="Reset all choices">⌂ Root</button><button data-action="radialPin" title="Click your token to anchor">◎ Pin</button>
       <button data-action="radialPanel" title="Open character sheet importer">▤ Sheet</button><button data-action="radialToggle" title="Collapse radial menu">✕</button></div>
-      <div class="rbe-wheel-info">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
+      <div class="rbe-wheel-info" title="Tab to enter wheel · Arrow keys or Home/End to move · Enter to choose · Esc to go back">${html(parts.join(' / ')||'Choose an action')}${r.source==='manual'?' · screen-pinned':r.source==='player-token'?' · player token':' · selected token'}</div></div>
      </div>`:''}
     ${!active?`<div id="rbe-radial-dock"><button data-action="radialToggle">⚔ ${r.open?'Combat wheel':'Open wheel'}</button><button data-action="radialPin">${r.pin?'Click token…':'◎ Pin to token'}</button><span class="rbe-dock-caption">${r.pin?'Click the center of your token on the tabletop':r.anchor?'HUD minimized':'Select a token or pin the HUD'}</span></div>`:''}
    </div>`;
@@ -2937,10 +2947,18 @@ function paletteEntries() {
     ...skillNames.map(n=>({name:'Skill: '+n,kind:'skill',value:n})),
     ...abilities.map(n=>({name:'Save: '+n.toUpperCase(),kind:'save',value:n}))];
 }
+function paletteOptions() {
+  const q=(RB.paletteQuery||'').toLowerCase();
+  return paletteEntries().filter(x=>x.name.toLowerCase().includes(q)).slice(0,30);
+}
+function paletteChoicesHTML(choices) {
+  return choices.map((x,i)=>`<button id="rbe-palette-option-${i}" role="option" tabindex="-1" aria-selected="${i===RB.paletteSelection}" class="palette-choice ${i===RB.paletteSelection?'on':''}" data-action="paletteGo" data-value="${html(x.kind)}" data-id="${html(x.value)}">${html(x.name)}</button>`).join('')||'<p class="hint" role="status">Nothing found.</p>';
+}
 function paletteUI() {
   if (!RB.paletteOpen) return '';
-  const q=(RB.paletteQuery||'').toLowerCase(), choices=paletteEntries().filter(x=>x.name.toLowerCase().includes(q)).slice(0,30);
-  return `<div id="rbe-palette"><div class="dialog"><div class="row between"><strong>⌘ Player command palette</strong>${button('✕','closePalette')}</div><input id="rbe-palette-input" placeholder="Find an attack, official roll, spell, skill, or panel…" value="${html(RB.paletteQuery||'')}"><div id="rbe-palette-results">${choices.map((x,i)=>`<button class="palette-choice ${i===RB.paletteSelection?'on':''}" data-action="paletteGo" data-value="${html(x.kind)}" data-id="${html(x.value)}">${html(x.name)}</button>`).join('')||'<p class="hint">Nothing found.</p>'}</div><p class="hint">↑ ↓ to choose • Enter to execute • Escape to close</p></div></div>`;
+  const choices=paletteOptions();
+  const active=choices.length?'rbe-palette-option-'+RB.paletteSelection:'';
+  return `<div id="rbe-palette"><div class="dialog"><div class="row between"><strong>⌘ Player command palette</strong>${button('✕','closePalette')}</div><input id="rbe-palette-input" role="combobox" aria-label="Find a command" aria-autocomplete="list" aria-expanded="true" aria-controls="rbe-palette-results" aria-activedescendant="${active}" placeholder="Find an attack, official roll, spell, skill, or panel…" value="${html(RB.paletteQuery||'')}"><div id="rbe-palette-results" role="listbox" aria-label="Matching commands">${paletteChoicesHTML(choices)}</div><p class="hint">↑ ↓ to choose · Home / End to jump · Enter to execute · Escape to close</p></div></div>`;
 }
 function modalUI() {
   if (RB.modal!=='copy') return '';
@@ -3638,8 +3656,9 @@ function onInput(e) {
   if(el.id==='rbe-macro-search'){RB.macroSearch=el.value;const n=getInput('macro-results');if(n)n.innerHTML=macroListHTML(RB.state.macros);}
   if(el.id==='rbe-spell-search'){RB.spellSearch=el.value;const n=getInput('spell-results');if(n)n.innerHTML=spellListHTML();}
   if(el.id==='rbe-palette-input'){RB.paletteQuery=el.value;RB.paletteSelection=0; // defer to preserve focus and caret
-    const choices=paletteEntries().filter(x=>x.name.toLowerCase().includes(el.value.toLowerCase())).slice(0,30);
-    const n=getInput('palette-results');if(n)n.innerHTML=choices.map((x,i)=>`<button class="palette-choice ${i===0?'on':''}" data-action="paletteGo" data-value="${html(x.kind)}" data-id="${html(x.value)}">${html(x.name)}</button>`).join('')||'<p class="hint">Nothing found.</p>';
+    const choices=paletteOptions(),n=getInput('palette-results');
+    if(n)n.innerHTML=paletteChoicesHTML(choices);
+    el.setAttribute?.('aria-activedescendant',choices.length?'rbe-palette-option-0':'');
   }
 }
 // Roll20 shortcuts are registered outside this ShadowRoot. Stop keyboard
@@ -3647,13 +3666,40 @@ function onInput(e) {
 // B, V, Z and other typed keys as tabletop commands. Never preventDefault.
 function keepEmbettermentKeysLocal(e) { e.stopPropagation(); }
 function onKeyDown(e) {
-  if(e.key==='Escape' && RB.radial?.path?.length){RB.radial.path.pop();render();radialPosition();return;}
-  if(e.key==='Escape' && (RB.paletteOpen||RB.modal)){RB.paletteOpen=false;RB.modal=null;render();return;}
   const origin=e.composedPath?.()[0] || e.target;
   const editing=origin?.closest?.('input,textarea,select,[contenteditable="true"],[role="textbox"]');
   const insideEmbetterment=e.composedPath?.().includes(RB.root) || false;
-  if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyR'){e.preventDefault();RB.radial.open=!RB.radial.open;render();radialPosition();return;}
-  if(insideEmbetterment&&['Enter',' '].includes(e.key)&&origin?.dataset?.action==='radialPick'){e.preventDefault();radialPick(int(origin.dataset.depth),int(origin.dataset.index));return;}
+  // An open palette takes precedence over navigating the underlying combat wheel.
+  if(e.key==='Escape' && RB.paletteOpen){e.preventDefault();RB.paletteOpen=false;render();return;}
+  if(e.key==='Escape' && RB.modal){e.preventDefault();RB.modal=null;render();return;}
+  if(e.key==='Escape' && RB.radial?.path?.length && !editing){
+    e.preventDefault();RB.radial.path.pop();render();radialPosition();
+    if(origin?.dataset?.action==='radialPick')radialFocusWedge(RB.radial.path.length,0);
+    return;
+  }
+  if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyR'){
+    e.preventDefault();RB.radial.open=!RB.radial.open;render();radialPosition();
+    if(RB.radial.open)radialFocusWedge(0,0);
+    return;
+  }
+  if(insideEmbetterment&&origin?.dataset?.action==='radialPick'){
+    const depth=int(origin.dataset.depth),index=int(origin.dataset.index),key=e.key;
+    if(['ArrowRight','ArrowDown','ArrowLeft','ArrowUp','Home','End'].includes(key)){
+      e.preventDefault();
+      const size=radialTreeRings()[depth]?.length||0;
+      const next=key==='Home'?0:key==='End'?size-1:index+(key==='ArrowRight'||key==='ArrowDown'?1:-1);
+      radialFocusWedge(depth,next);
+      return;
+    }
+    if(key==='Enter'||key===' '){
+      e.preventDefault();
+      const before=RB.radial.path.length;
+      radialPick(depth,index);
+      const expanded=RB.radial.path.length>before&&radialTreeRings().length>depth+1;
+      radialFocusWedge(expanded?depth+1:Math.min(depth,radialTreeRings().length-1),expanded?0:index);
+      return;
+    }
+  }
   if(!editing&&e.altKey&&e.shiftKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyE'){
     e.preventDefault();RB.visible=!RB.visible;render();return;
   }
@@ -3661,17 +3707,35 @@ function onKeyDown(e) {
     e.preventDefault();RB.paletteOpen=!RB.paletteOpen;RB.paletteSelection=0;RB.paletteQuery='';render();getInput('palette-input')?.focus();return;
   }
   if(RB.paletteOpen && origin?.id==='rbe-palette-input'){
-    const options=paletteEntries().filter(x=>x.name.toLowerCase().includes((RB.paletteQuery||'').toLowerCase())).slice(0,30);
-    if(e.key==='ArrowDown'){e.preventDefault();RB.paletteSelection=Math.min(options.length-1,RB.paletteSelection+1);highlightPalette();}
-    if(e.key==='ArrowUp'){e.preventDefault();RB.paletteSelection=Math.max(0,RB.paletteSelection-1);highlightPalette();}
-    if(e.key==='Enter'){e.preventDefault();const selected=options[RB.paletteSelection];if(selected)navigatePalette(selected.kind,selected.value);}
+    const options=paletteOptions();
+    if(['ArrowDown','ArrowUp','Home','End','PageDown','PageUp'].includes(e.key)){
+      e.preventDefault();
+      if(!options.length){RB.paletteSelection=0;highlightPalette();return;}
+      const delta=e.key==='PageDown'?5:e.key==='PageUp'?-5:e.key==='ArrowDown'?1:-1;
+      RB.paletteSelection=e.key==='Home'?0:e.key==='End'?options.length-1:
+        Math.max(0,Math.min(options.length-1,RB.paletteSelection+delta));
+      highlightPalette();return;
+    }
+    if(e.key==='Enter'){
+      e.preventDefault();const selected=options[RB.paletteSelection];
+      if(selected)navigatePalette(selected.kind,selected.value);
+    }
     return;
   }
   if(!editing&&!insideEmbetterment&&RB.state.settings.hotkeys&&!e.altKey&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey && /^Digit[1-8]$/.test(e.code)){
     e.preventDefault();executeSlot(Number(e.code.slice(-1))-1);
   }
 }
-function highlightPalette() {RB.shadow.querySelectorAll('.palette-choice').forEach((e,i)=>e.classList.toggle('on',i===RB.paletteSelection));}
+function highlightPalette() {
+  RB.shadow.querySelectorAll('.palette-choice').forEach((el,i)=>{
+    const selected=i===RB.paletteSelection;
+    el.classList.toggle('on',selected);
+    el.setAttribute?.('aria-selected',String(selected));
+    if(selected)el.scrollIntoView?.({block:'nearest'});
+  });
+  getInput('palette-input')?.setAttribute?.('aria-activedescendant',
+    paletteOptions().length?'rbe-palette-option-'+RB.paletteSelection:'');
+}
 function onDragStart(e) {
   if(e.target.closest('button,input,select,textarea'))return;
   if(!e.target.closest('#rbe-header')||!RB.panel)return;

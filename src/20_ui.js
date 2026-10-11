@@ -239,10 +239,18 @@ function paletteEntries() {
     ...skillNames.map(n=>({name:'Skill: '+n,kind:'skill',value:n})),
     ...abilities.map(n=>({name:'Save: '+n.toUpperCase(),kind:'save',value:n}))];
 }
+function paletteOptions() {
+  const q=(RB.paletteQuery||'').toLowerCase();
+  return paletteEntries().filter(x=>x.name.toLowerCase().includes(q)).slice(0,30);
+}
+function paletteChoicesHTML(choices) {
+  return choices.map((x,i)=>`<button id="rbe-palette-option-${i}" role="option" tabindex="-1" aria-selected="${i===RB.paletteSelection}" class="palette-choice ${i===RB.paletteSelection?'on':''}" data-action="paletteGo" data-value="${html(x.kind)}" data-id="${html(x.value)}">${html(x.name)}</button>`).join('')||'<p class="hint" role="status">Nothing found.</p>';
+}
 function paletteUI() {
   if (!RB.paletteOpen) return '';
-  const q=(RB.paletteQuery||'').toLowerCase(), choices=paletteEntries().filter(x=>x.name.toLowerCase().includes(q)).slice(0,30);
-  return `<div id="rbe-palette"><div class="dialog"><div class="row between"><strong>⌘ Player command palette</strong>${button('✕','closePalette')}</div><input id="rbe-palette-input" placeholder="Find an attack, official roll, spell, skill, or panel…" value="${html(RB.paletteQuery||'')}"><div id="rbe-palette-results">${choices.map((x,i)=>`<button class="palette-choice ${i===RB.paletteSelection?'on':''}" data-action="paletteGo" data-value="${html(x.kind)}" data-id="${html(x.value)}">${html(x.name)}</button>`).join('')||'<p class="hint">Nothing found.</p>'}</div><p class="hint">↑ ↓ to choose • Enter to execute • Escape to close</p></div></div>`;
+  const choices=paletteOptions();
+  const active=choices.length?'rbe-palette-option-'+RB.paletteSelection:'';
+  return `<div id="rbe-palette"><div class="dialog"><div class="row between"><strong>⌘ Player command palette</strong>${button('✕','closePalette')}</div><input id="rbe-palette-input" role="combobox" aria-label="Find a command" aria-autocomplete="list" aria-expanded="true" aria-controls="rbe-palette-results" aria-activedescendant="${active}" placeholder="Find an attack, official roll, spell, skill, or panel…" value="${html(RB.paletteQuery||'')}"><div id="rbe-palette-results" role="listbox" aria-label="Matching commands">${paletteChoicesHTML(choices)}</div><p class="hint">↑ ↓ to choose · Home / End to jump · Enter to execute · Escape to close</p></div></div>`;
 }
 function modalUI() {
   if (RB.modal!=='copy') return '';

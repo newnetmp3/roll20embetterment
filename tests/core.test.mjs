@@ -184,3 +184,28 @@ test('palette separates local mark-cast from actual Roll20 casting and native sp
   assert.ok(entries.some(x=>x.name==='Cast via Roll20: Burning Hands'&&x.kind==='spell'));
   assert.ok(entries.some(x=>x.kind==='sheetRoll'&&x.value==='bless-native'));
 });
+
+test('Escape closes command palette without dismissing underlying wheel selection',()=>{
+  const {h}=environment();h.RB.paletteOpen=true;h.RB.radial.path=['spells'];
+  const origin={id:'rbe-palette-input',closest(){return this}};
+  let stopped=0;
+  h.onKeyDown({key:'Escape',target:origin,composedPath(){return [origin,h.RB.root]},preventDefault(){stopped++;}});
+  assert.equal(stopped,1);assert.equal(h.RB.paletteOpen,false);
+  assert.deepEqual(Array.from(h.RB.radial.path),['spells']);
+});
+test('keyboard command palette has combobox semantics and clamps empty results',()=>{
+  const {h,scope}=environment();
+  h.RB.paletteOpen=true;
+  h.RB.paletteQuery='unlikely-to-match-anything-8fcfb';
+  const ui=vm.runInContext('paletteUI()',scope);
+  assert.match(ui,/role="combobox"/);
+  assert.match(ui,/role="listbox"/);
+  assert.match(ui,/Nothing found/);
+  const origin={id:'rbe-palette-input',closest(){return this}};
+  const event=key=>({key,target:origin,composedPath(){return [origin,h.RB.root]},preventDefault(){}});
+  h.onKeyDown(event('ArrowDown'));assert.equal(h.RB.paletteSelection,0);
+  h.RB.paletteQuery='Open ';
+  h.onKeyDown(event('End'));assert.ok(h.RB.paletteSelection>0);
+  h.onKeyDown(event('Home'));assert.equal(h.RB.paletteSelection,0);
+  assert.match(vm.runInContext('paletteUI()',scope),/id="rbe-palette-option-0" role="option"/);
+});

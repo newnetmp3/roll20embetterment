@@ -5,7 +5,8 @@
 **Default branch:** `main`  
 **Current main baseline:** `128b6a16fa00f14e2d82099276842c2df9d96ddf` (v2.3.4, PR #17)  
 **Previous milestone:** v2.3.3 (PR #16, 128 tests green).  
-**Latest completed milestone:** v2.3.5 (PR #18, CI 136 tests green) — separate casting, official rolls, and local reminders.  
+**Latest completed milestone:** v2.3.6 (PR #19, CI 140 tests green) — keyboard-accessible wheel and command palette.  
+**Current main baseline:** `253494b756f283e116527af658c4637b9981a2b0` (v2.3.5, PR #18).  
 **Verified previous main baseline:** `128b6a16fa00f14e2d82099276842c2df9d96ddf` (v2.3.4); verify main HEAD again after merge.
 
 ## Resume process
@@ -55,3 +56,12 @@
 Improve wheel keyboard accessibility and command-palette navigation; continue live official 2024 iframe, popout, closed-sheet helper and legacy 2014 verification.
 
 **Rolling policy:** Update this file and `docs/ROADMAP.md` in the same PR for each completed feature slice.
+
+## v2.3.6 completed (PR #19)
+
+- Each visible combat wheel ring offers a Tab entry, roving keyboard focus, arrow/Home/End navigation, Enter/Space selection, and Escape to step back without affecting text editing.
+- Palette exposes active option to assistive technology, keyboard Home/End/Page navigation and graceful empty results. Escape closes palette before touching the wheel state.
+- Regression coverage includes keyboard radial expansion/focus, preserved Escape precedence, and screen-reader combobox semantics.
+- **CI verified:** PR #19 head `9111715701503dc2f601a620187c39e81943b87e`: **140 tests passed, 0 failed**, distribution regeneration clean and JS syntax valid. **Remaining:** live keyboard QA on Firefox/Tampermonkey/Jumpgate and mouse/keyboard parity. Verify merged main SHA when resuming.
+
+**Next:** Continue live 2014/2024 sheet integration matrix and release/install automation. Keep this handover and the roadmap synchronized on each milestone.

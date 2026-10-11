@@ -1,4 +1,4 @@
-# roll20 Embetterment 2.3.5 — Concentric Combat HUD
+# roll20 Embetterment 2.3.6 — Concentric Combat HUD
 
 The main interface is a **token-anchored, Baldur's Gate 3–inspired combat wheel** for D&D 5e. Selecting a category contracts its ring, dims unused choices, and adds a new outer ring. Actions, spells, inventory, resources, sheet import, macros and other existing data are preserved locally.
 
@@ -119,3 +119,7 @@ An official D&D 2024 roll now shows visible, screen-reader-accessible **rolling 
 ## Explicit spellcasting and local combat reminders (2.3.5)
 
 The SPELLS wheel and Spells panel distinguish **Cast in Roll20** (only when a working chat command exists), **Mark cast (local)** (available even for official 2024 spells without a cast command), **Roll attack / Roll damage** (only when genuine official sheet buttons were imported), and **Use level N slot (local)**. The command palette follows the same distinction. Native sheet attack/damage rolls never imply a cast or spend a slot. Mark cast records the turn action type if the imported casting time explicitly says Action, Bonus Action, or Reaction, and starts a local concentration reminder only for concentration spells. Unknown casting times are not guessed. No slot is consumed automatically, including from Roll20 macros; spell slots remain explicit manual local controls. This companion does not cast a spell inside the 2024 sheet unless that sheet actually exposes a supported executable cast control.
+
+## Combat wheel and palette keyboard accessibility (2.3.6)
+
+Each visible combat ring has one Tab stop. Use **Left/Up** and **Right/Down** to move between wedges (including Previous/Next pagination), **Home/End** for the first/last wedge, and **Enter/Space** to select. Keyboard expansion moves focus into the new outer ring, and **Escape** backs out one ring. The command palette now exposes combobox/listbox semantics with an active option for screen readers, supports Home/End and PageUp/PageDown navigation, handles zero results without a negative selection, and closes before Escape affects the underlying wheel. Keyboard events inside R20eb inputs stay local rather than reaching Roll20 shortcuts.

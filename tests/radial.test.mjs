@@ -110,7 +110,7 @@ test('footer follows outer radius as choices expand and collapse',()=>{
     const rendered=r.radialHTML();
     assert.ok(rendered.includes('--rbe-outer-radius:'+outer+'px'));
     assert.match(rendered,/class="rbe-wheel-footer"><div class="rbe-wheel-health"[^>]*>.*<div class="rbe-wheel-toolbar">/);
-    assert.match(rendered,/class="rbe-wheel-info">/);
+    assert.match(rendered,/class="rbe-wheel-info"(?:\s|>)/);
   }
   r.RB.radial.path.pop();
   assert.match(r.radialHTML(),/--rbe-outer-radius:201px/);
@@ -562,4 +562,31 @@ test('official 2024 spell roll executes native button without declaring cast, co
   assert.equal(p.actionUsed,false);
   assert.equal(p.concentration,'');
   assert.equal(p.usedSlots[1],0);
+});
+
+test('combat wheel exposes ring groups, roving Tab stops and keyboard shortcuts',()=>{
+  const {r}=env();r.RB.radial.anchor={x:220,y:300};
+  const svg=r.radialWheelSVG();
+  assert.match(svg,/role="group" aria-label="Combat wheel level 1"/);
+  assert.match(svg,/role="button" tabindex="0"/);
+  assert.match(svg,/role="button" tabindex="-1"/);
+  assert.match(svg,/aria-keyshortcuts="Enter Space ArrowLeft/);
+  assert.match(svg,/aria-pressed="false"/);
+});
+test('keyboard focus moves around radial wedges and into newly expanded rings',()=>{
+  const {r,scope}=env(),calls=[];
+  r.RB.radial.anchor={x:200,y:250};
+  r.RB.shadow.querySelector=selector=>selector.includes('[data-action="radialPick"]')?{focus(){calls.push(selector)}}:null;
+  const target={dataset:{action:'radialPick',depth:'0',index:'0'},closest(){return null}};
+  const ev=key=>({key,target,altKey:false,shiftKey:false,ctrlKey:false,metaKey:false,code:'',
+    composedPath(){return [target,r.RB.root]},preventDefault(){}});
+  const onKeyDown=vm.runInContext('onKeyDown',scope);
+  onKeyDown(ev('ArrowLeft'));assert.match(calls.at(-1),/data-index="8"/);
+  onKeyDown(ev('Home'));assert.match(calls.at(-1),/data-index="0"/);
+  onKeyDown(ev('End'));assert.match(calls.at(-1),/data-index="8"/);
+  onKeyDown(ev('Enter'));assert.equal(r.RB.radial.path.length,1);
+  assert.match(calls.at(-1),/data-depth="1"/);
+  target.dataset.depth='1';
+  onKeyDown(ev('Escape'));assert.equal(r.RB.radial.path.length,0);
+  assert.match(calls.at(-1),/data-depth="0"/);
 });
