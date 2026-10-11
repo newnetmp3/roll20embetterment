@@ -4,8 +4,8 @@
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
 **Current main baseline:** `e71b68bc523bea2e41f5e744b04a2db355baa89b` (v2.3.3, PR #16)  
-**Latest completed milestone:** v2.3.3 (PR #16, 128 tests green).  
-**In progress:** v2.3.4 — native roll busy/success/error feedback and deduplication.
+**Previous milestone:** v2.3.3 (PR #16, 128 tests green).  
+**Latest completed milestone:** v2.3.4 (PR #17, 130 tests green) — native roll feedback and duplicate-click protection.
 
 ## Resume process
 
@@ -33,8 +33,16 @@
 **CI verified:** PR #16 head `5de47e95b73155dc0f4049f42d6ab372cd94d92c` passed **128 tests, 0 failures**, generated-userscript check and JavaScript syntax check. Baseline v2.3.2 PR #15 passed 125 tests.  
 **Remaining live testing:** Official Jumpgate / 2024 iframe/popout, closed-sheet helper, selected token identity and legacy 2014. Automated DOM mocks do not replace these checks.
 
-## Active next milestone (v2.3.4)
+## v2.3.4 delivery (PR #17)
 
-Add native-roll pending state and accidental duplicate-click protection, with clear confirmation/error for slow hidden helper sheets, without changing official Roll20 roll math or resource consumption.
+- Use per-character-and-roll in-flight guards to avoid repeating the same 2024 sheet action before completion.
+- Show screen-reader-accessible rolling / received / error state in the app; disable matching Sheet-panel roll buttons while busy.
+- Release guards after successful/failed requests, with retries enabled; clear completed feedback automatically.
+- Preserve the native authenticated Roll20 frame bridge and read-only character sheet semantics.
+- **Verified CI:** 130 tests passed, 0 failures, generated userscript and JavaScript syntax checks green (head `ed32372c5ba2fc6994df36c7f21f29b4037d419b`).
+
+## Next milestone
+
+Clarify casting versus attack/damage roll semantics for imported spells; keep resource/turn reminders explicitly local. Test in live Roll20 Jumpgate and popout before relying on changes in combat.
 
 **Rolling policy:** Update this file and `docs/ROADMAP.md` in the same PR for each completed feature slice.
