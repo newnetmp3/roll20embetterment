@@ -242,3 +242,15 @@ test('invalid or fabricated sheet roll references are never executed',async()=>{
   assert.equal(h.beaconFindRollButton({kind:'javascript',name:'x',action:'eval'}),null);
   assert.equal(await h.beaconInvokeRollRef({kind:'attack',name:'',action:'attack'}),false);
 });
+
+test('generic Roll-labeled controls resolve by exact accessible label only',()=>{
+  const {h,context}=harness();
+  const hitDie={getAttribute(name){return name==='aria-label'?'Roll a d10 hit die for Fighter':null},disabled:false,click(){}};
+  const rest={getAttribute(name){return name==='aria-label'?'Short Rest':null},disabled:false,click(){}};
+  context.document.querySelectorAll=selector=>selector==='button[aria-label]'?[hitDie,rest]:[];
+  context.document.querySelector=()=>null;
+  assert.equal(h.beaconFindRollButton({kind:'generic',name:'D10 (Fighter)',action:'roll',
+    ariaLabel:'Roll a d10 hit die for Fighter'}),hitDie);
+  assert.equal(h.beaconFindRollButton({kind:'generic',name:'Short Rest',action:'roll',
+    ariaLabel:'Short Rest'}),null);
+});
