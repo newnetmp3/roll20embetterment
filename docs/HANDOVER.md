@@ -6,7 +6,7 @@
 **Previous milestone:** v2.3.3 (PR #16, 128 tests green).  
 **Current verified main baseline:** `15cde06c65523d6ff4ba4ef94aea6e94016203e1` (v2.3.7, PR #20).  
 **Latest verified milestone:** v2.3.7 (PR #20, 150 tests green) — hidden helper isolation, manual Roll20 character access and draggable minimized dock.  
-**In development:** v2.3.8 — remove wheel footer prompt, live refresh of current Roll20 character stats.  
+**Latest tested milestone:** v2.3.8 (PR #21, CI green: 155 tests) — compact wheel and live controlled-character stats. Pending merge and actual browser validation.  
 
 ## Resume process
 
@@ -77,12 +77,12 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 
 **Next:** Test full import, manually reopened character window, external 2024 popout, helper after logout/reload, and toolbar drag on desktop/mobile; then continue priority 9 live integration matrix.
 
-## v2.3.8 — Live character stats and compact wheel (in progress)
+## v2.3.8 — Live character stats and compact wheel (PR #21, CI verified)
 
 - Removed “Choose an action” wheel footer. Added compact AC, speed and initiative readout alongside current/max and temporary HP.
 - Fixed one-time import behavior: imported characters previously never refreshed cached stats. Each scan now reads loaded Roll20 model attributes and merges available HP, max HP, temp HP, AC, speed, initiative, scores, modifiers, saves, skills, coins and details without reopening Advanced Tools.
 - Preserves full imports: does not replace spells, attacks, native sheet rolls, notes or manually tracked spell use during a partial model refresh. Blank/invalid values do not reset stats. Added 2014/2024 aliases.
 - Home now displays the six ability scores and modifiers, initiative, proficiency and level with a model-update indicator.
-- CI pending: require npm run check, regenerate the userscript and include the final test count here. Live Roll20 QA still required for exposed values, aliases, changing HP and closed-sheet updates.
+- **CI verified:** PR #21 head `11c71b80fd9b2244a10af10292fe294a951ceb6b` ran **155 tests, 155 passed, 0 failed**. Generated userscript is consistent with source. **Live Roll20 browser QA remains:** confirm exact named fields, changing HP/AC/speed and alternate character sheets. After merge, fetch the new main SHA rather than assuming the PR head.
 
 **Next:** Verify actual current HP/AC/speed on a live character, and which fields Roll20 exposes in each edition. Only expand edition-specific adapters using tested markup; never manufacture missing values.
