@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.1.1
+// @version      3.1.2
 // @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -620,19 +620,34 @@ function r3FrameList(){
     });
 }
 function r3Candidates(){
-  const frames=r3FrameList(),other=[...R3_POPOUTS.values()].filter(x=>!x.window.closed);
-  return [...frames,...other];
+  // Drop windows which were closed by the player. Don't retain dead popout
+  // references or allow their stale names to block the next real sheet.
+  for(const [session,candidate] of R3_POPOUTS){
+    try{if(candidate.window.closed)R3_POPOUTS.delete(session);}
+    catch{R3_POPOUTS.delete(session);}
+  }
+  return [...r3FrameList(),...R3_POPOUTS.values()];
 }
 function r3Listen(event){
   if(event.origin!==R3_ORIGIN||event.data?.protocol!==R3_PROTOCOL||!event.source)return;
   const data=event.data,candidate=r3Candidates().find(c=>c.window===event.source);
   if(data.type==='ready'){
-    // Popouts can announce from their authenticated origin and only when
-    // their opener is the Roll20 editor. Never accept arbitrary origins.
-    if(!candidate&&data.mode==='popout'&&/^[\w.:-]{6,100}$/.test(String(data.session||''))){
-      R3_POPOUTS.set(data.session,{key:'popout-'+data.session,
-        name:r3String(data.name||'Official sheet popout',90),
-        window:event.source,visible:true,type:'popout'});
+    // Cross-origin official popouts announce their opener with the same
+    // authenticated bridge as embedded official sheets. Roll20 often sends
+    // an initial "ready" before Vue has populated the character's name.
+    // Later announcements must refresh that session's identity.
+    if(data.mode==='popout'&&/^[\w.:-]{6,100}$/.test(String(data.session||''))){
+      const existing=R3_POPOUTS.get(data.session);
+      if(existing&&existing.window!==event.source)return; // session collision
+      if(!existing&&R3_POPOUTS.size>=16)return; // bounded registry
+      const name=r3String(data.name,90);
+      if(existing){
+        if(name)existing.name=name;
+      }else{
+        R3_POPOUTS.set(data.session,{key:'popout-'+data.session,
+          name:name||'Official sheet popout',window:event.source,
+          visible:true,type:'popout'});
+      }
     }
     r3UIRefresh?.();
     return;
@@ -927,14 +942,22 @@ function r3AutoId(candidate){
   return r3String(candidate?.characterId||r3AutoDialogFor(candidate)?.getAttribute?.('data-characterid'),100);
 }
 function r3AutoCandidate(){
-  const choices=r3Candidates().filter(c=>c.type==='iframe'&&c.visible);
-  // An explicit, conflicting character ID is never overridden by a name
-  // match. Duplicate names without a stable ID are ambiguous: fail closed.
+  // A player-popped-out official sheet is a valid authenticated reader.
+  // It has no parent dialog with a character ID, so require a unique exact
+  // name. Prefer the popout when the same sheet also has an embedded frame.
+  const choices=r3Candidates().filter(c=>c.visible&&c.window&&
+    (c.type==='iframe'||c.type==='popout'));
+  // Never allow an explicit, conflicting character ID to be rescued by a
+  // coincidental display-name match.
   const eligible=choices.filter(c=>!R3_AUTO.characterId||!r3AutoId(c)||
     r3AutoId(c)===R3_AUTO.characterId);
-  const named=eligible.filter(c=>r3String(c.name,120).toLowerCase()===R3_AUTO.name.toLowerCase());
+  const named=eligible.filter(c=>r3String(c.name,120).toLowerCase()===
+    R3_AUTO.name.toLowerCase());
+  const popouts=named.filter(c=>c.type==='popout');
+  if(popouts.length===1)return popouts[0];
+  if(popouts.length>1)return null; // same-named popouts are ambiguous
   if(R3_AUTO.characterId){
-    const exact=eligible.filter(c=>r3AutoId(c)===R3_AUTO.characterId);
+    const exact=eligible.filter(c=>c.type==='iframe'&&r3AutoId(c)===R3_AUTO.characterId);
     if(exact.length===1)return exact[0];
     if(exact.length>1)return null;
   }
@@ -1083,7 +1106,7 @@ async function r3AutoTick(){
     r3AutoStoreSnapshot(snapshot,mode);
     R3_AUTO.lastScan=Date.now();
     if(mode==='all')R3_AUTO.lastFull=R3_AUTO.lastScan;
-    r3AutoDisplay((background?'Background':'Visible sheet')+' '+mode+
+    r3AutoDisplay((candidate.type==='popout'?'Popout sheet':background?'Background':'Visible sheet')+' '+mode+
       ' import updated '+new Date(R3_AUTO.lastScan).toLocaleTimeString());
   }catch(e){
     R3_AUTO.lastScan=Date.now();
@@ -1125,8 +1148,8 @@ async function r3AutoHealthTick(){
     if(R3_AUTO.enabled&&!R3_AUTO.running&&!R3_UI.busy&&R3_AUTO.generation===generation)
       r3AutoStoreHealth(snapshot);
   }catch{
-    // A missing/unmounted HP input or unavailable iframe is not a fabricated
-    // zero. The slower whole-sheet importer continues to report its status.
+    // A missing/unmounted HP input or unavailable official iframe/popout
+    // is not a fabricated zero. The slower importer reports its status.
   }finally{
     R3_AUTO.lastHealth=Date.now();R3_AUTO.healthRunning=false;
   }
