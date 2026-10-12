@@ -10,6 +10,16 @@ function panelHarness(){
   const makeNode=id=>{
     const node={id,textContent:'',innerHTML:'',value:'',scrollTop:0,style:{},disabled:false,handlers:new Map(),
       addEventListener(type,fn){this.handlers.set(type,fn);}};
+    if(id==='r3-hud'){
+      let markup='';node.writes=0;
+      Object.defineProperty(node,'innerHTML',{get(){return markup;},set(value){
+        markup=value;node.writes++;
+        // HUD controls are rendered inside this nested container, not
+        // during the initial shadow root innerHTML assignment.
+        for(const [,childId] of markup.matchAll(/id="([^"]+)"/g))
+          nodes.set(childId,makeNode(childId));
+      }});
+    }
     if(id==='r3-results'){
       let markup='',scroller=null;
       node.writes=0;
