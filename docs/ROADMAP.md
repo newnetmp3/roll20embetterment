@@ -42,3 +42,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 **Next:** Validate synthetic Roll20 Journal double-click and loaded iframe in Floorp, compare live HP changing under damage/healing, verify AC 17/speed 55 only from labeled controls, then resume the Foundry-inspired combat HUD once imports are reliable.
 
 **v3.1.1 merge checkpoint:** PR #38 was merged into main as `00bb39c9eb2aa3c2ea2fc71564f23ea454682647`. Final PR-head CI run 38307749208 passed all checks (221 tests at the code verification head). Feature implemented; live Floorp/Jumpgate background opening and roughly one-second real HP response remain unverified. Continue with browser evidence instead of assuming synthetic Journal events work.
+
+**Live feedback received (2026-10-12):** User reports the updates appear to work correctly. Mark HP refresh as **user-reported working, latency unmeasured**. Keep fully unattended automatic import with a closed sheet and Journal unopened as **unverified** until explicitly tested. Next check restart/reload without manually opening Nier's sheet; preserve the fast health path.
