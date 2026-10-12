@@ -1,6 +1,6 @@
 # R20 Embetterment — Rolling Development Handover
 
-**Updated:** 2026-10-11  
+**Updated:** 2026-10-12  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
 **Current verified feature baseline:** `7b9ed80ea3a9920ede5da4a90845dc7f6fa7f47a` (v2.3.11, merged PR #26).  
@@ -220,3 +220,17 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Safety/limitations:** No private Roll20 APIs or arbitrary network calls, never clone the generic headless iframe, never scan a mismatching character or overwrite profile with empty/nonmatching snapshots. Journal DOM varies by Roll20 build, and the auto-open path has not been proven in live Floorp. Require browser QA to verify discovery, offscreen layout, named identity, update cadence, and recovery from unsupported journal UI. Keep `docs/ROADMAP.md` current.
 
 **CI:** GitHub Actions run 38305794819 (commit 02e9383749f3a39c89a6a33b41c4657e8fa88ca9): **214 tests passed, zero failures**, including six additional automatic-import/visibility/identity/race-condition cases. Generated userscript matches source. **Manual QA still required** for synthetic journal double-click, character sheet iframe handshake, and whether Floorp retains usable offscreen rendering.
+
+
+## v3.1.1 — Fast read-only HP watch and stricter automatic import (October 12, 2026)
+
+**User request:** Bring HP refresh closer to one second while progressing the v3.1.0 automatic importer.
+
+- The old auto timer ticked every 8 seconds and requested expensive current-tab scans no more often than every 30 seconds. Added separate `hp` bridge scan mode with a 1-second scheduling interval, 2.5-second timeout and bounded input-only reader. It reads explicitly labeled mounted HP, max and temporary HP; does not traverse tabs, invent missing values, or write to Roll20.
+- HP-only updates modify just observed health fields, preserve the existing full spell/attack/inventory/resource catalog, and do not repaint unchanged UI. Skip fast checks while manual/full import is active; protect in-flight results across disable/re-enable using an epoch. Full background scans remain at most once per five minutes, current-tab scans at most once per 30 seconds.
+- Automatic sheet selection now rejects conflicting character IDs even when the display name matches; unknown/duplicate name matches must be unique. Once a known character ID is selected, don't silently repin a different ID. A journal-open request records preexisting dialogs so only a newly created one may be moved offscreen. The Journal synthetic double-click and official iframe handshake are **still unverified live**, so this is not a claim that background opening is fixed in Floorp.
+- New regression fixtures cover input-only HP, invalid/hidden values, capture isolation, fast mode dispatch, catalog retention, unchanged UI, late response suppression, conflicting identities and timer cadence. **CI verification pending at authoring**; read the associated PR's latest GitHub Actions result before marking this version complete.
+
+**Live Floorp checklist:** Update Tampermonkey from the production generated script once the PR is merged; confirm Nier's displayed HP changes within roughly 1–2 seconds with the official sheet mounted (allow for browser throttling). Test damage/healing and temp HP, sheet on another tab, disabled auto mode, and Journal closed/visible. Watch whether the auto-open creates a truly new owned dialog; if Roll20 suppresses synthetic events or unmounts HP outside Combat, log that specific limitation without substituting guessed token HP. Continue to collect exact DOM evidence for AC 17/speed 55/slots/saves, not the removed spells Power Word Pain or Blades of Disaster.
+
+**Next milestone:** Retest auto-open and fast health source in actual Floorp/Jumpgate, then target any reproducible Journal DOM failures without private APIs or unwanted sheet visibility; only then advance Foundry-inspired HUD redesign.
