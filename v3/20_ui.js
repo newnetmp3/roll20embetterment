@@ -38,7 +38,14 @@ function r3CardsView(kind){
   if(!snap?.[kind]?.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
   return snap[kind].slice(0,400).map(item=>
     '<details class="entry" data-entry-key="'+r3Escape(kind+':'+item.tab+':'+item.name)+'"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
-    '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+    (item.checkboxes?'<div class="muted">Visible checkboxes: '+r3Escape(item.checkboxes.checked)+' of '+r3Escape(item.checkboxes.total)+' checked (sheet-specific meaning)</div>':'')+
+    '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+
+    (kind==='inventory'&&Object.prototype.hasOwnProperty.call(item,'quantity')?
+      '<div class="kv"><span>Observed quantity</span><strong>'+r3Escape(item.quantity)+'</strong></div>':'')+
+    (kind==='inventory'&&item.controls?.length?item.controls.map(control=>
+      '<div class="kv"><span>'+r3Escape(control.label||control.kind)+'</span><strong>'+
+      r3Escape(control.value===true?'On':control.value===false?'Off':control.value)+'</strong>'+
+      '<small>'+r3Escape(control.source||'observed')+'</small></div>').join(''):'')+
+    (item.checkboxes?'<div class="muted">Visible checkboxes: '+r3Escape(item.checkboxes.checked)+' of '+r3Escape(item.checkboxes.total)+' checked (sheet-specific meaning)</div>':'')+
     (item.actions?.length?'<div class="chips">'+item.actions.map(b=>'<span>'+r3Escape(b.label)+'</span>').join('')+'</div>':'')+
     '</details>').join('');
 }
