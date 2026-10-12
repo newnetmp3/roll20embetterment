@@ -3,7 +3,7 @@
 const R3_AUTO={
   enabled:false,name:'',characterId:'',running:false,active:false,opened:false,openedAt:0,
   lastScan:0,lastFull:0,lastOpenAttempt:0,lastError:'',timer:null,healthTimer:null,
-  healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,
+  healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,dirtyTimer:null,
   ownedDialog:null,originalPosition:null
 };
 function r3AutoKey(){return r3StorageKey()+':auto';}
@@ -194,7 +194,23 @@ function r3AutoStoreSnapshot(snapshot,mode){
     r3UIRefresh();
   }
 }
-async function r3AutoTick(){
+function r3AutoQueueDirty(candidate){
+  if(!R3_AUTO.enabled||R3_UI.busy||!R3_AUTO.name)return;
+  const current=r3AutoCandidate();
+  if(!current||current.window!==candidate?.window)return;
+  if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
+  const generation=R3_AUTO.generation;
+  // Normal edits start a scan after ~400ms. Limit full current-tab reads
+  // to once every 2 seconds during rapid typing/slider movement.
+  const ms=Math.max(400,2100-(Date.now()-R3_AUTO.lastScan));
+  R3_AUTO.dirtyTimer=setTimeout(()=>{
+    R3_AUTO.dirtyTimer=null;
+    if(!R3_AUTO.enabled||R3_AUTO.generation!==generation||R3_UI.busy)return;
+    if(r3AutoCandidate()?.window!==candidate.window)return;
+    r3AutoTick(true);
+  },ms);
+}
+async function r3AutoTick(eventTriggered=false){
   if(!R3_AUTO.enabled||R3_AUTO.running||R3_UI.busy||!R3_AUTO.name)return;
   const now=Date.now();
   const candidate=r3AutoCandidate();
@@ -207,10 +223,10 @@ async function r3AutoTick(){
   // Only navigate sheet tabs when the script itself opened an offscreen
   // dialog. A player-opened visible sheet is read without changing tabs.
   const mode=background&&now-R3_AUTO.lastFull>300000?'all':'current';
-  // Current-tab scans are read-only and do not navigate player-owned
-  // sheets. Poll their visible non-HP fields on a ~16-second cadence (the
-  // scheduler runs every eight seconds) while keeping full traversals rare.
-  if(now-R3_AUTO.lastScan<(mode==='all'?10000:12000))return;
+  // Event-triggered current-view checks bypass the periodic 12-second gate,
+  // but retain a 2-second minimum between heavier DOM reads. Full-tab
+  // traversal remains limited to the established background scheduler.
+  if(now-R3_AUTO.lastScan<(mode==='all'?10000:eventTriggered?2000:12000))return;
   R3_AUTO.running=true;
   const generation=R3_AUTO.generation;
   r3UIRefresh();
@@ -272,7 +288,10 @@ async function r3AutoHealthTick(){
 
 function r3ToggleAuto(){
   if(R3_AUTO.enabled){
-    R3_AUTO.enabled=false;R3_AUTO.generation++;r3AutoSave();r3AutoRestoreDialog();
+    R3_AUTO.enabled=false;R3_AUTO.generation++;
+    if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
+    R3_AUTO.dirtyTimer=null;
+    r3AutoSave();r3AutoRestoreDialog();
     r3AutoDisplay('');return;
   }
   const selected=r3Candidates().find(c=>c.key===R3_UI.selected);
