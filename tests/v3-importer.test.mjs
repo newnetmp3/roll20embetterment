@@ -309,8 +309,8 @@ test('live Nier export identifies temp HP, all five coin amounts, and named feat
   assert.equal(s.stats.tempHp,0);
   assert.deepEqual({cp:s.stats.cp,sp:s.stats.sp,ep:s.stats.ep,gp:s.stats.gp,pp:s.stats.pp},
     {cp:0,sp:3,ep:2,gp:29,pp:1});
-  assert.deepEqual(s.resources.map(x=>[x.name,x.observedValue]),[
-    ['Action Surge',1],['Second Wind',1],['Unleash Incarnation',2],['Fleet-Footed Resources',1]]);
+  assert.deepEqual([...s.resources.map(x=>x.name+':'+x.observedValue)],[
+    'Action Surge:1','Second Wind:1','Unleash Incarnation:2','Fleet-Footed Resources:1']);
   assert.equal(s.stats.ac,undefined,'unlabeled 17 cannot be assigned to armor class');
   assert.equal(s.stats.speed,undefined,'unlabeled 55 cannot be assigned to speed');
   const again=h.r3Capture(fixture.body,'Combat');
