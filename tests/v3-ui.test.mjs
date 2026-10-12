@@ -55,7 +55,7 @@ function panelHarness(){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -534,4 +534,69 @@ test('automatic current-tab polling has a shorter gate than a full scan',async()
   await pending;
   assert.equal(h.api.R3_UI.snapshot.skills.Athletics,5);
   assert.equal(h.api.R3_AUTO.lastFull,0,'a current-tab poll does not claim a full import');
+});
+
+test('authenticated official popout dirty hints trigger fast debounced current-view update',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const popup=registerOfficialPopout(h);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  h.api.R3_AUTO.lastScan=Date.now()-4000;
+  const prior=h.api.r3Empty();prior.name='NIER';prior.stats.hp=82;
+  prior.inventory=[{name:'Potion',_key:'potion',visible:'1'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prior);
+  const dirty={origin:'https://advanced-sheets.production.roll20preflight.net',
+    source:popup.popup,data:{protocol:'r20eb:import:v3',type:'dirty',
+      session:'popout-sess-123',name:'NIER'}};
+  h.windowListeners.get('message')(dirty);
+  h.windowListeners.get('message')(dirty);
+  assert.equal(popup.messages.length,0,'a dirty hint does not itself read the sheet');
+  const timers=[...h.timeouts.values()].filter(x=>x.ms===400);
+  assert.equal(timers.length,1,'a burst coalesces to one scheduled current scan');
+  timers[0].fn();
+  assert.equal(popup.messages.length,1);
+  assert.equal(popup.messages[0].message.mode,'current');
+  const fresh=h.api.r3Empty();fresh.name='NIER';
+  fresh.inventory=[{name:'Potion',_key:'potion',visible:'3'}];
+  popup.reply(h.api.r3Coverage(fresh));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.api.R3_UI.snapshot.inventory[0].visible,'3');
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82,'off-tab HP must be retained');
+});
+test('dirty hints from wrong source, session, name or origin cannot trigger scans',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const popup=registerOfficialPopout(h);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  const base={protocol:'r20eb:import:v3',type:'dirty',session:'popout-sess-123',name:'NIER'};
+  const send=(origin,source,data)=>h.windowListeners.get('message')({origin,source,data});
+  send('https://example.invalid',popup.popup,base);
+  send('https://advanced-sheets.production.roll20preflight.net',{},base);
+  send('https://advanced-sheets.production.roll20preflight.net',popup.popup,{...base,session:'wrong-session'});
+  send('https://advanced-sheets.production.roll20preflight.net',popup.popup,{...base,name:'OTHER'});
+  assert.equal(h.api.R3_AUTO.dirtyTimer,null);
+  assert.equal(popup.messages.length,0);
+  assert.equal([...h.timeouts.values()].filter(x=>x.ms===400).length,0);
+});
+test('rapid event changes respect the two-second current scan rate limit',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const popup=registerOfficialPopout(h);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  h.api.R3_AUTO.lastScan=Date.now()-400;
+  h.windowListeners.get('message')({origin:'https://advanced-sheets.production.roll20preflight.net',
+    source:popup.popup,data:{protocol:'r20eb:import:v3',type:'dirty',
+      session:'popout-sess-123',name:'NIER'}});
+  const timers=[...h.timeouts.values()].filter(x=>x.ms>=1600&&x.ms<=1800);
+  assert.equal(timers.length,1,'heavy scan is held until the two-second budget is available');
+  assert.equal(popup.messages.length,0);
+});
+test('turning Auto-sync off cancels queued event-triggered scans',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const popup=registerOfficialPopout(h);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  h.api.r3AutoQueueDirty(h.api.r3AutoCandidate());
+  const id=h.api.R3_AUTO.dirtyTimer;
+  assert.ok(id!==null&&h.timeouts.has(id));
+  h.api.r3ToggleAuto();
+  assert.equal(h.api.R3_AUTO.dirtyTimer,null);
+  assert.equal(h.timeouts.has(id),false);
+  assert.equal(popup.messages.length,0);
 });
