@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.0.0
+// @version      3.0.1
 // @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -539,7 +539,9 @@ function r3UIRefresh(){
   R3_UI.root.getElementById('r3-choices').value=R3_UI.selected;
   R3_UI.root.getElementById('r3-results').innerHTML=r3Results();
   R3_UI.root.getElementById('r3-content').style.display=R3_UI.shown?'block':'none';
-  R3_UI.root.getElementById('r3-title').textContent=R3_UI.shown?'Hide importer':'Show importer';
+  // The actual toggle is r3-toggle. A stale reference to r3-title used to
+  // throw here and stop every button handler before it could launch a scan.
+  R3_UI.root.getElementById('r3-toggle').textContent=R3_UI.shown?'Hide importer':'Show importer';
   const scan=R3_UI.root.getElementById('r3-scan'),all=R3_UI.root.getElementById('r3-all');
   scan.disabled=R3_UI.busy||!R3_UI.selected;all.disabled=R3_UI.busy||!R3_UI.selected;
   R3_UI.root.getElementById('r3-export').disabled=!R3_UI.snapshot;
@@ -573,8 +575,8 @@ function r3UIEvent(event){
   const target=event.target;
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-refresh')r3UIRefresh();
-  else if(target?.id==='r3-scan')r3StartImport('current');
-  else if(target?.id==='r3-all')r3StartImport('all');
+  else if(target?.id==='r3-scan')return r3StartImport('current');
+  else if(target?.id==='r3-all')return r3StartImport('all');
   else if(target?.id==='r3-export')r3Export();
   else if(target?.dataset?.view){R3_UI.view=target.dataset.view;r3UIRefresh();}
 }
@@ -614,7 +616,16 @@ function r3StartUI(){
     'Only player-opened 2024 sheets are scanned. Full import visits tabs you can see, then restores the original tab.</div>'+
     '<div id="r3-status" role="status" aria-live="polite"></div>'+
     '<div id="r3-results"></div></div></div>';
-  root.addEventListener('click',r3UIEvent);
+  // Surface handler errors in the panel instead of leaving apparently inert buttons.
+  root.addEventListener('click',event=>{
+    try{
+      const action=r3UIEvent(event);
+      if(action&&typeof action.catch==='function')action.catch(err=>r3UIStatus('Action failed: '+r3String(err?.message||err,250)));
+    }catch(err){
+      r3UIStatus('Action failed: '+r3String(err?.message||err,250));
+      console.error('[roll20 Embetterment] Importer control',err);
+    }
+  });
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
   root.addEventListener('keydown',event=>{event.stopPropagation();},true);
   root.addEventListener('keyup',event=>event.stopPropagation(),true);

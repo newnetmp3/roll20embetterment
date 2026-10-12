@@ -1,4 +1,6 @@
-# roll20 Embetterment 3.0.0 — Independent D&D 2024 sheet importer
+# roll20 Embetterment 3.0.1 — Independent D&D 2024 sheet importer
+
+**v3.0.1:** Fixed a shipped UI bug where the panel attempted to update a nonexistent `r3-title` element instead of its actual `r3-toggle` button; this prevented Refresh, Hide/Show and Scan handlers from completing. Button exceptions now surface in the panel. Regression tests exercise actual panel controls and official-frame request/response handling. **Live Floorp verification remains pending.**
 
 This is a clean restart of the importer, **not another v2 patch**. The previous HUD, model cache, token HP reconciliation, and background imports are not included in the production userscript. Old source is retained under src/ for comparison only.
 
