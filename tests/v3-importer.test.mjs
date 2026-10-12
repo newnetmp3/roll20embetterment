@@ -611,7 +611,7 @@ function screenshotInventoryFixture(){
   const cluster={parentElement:row,querySelectorAll:sel=>sel==='button'?[minus,plus]:
     sel==='input,[role="spinbutton"]'?[quantity]:[]};
   const quantity={tagName:'INPUT',type:'text',value:'0',className:'',parentElement:cluster,
-    getClientRects:()=>[{}],getAttribute:key=>key==='id'?'qty-random-uuid':null,
+    getClientRects:()=>[{}],getAttribute:key=>key==='id'?'11111111-2222-4333-8444-555555555555':null,
     closest:sel=>sel.includes('.item-row')?row:null};
   const sw={tagName:'BUTTON',type:'button',innerText:'',getClientRects:()=>[{}],
     getAttribute:key=>key==='id'?'headlessui-switch-100':
@@ -642,6 +642,8 @@ test('Crowbar screenshot-like unlabelled minus/count/plus controls report exact 
   assert.equal(result.inventory[0].quantity,0,
     'the screenshot stepper uses an unlabelled numeric input');
   assert.equal(result.inventory[0].controls.find(x=>x.kind==='quantity').value,0);
+  assert.equal(result.inventory[0].controls.find(x=>x.kind==='quantity').source,
+    'observed adjacent minus/plus buttons','no accessible quantity hint is present');
   assert.equal(result.inventory[0].controls.find(x=>x.kind==='toggle').value,true);
   assert.equal(h.r3InventoryPrune(result).inventory.length,0);
 });
