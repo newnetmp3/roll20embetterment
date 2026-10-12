@@ -48,12 +48,12 @@ function harness(fixture=docFixture()){
   };
   vm.createContext(context);
   const code=files.filter(f=>f!=='30_boot.js').map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n');
-  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3Merge,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
+  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3StartReader,r3Merge,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
   return {h:context.testApi,context,fixture};
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.1\.3/);
+  assert.match(compiled,/\/\/ @version\s+3\.1\.4/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -450,4 +450,51 @@ test('official popout reader announces and answers only its Roll20 opener',async
   await h.r3ReaderReceive({source:{},origin:'https://example.invalid',
     data:{protocol:'r20eb:import:v3',type:'scan',mode:'hp',id:'r3-popup-invalid-100'}});
   assert.equal(delivered.length,count);
+});
+
+test('sheet input/change events debounce to one authenticated popup dirty hint',()=>{
+  const {h,context}=harness();
+  const notices=[],scheduled=new Map();let seq=0;
+  const opener={closed:false,postMessage(value,origin){notices.push({value,origin});}};
+  context.window.parent=context.window;context.window.opener=opener;
+  context.setTimeout=(fn,ms)=>{const id=++seq;scheduled.set(id,{fn,ms});return id;};
+  context.clearTimeout=id=>scheduled.delete(id);
+  const control={tagName:'INPUT',getClientRects:()=>[{}],closest:()=>null};
+  h.r3ReaderChanged({type:'input',target:control});
+  h.r3ReaderChanged({type:'input',target:control});
+  h.r3ReaderChanged({type:'change',target:control});
+  assert.equal(scheduled.size,1,'typing and the final change share one trailing timer');
+  const timer=[...scheduled.values()][0];
+  assert.equal(timer.ms,350);assert.equal(notices.length,0);
+  timer.fn();
+  assert.equal(notices.length,1);
+  assert.equal(notices[0].origin,'https://app.roll20.net');
+  assert.equal(notices[0].value.type,'dirty');
+  assert.equal(notices[0].value.name,'NIER');
+  assert.match(notices[0].value.session,/^[\\w.:-]{6,100}$/);
+});
+test('reader ignores generic clicks but tracks incrementers and editable controls',()=>{
+  const {h,context}=harness();
+  const scheduled=[],original=(fn,ms)=>{scheduled.push(ms);return scheduled.length;};
+  context.setTimeout=original;
+  const button={className:'regular button',getAttribute:()=>null};
+  const target={tagName:'SPAN',getClientRects:()=>[{}],closest:()=>button};
+  h.r3ReaderChanged({type:'click',target});
+  assert.equal(scheduled.length,0,'ordinary clicks must not trigger a heavyweight re-read');
+  button.className='utility-incrementer__button';
+  h.r3ReaderChanged({type:'click',target});
+  assert.equal(scheduled.length,1,'official increment buttons notify the editor');
+  h.r3ReaderChanged({type:'input',target:{tagName:'DIV',getClientRects:()=>[{}]}});
+  assert.equal(scheduled.length,1,'irrelevant DIV input event is ignored');
+});
+test('reader registers capture-phase form and incrementer event listeners',()=>{
+  const {h,context}=harness();
+  const added=[],windowAdded=[];
+  context.window.addEventListener=(type)=>windowAdded.push(type);
+  context.document.addEventListener=(type,callback,capture)=>added.push({type,callback,capture});
+  context.window.parent=context.window;context.window.opener=null;
+  h.r3StartReader();
+  assert.deepEqual(added.map(x=>x.type),['input','change','click']);
+  assert.ok(added.every(x=>x.capture===true&&typeof x.callback==='function'));
+  assert.ok(windowAdded.includes('message')&&windowAdded.includes('focus'));
 });
