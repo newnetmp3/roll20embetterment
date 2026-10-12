@@ -97,12 +97,15 @@ function r3AutoOpenFromJournal(now){
   }
 }
 function r3AutoMoveOffscreen(candidate){
+  const dialog=r3AutoDialogFor(candidate);
+  if(!dialog)return false;
+  // The 30s check only applies to claiming a newly opened dialog.
+  // A dialog already owned by auto-sync remains a background reader for
+  // later five-minute full scans until the feature is turned off.
+  if(R3_AUTO.ownedDialog===dialog)return true;
   if(!R3_AUTO.opened||Date.now()-R3_AUTO.openedAt>30000){
     R3_AUTO.opened=false;return false;
   }
-  const dialog=r3AutoDialogFor(candidate);
-  if(!dialog)return false;
-  if(R3_AUTO.ownedDialog===dialog)return true;
   // Preserve layout/rendering rather than display:none (which would prevent
   // Vue controls from mounting and being imported). Only move a dialog the
   // script itself asked the journal to open, never a player-opened dialog.

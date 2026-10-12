@@ -55,7 +55,7 @@ function panelHarness(){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -231,6 +231,9 @@ test('auto background importer locates exact journal character then moves only s
   assert.equal(h.sent.length,1);
   assert.equal(h.sent[0].message.mode,'all');
   assert.equal(dialog.style.left,'-20000px');
+  a.openedAt=Date.now()-65000;
+  assert.equal(h.api.r3AutoMoveOffscreen(h.api.r3Candidates()[0]),true,
+    'an already owned offscreen dialog must survive beyond the initial opening window');
   const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
   snap.inventory=[{name:'Dagger',tab:'INVENTORY',_key:'dagger||'}];
   h.respond(h.api.r3Coverage(snap));
