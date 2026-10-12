@@ -201,7 +201,10 @@ async function r3AutoTick(){
   // Only navigate sheet tabs when the script itself opened an offscreen
   // dialog. A player-opened visible sheet is read without changing tabs.
   const mode=background&&now-R3_AUTO.lastFull>300000?'all':'current';
-  if(now-R3_AUTO.lastScan<(mode==='all'?10000:30000))return;
+  // Current-tab scans are read-only and do not navigate player-owned
+  // sheets. Poll their visible non-HP fields on a ~16-second cadence (the
+  // scheduler runs every eight seconds) while keeping full traversals rare.
+  if(now-R3_AUTO.lastScan<(mode==='all'?10000:12000))return;
   R3_AUTO.running=true;
   const generation=R3_AUTO.generation;
   r3UIRefresh();
