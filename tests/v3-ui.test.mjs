@@ -834,3 +834,12 @@ test('HUD sync button controls the existing per-game auto importer',()=>{
   assert.equal(h.api.R3_AUTO.enabled,false);
   assert.match(h.nodes.get('r3-hud').innerHTML,/Sync Off/);
 });
+
+test('clicking inner glyph of a HUD tab selects its category, without extra scans',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const categoryButton={dataset:{hudCategory:'features'}};
+  const inner={dataset:{},closest:selector=>selector==='[data-hud-category]'?categoryButton:null};
+  h.shadow.handlers.get('click')({target:inner});
+  assert.equal(h.api.R3_HUD.category,'features');
+  assert.equal(h.sent.length,0);
+});
