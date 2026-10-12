@@ -1064,6 +1064,12 @@ function r3AutoCombine(prev,current){
     abilities:{...prev.abilities,...current.abilities},modifiers:{...prev.modifiers,...current.modifiers},
     saves:{...prev.saves,...current.saves},skills:{...prev.skills,...current.skills},
     slots:{...prev.slots,...current.slots},provenance:{...prev.provenance,...current.provenance}};
+  // Spell slot rows expose current/remaining/max separately. A partial
+  // current-tab refresh often sees only one property; preserve the others.
+  for(const [level,values] of Object.entries(current.slots||{})){
+    if(values&&typeof values==='object'&&!Array.isArray(values))
+      merged.slots[level]={...(prev.slots?.[level]||{}),...values};
+  }
   for(const kind of ['resources','attacks','spells','inventory','features']){
     const indexed=new Map((prev[kind]||[]).map(item=>[item._key||item.name,item]));
     for(const entry of current[kind]||[])indexed.set(entry._key||entry.name,entry);
