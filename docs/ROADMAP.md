@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.2.0 combat HUD foundation under development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.2.0 combat HUD foundation merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -10,7 +10,7 @@ Updated: October 12, 2026 (v3.2.0 combat HUD foundation under development). v2.3
 | 4 | Bounded tab traversal, origin verification, diagnostics and JSON export | **Manual all-tabs popout import user-verified**; field accuracy/diagnostics still require QA | Examine export for missing fields |
 | 5 | Improve unmapped fields from exported observations | Planned | No guessed selectors |
 | 6 | Verify virtualized tabs and official sheet popouts | **Popout HP sync and manual all-tabs import user-verified**; virtualization/reconnect still open | Check specific missing rendered/virtualized records and window reopen |
-| 7 | Rebuild player combat HUD atop confirmed importer data | HUD v1 implemented; CI/live browser QA pending | Default combat shell, observed stat strip, category cards, debug-only importer |
+| 7 | Rebuild player combat HUD atop confirmed importer data | **HUD v1 merged, CI green; live browser QA pending** | Default combat shell, observed stat strip, category cards, debug-only importer |
 | 8 | Add independent 2014 sheet adapter | Planned | Real 2014 fixtures |
 | 9 | Release/installation automation | Planned | Repeatable CI and browser install |
 
@@ -81,3 +81,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 
 
 **v3.2.0 — HUD v1 foundation (user authorized by replying "1"):** User verified that v3.1.7 Crowbar quantity-zero removal now **works** and requested dropping the importer-centric UI in favor of the actual combat HUD. Keep v3 reader, authentication, popout, persistence and auto-sync engine untouched. Add dedicated `v3/22_hud.js` renderer between importer UI and auto-sync; make a bottom-center, responsive CRPG-styled combat HUD the primary UI, showing confirmed HP/max HP, AC, speed, initiative, passive perception, observed spell slots/resources, action categories and expandable cards from captured character data. Show unknown stats as em-dashes. Classify Bonus/Reaction spell cards **only** with source-observed casting times; don't infer class features or fabricate actions. Provide HUD Sync and Debug controls, collapsed mode and per-game preferences. Hide, do not delete, the existing importer/JSON Diagnostics UI behind Debug. Cards are read-only placeholders for later verified Roll20 action dispatch; no unauthorized casting, expenditure or synthetic rolls. Add HUD UI tests and include the module in the six-module v3 build. **CI verified:** PR #45 run 38319116848, **265 tests passed with zero failures**, generated userscript matches source. Merge and real Floorp UI validation still pending. **Next milestones:** live Floorp HUD UX QA, action attribution/typed action metadata, verified Roll20 native roll/cast bridge, HUD economy/resource display, then Foundry-inspired refinement. Current importer limits (fully closed-sheet Journal auto-open; uncertain AC/speed/save/slots on some sheets) remain tracked.
+
+**v3.2.0 merged:** PR #45 squash merge `6c78f826b5eaaf1afafd9ea2f34a79fac9a63bfa`; final Actions run 38319190135 **265 tests passed**, generated bundle consistent. Start real Floorp HUD QA, then implement safe native Roll20 action dispatch/rolls, action economy and richer categorization from observed sheet data. Debug importer preserved for diagnostics; data pipeline remains intact.
