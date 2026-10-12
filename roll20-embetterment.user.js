@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.1.2
+// @version      3.1.3
 // @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -1072,12 +1072,23 @@ function r3AutoCombine(prev,current){
   // Keep bounded observations from the last full import, not every poll.
   return r3Coverage(merged);
 }
+function r3AutoHasRecognizedData(snapshot){
+  // HP/AC and other stats are not necessarily mounted outside Combat.
+  // A named Inventory/Features/Spells/Skills tab is still a useful scan.
+  // Treat an entirely empty/malformed result as not yet populated so it
+  // cannot replace a previously successful full import.
+  return ['stats','abilities','modifiers','saves','skills','slots'].some(kind=>
+    snapshot[kind]&&typeof snapshot[kind]==='object'&&
+    !Array.isArray(snapshot[kind])&&Object.keys(snapshot[kind]).length>0)||
+    ['spells','attacks','inventory','features','resources'].some(kind=>
+      Array.isArray(snapshot[kind])&&snapshot[kind].length>0);
+}
 function r3AutoStoreSnapshot(snapshot,mode){
   const candidateName=r3String(snapshot?.name,120);
   if(snapshot?.schema!==3||candidateName.toLowerCase()!==R3_AUTO.name.toLowerCase())
     throw new Error('Sheet identity did not match the auto-sync character');
-  if(!snapshot.stats||Object.keys(snapshot.stats).length===0)
-    throw new Error('Sheet has not populated its character values yet');
+  if(!r3AutoHasRecognizedData(snapshot))
+    throw new Error('Sheet has not populated recognizable character values yet');
   // A partial scan cannot erase the full inventory, spells and actions.
   const next=mode==='all'?snapshot:r3AutoCombine(R3_UI.snapshot,snapshot);
   if(r3AutoSignature(R3_UI.snapshot||{})!==r3AutoSignature(next)){
@@ -1098,7 +1109,10 @@ async function r3AutoTick(){
   // Only navigate sheet tabs when the script itself opened an offscreen
   // dialog. A player-opened visible sheet is read without changing tabs.
   const mode=background&&now-R3_AUTO.lastFull>300000?'all':'current';
-  if(now-R3_AUTO.lastScan<(mode==='all'?10000:30000))return;
+  // Current-tab scans are read-only and do not navigate player-owned
+  // sheets. Poll their visible non-HP fields on a ~16-second cadence (the
+  // scheduler runs every eight seconds) while keeping full traversals rare.
+  if(now-R3_AUTO.lastScan<(mode==='all'?10000:12000))return;
   R3_AUTO.running=true;
   const generation=R3_AUTO.generation;
   r3UIRefresh();
