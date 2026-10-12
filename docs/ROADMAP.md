@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.1.2 popout fix in development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.1.2 merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -47,3 +47,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 
 
 **v3.1.2 — Popped-out official Roll20 sheet:** User-reported v3.1.1 regression: HP refreshing stops when the official 2024 sheet is opened in a separate window. Code inspection proves the auto reader filters out all `type=popout` candidates even though the existing authenticated bridge registers them. Implement popout preference for unique exact name (without weakening character-ID conflict checks), registration refresh after late Vue mount, closed-window cleanup, and unchanged one-second HP/30-second current-tab scan cadences. Preserve scroll and full-catalog data, and do not change player-owned popup tabs. Regression CI verified: PR #39 GitHub Actions run 38310552374, **228 tests passed**, zero failures and clean generated bundle. **Live Floorp/Jumpgate validation is still required**. The link requires a functioning popup-to-editor `window.opener` and userscript access on the official advanced-sheets host.
+
+**v3.1.2 merged:** PR #39 squash-merged to `main` as `4f812a74a74d7b510628d08e78ecbffe89abbfc4`. Final GitHub Actions run 38310601659 green (228 automated tests, generated bundle consistent). Await live Floorp popout confirmation. Do not consider fully unattended background Journal opening verified; no runtime proof yet.
