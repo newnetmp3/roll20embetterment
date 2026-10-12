@@ -1,4 +1,6 @@
-# roll20 Embetterment 3.0.1 — Independent D&D 2024 sheet importer
+# roll20 Embetterment 3.0.2 — Independent D&D 2024 sheet importer
+
+**v3.0.2:** Fixes `s[kind].some is not a function` when real skill rows are present in the official sheet. Skill bonuses are a keyed object, not named-card lists; the importer now separates these data types and tests skill row + HP + spells capture and merging. Supplied HTML confirms the Nier iframe but contains only outer editor markup. Browser end-to-end QA remains pending.
 
 **v3.0.1:** Fixed a shipped UI bug where the panel attempted to update a nonexistent `r3-title` element instead of its actual `r3-toggle` button; this prevented Refresh, Hide/Show and Scan handlers from completing. Button exceptions now surface in the panel. Regression tests exercise actual panel controls and official-frame request/response handling. **Live Floorp verification remains pending.**
 
