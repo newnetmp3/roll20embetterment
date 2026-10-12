@@ -1,7 +1,7 @@
 // Roll20 Embetterment HUD v1: read-only combat presentation of v3 sheet data.
 // This module never dispatches native Roll20 rolls, casts or sheet mutations.
-const R3_HUD={category:'actions',collapsed:false,drawerOpen:false,renderedSnapshot:null,
-  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedDebug:null,openKeys:[],scrollTop:0};
+const R3_HUD={category:'actions',collapsed:false,drawerOpen:false,flyout:'',spellLevel:'',weaponSet:0,weaponSets:[null,null,null,null,null,null],chooser:null,used:{action:false,bonus:false,reaction:false},renderedSnapshot:null,
+  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedWeaponSet:null,renderedChooser:null,renderedUsed:null,renderedDebug:null,openKeys:[],scrollTop:0};
 const R3_HUD_TABS=[
   {key:'actions',title:'Actions',icon:'⚔'},
   {key:'bonus',title:'Bonus',icon:'✦'},
@@ -18,11 +18,19 @@ function r3HudLoad(){
       R3_HUD.category=stored.category;
     if(typeof stored?.collapsed==='boolean')R3_HUD.collapsed=stored.collapsed;
     if(typeof stored?.drawerOpen==='boolean')R3_HUD.drawerOpen=stored.drawerOpen;
+    if(Number.isInteger(stored?.weaponSet)&&stored.weaponSet>=0&&stored.weaponSet<3)
+      R3_HUD.weaponSet=stored.weaponSet;
+    if(Array.isArray(stored?.weaponSets)&&stored.weaponSets.length===6)
+      R3_HUD.weaponSets=stored.weaponSets.map(item=>
+        item&&['attacks','inventory','spells'].includes(item.kind)&&
+        typeof item.key==='string'&&item.key.length>0&&item.key.length<=140?
+          {kind:item.kind,key:item.key}:null);
   }catch{}
 }
 function r3HudSave(){
   try{localStorage.setItem(r3StorageKey()+':hud',JSON.stringify({
-    category:R3_HUD.category,collapsed:R3_HUD.collapsed,drawerOpen:R3_HUD.drawerOpen
+    category:R3_HUD.category,collapsed:R3_HUD.collapsed,drawerOpen:R3_HUD.drawerOpen,
+    weaponSet:R3_HUD.weaponSet,weaponSets:R3_HUD.weaponSets
   }));}catch{}
 }
 function r3HudValue(value,suffix=''){
@@ -142,54 +150,213 @@ function r3HudActionGroup(snapshot,kind){
     '<div class="hud-action-head"><span>'+title+'</span><b>'+items.length+'</b></div>'+
     '<div class="hud-action-tiles">'+tiles+fallback+'</div></div>';
 }
+// Argon Core reference: bottom-aligned horizontal panels, action tiles,
+// weapon loadouts over the portrait, and flyouts expanding up over the bar.
+// These UI operations are local/read-only until Roll20 native action routing
+// can be verified. No Foundry runtime, assets or network are required.
+function r3HudWeaponCandidates(snapshot){
+  if(!snapshot)return [];
+  const result=[];
+  for(const kind of ['attacks','inventory','spells']){
+    const entries=kind==='inventory'?r3HudEntries(snapshot,kind):
+      (Array.isArray(snapshot[kind])?snapshot[kind]:[]);
+    for(const item of entries.slice(0,120)){
+      const key=r3String(item._key||item.name,140);
+      if(key&&!result.some(x=>x.kind===kind&&x.key===key))
+        result.push({kind,key,item});
+    }
+  }
+  return result.slice(0,175);
+}
+function r3HudLoadoutItem(snapshot,index){
+  const slot=R3_HUD.weaponSets[index];
+  if(!slot)return null;
+  return r3HudWeaponCandidates(snapshot).find(c=>c.kind===slot.kind&&c.key===slot.key)?.item||null;
+}
+function r3HudIcon(symbol){
+  const icons={
+    blade:'<path d="M5 21l5-5M13 13l8-8-2-2-8 8M6 18l-3 3m4-6 4 4"/>',
+    book:'<path d="M4 4c4-2 8-2 12 0v16c-4-2-8-2-12 0zM16 4c2-1 4-1 5 0v16c-2-1-4-1-5 0zM10 9v5"/>',
+    flame:'<path d="M12 2c1 5-4 6-2 10 2-1 3-3 4-5 6 6 6 11 1 14-5 3-11 0-11-6 0-5 5-8 8-13z"/>',
+    shield:'<path d="M12 2L3 6v7c0 6 6 9 9 10 3-1 9-4 9-10V6zM9 12l2 2 4-5"/>',
+    bag:'<path d="M7 9h10l3 12H4L7 9zM9 9V6a3 3 0 0 1 6 0v3M8 15h8"/>',
+    lightning:'<path d="M13 2L5 13h7l-1 9 8-12h-7z"/>',
+    clock:'<circle cx="12" cy="12" r="9"/><path d="M12 6v7l4 2"/>',
+    exit:'<path d="M12 3a9 9 0 1 1-9 9M2 6l10 6-10 6M2 12h13"/>',
+    dice:'<rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="12" cy="12" r="1"/>',
+    move:'<path d="M12 2v20M2 12h20M12 2l-3 3m3-3 3 3M12 22l-3-3m3 3 3-3M2 12l3-3m-3 3 3 3M22 12l-3-3m3 3-3 3"/>',
+    star:'<path d="M12 2l3.1 6.4 7 .9-5 4.9 1.2 7-6.3-3.4L5.7 21l1.2-7-5-4.9 7-.9z"/>',
+    target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 1v5M12 18v5M1 12h5M18 12h5"/>',
+    eye:'<path d="M2 12c5-8 15-8 20 0-5 8-15 8-20 0z"/><circle cx="12" cy="12" r="3"/>'
+  };
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+
+    (icons[symbol]||icons.star)+'</svg>';
+}
+function r3HudBarButton(label,icon,flyout,more=''){
+  return '<button type="button" class="hud-bar-button '+more+'" data-hud-flyout="'+r3Escape(flyout)+'" title="Browse '+r3Escape(label)+' (read-only)">'+
+    '<span class="hud-bar-art">'+r3HudIcon(icon)+'</span>'+
+    '<span class="hud-bar-label">'+r3Escape(label)+'</span></button>';
+}
+function r3HudSetMarkup(snapshot){
+  const entries=R3_HUD.weaponSets;
+  return '<div class="hud-loadout" aria-label="Three two-slot weapon sets">'+
+    [0,1,2].map(set=>{
+      const slots=[0,1].map(side=>{
+        const index=set*2+side;
+        const item=r3HudLoadoutItem(snapshot,index);
+        const name=item?.name||'Empty '+(side?'bonus':'action')+' slot';
+        const icon=side?'lightning':'blade';
+        return '<button type="button" data-hud-slot="'+index+'" class="hud-loadout-slot'+
+          (item?' assigned':'')+'" title="'+r3Escape(name)+
+          ': assign an observed attack, spell or item">'+
+          (item?'<span class="hud-slot-letter">'+r3Escape(r3String(name,1).toUpperCase())+'</span>':
+          r3HudIcon(icon))+'</button>';
+      }).join('');
+      return '<div class="hud-loadout-pair'+(R3_HUD.weaponSet===set?' active':'')+'">'+
+        '<button type="button" class="hud-loadout-number" data-hud-set="'+set+
+        '" title="Select weapon set '+(set+1)+'">SET '+(set+1)+'</button>'+
+        '<div class="hud-loadout-slots">'+slots+'</div></div>';
+    }).join('')+'</div>';
+}
+function r3HudSpellLevels(snapshot){
+  const levels=new Map();
+  for(const spell of snapshot?.spells||[]){
+    const raw=spell.level;
+    const level=raw===0||String(raw??'').toLowerCase()==='cantrip'?'0':
+      /^\d$/.test(String(raw??''))?String(raw):'other';
+    if(!levels.has(level))levels.set(level,[]);
+    levels.get(level).push(spell);
+  }
+  return [...levels.entries()].sort((a,b)=>
+    a[0]==='other'?1:b[0]==='other'?-1:Number(a[0])-Number(b[0]));
+}
+function r3HudFlyoutMarkup(snapshot){
+  if(R3_HUD.chooser!==null){
+    const candidates=r3HudWeaponCandidates(snapshot);
+    const slot=R3_HUD.chooser;
+    return '<section class="hud-flyout" aria-label="Assign weapon set slot">'+
+      '<header><strong>QUICK SLOT '+(Math.floor(slot/2)+1)+' · '+
+      (slot%2?'BONUS':'ACTION')+'</strong>'+
+      '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
+      '<div class="hud-choice-list"><button type="button" data-hud-assign="clear">Clear slot</button>'+
+      candidates.map((c,i)=>'<button type="button" data-hud-assign="'+i+'">'+
+        r3Escape(c.item.name)+'<small>'+r3Escape(c.kind)+'</small></button>').join('')+
+      '</div><small class="hud-hint">Assignments customize HUD shortcuts only; nothing is equipped or cast on Roll20.</small></section>';
+  }
+  if(!R3_HUD.flyout)return '';
+  const flyout=R3_HUD.flyout;
+  const titles={spells:'CAST SPELL',skills:'SAVES / SKILLS / TOOLS',inventory:'USE ITEM',
+    features:'USE FEATURE',actions:'ACTION',bonus:'BONUS ACTION',reactions:'REACTION',
+    resources:'RESOURCES'};
+  let content='';
+  if(flyout==='spells'){
+    const levels=r3HudSpellLevels(snapshot);
+    if(!levels.length)content='<p class="hud-empty">No labeled spells have been imported.</p>';
+    else{
+      const selected=levels.some(([lev])=>lev===R3_HUD.spellLevel)?R3_HUD.spellLevel:levels[0][0];
+      const spells=levels.find(([lev])=>lev===selected)?.[1]||[];
+      const slot=snapshot?.slots?.[selected];
+      const slots=slot?(' · Slots '+r3HudValue(slot.current??slot.remaining)+' / '+r3HudValue(slot.max)):'';
+      content='<div class="hud-spell-levels">'+levels.map(([lev,arr])=>
+        '<button type="button" data-hud-spell-level="'+r3Escape(lev)+'" class="'+
+        (lev===selected?'active':'')+'">'+(lev==='0'?'Cantrip':lev==='other'?'Unclassified':'Level '+lev)+
+        ' <small>'+arr.length+'</small></button>').join('')+'</div>'+
+        '<div class="hud-flyout-caption">'+(selected==='0'?'Cantrips':selected==='other'?'Unclassified spells':'Level '+selected)+
+        slots+'</div><div class="hud-flyout-cards">'+spells.slice(0,65).map(r3HudCard).join('')+'</div>';
+    }
+  }else if(flyout==='skills'){
+    const groups=[['SAVING THROWS',snapshot?.saves||{}],['SKILLS',snapshot?.skills||{}],
+      ['ABILITY CHECKS',snapshot?.modifiers||{}]];
+    content=groups.map(([label,values])=>'<div class="hud-skill-group"><b>'+label+'</b>'+
+      (Object.keys(values).length?Object.entries(values).map(([name,value])=>
+        '<div class="hud-skill-row">'+r3Escape(name)+' <strong>'+r3HudValue(value)+'</strong></div>').join(''):
+        '<span class="hud-empty">No imported entries</span>')+'</div>').join('');
+  }else{
+    const cards=r3HudEntries(snapshot,flyout);
+    content=cards.length?'<div class="hud-flyout-cards">'+cards.slice(0,80).map(r3HudCard).join('')+'</div>':
+      '<p class="hud-empty">No confirmed entries in this category.</p>';
+  }
+  return '<section class="hud-flyout" aria-label="Combat '+r3Escape(titles[flyout]||flyout)+' flyout">'+
+    '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
+    '<small>Read-only · official sheet remains authoritative</small>'+
+    '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
+    content+'</section>';
+}
+function r3HudSegment(label,kind,buttons){
+  const tracks=kind==='action'||kind==='bonus'||kind==='reaction';
+  const used=!!R3_HUD.used[kind];
+  return '<section class="hud-segment hud-segment-'+kind+'" aria-label="'+r3Escape(label)+'">'+
+    '<div class="hud-segment-buttons">'+buttons+'</div>'+
+    '<div class="hud-segment-caption"><span>'+r3Escape(label)+'</span>'+
+    (tracks?'<button type="button" data-hud-used="'+kind+'" aria-pressed="'+used+
+      '" title="Mark '+r3Escape(label)+' as used (local indicator only)">'+
+      (used?'●':'○')+'</button>':'')+'</div></section>';
+}
 function r3HudMarkup(snapshot){
   const name=r3String(snapshot?.name,80)||'No character imported';
   const hp=snapshot?.stats||{};
   const collapsed=R3_HUD.collapsed;
-  const active=R3_HUD_TABS.find(t=>t.key===R3_HUD.category);
-  const items=r3HudEntries(snapshot,R3_HUD.category);
   const passive=r3HudPassive(snapshot);
-  const portrait='<div class="hud-portrait-dock">'+
-    '<div class="hud-portrait-rim"><div class="hud-portrait-face" aria-hidden="true">'+
-    r3Escape(name.slice(0,1).toUpperCase())+'</div></div>'+
-    '<div class="hud-portrait-caption">'+r3Escape(name)+'</div>'+
-    '<div class="hud-portrait-hp">'+r3HudHp(snapshot)+'</div></div>';
-  const header='<header class="hud-top">'+
-    '<span class="hud-brand">R20 <b>EMBETTERMENT</b> <small>ARGON-INSPIRED COMBAT HUD</small></span>'+
-    '<div class="hud-top-actions">'+
-    '<button type="button" id="r3-hud-auto">'+(R3_AUTO.enabled?'● Sync On':'○ Sync Off')+'</button>'+
-    '<button type="button" id="r3-hud-debug">'+(R3_UI.shown?'Close Debug':'Debug')+'</button>'+
-    '<button type="button" id="r3-hud-collapse">'+(collapsed?'Expand':'Minimize')+'</button>'+
-    '</div></header>';
-  const statStrip='<div class="hud-vitals">'+
+  const actionIndex=R3_HUD.weaponSet*2;
+  const actionItem=r3HudLoadoutItem(snapshot,actionIndex);
+  const bonusItem=r3HudLoadoutItem(snapshot,actionIndex+1);
+  const attacks=r3HudEntries(snapshot,'actions');
+  const weapon=actionItem||attacks[0];
+  const mainButtons=[
+    r3HudBarButton(weapon?.name||'WEAPON','blade','actions','hud-weapon-button'),
+    r3HudBarButton('DODGE / DISENGAGE','shield','actions','hud-small-button'),
+    r3HudBarButton('CAST SPELL','book','spells','hud-color-spells'),
+    r3HudBarButton('USE FEATURE','flame','features'),
+    r3HudBarButton('READY / DASH','clock','actions','hud-small-button'),
+    r3HudBarButton('USE ITEM','bag','inventory')
+  ].join('');
+  const bonusButtons=[
+    r3HudBarButton(bonusItem?.name||'OFF HAND','blade','bonus','hud-color-bonus'),
+    r3HudBarButton('CAST SPELL','book','spells','hud-color-bonus')
+  ].join('');
+  const freeButtons=r3HudBarButton('FEATURE','star','features','hud-color-free');
+  const reactionButtons=[
+    r3HudBarButton(r3HudEntries(snapshot,'reactions')[0]?.name||'REACTION',
+      'shield','reactions','hud-color-reaction')
+  ].join('');
+  const passButtons='<button type="button" class="hud-bar-button hud-color-pass" '+
+    'title="End turn is not wired to Roll20 yet" disabled>'+
+    '<span class="hud-bar-art">'+r3HudIcon('exit')+'</span>'+
+    '<span class="hud-bar-label">END TURN</span></button>';
+  const statRow='<div class="hud-portrait-stats">'+
     r3HudStat('AC',hp.ac)+r3HudStat('SPEED',hp.speed,' ft')+
     r3HudStat('INIT',hp.initiative)+
-    '<div title="'+r3Escape(passive.source)+'">'+r3HudStat(passive.label,passive.value)+'</div>'+
+    '<div title="'+r3Escape(passive.source)+'">'+r3HudStat(passive.label,passive.value)+'</div></div>';
+  const portrait='<aside class="hud-portrait-panel">'+
+    r3HudSetMarkup(snapshot)+
+    '<button type="button" class="hud-portrait-shortcuts" data-hud-flyout="skills">'+
+    'SAVES / SKILLS / TOOLS ▾</button>'+
+    '<div class="hud-avatar-pane"><div class="hud-avatar" aria-hidden="true">'+
+    r3Escape(name.slice(0,1).toUpperCase())+'</div>'+
+    '<div class="hud-portrait-name">'+r3Escape(name)+'</div>'+r3HudHp(snapshot)+
+    statRow+'</div></aside>';
+  const controls='<div class="hud-controller">'+
+    '<div class="hud-toolbar"><span>R20 EMBETTERMENT <small>ARGON PORT</small></span>'+
+    '<div class="hud-toolbar-actions">'+
+    '<button type="button" id="r3-hud-auto">'+(R3_AUTO.enabled?'● Sync':'○ Sync')+'</button>'+
+    '<button type="button" id="r3-hud-debug">Debug</button>'+
+    '<button type="button" id="r3-hud-collapse">'+(collapsed?'Show HUD':'Hide')+'</button></div></div>'+
+    '<div class="hud-action-track"><span>Action tracking (local)</span>'+
+    '<button type="button" id="r3-hud-reset-turn">Reset tracking</button></div>'+
+    '<div class="hud-main-segments">'+
+    r3HudSegment('MAIN ACTION','action',mainButtons)+
+    r3HudSegment('BONUS','bonus',bonusButtons)+
+    r3HudSegment('FREE','free',freeButtons)+
+    r3HudSegment('REACTION','reaction',reactionButtons)+
+    r3HudSegment('PASS','pass',passButtons)+'</div>'+
+    '<div class="hud-resources-bottom">'+r3HudResourceBar(snapshot)+'</div>'+
     '</div>';
-  const categories=R3_HUD_TABS.map(tab=>{
-    const count=r3HudEntries(snapshot,tab.key).length;
-    return '<button type="button" class="hud-tab'+(R3_HUD.category===tab.key?' selected':'')+
-      '" data-hud-category="'+tab.key+'" aria-pressed="'+(R3_HUD.category===tab.key)+'">'+
-      '<span aria-hidden="true">'+tab.icon+'</span> '+tab.title+' <small>'+count+'</small></button>';
-  }).join('');
-  const cards=!snapshot?'<p class="hud-empty">Import a sheet once through Debug, then enable Sync.</p>':
-    items.length?'<div class="hud-cards">'+items.slice(0,80).map(r3HudCard).join('')+'</div>':
-    '<p class="hud-empty">No confirmed entries in this category.</p>';
-  const drawer=R3_HUD.drawerOpen?
-    '<div class="hud-drawer" role="region" aria-label="Action details">'+
-    '<div class="hud-drawer-head"><strong>'+r3Escape(active?.title||'Actions')+
-    '</strong><span>'+items.length+' observed</span>'+
-    '<button type="button" id="r3-hud-drawer-close" aria-label="Close detail drawer">×</button></div>'+
-    '<div class="hud-body">'+cards+'</div></div>':'';
-  const main=collapsed?'':'<div class="hud-command">'+
-    portrait+'<div class="hud-command-deck">'+statStrip+
-    '<div class="hud-action-panels">'+r3HudActionGroup(snapshot,'actions')+
-    r3HudActionGroup(snapshot,'bonus')+r3HudActionGroup(snapshot,'reactions')+'</div>'+
-    r3HudResourceBar(snapshot)+
-    '<nav class="hud-tabs" aria-label="Combat action categories">'+categories+'</nav>'+
-    '</div>'+drawer+'</div>';
-  return '<section class="hud-shell'+(collapsed?' collapsed':'')+
-    '" aria-label="R20 Embetterment combat HUD">'+header+main+'</section>';
+  const compact='<div class="hud-collapsed">'+
+    '<span>'+r3Escape(name)+' · '+r3HudValue(hp.hp)+' / '+r3HudValue(hp.maxHp)+' HP</span>'+
+    '<button type="button" id="r3-hud-collapse">Show HUD</button></div>';
+  return '<section class="hud-shell'+(collapsed?' collapsed':'')+'" aria-label="R20 Embetterment combat HUD">'+
+    (collapsed?compact:'<div class="hud-reference-bar">'+portrait+controls+'</div>')+
+    (!collapsed?r3HudFlyoutMarkup(snapshot):'')+'</section>';
 }
 function r3HudRender(){
   const el=R3_UI.root?.getElementById('r3-hud');if(!el)return;
@@ -197,6 +364,10 @@ function r3HudRender(){
     R3_HUD.renderedCategory===R3_HUD.category&&
     R3_HUD.renderedCollapsed===R3_HUD.collapsed&&
     R3_HUD.renderedDrawer===R3_HUD.drawerOpen&&
+    R3_HUD.renderedFlyout===R3_HUD.flyout&&
+    R3_HUD.renderedWeaponSet===R3_HUD.weaponSet&&
+    R3_HUD.renderedChooser===R3_HUD.chooser&&
+    R3_HUD.renderedUsed===JSON.stringify(R3_HUD.used)&&
     R3_HUD.renderedDebug===R3_UI.shown&&
     R3_HUD.renderedSync===R3_AUTO.enabled)return;
   const oldBody=el.querySelector?.('.hud-body');
@@ -210,6 +381,10 @@ function r3HudRender(){
   R3_HUD.renderedCategory=R3_HUD.category;
   R3_HUD.renderedCollapsed=R3_HUD.collapsed;
   R3_HUD.renderedDrawer=R3_HUD.drawerOpen;
+  R3_HUD.renderedFlyout=R3_HUD.flyout;
+  R3_HUD.renderedWeaponSet=R3_HUD.weaponSet;
+  R3_HUD.renderedChooser=R3_HUD.chooser;
+  R3_HUD.renderedUsed=JSON.stringify(R3_HUD.used);
   R3_HUD.renderedDebug=R3_UI.shown;
   R3_HUD.renderedSync=R3_AUTO.enabled;
   const body=el.querySelector?.('.hud-body');
