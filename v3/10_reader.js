@@ -17,40 +17,78 @@ function r3Tabs(){
 }
 function r3Active(tab){return tab?.getAttribute?.('aria-selected')==='true'||tab?.getAttribute?.('data-state')==='active'||/\b(active|selected|current)\b/i.test(String(tab?.className||''));}
 function r3Pause(ms){return new Promise(r=>setTimeout(r,ms));}
+function r3TabKey(tab){
+  const group=tab?.closest?.('[role="tablist"]');
+  const groupName=r3Attr(group,'aria-label')||r3Attr(group,'id')||
+    r3String(group?.className,80)||'tablist';
+  return groupName+'|'+r3TabLabel(tab).toLowerCase();
+}
+function r3ResolveTab(key,label){
+  const tabs=r3Tabs();
+  return tabs.find(tab=>r3TabKey(tab)===key)||
+    tabs.find(tab=>r3TabLabel(tab).toLowerCase()===label.toLowerCase())||null;
+}
 async function r3CollectAllTabs(progress){
-  const original=r3Tabs().filter(r3Active);
-  const acc=r3Empty();
-  const seen=new Set();let visited=0;
+  // Vue can replace every tab element after clicking a tab. Store labels
+  // and stable tablist identities, NOT stale element references.
+  const descriptors=()=>r3Tabs().map(tab=>({key:r3TabKey(tab),label:r3TabLabel(tab)}));
+  const original=r3Tabs().filter(r3Active).map(tab=>({key:r3TabKey(tab),label:r3TabLabel(tab)}));
+  const acc=r3Empty(),seen=new Set();
+  let visited=0;
+  const primaryLabel=/^(combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
   const collect=label=>{
-    const snap=r3Capture(document.body,label);r3Merge(acc,snap);visited++;
+    r3Merge(acc,r3Capture(document.body,label));visited++;
     progress?.(label,r3Coverage(acc));
   };
-  const visit=async tab=>{
-    if(!tab||!tab.isConnected||!r3Shown(tab)||visited>=32)return;
-    const label=r3TabLabel(tab);if(!label)return;
-    const identity=label+'|'+(tab.closest?.('[role="tablist"]')?.getAttribute?.('aria-label')||'');
-    if(seen.has(identity))return;
-    seen.add(identity);
-    if(!r3Active(tab)){tab.click();await r3Pause(210);}
+  const visit=async ({key,label})=>{
+    if(visited>=32||seen.has(key))return false;
+    const tab=r3ResolveTab(key,label);
+    if(!tab||!r3Shown(tab)){
+      acc.diagnostics.notes.push('Tab not available when visited: '+label);
+      return false;
+    }
+    seen.add(key);
+    if(!r3Active(tab)){
+      tab.click();await r3Pause(290);
+    }
     collect(label);
+    return true;
   };
   try{
     collect('Current view');
-    const top=r3Tabs().slice(0,14);
-    for(const tab of top){
+    const initial=descriptors();
+    // The six main 2024 sheet panels must not be pushed out of the first
+    // 14 tabs by nested filter tabs (a previous source of false zeroes).
+    const main=initial.filter(x=>primaryLabel.test(x.label));
+    for(const mainTab of main){
       if(visited>=32)break;
-      await visit(tab);
-      if(/^(spells|inventory|combat|features\s*(?:&|and)\s*traits|skills\s*&\s*tools)$/i.test(r3TabLabel(tab))){
-        const second=r3Tabs().filter(x=>!top.includes(x)).slice(0,20);
-        const prior=second.filter(r3Active);
-        try{for(const child of second){if(visited>=32)break;await visit(child);}}
-        finally{for(const child of prior)if(child?.isConnected&&!r3Active(child)){child.click();await r3Pause(100);}}
+      if(!await visit(mainTab))continue;
+      const children=descriptors().filter(x=>!primaryLabel.test(x.label)&&!seen.has(x.key)).slice(0,20);
+      for(const child of children){
+        if(visited>=32)break;
+        await visit(child);
       }
     }
+    // Visit any other initially visible tabs missed by the priority pass.
+    for(const extra of initial.filter(x=>!primaryLabel.test(x.label))){
+      if(visited>=32)break;
+      await visit(extra);
+    }
   }finally{
-    for(const tab of original)if(tab?.isConnected&&!r3Active(tab)){tab.click();await r3Pause(130);}
+    // Restore by identity rather than trying to click detached old nodes.
+    for(const prior of original){
+      const tab=r3ResolveTab(prior.key,prior.label);
+      if(tab&&!r3Active(tab)){tab.click();await r3Pause(130);}
+    }
   }
   if(visited>=32)acc.diagnostics.limits.push('32 tab views maximum');
+  const scanned=acc.diagnostics.tabs;
+  if(!scanned.some(label=>/^inventory\b/i.test(label)))
+    acc.diagnostics.notes.push('Inventory tab was not visited. Check whether its tab is exposed and visible.');
+  else if(!acc.inventory.length)
+    acc.diagnostics.notes.push('Inventory tab visited, but no identifiable item-name rows were rendered.');
+  if(!acc.resources.length)
+    acc.diagnostics.notes.push('No named resource trackers detected in rendered tabs; resource checkboxes may be nested or unmounted.');
   acc.diagnostics.notes.push('Only rendered DOM was read. Virtualized/offscreen rows are not guaranteed complete.');
   return r3Coverage(acc);
 }
