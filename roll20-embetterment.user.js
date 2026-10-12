@@ -1060,7 +1060,7 @@ function r3AutoStoreSnapshot(snapshot,mode){
   }
 }
 async function r3AutoTick(){
-  if(!R3_AUTO.enabled||R3_AUTO.running||R3_AUTO.healthRunning||R3_UI.busy||!R3_AUTO.name)return;
+  if(!R3_AUTO.enabled||R3_AUTO.running||R3_UI.busy||!R3_AUTO.name)return;
   const now=Date.now();
   const candidate=r3AutoCandidate();
   if(!candidate){
