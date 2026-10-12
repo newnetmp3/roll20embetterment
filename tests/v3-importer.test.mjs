@@ -471,7 +471,7 @@ test('sheet input/change events debounce to one authenticated popup dirty hint',
   assert.equal(notices[0].origin,'https://app.roll20.net');
   assert.equal(notices[0].value.type,'dirty');
   assert.equal(notices[0].value.name,'NIER');
-  assert.match(notices[0].value.session,/^[\\w.:-]{6,100}$/);
+  assert.match(notices[0].value.session,/^[\w.:-]{6,100}$/);
 });
 test('reader ignores generic clicks but tracks incrementers and editable controls',()=>{
   const {h,context}=harness();
