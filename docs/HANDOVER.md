@@ -3,9 +3,9 @@
 **Updated:** 2026-10-12  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `00bb39c9eb2aa3c2ea2fc71564f23ea454682647` (v3.1.1, merged PR #38).  
-**Latest completed milestone:** v3.1.1 fast HP watch and automatic-import identity safeguards (PR #38 merged; 221 tests passed).  
-**Known unresolved issues:** Automated Journal sheet opening and official 2024 HP timing still require live Floorp verification; AC, speed, saving throws and slots remain incompletely mapped.  
+**Current verified feature baseline:** `4f812a74a74d7b510628d08e78ecbffe89abbfc4` (v3.1.2, merged PR #39).  
+**Latest completed milestone:** v3.1.2 official popout automatic sync (PR #39 merged; 228 tests passed).  
+**Known unresolved issues:** Live Floorp validation of popout HP updates and unattended Journal opening remains; AC/speed, saving throws and slots are still incompletely mapped.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
 ## Resume process
@@ -253,3 +253,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Live check after merge:** Update Tampermonkey in Roll20 editor and official popup; keep opener/editor open; pop out Nier and change HP twice. Look for v3 auto status “Popout sheet current import updated” and a current HP change in the R20eb panel, ideally within 1–2 seconds. Test when popup is focused and when Roll20 editor is focused, close/reopen popup, and check that inventory/spells persist. If zero updates, determine whether `ready` appears in sheet selector; if not, verify official popup script injection/opener relationship before changing source-matching assumptions. Browser background throttling may increase latency.
 
 **Next:** Verify official popup runtime, Journal auto-open when the sheet is fully closed, then remaining AC/speed/saves/slots adapters; only then resume Foundry-inspired combat HUD.
+
+**Post-merge checkpoint (2026-10-12):** PR #39 merged into `main` as `4f812a74a74d7b510628d08e78ecbffe89abbfc4`. The final PR-head GitHub Actions run 38310601659 passed with 228 tests, no failures, generated-userscript check green. Production script is v3.1.2. User's popout bug is **implemented/fixed in code, but awaiting user confirmation in live Roll20/Floorp**. Next confirm popup-to-opener handshake and HP updates without closing/reopening the sheet; if still failing, capture the actual popout URL and whether it retains opener before changing cross-window transport.
