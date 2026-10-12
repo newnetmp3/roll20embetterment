@@ -164,12 +164,23 @@ function r3AutoCombine(prev,current){
   // Keep bounded observations from the last full import, not every poll.
   return r3Coverage(merged);
 }
+function r3AutoHasRecognizedData(snapshot){
+  // HP/AC and other stats are not necessarily mounted outside Combat.
+  // A named Inventory/Features/Spells/Skills tab is still a useful scan.
+  // Treat an entirely empty/malformed result as not yet populated so it
+  // cannot replace a previously successful full import.
+  return ['stats','abilities','modifiers','saves','skills','slots'].some(kind=>
+    snapshot[kind]&&typeof snapshot[kind]==='object'&&
+    !Array.isArray(snapshot[kind])&&Object.keys(snapshot[kind]).length>0)||
+    ['spells','attacks','inventory','features','resources'].some(kind=>
+      Array.isArray(snapshot[kind])&&snapshot[kind].length>0);
+}
 function r3AutoStoreSnapshot(snapshot,mode){
   const candidateName=r3String(snapshot?.name,120);
   if(snapshot?.schema!==3||candidateName.toLowerCase()!==R3_AUTO.name.toLowerCase())
     throw new Error('Sheet identity did not match the auto-sync character');
-  if(!snapshot.stats||Object.keys(snapshot.stats).length===0)
-    throw new Error('Sheet has not populated its character values yet');
+  if(!r3AutoHasRecognizedData(snapshot))
+    throw new Error('Sheet has not populated recognizable character values yet');
   // A partial scan cannot erase the full inventory, spells and actions.
   const next=mode==='all'?snapshot:r3AutoCombine(R3_UI.snapshot,snapshot);
   if(r3AutoSignature(R3_UI.snapshot||{})!==r3AutoSignature(next)){
