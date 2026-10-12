@@ -183,8 +183,11 @@ function r3UIEvent(event){
     R3_HUD.collapsed=!R3_HUD.collapsed;r3HudSave();r3HudRender();
   }
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
+  else if(target?.id==='r3-hud-drawer-close'){
+    R3_HUD.drawerOpen=false;r3HudSave();r3HudRender();
+  }
   else if(hudCategory&&R3_HUD_TABS.some(tab=>tab.key===hudCategory)){
-    R3_HUD.category=hudCategory;R3_HUD.scrollTop=0;
+    R3_HUD.category=hudCategory;R3_HUD.drawerOpen=true;R3_HUD.scrollTop=0;
     R3_HUD.openKeys=[];r3HudSave();r3HudRender();
   }
   else if(target?.dataset?.view){R3_UI.view=target.dataset.view;r3UIRefresh();}

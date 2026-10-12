@@ -53,7 +53,7 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.2\.0/);
+  assert.match(compiled,/\/\/ @version\s+3\.2\.1/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -688,4 +688,45 @@ test('live unlabelled inventory plus/minus clicks signal the authenticated reade
     closest:sel=>sel.startsWith('button')?x.minus:sel.includes('item-row')?x.row:null};
   h.r3ReaderChanged({type:'click',target});
   assert.deepEqual(calls,[350]);
+});
+
+
+test('exported UUID-named AC 17 and speed 55 recover from exact nearby labels',()=>{
+  const {h}=harness();
+  const snap=h.r3Empty();snap.name='Nier';
+  snap.observations=[
+    {label:'59a75333-038c-491a-a93f-be3022111d42',value:'17',
+      nearbyText:['ARMOR CLASS'],tab:'COMBAT',element:'INPUT'},
+    {label:'b89b2c57-491e-4f8c-b43f-7b21bc42aa96',value:'55',
+      nearbyText:['SPEED (ft)'],tab:'COMBAT',element:'INPUT'},
+    {label:'b89b2c57-491e-4f8c-b43f-7b21bc42aa96',value:'55',
+      nearbyText:['SPEED (ft)'],tab:'INVENTORY',element:'INPUT'}
+  ];
+  h.r3Coverage(snap);
+  assert.equal(snap.stats.ac,17);assert.equal(snap.stats.speed,55);
+  assert.equal(snap.provenance['stats.ac'].kind,'exact nearby control caption');
+  assert.equal(snap.provenance['stats.speed'].label,'SPEED (ft)');
+});
+test('raw UUID observations without exactly identifiable labels never fabricate stats',()=>{
+  const {h}=harness();
+  const snap=h.r3Empty();snap.name='Nier';
+  snap.observations=[
+    {label:'59a75333-038c-491a-a93f-be3022111d42',value:'17',nearbyText:['Random item AC +17']},
+    {label:'b89b2c57-491e-4f8c-b43f-7b21bc42aa96',value:'55',nearbyText:['Speed 55 feet']},
+    {label:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',value:'15',nearbyText:['Perception']}
+  ];
+  h.r3Coverage(snap);
+  assert.equal(snap.stats.ac,undefined);
+  assert.equal(snap.stats.speed,undefined);
+  assert.equal(snap.stats.passivePerception,undefined);
+});
+test('inconsistent AC evidence across visited tabs remains unresolved',()=>{
+  const {h}=harness();const snap=h.r3Empty();
+  snap.observations=[
+    {label:'59a75333-038c-491a-a93f-be3022111d42',value:'17',nearbyText:['ARMOR CLASS']},
+    {label:'59a75333-038c-491a-a93f-be3022111d42',value:'18',nearbyText:['ARMOR CLASS']}
+  ];
+  h.r3Coverage(snap);assert.equal(snap.stats.ac,undefined);
+  // An authoritative labeled value wins, even with old conflicting raw samples.
+  snap.stats.ac=19;h.r3Coverage(snap);assert.equal(snap.stats.ac,19);
 });

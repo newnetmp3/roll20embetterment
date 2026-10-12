@@ -496,7 +496,38 @@ function r3InventoryPrune(snapshot){
     snapshot.inventory=snapshot.inventory.filter(item=>!r3InventoryZero(item));
   return r3Coverage(snapshot);
 }
+// Reconcile already-imported UUID-addressed input observations only when
+// the reader captured a nearby *exact* field caption in the same single-
+// control wrapper. This preserves existing exported evidence (Nier AC 17,
+// Speed 55) without assigning meaning to an anonymous UUID or numeric value.
+function r3RecoverObservedStats(snapshot){
+  if(!snapshot?.stats||!Array.isArray(snapshot.observations))return snapshot;
+  for(const [field,caption,min,max] of [
+    ['ac',/^(?:armor class|ac)$/i,1,60],
+    ['speed',/^speed(?:\s*\(ft\))?$/i,0,1000],
+    ['passivePerception',/^passive perception$/i,0,60]
+  ]){
+    if(snapshot.stats[field]!==undefined)continue;
+    const matches=[];
+    for(const obs of snapshot.observations.slice(0,750)){
+      // UUID-only fields cannot be mapped from their IDs. The local caption
+      // is an independent observation, not a value-based inference.
+      if(!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(r3String(obs.label,160)))continue;
+      const labels=Array.isArray(obs.nearbyText)?obs.nearbyText:[];
+      if(labels.length!==1||!caption.test(r3String(labels[0],90)))continue;
+      const n=r3Number(obs.value,min,max);
+      if(n!==null)matches.push({value:n,tab:r3String(obs.tab,70),label:labels[0]});
+    }
+    if(!matches.length||matches.some(x=>x.value!==matches[0].value))continue;
+    snapshot.stats[field]=matches[0].value;
+    snapshot.provenance=snapshot.provenance||{};
+    snapshot.provenance['stats.'+field]={kind:'exact nearby control caption',
+      label:matches[0].label,tab:matches[0].tab};
+  }
+  return snapshot;
+}
 function r3Coverage(s){
+  r3RecoverObservedStats(s);
   s.coverage={stats:Object.keys(s.stats).length,abilities:Object.keys(s.abilities).length,
     modifiers:Object.keys(s.modifiers).length,saves:Object.keys(s.saves).length,
     skills:Object.keys(s.skills).length,slots:Object.keys(s.slots).length,
