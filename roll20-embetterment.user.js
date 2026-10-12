@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.1.5
+// @version      3.1.6
 // @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -457,6 +457,17 @@ function r3NameFromDocument(root){
   }
   return r3String(root.ownerDocument?.title||root.title,120).replace(/\s+[—–]\s+.*$/,'')||'Unnamed sheet';
 }
+// Quantity zero is an explicit observation, unlike a row absent because a
+// tab is offscreen, filtered or virtualized. Keep zero rows in reader scans
+// as removal signals; prune only when publishing an editor-side snapshot.
+function r3InventoryZero(item){
+  return item?.quantity===0;
+}
+function r3InventoryPrune(snapshot){
+  if(Array.isArray(snapshot?.inventory))
+    snapshot.inventory=snapshot.inventory.filter(item=>!r3InventoryZero(item));
+  return r3Coverage(snapshot);
+}
 function r3Coverage(s){
   s.coverage={stats:Object.keys(s.stats).length,abilities:Object.keys(s.abilities).length,
     modifiers:Object.keys(s.modifiers).length,saves:Object.keys(s.saves).length,
@@ -476,8 +487,17 @@ function r3Merge(target,source){
   for(const kind of Object.keys(R3_CATEGORIES)){
     if(!Array.isArray(target[kind])||!Array.isArray(source[kind]))continue;
     const keys=new Set(target[kind].map(x=>x._key));
-    for(const item of source[kind])if(!keys.has(item._key)&&target[kind].length<400){
-      target[kind].push(item);keys.add(item._key);
+    for(const item of source[kind]){
+      if(keys.has(item._key)){
+        // On a full traversal, a later Inventory-tab observation takes
+        // precedence over the generic first view, including quantity 0.
+        if(kind==='inventory'){
+          const index=target[kind].findIndex(x=>x._key===item._key);
+          if(index>=0)target[kind][index]=item;
+        }
+      }else if(target[kind].length<400){
+        target[kind].push(item);keys.add(item._key);
+      }
     }
   }
   const obs=new Set(target.observations.map(o=>o.tab+'|'+o.label+'|'+o.value));
@@ -794,7 +814,8 @@ function r3StorageKey(){
 function r3Load(){
   try{
     const s=JSON.parse(localStorage.getItem(r3StorageKey())||'null');
-    if(s?.schema===3&&s.snapshot?.schema===3&&JSON.stringify(s).length<4000000)R3_UI.snapshot=s.snapshot;
+    if(s?.schema===3&&s.snapshot?.schema===3&&JSON.stringify(s).length<4000000)
+      R3_UI.snapshot=r3InventoryPrune(s.snapshot);
   }catch{/* Corrupted storage should never prevent scanning. */}
 }
 function r3Save(snapshot){
@@ -820,8 +841,12 @@ function r3ObjectRows(obj,lookup,prefix){
 }
 function r3CardsView(kind){
   const snap=R3_UI.snapshot;
-  if(!snap?.[kind]?.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
-  return snap[kind].slice(0,400).map(item=>
+  // Defend against old v3.1.5 local caches and manually seeded snapshots.
+  // Explicitly zeroed items do not belong in the active Inventory list.
+  const items=kind==='inventory'?(snap?.inventory||[]).filter(item=>!r3InventoryZero(item)):
+    (snap?.[kind]||[]);
+  if(!items.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
+  return items.slice(0,400).map(item=>
     '<details class="entry" data-entry-key="'+r3Escape(kind+':'+item.tab+':'+item.name)+'"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
     '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+
     (kind==='inventory'&&Object.prototype.hasOwnProperty.call(item,'quantity')?
@@ -927,7 +952,7 @@ async function r3StartImport(mode){
     if(!snapshot||snapshot.schema!==3)throw new Error('Unexpected sheet format');
     // Replace the previous profile only on an explicit successful import.
     // A partially rendered sheet remains explicit in its diagnostics.
-    R3_UI.snapshot=r3Coverage(snapshot);r3Save(R3_UI.snapshot);
+    R3_UI.snapshot=r3InventoryPrune(snapshot);r3Save(R3_UI.snapshot);
     R3_UI.view='summary';
     R3_UI.status='Imported '+snapshot.name+'. Review each category and Diagnostics for coverage.';
   }catch(err){
@@ -1161,7 +1186,7 @@ function r3AutoSignature(s){
 }
 function r3AutoCombine(prev,current){
   if(!prev||r3String(prev.name).toLowerCase()!==r3String(current.name).toLowerCase())
-    return r3Coverage(current);
+    return r3InventoryPrune(current);
   // Current-view scans refresh only fields they genuinely observed; don't
   // erase saved inventory/spells/features because their tabs were not visited.
   const merged={...prev,capturedAt:current.capturedAt,stats:{...prev.stats,...current.stats},
@@ -1176,7 +1201,13 @@ function r3AutoCombine(prev,current){
   }
   for(const kind of ['resources','attacks','spells','inventory','features']){
     const indexed=new Map((prev[kind]||[]).map(item=>[item._key||item.name,item]));
-    for(const entry of current[kind]||[])indexed.set(entry._key||entry.name,entry);
+    for(const entry of current[kind]||[]){
+      const key=entry._key||entry.name;
+      // A positively observed quantity of zero removes an item from the
+      // saved inventory. Missing/off-tab/virtualized rows never do.
+      if(kind==='inventory'&&r3InventoryZero(entry))indexed.delete(key);
+      else indexed.set(key,entry);
+    }
     merged[kind]=[...indexed.values()];
   }
   // Keep bounded observations from the last full import, not every poll.
@@ -1200,7 +1231,7 @@ function r3AutoStoreSnapshot(snapshot,mode){
   if(!r3AutoHasRecognizedData(snapshot))
     throw new Error('Sheet has not populated recognizable character values yet');
   // A partial scan cannot erase the full inventory, spells and actions.
-  const next=mode==='all'?snapshot:r3AutoCombine(R3_UI.snapshot,snapshot);
+  const next=mode==='all'?r3InventoryPrune(snapshot):r3AutoCombine(R3_UI.snapshot,snapshot);
   if(r3AutoSignature(R3_UI.snapshot||{})!==r3AutoSignature(next)){
     R3_UI.snapshot=r3Coverage(next);r3Save(R3_UI.snapshot);
     r3UIRefresh();
