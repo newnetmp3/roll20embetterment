@@ -168,6 +168,10 @@ function r3Export(){
 }
 function r3UIEvent(event){
   const target=event.target;
+  // Clicking a glyph/count inside a category button must behave like
+  // clicking the button itself; no handlers are assigned to inner markup.
+  const hudCategory=target?.dataset?.hudCategory||
+    target?.closest?.('[data-hud-category]')?.dataset?.hudCategory;
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-refresh')r3UIRefresh();
   else if(target?.id==='r3-scan')return r3StartImport('current');
@@ -179,8 +183,8 @@ function r3UIEvent(event){
     R3_HUD.collapsed=!R3_HUD.collapsed;r3HudSave();r3HudRender();
   }
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
-  else if(target?.dataset?.hudCategory){
-    R3_HUD.category=target.dataset.hudCategory;R3_HUD.scrollTop=0;
+  else if(hudCategory&&R3_HUD_TABS.some(tab=>tab.key===hudCategory)){
+    R3_HUD.category=hudCategory;R3_HUD.scrollTop=0;
     R3_HUD.openKeys=[];r3HudSave();r3HudRender();
   }
   else if(target?.dataset?.view){R3_UI.view=target.dataset.view;r3UIRefresh();}
