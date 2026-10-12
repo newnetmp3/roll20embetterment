@@ -119,12 +119,14 @@ function r3UIRefresh(){
   // throw here and stop every button handler before it could launch a scan.
   R3_UI.root.getElementById('r3-toggle').textContent=R3_UI.shown?'Hide importer':'Show importer';
   const scan=R3_UI.root.getElementById('r3-scan'),all=R3_UI.root.getElementById('r3-all');
-  scan.disabled=R3_UI.busy||!R3_UI.selected;all.disabled=R3_UI.busy||!R3_UI.selected;
+  scan.disabled=R3_UI.busy||R3_AUTO.running||!R3_UI.selected;
+  all.disabled=R3_UI.busy||R3_AUTO.running||!R3_UI.selected;
   R3_UI.root.getElementById('r3-export').disabled=!R3_UI.snapshot;
   r3UIStatus(R3_UI.status);
   r3AutoDisplay();
 }
 async function r3StartImport(mode){
+  if(R3_AUTO.running){r3UIStatus('Auto-sync is reading the sheet; wait for it to finish.');return;}
   const candidate=r3Candidates().find(x=>x.key===R3_UI.selected);
   if(!candidate){r3UIStatus('Open an official Roll20 2024 sheet and refresh the list.');return;}
   R3_UI.busy=true;r3UIRefresh();r3UIStatus(mode==='all'?'Reading all available sheet tabs…':'Reading current sheet tab…');

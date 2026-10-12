@@ -252,3 +252,27 @@ test('full automatic imports replace deleted spells rather than merging stale sp
   h.api.r3AutoStoreSnapshot(h.api.r3Coverage(next),'all');
   assert.deepEqual([...h.api.R3_UI.snapshot.spells.map(x=>x.name)],['Druidcraft']);
 });
+
+test('disable auto-sync before a pending scan responds leaves the stored profile unchanged',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const stored=h.api.r3Empty();stored.name='NIER';stored.stats.hp=82;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(stored);
+  h.click('r3-auto');
+  assert.equal(h.sent.length,1);
+  assert.equal(h.nodes.get('r3-all').disabled,true,'manual scan is disabled while auto reading');
+  h.click('r3-auto');
+  assert.equal(h.api.R3_AUTO.enabled,false);
+  const response=h.api.r3Empty();response.name='NIER';response.stats.hp=60;
+  h.respond(h.api.r3Coverage(response));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82,'late response must not overwrite data after disable');
+});
+test('auto-sync status survives routine focus/refresh, without resetting results',async()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  h.api.R3_AUTO.lastError='Waiting for a matching journal entry';
+  h.click('r3-refresh');
+  assert.match(h.nodes.get('r3-auto-status').textContent,/Waiting for a matching journal entry/);
+  h.windowListeners.get('focus')();
+  assert.match(h.nodes.get('r3-auto-status').textContent,/Waiting for a matching journal entry/);
+});

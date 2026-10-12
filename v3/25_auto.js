@@ -21,7 +21,8 @@ function r3AutoSave(){
   }));}catch{}
 }
 function r3AutoDisplay(message){
-  R3_AUTO.lastError=message||'';
+  // Routine UI refreshes must not erase a useful "journal not loaded" status.
+  if(message!==undefined)R3_AUTO.lastError=message||'';
   const status=R3_UI.root?.getElementById('r3-auto-status');
   if(status)status.textContent=R3_AUTO.enabled?
     ('Auto-sync: '+(message||'watching for your character sheet')):'Auto-sync is off';
@@ -172,6 +173,8 @@ async function r3AutoTick(){
   R3_AUTO.running=true;
   try{
     const snapshot=await r3SendScan(candidate,mode);
+    // A disabled auto-sync must never publish a late response.
+    if(!R3_AUTO.enabled)return;
     r3AutoStoreSnapshot(snapshot,mode);
     R3_AUTO.lastScan=Date.now();
     if(mode==='all')R3_AUTO.lastFull=R3_AUTO.lastScan;
@@ -179,18 +182,19 @@ async function r3AutoTick(){
       ' import updated '+new Date(R3_AUTO.lastScan).toLocaleTimeString());
   }catch(e){
     R3_AUTO.lastScan=Date.now();
-    r3AutoDisplay('Waiting: '+r3String(e?.message||e,170));
+    if(R3_AUTO.enabled)r3AutoDisplay('Waiting: '+r3String(e?.message||e,170));
   }finally{R3_AUTO.running=false;}
 }
 function r3ToggleAuto(){
   if(R3_AUTO.enabled){
     R3_AUTO.enabled=false;r3AutoSave();r3AutoRestoreDialog();
-    r3AutoDisplay();return;
+    r3AutoDisplay('');return;
   }
   const selected=r3Candidates().find(c=>c.key===R3_UI.selected);
   const name=r3String(R3_UI.snapshot?.name||selected?.name,120);
-  if(!name||/^2024 character sheet|unnamed sheet$/i.test(name)){
-    r3AutoDisplay('Import a named character once before enabling auto-sync.');
+  if(!name||/^(?:2024 character sheet|unnamed sheet)/i.test(name)){
+    r3UIStatus('Import a named character once before enabling auto-sync.');
+    r3AutoDisplay();
     return;
   }
   R3_AUTO.enabled=true;R3_AUTO.name=name;
