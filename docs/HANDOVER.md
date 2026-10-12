@@ -191,3 +191,13 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 **Implementation:** Repaint results only when the selected category or imported snapshot actually changes. Remember per-category nested scroll positions and expanded entry keys, and retain outer panel scroll during genuine redraws. Avoid rewriting the sheet selector if its available choices did not change; still update buttons, busy state and status normally.
 
 **Verification:** Added focus/Refresh and category/expanded-item regression tests with a scrolling VM UI fixture. Verify final GitHub CI outcome. Live Floorp interaction and data completeness remain to be checked.
+ 
+## v3.0.5 — Evidence-led extraction improvements from real Nier export (2026-10-12)
+
+**Real end-to-end imported snapshot received:** 82/84 HP, six ability scores, initiative +2.14, proficiency +3, 18 skills, 5 spells, 22 attacks, 37 inventory items and 34 features across Current view, Combat, Spells, Inventory, Features & Traits, Notes and About. The scanner reached the tabs previously reported empty. **Still missing:** resource records (0), temp HP (despite labeled 0 observation), all six modifiers, all saves, all slots, AC and speed. Export also had 114 raw control observations, 777 rejected controls and 58 unclassified controls.
+
+**Root causes and changes:** The 2024 resource UI exposes genuinely named `input[type=range]` sliders (Second Wind, Action Surge, Unleash Incarnation, Fleet-Footed Resources, Healer's Kit), but the prior adapter only searched special CSS resource-tracker wrappers. Read these as named **observed slider positions** with explicit unknown used/remaining semantics, deduplicated across tabs. Recognize `Temp / tempHP` and official copper/silver/electrum/gold/platinum labels. Restrict spell attribute parsing to the short header and explicit field labels; do not extract `range` or `duration` from narrative phrases or automatically assert false concentration/ritual.
+
+**Important safety boundary:** The export also shows persistent unlabeled UUID text controls containing 17 and 55, plausibly armor class and movement speed, but provides no trustworthy semantic linkage. Do not hardcode these UUIDs or infer field identity from numeric matches. A *targeted* parent element/accessible label sample is needed for them. Saving throws, modifiers and slots remain unverified. No full user-supplied JSON was added to the repo; tests use only minimal synthetic observations.
+
+**Validation:** New fixtures cover real anonymized label/value patterns, slider dedup/semantics, safe handling of anonymous 17/55, and avoidance of false spell fields. Check GitHub CI before merging and verify against a fresh Floorp export after installing v3.0.5.
