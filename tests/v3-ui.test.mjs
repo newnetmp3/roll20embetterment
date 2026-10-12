@@ -55,7 +55,7 @@ function panelHarness(){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -72,7 +72,9 @@ test('real importer panel initializes and both scan buttons become enabled when 
   h.api.r3StartEditorBridge();
   assert.doesNotThrow(()=>h.api.r3StartUI());
   assert.ok(h.document.host);
-  assert.equal(h.nodes.get('r3-toggle').textContent,'Hide importer');
+  assert.equal(h.nodes.get('r3-toggle').textContent,'Show importer');
+  assert.equal(h.nodes.get('r3-wrap').style.display,'none','debug importer is hidden by default');
+  assert.match(h.nodes.get('r3-hud').innerHTML,/No character imported/);
   assert.equal(h.nodes.get('r3-choices').value,'iframe-0');
   assert.equal(h.nodes.get('r3-scan').disabled,false);
   assert.equal(h.nodes.get('r3-all').disabled,false);
@@ -81,12 +83,14 @@ test('Refresh and Hide/Show execute without leaving the panel in a broken state'
   const h=panelHarness();h.api.r3StartUI();
   h.click('r3-refresh');
   assert.equal(h.nodes.get('r3-choices').value,'iframe-0');
+  h.click('r3-hud-debug');
+  assert.equal(h.nodes.get('r3-content').style.display,'block');
+  assert.equal(h.nodes.get('r3-wrap').style.display,'block');
+  assert.equal(h.nodes.get('r3-toggle').textContent,'Hide importer');
   h.click('r3-toggle');
   assert.equal(h.nodes.get('r3-content').style.display,'none');
+  assert.equal(h.nodes.get('r3-wrap').style.display,'none');
   assert.equal(h.nodes.get('r3-toggle').textContent,'Show importer');
-  h.click('r3-toggle');
-  assert.equal(h.nodes.get('r3-content').style.display,'block');
-  assert.equal(h.nodes.get('r3-toggle').textContent,'Hide importer');
 });
 test('click Read current tab sends a real scan request and displays returned stats',async()=>{
   const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
