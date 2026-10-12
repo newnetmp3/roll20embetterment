@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.1.4 event-driven synchronization development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.1.4 event-driven sync merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -61,3 +61,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 
 
 **v3.1.4 — Event-driven faster synchronization:** User correctly identified that the ~16-second non-HP current-tab delay is an artificial, conservative scan throttle rather than a local data latency requirement. Use capture-phase `input`/`change` and recognized incrementer events in the official 2024 iframe or popout to send a 350ms-debounced authenticated `dirty` signal to the Roll20 editor. After source/name/session validation, automatically re-read the current visible tab after ~400ms, rate-limited to >=2s between heavier reads. Keep the ~16s periodic scan for silent updates and separate ~1s HP watcher. Preserve full profile catalog, ignore forged/ambiguous messages, cancel queued scans on disable and never change player-owned sheet tabs. **Automated CI verified:** PR #41 run 38314500857, **240 tests passed, zero failures**, generated bundle diff clean. Real Floorp popup verification still required before calling latency improved in practice. **Pending:** unattended closed-sheet Journal recovery and precise AC/speed/saves/slot mappings.
+
+**v3.1.4 merge checkpoint:** PR #41 merged as `c7f3a9074b53a7ac8f1a1f781fe402633c27a2ee`; final GitHub Actions run 38314565901 passed (240 tests, generated userscript clean). Next: live Floorp event-driven latency verification and identify controls whose changes do not emit browser input/change; preserve the polling fallback until these are characterized. Unattended closed-sheet Journal open and source-grounded character field mappings remain outstanding.
