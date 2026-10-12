@@ -7,9 +7,9 @@ Updated: October 12, 2026 (v3.1.2 merged). v2.3.13 continued to fail real Floorp
 | 1 | Replace production bundle with independent v3 engine | Implemented | Run 38182938287 green; 189 total tests, 10 for v3; v2 runtime excluded |
 | 2 | Labeled HP/stats/abilities/saves/skills/slots | CI verified; live QA pending | Official 2024 iframe in Floorp |
 | 3 | Spells, attacks, inventory, features and resources | Implemented; live QA pending | Live populated character sheet tabs |
-| 4 | Bounded tab traversal, origin verification, diagnostics and JSON export | UI click-handler fix and tests in v3.0.1; live QA pending | Floorp end-to-end scan |
+| 4 | Bounded tab traversal, origin verification, diagnostics and JSON export | **Manual all-tabs popout import user-verified**; field accuracy/diagnostics still require QA | Examine export for missing fields |
 | 5 | Improve unmapped fields from exported observations | Planned | No guessed selectors |
-| 6 | Verify virtualized tabs and official sheet popouts | Planned | Browser QA matrix |
+| 6 | Verify virtualized tabs and official sheet popouts | **Popout HP sync and manual all-tabs import user-verified**; virtualization/reconnect still open | Check specific missing rendered/virtualized records and window reopen |
 | 7 | Rebuild player combat wheel atop confirmed importer data | Planned | Separate architecture |
 | 8 | Add independent 2014 sheet adapter | Planned | Real 2014 fixtures |
 | 9 | Release/installation automation | Planned | Repeatable CI and browser install |
@@ -51,3 +51,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 **v3.1.2 merged:** PR #39 squash-merged to `main` as `4f812a74a74d7b510628d08e78ecbffe89abbfc4`. Final GitHub Actions run 38310601659 green (228 automated tests, generated bundle consistent). Await live Floorp popout confirmation. Do not consider fully unattended background Journal opening verified; no runtime proof yet.
 
 **v3.1.2 user-verified popout HP (2026-10-12):** User confirms HP now updates when the official character sheet is popped out. Update popout HP item to **user verified**; interval unmeasured. Do not propagate this status to other fields or full popout imports. Current-tab auto scanning remains read-only and about every 30 seconds; HP-only watch is about every second. A player-owned popout is never automatically navigated through all tabs. Remaining browser QA: explicit Import all tabs from popout, changed non-HP field propagation, popup reconnect and closed-sheet Journal unattended open. AC/speed/saves/slots still need evidence-backed mappings. Documentation-only update, no new CI claim.
+
+**v3.1.2 successful manual popout import (2026-10-12):** User confirms `Import all tabs` is successful from Nier's official popped-out 2024 character sheet. Together with prior user confirmation that popout HP watches work, this completes the **live functional check of the popout bridge and user-triggered multi-tab import**. Individual field completeness remains unverified; don't equate import success with verified AC/speed/saves/slots. Automated refresh of a user-owned popout still scans only its current view (~30-second gate), and does not automatically navigate tabs; HP gets separate ~1-second best-effort reads. Next: test non-HP live changes, unattended Journal opening/reload, and missing labeled fields before the combat HUD rebuild. Documentation-only checkpoint; no new code or CI claim.
