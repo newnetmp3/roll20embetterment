@@ -244,6 +244,7 @@ function r3CardInfo(card,kind,name,tab){
     .filter(r3Shown).map(b=>({label:r3String(r3Attr(b,'aria-label')||r3Attr(b,'title')||r3Text(b,70),70)}))
     .filter(b=>b.label);
   if(buttons.length)info.actions=buttons;
+  if(kind==='inventory')r3InventoryControls(card,info);
   if(kind==='spells'){
     // The official 2024 card flattens header and description into one
     // innerText string. Words like "range", "duration" and "action" in the
@@ -284,6 +285,52 @@ function r3CardInfo(card,kind,name,tab){
     // The flags above require the official single-letter header tokens.
   }
   return info;
+}
+// Keep only raw, explicitly observed states in an inventory item's own row.
+// 2024 quantity controls can be Vue incrementers; changing their number to
+// zero often leaves the item's ordinary innerText unchanged. Don't infer
+// whether a toggle means equipped, carried, attuned or consumed.
+function r3InventoryControls(row,info){
+  const controls=Array.from(row.querySelectorAll?.(
+    'input,select,[role="spinbutton"],[role="checkbox"],[role="switch"],button[aria-pressed]'
+  )||[]).slice(0,36);
+  const observed=[];
+  const quantities=[];
+  for(const el of controls){
+    if(!r3Shown(el))continue;
+    // Nested inventory cards/resource sections must not be mistaken for
+    // another item's quantity. Only the innermost named inventory row owns
+    // a control when there is a nested row.
+    const owner=el.closest?.('.item-row,.inventory-item,.equipment-item,[data-testid*="inventory-row"]');
+    if(owner&&owner!==row)continue;
+    const role=r3Attr(el,'role'),type=r3String(el.type,35).toLowerCase();
+    const labels=r3Descriptor(el);
+    const label=r3String(labels.find(l=>!/(?:^[0-9a-f]{8}-[0-9a-f-]{27,}$)/i.test(l))||'',100);
+    const testId=r3Attr(el,'data-testid');
+    const state=type==='checkbox'?(!!el.checked):
+      role==='checkbox'||role==='switch'?r3Attr(el,'aria-checked')==='true':
+      r3Attr(el,'aria-pressed')?r3Attr(el,'aria-pressed')==='true':null;
+    if(state!==null){
+      observed.push({kind:'toggle',label:label||role||'Checkbox',
+        value:state,source:role||type||'aria-pressed'});
+      continue;
+    }
+    if(String(el.tagName||'').toUpperCase()==='BUTTON')continue;
+    const numeric=r3Number(r3Read(el),0,9999);
+    if(numeric===null)continue;
+    // Exact quantity/incrementer semantics only; a resource counter from
+    // a potion or magic item is not necessarily an item count.
+    const quantity=/(?:quantity|qty|item count|stack count)/i.test(
+      [label,testId,r3Attr(el,'aria-label')].join(' '))||
+      /(?:utility-incrementer__input|item-quantity)/i.test(
+        [testId,r3String(el.className,120)].join(' '));
+    if(quantity)quantities.push(numeric);
+    observed.push({kind:quantity?'quantity':'number',
+      label:label||(quantity?'Item quantity':'Unlabeled numeric control'),
+      value:numeric,source:testId||type||role||'input'});
+  }
+  if(observed.length)info.controls=observed.slice(0,24);
+  if(quantities.length===1)info.quantity=quantities[0];
 }
 // Only named, rendered inventory rows are imported. Many 2024 sheets use
 // generic item-row components instead of .inventory-item/.equipment-item.
