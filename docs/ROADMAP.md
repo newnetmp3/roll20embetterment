@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.1.1 development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.1.1 merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -40,3 +40,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 **v3.1.1 — Fast health and auto-open correctness:** Implemented targeted cross-origin, read-only `hp` request once per second with input validation, 2.5s timeout, bounded capture and value-change-only storage. This does not accelerate the 30-second current-tab or 5-minute full-tab traversals. Honor pinned character IDs, reject conflicting/ambiguous same-name candidates, retain player-owned dialog positions, and ignore stale health responses on disable. Regression tests and CI passed: PR #38 GitHub Actions run 38307657964, **221/221 tests passed**, generated bundle clean. **Live Floorp QA** remains required. Browser throttling or unmounted HP controls prevent a guaranteed one-second update; do not silently fall back to token guesses.
 
 **Next:** Validate synthetic Roll20 Journal double-click and loaded iframe in Floorp, compare live HP changing under damage/healing, verify AC 17/speed 55 only from labeled controls, then resume the Foundry-inspired combat HUD once imports are reliable.
+
+**v3.1.1 merge checkpoint:** PR #38 was merged into main as `00bb39c9eb2aa3c2ea2fc71564f23ea454682647`. Final PR-head CI run 38307749208 passed all checks (221 tests at the code verification head). Feature implemented; live Floorp/Jumpgate background opening and roughly one-second real HP response remain unverified. Continue with browser evidence instead of assuming synthetic Journal events work.
