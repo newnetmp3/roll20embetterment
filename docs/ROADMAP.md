@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.1.6 inventory zero removal in development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.1.6 inventory zero removal merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -71,3 +71,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 
 
 **v3.1.6 — Inventory quantity zero removes imported entry:** Live user report validates 2024 popout inventory toggle On/Off works in v3.1.5, but zero-count item still appears. Implement numeric, directly observed `quantity===0` as an exact-key removal from the R20eb Inventory list during event-driven current-tab merges, full automated imports, manual current/all-tab imports, and cache loads. Keep zero as a source-side observation until the editor processes it. Never delete Roll20 source records; never remove an item merely because it is absent in an off-tab, filtered or virtualized scan. Preserve all other items and spell/HP information. Regression tests for deletion, re-addition, unaffected items, persistence, coverage, full-tab precedence and debug rendering. **CI verified:** PR #43 run 38316660508 (**251 tests, zero failures**, bundle consistency clean). User live QA remains required before considering zero-removal verified. Unattended Journal and remaining field mapping remain planned.
+
+**v3.1.6 merged:** PR #43 into `main`, commit `c2d16758ce255db5d834c22c808f2ee9f29d121b`; final PR-head GitHub Actions run 38316709781 green, **251 tests passed**, generated bundle consistent. Pending live Floorp check of zero count deletion from imported UI; a Roll20 control that unmounts its row before capture may require additional evidence-driven event handling. No Roll20 source items are deleted or modified.
