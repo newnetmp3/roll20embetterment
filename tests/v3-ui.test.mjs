@@ -315,13 +315,27 @@ test('a conflicting official character ID cannot be rescued by identical name',(
   const h=panelHarness();h.api.r3StartUI();
   h.api.R3_AUTO.name='NIER';h.api.R3_AUTO.characterId='expected-character';
   const frame=h.api.r3Candidates()[0].frame;
-  frame.closest=()=>({getAttribute:()=> 'different-character'});
+  frame.closest=selector=>selector.includes('.characterdialog')?
+    {getAttribute:()=> 'different-character'}:null;
   assert.equal(h.api.r3AutoCandidate(),null);
-  frame.closest=()=>({getAttribute:()=> 'expected-character'});
+  frame.closest=selector=>selector.includes('.characterdialog')?
+    {getAttribute:()=> 'expected-character'}:null;
   assert.ok(h.api.r3AutoCandidate());
 });
 test('automatic scheduler samples HP each second without accelerating full tab imports',()=>{
   const h=panelHarness();h.api.r3StartUI();h.api.r3StartAuto();
   assert.ok(h.intervals.includes(1000));
   assert.ok(h.intervals.includes(8000));
+});
+
+
+test('scheduled full import is not starved by an in-flight fast HP request',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  h.api.R3_AUTO.healthRunning=true;
+  const pending=h.api.r3AutoTick();
+  assert.equal(h.sent.at(-1).message.mode,'current');
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
+  h.respond(h.api.r3Coverage(snap));await pending;
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
 });
