@@ -286,6 +286,52 @@ function r3CardInfo(card,kind,name,tab){
   }
   return info;
 }
+// The live 2024 Inventory uses compact − [count] + steppers; the count
+// may lack any quantity label or test id. Use the two adjacent buttons as
+// evidence instead of assuming every anonymous numeric field is a count.
+function r3InventoryStepperButton(button){
+  const text=r3Text(button,14);
+  const hint=[r3Attr(button,'aria-label'),r3Attr(button,'title'),
+    r3Attr(button,'data-testid'),r3String(button.className,100)].join(' ');
+  return {
+    minus:/^[−–-]$/.test(text)||/\b(?:decrease|decrement|subtract|minus|reduce quantity)\b/i.test(hint),
+    plus:/^\+$/.test(text)||/\b(?:increase|increment|plus|add quantity)\b/i.test(hint)
+  };
+}
+function r3InventoryStepper(el){
+  // Reject resource/charge counters even if they also have +/- buttons.
+  if(el.closest?.('.resource-tracker,[class*="resource-tracker"],[class*="charge-tracker"],[data-testid*="resource-row"]'))
+    return false;
+  for(let group=el.parentElement,depth=0;group&&depth<3;group=group.parentElement,depth++){
+    const inputs=Array.from(group.querySelectorAll?.('input,[role="spinbutton"]')||[]).slice(0,8);
+    if(inputs.length>1)break; // don't correlate buttons from unrelated controls
+    if(inputs.length!==1||inputs[0]!==el)continue;
+    const buttons=Array.from(group.querySelectorAll?.('button')||[]).slice(0,10).filter(r3Shown);
+    if(buttons.length<2)continue;
+    const directions=buttons.map(r3InventoryStepperButton);
+    if(directions.some(x=>x.minus)&&directions.some(x=>x.plus))return true;
+  }
+  return false;
+}
+function r3InventoryRowFor(nameElement){
+  // `.item-row__name` may be the nearest match of an expansive selector,
+  // but it omits the quantity stepper next to the name. Prefer a complete
+  // item wrapper before falling back to its bounded single-title ancestors.
+  const outer=nameElement.closest?.(
+    '.item-row,.inventory-item,.equipment-item,[data-testid*="item-row"],'+
+    '[data-testid*="inventory-item"],[data-testid*="equipment-item"]');
+  if(outer)return outer;
+  let best=null;
+  for(let parent=nameElement.parentElement,depth=0;parent&&depth<5;
+      parent=parent.parentElement,depth++){
+    const names=Array.from(parent.querySelectorAll?.(
+      '.span--item-row-title,[data-testid*="item-name"],[data-testid*="equipment-name"]'
+    )||[]);
+    if(names.length>1)break;
+    if(names.length===1)best=parent;
+  }
+  return best||nameElement.parentElement?.parentElement||nameElement.parentElement||nameElement;
+}
 // Keep only raw, explicitly observed states in an inventory item's own row.
 // 2024 quantity controls can be Vue incrementers; changing their number to
 // zero often leaves the item's ordinary innerText unchanged. Don't infer
@@ -320,14 +366,17 @@ function r3InventoryControls(row,info){
     if(numeric===null)continue;
     // Exact quantity/incrementer semantics only; a resource counter from
     // a potion or magic item is not necessarily an item count.
-    const quantity=/(?:quantity|qty|item count|stack count)/i.test(
+    const namedQuantity=/(?:quantity|qty|item count|stack count)/i.test(
       [label,testId,r3Attr(el,'aria-label')].join(' '))||
       /(?:utility-incrementer__input|item-quantity)/i.test(
         [testId,r3String(el.className,120)].join(' '));
+    const pairedStepper=!namedQuantity&&r3InventoryStepper(el);
+    const quantity=namedQuantity||pairedStepper;
     if(quantity)quantities.push(numeric);
     observed.push({kind:quantity?'quantity':'number',
       label:label||(quantity?'Item quantity':'Unlabeled numeric control'),
-      value:numeric,source:testId||type||role||'input'});
+      value:numeric,source:pairedStepper?'observed adjacent minus/plus buttons':
+        testId||type||role||'input'});
   }
   if(observed.length)info.controls=observed.slice(0,24);
   if(quantities.length===1)info.quantity=quantities[0];
@@ -352,10 +401,7 @@ function r3InventoryRows(root,s,tab){
     if(!r3Shown(el))continue;
     const name=r3Text(el,125);
     if(!name||/^(equipment|other possessions|attunement|inventory|add item|search)$/i.test(name))continue;
-    const row=el.closest?.(
-      '.item-row,[class*="item-row__"],[class*="item-row--"],[data-testid*="item-row"],'+
-      '.inventory-item,.equipment-item,[data-testid*="inventory-item"],[data-testid*="equipment-item"]'
-    )||el.parentElement?.parentElement||el.parentElement||el;
+    const row=r3InventoryRowFor(el);
     if(!r3Shown(row))continue;
     // Don't manufacture a giant "item" whose wrapper holds several names.
     if((row.querySelectorAll?.('.span--item-row-title,[data-testid*="item-name"]')||[]).length>1)continue;

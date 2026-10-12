@@ -718,3 +718,17 @@ test('older stored zero-count items are hidden and discarded on load',()=>{
   assert.deepEqual([...h.api.R3_UI.snapshot.inventory.map(x=>x.name)],['Rope']);
   assert.equal(h.api.R3_UI.snapshot.coverage.inventory,1);
 });
+
+test('Inventory debug calls out a previously silent unknown quantity next to a detected switch',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';
+  snap.inventory=[{name:'Crowbar',_key:'crowbar||',tab:'Inventory',visible:'Crowbar Gear',
+    controls:[{kind:'toggle',label:'headlessui-switch-100',value:true,source:'switch'}]}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.shadow.handlers.get('click')({target:{dataset:{view:'inventory'}}});
+  const html=h.nodes.get('r3-results').innerHTML;
+  assert.match(html,/Crowbar/);
+  assert.match(html,/Quantity not detected/);
+  assert.match(html,/zero removal needs a readable counter/);
+  assert.match(html,/headlessui-switch-100/);
+});
