@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.1.0
+// @version      3.1.1
 // @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -446,6 +446,38 @@ function r3Merge(target,source){
   target.capturedAt=new Date().toISOString();return r3Coverage(target);
 }
 
+
+// Low-cost, read-only HP sampling: only mounted official inputs, never tab
+// traversal, card collection, token guessing or sheet state mutation.
+function r3CaptureHealth(root=document.body){
+  const s=r3Empty();s.name=r3NameFromDocument(root);
+  if(!root?.querySelectorAll)return r3Coverage(s);
+  const inputs=Array.from(root.querySelectorAll('input')||[]).slice(0,600);
+  let explicitMax=null;
+  for(const el of inputs){
+    if(!r3Shown(el))continue;
+    const labels=r3Descriptor(el);
+    for(const label of labels){
+      const field=r3Field(label);
+      if(field?.kind!=='stat'||!['hp','maxHp','tempHp'].includes(field.key))continue;
+      const value=r3Number(r3Read(el),0,9999);
+      if(value===null)break;
+      const source={kind:'hp watch input',tab:'HP watch',label};
+      if(field.key==='maxHp'){explicitMax={value,source};}
+      else r3Push(s,'stat',field.key,value,source);
+      if(field.key==='hp'&&s.stats.maxHp===undefined){
+        const maximum=r3Number(r3Attr(el,'aria-valuemax'),1,9999);
+        if(maximum!==null)r3Push(s,'stat','maxHp',maximum,
+          {kind:'hp watch aria maximum',tab:'HP watch',label});
+      }
+      break;
+    }
+  }
+  if(explicitMax){s.stats.maxHp=explicitMax.value;s.provenance['stats.maxHp']=explicitMax.source;}
+  if(s.stats.hp!==undefined)s.diagnostics.tabs.push('HP watch');
+  return r3Coverage(s);
+}
+
 // ===== v3/10_reader.js =====
 // v3 authenticated cross-origin reader and explicit, bounded tab traversal.
 const R3_PENDING=new Map();
@@ -543,6 +575,7 @@ async function r3CollectAllTabs(progress){
 }
 async function r3ReaderScan(mode,sendProgress){
   if(mode==='all')return r3CollectAllTabs(sendProgress);
+  if(mode==='hp')return r3CaptureHealth(document.body);
   return r3Capture(document.body,'Current view');
 }
 async function r3ReaderReceive(event){
@@ -550,7 +583,7 @@ async function r3ReaderReceive(event){
   const data=event.data;if(data?.protocol!==R3_PROTOCOL)return;
   if(data.type==='hello'){r3ReaderAnnounce();return;}
   if(data.type!=='scan'||typeof data.id!=='string'||!/^r3-[\w.-]{4,100}$/.test(data.id))return;
-  if(!['current','all'].includes(data.mode))return;
+  if(!['current','all','hp'].includes(data.mode))return;
   try{
     const snap=await r3ReaderScan(data.mode,(tab,coverage)=>{
       peer.postMessage(r3Msg('progress',{id:data.id,tab,coverage}),R3_EDITOR);
@@ -623,7 +656,7 @@ function r3SendScan(candidate,mode){
     const id='r3-'+R3_SESSION.replace(/[^a-z0-9.-]/gi,'').slice(0,40)+'-'+(++r3Counter);
     const timeout=setTimeout(()=>{R3_PENDING.delete(id);reject(new Error(
       'Official sheet reader did not answer. Ensure the new userscript is active on the advanced-sheets.production.roll20preflight.net domain and reload the character sheet.'));},
-      mode==='all'?40000:12000);
+      mode==='all'?40000:mode==='hp'?2500:12000);
     R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout});
     try{candidate.window.postMessage(r3Msg('scan',{id,mode}),R3_ORIGIN);}
     catch(e){R3_PENDING.delete(id);clearTimeout(timeout);reject(e);}
@@ -859,7 +892,8 @@ function r3StartUI(){
 // Never fetch privileged data, synthesize character records, or scan other sheets.
 const R3_AUTO={
   enabled:false,name:'',characterId:'',running:false,active:false,opened:false,openedAt:0,
-  lastScan:0,lastFull:0,lastOpenAttempt:0,lastError:'',timer:null,
+  lastScan:0,lastFull:0,lastOpenAttempt:0,lastError:'',timer:null,healthTimer:null,
+  healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,
   ownedDialog:null,originalPosition:null
 };
 function r3AutoKey(){return r3StorageKey()+':auto';}
@@ -894,20 +928,21 @@ function r3AutoId(candidate){
 }
 function r3AutoCandidate(){
   const choices=r3Candidates().filter(c=>c.type==='iframe'&&c.visible);
-  // Prefer the stable Roll20 character ID, not a generic headless frame.
+  // An explicit, conflicting character ID is never overridden by a name
+  // match. Duplicate names without a stable ID are ambiguous: fail closed.
+  const eligible=choices.filter(c=>!R3_AUTO.characterId||!r3AutoId(c)||
+    r3AutoId(c)===R3_AUTO.characterId);
+  const named=eligible.filter(c=>r3String(c.name,120).toLowerCase()===R3_AUTO.name.toLowerCase());
   if(R3_AUTO.characterId){
-    const exact=choices.find(c=>r3AutoId(c)===R3_AUTO.characterId);
-    if(exact)return exact;
+    const exact=eligible.filter(c=>r3AutoId(c)===R3_AUTO.characterId);
+    if(exact.length===1)return exact[0];
+    if(exact.length>1)return null;
   }
-  const name=R3_AUTO.name.toLowerCase();
-  // An authenticated, visibly mounted iframe titled with the exact
-  // character name is a valid reader even when Roll20 changes its dialog
-  // wrapper. A generic headless iframe has no matching character title.
-  return choices.find(c=>r3String(c.name,120).toLowerCase()===name)||null;
+  return named.length===1?named[0]:null;
 }
 function r3AutoRemember(candidate){
   const charId=r3AutoId(candidate);
-  if(charId&&charId!==R3_AUTO.characterId){
+  if(charId&&!R3_AUTO.characterId){
     R3_AUTO.characterId=charId;r3AutoSave();
   }
 }
@@ -933,6 +968,11 @@ function r3AutoJournalEntry(){
   return matches.length===1?matches[0]:null;
 }
 function r3AutoOpenFromJournal(now){
+  if(R3_AUTO.opened&&now-R3_AUTO.openedAt<30000)return false;
+  if(R3_AUTO.opened){
+    R3_AUTO.opened=false;
+    r3AutoDisplay('Roll20 did not expose the requested sheet; open its Journal entry manually if needed.');
+  }
   if(now-R3_AUTO.lastOpenAttempt<60000)return false;
   R3_AUTO.lastOpenAttempt=now;
   const entry=r3AutoJournalEntry();
@@ -944,6 +984,8 @@ function r3AutoOpenFromJournal(now){
   // Do not clone the generic headless iframe: its URL has no character ID,
   // and cloning it cannot supply Roll20's official character handshake.
   try{
+    // Only a dialog CREATED by this request may be moved offscreen.
+    R3_AUTO.preOpenDialogs=new Set(document.querySelectorAll('.characterdialog')||[]);
     entry.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,view:window}));
     R3_AUTO.opened=true;R3_AUTO.openedAt=Date.now();
     r3AutoDisplay('Requested character sheet from the Roll20 journal; waiting for it to load');
@@ -960,6 +1002,7 @@ function r3AutoMoveOffscreen(candidate){
   // A dialog already owned by auto-sync remains a background reader for
   // later five-minute full scans until the feature is turned off.
   if(R3_AUTO.ownedDialog===dialog)return true;
+  if(R3_AUTO.preOpenDialogs?.has(dialog))return false;
   if(!R3_AUTO.opened||Date.now()-R3_AUTO.openedAt>30000){
     R3_AUTO.opened=false;return false;
   }
@@ -980,7 +1023,7 @@ function r3AutoRestoreDialog(){
     d.left=p.left;d.top=p.top;d.position=p.position;
   }
   R3_AUTO.ownedDialog=null;R3_AUTO.originalPosition=null;
-  R3_AUTO.opened=false;R3_AUTO.openedAt=0;
+  R3_AUTO.opened=false;R3_AUTO.openedAt=0;R3_AUTO.preOpenDialogs=null;
 }
 function r3AutoSignature(s){
   return JSON.stringify([s.name,s.stats,s.abilities,s.modifiers,s.saves,s.skills,s.slots,
@@ -1031,11 +1074,12 @@ async function r3AutoTick(){
   const mode=background&&now-R3_AUTO.lastFull>300000?'all':'current';
   if(now-R3_AUTO.lastScan<(mode==='all'?10000:30000))return;
   R3_AUTO.running=true;
+  const generation=R3_AUTO.generation;
   r3UIRefresh();
   try{
     const snapshot=await r3SendScan(candidate,mode);
     // A disabled auto-sync must never publish a late response.
-    if(!R3_AUTO.enabled)return;
+    if(!R3_AUTO.enabled||R3_AUTO.generation!==generation)return;
     r3AutoStoreSnapshot(snapshot,mode);
     R3_AUTO.lastScan=Date.now();
     if(mode==='all')R3_AUTO.lastFull=R3_AUTO.lastScan;
@@ -1046,9 +1090,51 @@ async function r3AutoTick(){
     if(R3_AUTO.enabled)r3AutoDisplay('Waiting: '+r3String(e?.message||e,170));
   }finally{R3_AUTO.running=false;r3UIRefresh();}
 }
+
+function r3AutoStoreHealth(snapshot){
+  if(snapshot?.schema!==3||r3String(snapshot.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())
+    return false;
+  if(!Object.prototype.hasOwnProperty.call(snapshot.stats||{},'hp'))return false;
+  const prior=R3_UI.snapshot;
+  if(!prior||r3String(prior.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())return false;
+  const keys=['hp','maxHp','tempHp'],nextStats={...prior.stats},nextSources={...prior.provenance};
+  let changed=false;
+  for(const key of keys){
+    if(!Object.prototype.hasOwnProperty.call(snapshot.stats,key))continue;
+    if(nextStats[key]!==snapshot.stats[key]){
+      nextStats[key]=snapshot.stats[key];changed=true;
+      nextSources['stats.'+key]=snapshot.provenance?.['stats.'+key];
+    }
+  }
+  if(!changed)return false;
+  R3_UI.snapshot=r3Coverage({...prior,stats:nextStats,provenance:nextSources,
+    capturedAt:snapshot.capturedAt});
+  r3Save(R3_UI.snapshot);r3UIRefresh();
+  r3AutoDisplay('HP '+nextStats.hp+(nextStats.maxHp!==undefined?'/'+nextStats.maxHp:'')+
+    ' updated '+new Date().toLocaleTimeString());
+  return true;
+}
+async function r3AutoHealthTick(){
+  if(!R3_AUTO.enabled||!R3_AUTO.name||R3_AUTO.healthRunning||R3_AUTO.running||R3_UI.busy)return;
+  const candidate=r3AutoCandidate();
+  if(!candidate)return;
+  const generation=R3_AUTO.generation;
+  R3_AUTO.healthRunning=true;
+  try{
+    const snapshot=await r3SendScan(candidate,'hp');
+    if(R3_AUTO.enabled&&!R3_AUTO.running&&!R3_UI.busy&&R3_AUTO.generation===generation)
+      r3AutoStoreHealth(snapshot);
+  }catch{
+    // A missing/unmounted HP input or unavailable iframe is not a fabricated
+    // zero. The slower whole-sheet importer continues to report its status.
+  }finally{
+    R3_AUTO.lastHealth=Date.now();R3_AUTO.healthRunning=false;
+  }
+}
+
 function r3ToggleAuto(){
   if(R3_AUTO.enabled){
-    R3_AUTO.enabled=false;r3AutoSave();r3AutoRestoreDialog();
+    R3_AUTO.enabled=false;R3_AUTO.generation++;r3AutoSave();r3AutoRestoreDialog();
     r3AutoDisplay('');return;
   }
   const selected=r3Candidates().find(c=>c.key===R3_UI.selected);
@@ -1058,7 +1144,7 @@ function r3ToggleAuto(){
     r3AutoDisplay();
     return;
   }
-  R3_AUTO.enabled=true;R3_AUTO.name=name;
+  R3_AUTO.enabled=true;R3_AUTO.generation++;R3_AUTO.name=name;
   if(selected&&selected.name.toLowerCase()===name.toLowerCase())r3AutoRemember(selected);
   r3AutoSave();r3AutoDisplay('Enabled for '+name+'; checking Roll20 session');
   r3AutoTick();
@@ -1067,6 +1153,7 @@ function r3StartAuto(){
   r3AutoLoad();
   r3AutoDisplay();
   if(R3_AUTO.timer===null)R3_AUTO.timer=setInterval(()=>{r3AutoTick();},8000);
+  if(R3_AUTO.healthTimer===null)R3_AUTO.healthTimer=setInterval(()=>{r3AutoHealthTick();},1000);
   if(R3_AUTO.enabled)setTimeout(()=>{r3AutoTick();},1600);
 }
 

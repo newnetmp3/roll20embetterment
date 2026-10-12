@@ -6,7 +6,7 @@ import {resolve,join} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const files=readdirSync(join(root,'v3')).filter(x=>/^\d{2}_.*\.js$/.test(x)&&x!=='30_boot.js').sort();
 function panelHarness(){
-  const nodes=new Map(),windowListeners=new Map(),sent=[];
+  const nodes=new Map(),windowListeners=new Map(),sent=[],intervals=[];
   const makeNode=id=>{
     const node={id,textContent:'',innerHTML:'',value:'',scrollTop:0,style:{},disabled:false,handlers:new Map(),
       addEventListener(type,fn){this.handlers.set(type,fn);}};
@@ -49,13 +49,13 @@ function panelHarness(){
   const context={console,crypto,Date,Math,Number,String,Array,URL,URLSearchParams,Blob,
     document,location:{origin:'https://app.roll20.net',pathname:'/editor/123',search:'?id=123'},
     window:{addEventListener(type,fn){windowListeners.set(type,fn);}},
-    setInterval(){return 1;},clearInterval(){},
+    setInterval(fn,ms){intervals.push(ms);return intervals.length;},clearInterval(){},
     setTimeout(){return 1;},clearTimeout(){},
     localStorage:{getItem(key){return store.get(key)||null;},setItem(key,value){store.set(key,value);}}
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -65,7 +65,7 @@ function panelHarness(){
       data:{protocol:'r20eb:import:v3',type,id:msg.id,snapshot,error:'Simulated sheet failure'}
     });
   }
-  return {context,api:context.uiApi,nodes,shadow,document,sent,store,windowListeners,click,respond};
+  return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,windowListeners,click,respond};
 }
 test('real importer panel initializes and both scan buttons become enabled when a sheet appears',()=>{
   const h=panelHarness();
@@ -278,4 +278,64 @@ test('auto-sync status survives routine focus/refresh, without resetting results
   assert.match(h.nodes.get('r3-auto-status').textContent,/Waiting for a matching journal entry/);
   h.windowListeners.get('focus')();
   assert.match(h.nodes.get('r3-auto-status').textContent,/Waiting for a matching journal entry/);
+});
+
+
+test('fast HP watch uses only hp scans, preserving spells, inventory and panel scroll',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const previous=h.api.r3Empty();previous.name='NIER';previous.stats.hp=82;previous.stats.maxHp=84;
+  previous.spells=[{name:'Druidcraft',tab:'Spells',_key:'druidcraft'}];
+  previous.inventory=[{name:'Healer kit',tab:'Inventory',_key:'healer'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(previous);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  const pending=h.api.r3AutoHealthTick();
+  assert.equal(h.sent.at(-1).message.mode,'hp');
+  const hp=h.api.r3Empty();hp.name='NIER';hp.stats.hp=79;hp.stats.maxHp=84;
+  h.respond(h.api.r3Coverage(hp));await pending;
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,79);
+  assert.equal(h.api.R3_UI.snapshot.spells.length,1);
+  assert.equal(h.api.R3_UI.snapshot.inventory.length,1);
+  const writes=h.nodes.get('r3-results').writes;
+  const pending2=h.api.r3AutoHealthTick();
+  h.respond(h.api.r3Coverage(hp));await pending2;
+  assert.equal(h.nodes.get('r3-results').writes,writes,'unchanged HP avoids results repaint');
+});
+test('late HP watch responses after turning auto-sync off cannot overwrite data',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const current=h.api.r3Empty();current.name='NIER';current.stats.hp=82;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(current);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  const pending=h.api.r3AutoHealthTick();
+  h.api.r3ToggleAuto();
+  const changed=h.api.r3Empty();changed.name='NIER';changed.stats.hp=3;
+  h.respond(h.api.r3Coverage(changed));await pending;
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+});
+test('a conflicting official character ID cannot be rescued by identical name',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  h.api.R3_AUTO.name='NIER';h.api.R3_AUTO.characterId='expected-character';
+  const frame=h.api.r3Candidates()[0].frame;
+  frame.closest=selector=>selector.includes('.characterdialog')?
+    {getAttribute:()=> 'different-character'}:null;
+  assert.equal(h.api.r3AutoCandidate(),null);
+  frame.closest=selector=>selector.includes('.characterdialog')?
+    {getAttribute:()=> 'expected-character'}:null;
+  assert.ok(h.api.r3AutoCandidate());
+});
+test('automatic scheduler samples HP each second without accelerating full tab imports',()=>{
+  const h=panelHarness();h.api.r3StartUI();h.api.r3StartAuto();
+  assert.ok(h.intervals.includes(1000));
+  assert.ok(h.intervals.includes(8000));
+});
+
+
+test('scheduled full import is not starved by an in-flight fast HP request',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  h.api.R3_AUTO.healthRunning=true;
+  const pending=h.api.r3AutoTick();
+  assert.equal(h.sent.at(-1).message.mode,'current');
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
+  h.respond(h.api.r3Coverage(snap));await pending;
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
 });

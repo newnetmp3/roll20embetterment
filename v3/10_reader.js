@@ -94,6 +94,7 @@ async function r3CollectAllTabs(progress){
 }
 async function r3ReaderScan(mode,sendProgress){
   if(mode==='all')return r3CollectAllTabs(sendProgress);
+  if(mode==='hp')return r3CaptureHealth(document.body);
   return r3Capture(document.body,'Current view');
 }
 async function r3ReaderReceive(event){
@@ -101,7 +102,7 @@ async function r3ReaderReceive(event){
   const data=event.data;if(data?.protocol!==R3_PROTOCOL)return;
   if(data.type==='hello'){r3ReaderAnnounce();return;}
   if(data.type!=='scan'||typeof data.id!=='string'||!/^r3-[\w.-]{4,100}$/.test(data.id))return;
-  if(!['current','all'].includes(data.mode))return;
+  if(!['current','all','hp'].includes(data.mode))return;
   try{
     const snap=await r3ReaderScan(data.mode,(tab,coverage)=>{
       peer.postMessage(r3Msg('progress',{id:data.id,tab,coverage}),R3_EDITOR);
@@ -174,7 +175,7 @@ function r3SendScan(candidate,mode){
     const id='r3-'+R3_SESSION.replace(/[^a-z0-9.-]/gi,'').slice(0,40)+'-'+(++r3Counter);
     const timeout=setTimeout(()=>{R3_PENDING.delete(id);reject(new Error(
       'Official sheet reader did not answer. Ensure the new userscript is active on the advanced-sheets.production.roll20preflight.net domain and reload the character sheet.'));},
-      mode==='all'?40000:12000);
+      mode==='all'?40000:mode==='hp'?2500:12000);
     R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout});
     try{candidate.window.postMessage(r3Msg('scan',{id,mode}),R3_ORIGIN);}
     catch(e){R3_PENDING.delete(id);clearTimeout(timeout);reject(e);}

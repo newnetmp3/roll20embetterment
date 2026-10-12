@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.1.0). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.1.1 development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -35,3 +35,8 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 **v3.1.0 automatic importer:** User-requested opt-in per-game Auto-sync with background journal open when a matching character entry exists, official iframe origin/identity checks, full scan in script-opened offscreen dialog and current-view refresh without disrupting player-visible tabs. Report unsupported journal UI instead of silently scanning another actor. Next manual Floorp QA of journal discovery and whether Roll20 supports synthetic double-click for managed character dialogs. Remain careful not to confuse this with proven fully unattended background support. Saving throws/modifiers/slots remain unverified. User's removed spells Power Word Pain and Blade of Disaster should not be flagged as missing.
 
 **Automated QA:** v3.1.0 branch CI: 214 tests passed, 0 failed (run 38305794819). End-to-end live journal auto-open remains unverified; avoid calling automatic background access guaranteed until tested on the actual Roll20/Floorp session.
+
+
+**v3.1.1 — Fast health and auto-open correctness:** Implemented targeted cross-origin, read-only `hp` request once per second with input validation, 2.5s timeout, bounded capture and value-change-only storage. This does not accelerate the 30-second current-tab or 5-minute full-tab traversals. Honor pinned character IDs, reject conflicting/ambiguous same-name candidates, retain player-owned dialog positions, and ignore stale health responses on disable. Regression tests and CI passed: PR #38 GitHub Actions run 38307657964, **221/221 tests passed**, generated bundle clean. **Live Floorp QA** remains required. Browser throttling or unmounted HP controls prevent a guaranteed one-second update; do not silently fall back to token guesses.
+
+**Next:** Validate synthetic Roll20 Journal double-click and loaded iframe in Floorp, compare live HP changing under damage/healing, verify AC 17/speed 55 only from labeled controls, then resume the Foundry-inspired combat HUD once imports are reliable.
