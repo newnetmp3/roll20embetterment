@@ -897,8 +897,10 @@ function r3AutoCandidate(){
     if(exact)return exact;
   }
   const name=R3_AUTO.name.toLowerCase();
-  return choices.find(c=>r3String(c.name,120).toLowerCase()===name&&
-    r3AutoDialogFor(c))||null;
+  // An authenticated, visibly mounted iframe titled with the exact
+  // character name is a valid reader even when Roll20 changes its dialog
+  // wrapper. A generic headless iframe has no matching character title.
+  return choices.find(c=>r3String(c.name,120).toLowerCase()===name)||null;
 }
 function r3AutoRemember(candidate){
   const charId=r3AutoId(candidate);
