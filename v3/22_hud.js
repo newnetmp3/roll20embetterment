@@ -1,7 +1,7 @@
 // Roll20 Embetterment HUD v1: read-only combat presentation of v3 sheet data.
 // This module never dispatches native Roll20 rolls, casts or sheet mutations.
 const R3_HUD={category:'actions',collapsed:false,drawerOpen:false,flyout:'',spellLevel:'',weaponSet:0,weaponSets:[null,null,null,null,null,null],chooser:null,used:{action:false,bonus:false,reaction:false},renderedSnapshot:null,
-  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedDebug:null,portraitName:'',portraitUrl:'',portraitChecked:0,openKeys:[],scrollTop:0};
+  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedDebug:null,portraitName:'',portraitUrl:'',portraitChecked:0,portraitCache:null,openKeys:[],scrollTop:0};
 const R3_HUD_TABS=[
   {key:'actions',title:'Actions',icon:'⚔'},
   {key:'bonus',title:'Bonus',icon:'✦'},
@@ -25,12 +25,23 @@ function r3HudLoad(){
         item&&['attacks','inventory','spells'].includes(item.kind)&&
         typeof item.key==='string'&&item.key.length>0&&item.key.length<=140?
           {kind:item.kind,key:item.key}:null);
+    // A character's previously seen Journal thumbnail survives switching
+    // Roll20's sidebar from Journal to Chat, without opening hidden tabs.
+    if(stored?.portrait&&typeof stored.portrait.name==='string'&&
+      typeof stored.portrait.url==='string'&&stored.portrait.url.length<4096){
+      try{
+        const uri=new URL(stored.portrait.url);
+        if(uri.protocol==='https:'&&stored.portrait.name.length<=80)
+          R3_HUD.portraitCache={name:stored.portrait.name,url:uri.href};
+      }catch{}
+    }
   }catch{}
 }
 function r3HudSave(){
   try{localStorage.setItem(r3StorageKey()+':hud',JSON.stringify({
     category:R3_HUD.category,collapsed:R3_HUD.collapsed,drawerOpen:R3_HUD.drawerOpen,
-    weaponSet:R3_HUD.weaponSet,weaponSets:R3_HUD.weaponSets
+    weaponSet:R3_HUD.weaponSet,weaponSets:R3_HUD.weaponSets,
+    portrait:R3_HUD.portraitCache
   }));}catch{}
 }
 function r3HudValue(value,suffix=''){
@@ -126,7 +137,10 @@ function r3HudPortraitUrl(snapshot){
   const name=r3String(snapshot?.name,80),now=Date.now();
   if(!name){R3_HUD.portraitName='';R3_HUD.portraitUrl='';return '';}
   if(name!==R3_HUD.portraitName){
-    R3_HUD.portraitName=name;R3_HUD.portraitUrl='';R3_HUD.portraitChecked=0;
+    R3_HUD.portraitName=name;
+    R3_HUD.portraitUrl=R3_HUD.portraitCache?.name===name?
+      R3_HUD.portraitCache.url:'';
+    R3_HUD.portraitChecked=0;
   }
   if(R3_HUD.portraitUrl||now-R3_HUD.portraitChecked<15000)return R3_HUD.portraitUrl;
   R3_HUD.portraitChecked=now;
@@ -143,7 +157,10 @@ function r3HudPortraitUrl(snapshot){
     try{
       const uri=new URL(raw,location.origin);
       if(uri.protocol!=='https:')continue;
-      R3_HUD.portraitUrl=uri.href;break;
+      R3_HUD.portraitUrl=uri.href;
+      R3_HUD.portraitCache={name,url:uri.href};
+      r3HudSave();
+      break;
     }catch{}
   }
   return R3_HUD.portraitUrl;
@@ -523,6 +540,16 @@ function r3HudStyles(){
     ".hud-flyout{left:210px}",
     "@media(max-width:1280px){.hud-portrait-panel{flex-basis:184px}.hud-flyout{left:190px}.hud-reference-bar{min-height:212px}.hud-avatar{width:55px;height:55px;flex-basis:55px}.hud-portrait-head{min-height:55px}}",
     "@media(max-width:980px){#r3-hud{width:calc(100vw - 24px)}.hud-portrait-panel{flex-basis:182px}.hud-flyout{left:0}}",
-    "@media(max-width:650px){.hud-portrait-panel{flex-basis:175px}.hud-avatar{width:49px;height:49px;flex-basis:49px}.hud-portrait-head{min-height:49px}.hud-portrait-name{font-size:11px}.hud-hp-label span,.hud-hp-label strong{font-size:10px}.hud-portrait-stats .hud-stat{padding:3px}.hud-stat span{font-size:8px}}"
+    "@media(max-width:650px){.hud-portrait-panel{flex-basis:175px}.hud-avatar{width:49px;height:49px;flex-basis:49px}.hud-portrait-head{min-height:49px}.hud-portrait-name{font-size:11px}.hud-hp-label span,.hud-hp-label strong{font-size:10px}.hud-portrait-stats .hud-stat{padding:3px}.hud-stat span{font-size:8px}}",
+    // The prior max-height:229px clipped the second portrait stat row in
+    // the real 2026-10-12 Floorp screenshot. Let content set the height.
+    ".hud-reference-bar{min-height:242px;max-height:none;align-items:stretch}",
+    ".hud-portrait-panel{min-height:242px;height:auto}",
+    ".hud-avatar-pane{min-height:151px;overflow:visible;flex:1 0 auto}",
+    ".hud-portrait-stats{margin-top:auto;grid-auto-rows:minmax(21px,auto)}",
+    ".hud-portrait-stats .hud-stat{min-height:21px;overflow:hidden}",
+    ".hud-portrait-stats>div[title]{min-width:0}",
+    ".hud-portrait-stats>div[title] .hud-stat{height:100%}",
+    "@media(max-width:650px){.hud-reference-bar{min-height:235px}.hud-portrait-panel{min-height:235px}.hud-avatar-pane{min-height:142px}}"
   ].join('');
 }
