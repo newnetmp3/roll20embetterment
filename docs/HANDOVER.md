@@ -3,9 +3,9 @@
 **Updated:** 2026-10-12  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `4f812a74a74d7b510628d08e78ecbffe89abbfc4` (v3.1.2, merged PR #39).  
-**Latest completed milestone:** v3.1.2 official popout automatic sync (PR #39 merged; 228 tests passed).  
-**Known unresolved issues:** Popout HP and manual all-tab import are now user-verified. Automated non-HP changes, unattended closed-sheet Journal opening, and AC/speed/saving throw/slot mappings still require verification.  
+**Current verified feature baseline:** `018584ffd46d7ba281c7ecddf9c78827cfbc7524` (v3.1.3, merged PR #40).  
+**Latest completed milestone:** v3.1.3 statless current-view automatic updates + per-level spell slot merges (PR #40 merged; 233 tests passed).  
+**Known unresolved issues:** User verified popout HP and manual all-tab import, but v3.1.3 non-HP auto-sync is not yet live tested. Completely closed-sheet Journal auto-opening and AC/speed/save/slot mapping require verification.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
 ## Resume process
@@ -270,3 +270,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **QA:** Added regression tests for statless Inventory update, changed resources/skills/slots, authoritative full replacement, empty/mismatched snapshot rejection and shorter current-view polling. Corrected a separately exposed shallow-merge defect in spell-slot records: updating remaining slots now preserves maximum slots. **CI verified:** PR #40 head `b935969598c0d9f45dc224ad9006f7e6dc5c079d`, GitHub Actions run 38313102450, **233 tests passed, zero failed**, `npm run check`, regenerated userscript diff clean. Final PR documentation/head CI and merge still pending. **Live non-HP refresh still pending:** change a visible resource slider or item count on the popped-out Nier sheet while Auto-sync is enabled; verify it propagates to R20eb without a manual import within roughly 16–24 seconds (background throttling possible). Old off-tab/deleted item removal and complete unsupervised Journal opening are not claimed fixed.
 
 **Next:** Address any real current-view refresh failures; test fully closed-sheet Journal opening after reload with the Journal sidebar loaded; inspect precise labels for AC 17, speed 55, saves and slots without guessing UUID fields; only then advance Foundry-inspired combat HUD work.
+
+**v3.1.3 post-merge checkpoint (2026-10-12):** PR #40 merged to `main` as `018584ffd46d7ba281c7ecddf9c78827cfbc7524`. Final PR-head GitHub Actions run 38313162355 passed all checks (233 tests, zero failures, clean generated userscript). Source and production bundle are v3.1.3. No live Floorp non-HP automatic-update confirmation yet. Next practical test: with Nier's sheet popped out on Inventory or Features, change a visible named value, leave Auto-sync enabled and do not click Import; verify R20eb changes within ~16–24s. Full Journal auto-opening without any sheet remains unverified.
