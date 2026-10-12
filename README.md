@@ -1,4 +1,4 @@
-# roll20 Embetterment 3.0.6 — Independent D&D 2024 sheet importer
+# roll20 Embetterment 3.1.0 — Independent D&D 2024 sheet importer
 
 **v3.0.6:** Improves Import all tabs: reacquires Vue-replaced tab elements, prioritizes the primary Inventory and Features & Traits tabs over long nested filter lists, reads named inventory item rows and embedded resource/charge trackers, and exposes observed checkbox counts without guessing available/used status. Diagnostics now distinguish an unvisited Inventory tab from a visited tab with no recognized rows. Automated DOM fixtures cover all three cases. **These are conservative DOM adapters; live Floorp confirmation and an inside-iframe fixture are still needed.**
 
@@ -7,6 +7,14 @@
 **v3.0.1:** Fixed a shipped UI bug where the panel attempted to update a nonexistent `r3-title` element instead of its actual `r3-toggle` button; this prevented Refresh, Hide/Show and Scan handlers from completing. Button exceptions now surface in the panel. Regression tests exercise actual panel controls and official-frame request/response handling. **Live Floorp verification remains pending.**
 
 This is a clean restart of the importer, **not another v2 patch**. The previous HUD, model cache, token HP reconciliation, and background imports are not included in the production userscript. Old source is retained under src/ for comparison only.
+
+## Automatic character import (v3.1.0)
+
+Enable **Auto-sync: On** once for your imported character. The choice and character ID are kept locally for that Roll20 game. The extension checks for its official D&D 2024 sheet and refreshes the imported data automatically. When the Journal sidebar exposes the matching character entry, the script uses Roll20's own double-click to load that sheet, moves **only that script-opened** dialog offscreen while it reads all the tabs, and then checks for changes periodically. It does not invent character identity, read unrelated characters, or clone Roll20's generic headless iframe (the generic iframe URL does not include a character ID).
+
+If Roll20 hasn't rendered the Journal entry or doesn't open it via the normal browser double-click, auto-sync reports **Waiting for a matching journal entry**. Open Roll20's Journal sidebar once to make it available; in that case you may need to open the sheet once for Roll20 to load it. A player-opened visible sheet is read automatically without clicking Import, but its tabs are not switched behind your back. Quick current-view refreshes merge only observed live values into the previous full snapshot so the collected inventory, spells, and features aren't erased. The offscreen full scan runs no more than once every five minutes; lightweight current-view scans no more than every thirty seconds. Turn Auto-sync Off to restore any offscreen dialog.
+
+This is a **browser-dependent, opt-in experimental feature**: its journal-open path is based on public DOM and needs live Floorp verification. No background data is guaranteed if Roll20 does not expose the necessary journal controls. Disable Auto-sync if it interferes with Roll20. The existing Read current tab and Import all tabs buttons remain available.
 
 ## Install and use
 Install or update the script from https://raw.githubusercontent.com/newnetmp3/roll20embetterment/main/roll20-embetterment.user.js. Disable duplicate/old scripts and reload Roll20. Open an official D&D 2024 character sheet. The new importer appears at the bottom right of the editor. Refresh the sheet list, choose the visible sheet, then use **Read current tab** or **Import all tabs**. The latter navigates rendered tabs and sub-tabs and restores the original tab selection.

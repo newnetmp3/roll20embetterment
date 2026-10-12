@@ -1,7 +1,7 @@
 // Opt-in background importer for a character the player can already open.
 // Never fetch privileged data, synthesize character records, or scan other sheets.
 const R3_AUTO={
-  enabled:false,name:'',characterId:'',running:false,active:false,opened:false,
+  enabled:false,name:'',characterId:'',running:false,active:false,opened:false,openedAt:0,
   lastScan:0,lastFull:0,lastOpenAttempt:0,lastError:'',timer:null,
   ownedDialog:null,originalPosition:null
 };
@@ -85,7 +85,7 @@ function r3AutoOpenFromJournal(now){
   // and cloning it cannot supply Roll20's official character handshake.
   try{
     entry.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,view:window}));
-    R3_AUTO.opened=true;
+    R3_AUTO.opened=true;R3_AUTO.openedAt=Date.now();
     r3AutoDisplay('Requested character sheet from the Roll20 journal; waiting for it to load');
     return true;
   }catch(e){
@@ -94,7 +94,9 @@ function r3AutoOpenFromJournal(now){
   }
 }
 function r3AutoMoveOffscreen(candidate){
-  if(!R3_AUTO.opened)return false;
+  if(!R3_AUTO.opened||Date.now()-R3_AUTO.openedAt>30000){
+    R3_AUTO.opened=false;return false;
+  }
   const dialog=r3AutoDialogFor(candidate);
   if(!dialog)return false;
   if(R3_AUTO.ownedDialog===dialog)return true;
@@ -115,7 +117,7 @@ function r3AutoRestoreDialog(){
     d.left=p.left;d.top=p.top;d.position=p.position;
   }
   R3_AUTO.ownedDialog=null;R3_AUTO.originalPosition=null;
-  R3_AUTO.opened=false;
+  R3_AUTO.opened=false;R3_AUTO.openedAt=0;
 }
 function r3AutoSignature(s){
   return JSON.stringify([s.name,s.stats,s.abilities,s.modifiers,s.saves,s.skills,s.slots,

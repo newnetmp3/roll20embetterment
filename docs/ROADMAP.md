@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.0.6). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.1.0). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -31,3 +31,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 **v3.0.5 actual Nier export:** Import verified from user JSON for 37 inventory, 34 features, 22 attacks, 18 skills, 5 spells, 82/84 HP and six scores. The previous zero-resources report is explained by named range controls being absent from resource-wrapper selectors; v3.0.5 reads named sliders as observations (not presumed remaining uses), temp HP, and coin counts. Spell fields no longer parse prose as metadata. **Next:** request narrowly scoped accessible parent markup for two unlabeled numeric controls (17 and 55) to establish AC/speed, plus actual official saving throw/modifier controls. Do not infer UUID identity from values; continue validating slots and whether spells are virtualized. Then proceed with user-selected Foundry module UI.
 
 **v3.0.6 review:** The second live export confirms v3.0.5 resources/tempHP/currency. Fix known `11 Action` spell parsing and preserve compact official V/S/M, ritual R and concentration C header markers. Add bounded context of anonymous numeric controls and support explicit `aria-labelledby` without guessing UUID meanings. Re-import in Floorp to verify diagnostic hints for AC and speed. Saving throws, modifiers and slots remain unknown, so no invented values. UI redesign deferred until trustworthy importer.
+
+**v3.1.0 automatic importer:** User-requested opt-in per-game Auto-sync with background journal open when a matching character entry exists, official iframe origin/identity checks, full scan in script-opened offscreen dialog and current-view refresh without disrupting player-visible tabs. Report unsupported journal UI instead of silently scanning another actor. Next manual Floorp QA of journal discovery and whether Roll20 supports synthetic double-click for managed character dialogs. Remain careful not to confuse this with proven fully unattended background support. Saving throws/modifiers/slots remain unverified. User's removed spells Power Word Pain and Blade of Disaster should not be flagged as missing.
