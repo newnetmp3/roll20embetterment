@@ -53,11 +53,11 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.1\.7/);
+  assert.match(compiled,/\/\/ @version\s+3\.2\.0/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
-  assert.deepEqual(files,['00_capture.js','10_reader.js','20_ui.js','25_auto.js','30_boot.js']);
+  assert.deepEqual(files,['00_capture.js','10_reader.js','20_ui.js','22_hud.js','25_auto.js','30_boot.js']);
 });
 test('real official Vue inputs yield 82 of 84 HP and STR 18 even when innerText is empty',()=>{
   const inputHp=input({id:'hp-current',title:'Current Hitpoints',value:'82',ariaMax:'84'});
