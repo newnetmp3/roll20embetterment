@@ -8,14 +8,14 @@ const R3_SKILLS=['Acrobatics','Animal Handling','Arcana','Athletics','Deception'
 const R3_CATEGORIES={
   spells:'.spell-item,[data-testid*="spell-item"],[data-testid*="spell-row"],.sheet-spell',
   attacks:'.attack-item,[data-testid*="attack-item"],.sheet-attack',
-  inventory:'.inventory-item,.equipment-item,[data-testid*="inventory-item"],[data-testid*="equipment-item"],.sheet-item',
+  inventory:'.inventory-item,.equipment-item,[data-testid*="inventory-item"],[data-testid*="equipment-item"],[data-testid*="inventory-row"],[data-testid*="equipment-row"],.item-row--inventory,.sheet-item',
   features:'.feature-item,.trait-item,.action-item,[data-testid*="feature-item"],[data-testid*="trait-item"],.sheet-feature',
-  resources:'.resource-item,[data-testid*="resource-item"],.sheet-resource'
+  resources:'.resource-item,[data-testid*="resource-item"],[data-testid*="resource-row"],.sheet-resource'
 };
 const R3_NAMES={
   spells:['.spell-item__name','.span--item-row-title','[data-testid*="spell-name"]','[class*="spell-name"]'],
   attacks:['.span--item-row-title','.attack-item__title-chat','.attack-item__title-col','[data-testid*="attack-name"]'],
-  inventory:['.inventory-item__name','.equipment-item__name','.span--item-row-title','[data-testid*="item-name"]'],
+  inventory:['.inventory-item__name','.equipment-item__name','.span--item-row-title','[class*="item-row-title"]','[data-testid*="item-name"]','[data-testid*="equipment-name"]'],
   features:['.action-item__name','.feature-item__name','.trait-item__name','.span--item-row-title'],
   resources:['.resource-item__name','.span--item-row-title']
 };
@@ -213,6 +213,79 @@ function r3CardInfo(card,kind,name,tab){
   }
   return info;
 }
+// Only named, rendered inventory rows are imported. Many 2024 sheets use
+// generic item-row components instead of .inventory-item/.equipment-item.
+function r3AddNamedCard(s,kind,row,name,tab){
+  if(!Array.isArray(s[kind])||!name||s[kind].length>=400)return;
+  const info=r3CardInfo(row,kind,name,tab);
+  const key=name.toLowerCase()+'|'+(kind==='spells'?info.level||'':'')+'|'+(kind==='attacks'?info.visible.slice(0,60):'');
+  if(!s[kind].some(x=>x._key===key))s[kind].push({...info,_key:key});
+}
+function r3InventoryRows(root,s,tab){
+  // Generic .item-row and .span--item-row-title also appear on other tabs.
+  // Use them only after visiting the *actual* Inventory tab.
+  if(!/^inventory\b/i.test(tab))return;
+  const names=Array.from(root.querySelectorAll?.(
+    '.span--item-row-title,[class*="item-row-title"],[data-testid*="item-name"],'+
+    '[data-testid*="equipment-name"],.inventory-item__name,.equipment-item__name'
+  )||[]).slice(0,500);
+  for(const el of names){
+    if(!r3Shown(el))continue;
+    const name=r3Text(el,125);
+    if(!name||/^(equipment|other possessions|attunement|inventory|add item|search)$/i.test(name))continue;
+    const row=el.closest?.(
+      '.item-row,[class*="item-row__"],[class*="item-row--"],[data-testid*="item-row"],'+
+      '.inventory-item,.equipment-item,[data-testid*="inventory-item"],[data-testid*="equipment-item"]'
+    )||el.parentElement?.parentElement||el.parentElement||el;
+    if(!r3Shown(row))continue;
+    // Don't manufacture a giant "item" whose wrapper holds several names.
+    if((row.querySelectorAll?.('.span--item-row-title,[data-testid*="item-name"]')||[]).length>1)continue;
+    r3AddNamedCard(s,'inventory',row,name,tab);
+  }
+}
+function r3ResourceControls(root,s,tab){
+  // 2024 resources are normally charge/checkbox trackers *inside* features
+  // or inventory items, not standalone .resource-item cards.
+  const controls=Array.from(root.querySelectorAll?.(
+    '.resource-tracker,[class*="resource-tracker"],[class*="resource-row"],'+
+    '[data-testid*="resource"],[class*="resource-uses"],[class*="charge-tracker"]'
+  )||[]).slice(0,500);
+  const seen=new Set();
+  for(const el of controls){
+    if(!r3Shown(el))continue;
+    const group=el.closest?.(
+      '.resource-item,[data-testid*="resource-row"],.resource-tracker,'+
+      '[class*="resource-tracker"],[class*="resource-row"]'
+    )||el;
+    if(seen.has(group))continue;seen.add(group);
+    if(!r3Shown(group))continue;
+    const parent=group.closest?.(
+      '.item-row,.inventory-item,.equipment-item,.feature-item,.trait-item,.action-item,'+
+      '[data-testid*="feature-item"],[data-testid*="inventory-item"]'
+    )||group.parentElement;
+    const resourceLabel=group.querySelector?.(
+      '[data-testid*="resource-name"],[class*="resource__name"],'+
+      '[class*="resource-name"],[class*="resource-label"]'
+    );
+    let name=r3Text(resourceLabel,125);
+    if(!name)name=r3Attr(group,'aria-label')||r3Attr(group,'title');
+    if(!name&&group!==el)name=r3Attr(el,'aria-label')||r3Attr(el,'title');
+    if(!name||/^(resources?|charges?|uses?|track(?:er)?|remaining|used)$/i.test(name)){
+      const owner=parent&&parent!==group?parent:null;
+      name=owner&&(r3Name(owner,'inventory')||r3Name(owner,'features')||r3Name(owner,'attacks'))||'';
+    }
+    if(!name||/^(resources?|charges?|uses?|track(?:er)?|remaining|used)$/i.test(name))continue;
+    const item=r3CardInfo(group,'resources',name,tab);
+    // Checkboxes describe *visible state*. Checked may mean expended or
+    // available depending on the sheet; never infer remaining charges.
+    const checks=Array.from(group.querySelectorAll?.('input[type="checkbox"],[role="checkbox"]')||[]).slice(0,100);
+    if(checks.length)item.checkboxes={total:checks.length,checked:checks.filter(c=>c.checked||r3Attr(c,'aria-checked')==='true').length};
+    if(!item.visible)item.visible=r3Text(parent,250);
+    const key=name.toLowerCase();
+    if(!s.resources.some(x=>x._key===key)&&s.resources.length<400)
+      s.resources.push({...item,_key:key});
+  }
+}
 function r3Cards(root,s,tab){
   // Card collections and keyed bonus maps have different data contracts.
   // Skills are parsed by r3VisibleStats into s.skills (an object), never here.
@@ -226,14 +299,11 @@ function r3Cards(root,s,tab){
     for(const row of cards){
       if(!r3Shown(row))continue;
       const name=r3Name(row,kind);if(!name)continue;
-      const info=r3CardInfo(row,kind,name,tab);
-      const key=name.toLowerCase()+'|'+(kind==='spells'?info.level||'':'')+'|'+(kind==='attacks'?info.visible.slice(0,60):'');
-      if(!s[kind].some(x=>x._key===key)){
-        if(s[kind].length>=400)continue;
-        s[kind].push({...info,_key:key});
-      }
+      r3AddNamedCard(s,kind,row,name,tab);
     }
   }
+  r3InventoryRows(root,s,tab);
+  r3ResourceControls(root,s,tab);
 }
 function r3Capture(root,tab='Current view'){
   const s=r3Empty();s.name=r3NameFromDocument(root);
