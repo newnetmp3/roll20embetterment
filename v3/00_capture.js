@@ -10,16 +10,14 @@ const R3_CATEGORIES={
   attacks:'.attack-item,[data-testid*="attack-item"],.sheet-attack',
   inventory:'.inventory-item,.equipment-item,[data-testid*="inventory-item"],[data-testid*="equipment-item"],.sheet-item',
   features:'.feature-item,.trait-item,.action-item,[data-testid*="feature-item"],[data-testid*="trait-item"],.sheet-feature',
-  resources:'.resource-item,[data-testid*="resource-item"],.sheet-resource',
-  skills:'.skill,[data-testid*="skill-row"]'
+  resources:'.resource-item,[data-testid*="resource-item"],.sheet-resource'
 };
 const R3_NAMES={
   spells:['.spell-item__name','.span--item-row-title','[data-testid*="spell-name"]','[class*="spell-name"]'],
   attacks:['.span--item-row-title','.attack-item__title-chat','.attack-item__title-col','[data-testid*="attack-name"]'],
   inventory:['.inventory-item__name','.equipment-item__name','.span--item-row-title','[data-testid*="item-name"]'],
   features:['.action-item__name','.feature-item__name','.trait-item__name','.span--item-row-title'],
-  resources:['.resource-item__name','.span--item-row-title'],
-  skills:['button.skill__name','.skill__name','[data-testid*="skill-name"]']
+  resources:['.resource-item__name','.span--item-row-title']
 };
 function r3String(value,max=160){return String(value??'').replace(/\s+/g,' ').trim().slice(0,max);}
 function r3Text(el,max=300){return r3String(typeof el?.innerText==='string'?el.innerText:'',max);}
@@ -216,7 +214,13 @@ function r3CardInfo(card,kind,name,tab){
   return info;
 }
 function r3Cards(root,s,tab){
+  // Card collections and keyed bonus maps have different data contracts.
+  // Skills are parsed by r3VisibleStats into s.skills (an object), never here.
   for(const [kind,selector] of Object.entries(R3_CATEGORIES)){
+    if(!Array.isArray(s[kind])){
+      s.diagnostics.notes.push('Card category '+kind+' is not an array; skipped');
+      continue;
+    }
     const cards=Array.from(root.querySelectorAll?.(selector)||[]).slice(0,300);
     if(cards.length===300)s.diagnostics.limits.push(kind+' cards capped at 300 per tab');
     for(const row of cards){
@@ -263,7 +267,7 @@ function r3Merge(target,source){
     target.slots[k]={...v,...(target.slots[k]||{})};
   }
   for(const kind of Object.keys(R3_CATEGORIES)){
-    if(kind==='skills')continue; // skill bonuses are keyed values, not named cards
+    if(!Array.isArray(target[kind])||!Array.isArray(source[kind]))continue;
     const keys=new Set(target[kind].map(x=>x._key));
     for(const item of source[kind])if(!keys.has(item._key)&&target[kind].length<400){
       target[kind].push(item);keys.add(item._key);

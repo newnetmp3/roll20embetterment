@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026. v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.0.2). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -16,6 +16,8 @@ Updated: October 12, 2026. v2.3.13 continued to fail real Floorp/Roll20 imports 
 
 **v3.0.1 fix:** The sheet was detected, but all buttons failed because the UI refreshed a nonexistent `r3-title` element. Now references `r3-toggle`, reports unexpected control exceptions and covers actual scan button interaction with a mocked frame. 194 tests pass. Browser verification still required.
 
-**Next:** Install v3.0.1 with the previous version disabled. Open the original 2024 sheet, import all tabs, verify HP 82/84, STR 18, AC 17, speed 55, initiative +2.14 and spell inventory; export JSON for any missed fields. Do not call the importer correct based solely on CI.
+**v3.0.2 fix:** Removed accidental skill-object processing as a card array, which caused a live TypeError during import. Added regression coverage for populated skill rows alongside HP and spell data. The uploaded HTML confirms the original editor iframe, not its cross-origin sheet DOM; live browser verification remains pending.
+
+**Next:** Install v3.0.2 with the previous version disabled. Open the original 2024 sheet, import all tabs, verify HP 82/84, STR 18, AC 17, speed 55, initiative +2.14 and spell inventory; export JSON for any missed fields. Do not call the importer correct based solely on CI.
 
 Rolling rule: update this roadmap and docs/HANDOVER.md with each development milestone.

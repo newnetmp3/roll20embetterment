@@ -53,7 +53,7 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.0\.1/);
+  assert.match(compiled,/\/\/ @version\s+3\.0\.2/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -118,6 +118,44 @@ test('extracts identifiable spells attacks inventory features resources and asso
   assert.equal(s.spells[1].castingTime,'Casting Time: Reaction Duration: 1 round'.slice(0,70));
   assert.equal(s.inventory[0].visible,'Rope 50 feet');
   assert.equal(s.attacks[0].tab,'Combat');
+});
+test('official skill rows remain keyed skill bonuses, not array cards (reported Floorp crash)',()=>{
+  const skillRow={
+    innerText:'Athletics +7',getClientRects(){return [{}]},
+    getAttribute(){return null},closest(){return null},
+    querySelector(sel){return sel==='button.skill__name'?
+      {innerText:'Athletics',getClientRects(){return [{}]}}:null},
+    querySelectorAll(){return []}
+  };
+  const fixture=docFixture({
+    inputs:[input({id:'hp-current',title:'Current Hitpoints',value:'82',ariaMax:'84'})],
+    cards:{spells:[card('spells','Shield','Shield Level 1')]}
+  });
+  const original=fixture.body.querySelectorAll.bind(fixture.body);
+  fixture.body.querySelectorAll=selector=>selector==='.skill'?[skillRow]:
+    selector.includes('skill-row')?[skillRow]:original(selector);
+  const {h}=harness(fixture);
+  assert.doesNotThrow(()=>h.r3Capture(fixture.body,'Skills'));
+  const snap=h.r3Capture(fixture.body,'Skills');
+  assert.equal(snap.stats.hp,82);assert.equal(snap.stats.maxHp,84);
+  assert.equal(snap.skills.Athletics,7);
+  assert.equal(Array.isArray(snap.skills),false);
+  assert.equal(snap.spells.length,1);
+  assert.equal(snap.coverage.skills,1);
+  const merged=h.r3Merge(h.r3Empty(),snap);
+  assert.equal(merged.skills.Athletics,7);
+  assert.equal(merged.coverage.skills,1);
+  assert.equal(merged.coverage.spells,1);
+});
+test('importer card schema excludes keyed skills and protects against future array/object mismatch',()=>{
+  const {h,fixture}=harness(docFixture({cards:{
+    skills:[card('skills','Athletics','Athletics +7')],
+    features:[card('features','Second Wind','Second Wind 1/1 Bonus Action')]
+  }}));
+  const snap=h.r3Capture(fixture.body);
+  assert.equal(snap.features.length,1);
+  assert.deepEqual({...snap.skills},{});
+  assert.equal(snap.coverage.features,1);
 });
 test('multiple scans merge distinct categories and deduplicate repeated card names',()=>{
   const {h,fixture}=harness(docFixture({cards:{spells:[card('spells','Fire Bolt','Fire Bolt Cantrip')]}}));
