@@ -642,7 +642,10 @@ function r3Listen(event){
       if(!existing&&R3_POPOUTS.size>=16)return; // bounded registry
       const name=r3String(data.name,90);
       if(existing){
-        if(name)existing.name=name;
+        // Vue can briefly unmount its name control during rerenders. Do not
+        // replace a known identity with a generic loading-state title.
+        if(name&&!/^(?:unnamed sheet|official sheet popout|2024 character sheet)/i.test(name))
+          existing.name=name;
       }else{
         R3_POPOUTS.set(data.session,{key:'popout-'+data.session,
           name:name||'Official sheet popout',window:event.source,
