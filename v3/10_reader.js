@@ -139,8 +139,10 @@ function r3ReaderChanged(event){
     const role=r3Attr(control,'role');
     const inventory=!!target.closest?.(
       '.item-row,.inventory-item,.equipment-item,[data-testid*="inventory-row"]');
+    const stepperButton=inventory&&
+      (r3InventoryStepperButton(control).minus||r3InventoryStepperButton(control).plus);
     if(!/(?:increment|decrement|stepper|counter|quantity|checkbox|charge|toggle-resource)/i.test(hint)&&
-      !['checkbox','switch'].includes(role)&&
+      !['checkbox','switch'].includes(role)&&!stepperButton&&
       !(inventory&&(/toggle/i.test(hint)||r3Attr(control,'aria-pressed'))))return;
   }else if(!['INPUT','TEXTAREA','SELECT'].includes(String(target.tagName||'').toUpperCase())
     &&!['spinbutton','checkbox','switch'].includes(r3Attr(target,'role')))return;
