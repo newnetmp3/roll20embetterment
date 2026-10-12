@@ -427,3 +427,35 @@ function r3Merge(target,source){
   if(!target.name||target.name==='Unnamed sheet')target.name=source.name;
   target.capturedAt=new Date().toISOString();return r3Coverage(target);
 }
+
+
+// Low-cost, read-only HP sampling: only mounted official inputs, never tab
+// traversal, card collection, token guessing or sheet state mutation.
+function r3CaptureHealth(root=document.body){
+  const s=r3Empty();s.name=r3NameFromDocument(root);
+  if(!root?.querySelectorAll)return r3Coverage(s);
+  const inputs=Array.from(root.querySelectorAll('input')||[]).slice(0,600);
+  let explicitMax=null;
+  for(const el of inputs){
+    if(!r3Shown(el))continue;
+    const labels=r3Descriptor(el);
+    for(const label of labels){
+      const field=r3Field(label);
+      if(field?.kind!=='stat'||!['hp','maxHp','tempHp'].includes(field.key))continue;
+      const value=r3Number(r3Read(el),0,9999);
+      if(value===null)break;
+      const source={kind:'hp watch input',tab:'HP watch',label};
+      if(field.key==='maxHp'){explicitMax={value,source};}
+      else r3Push(s,'stat',field.key,value,source);
+      if(field.key==='hp'&&s.stats.maxHp===undefined){
+        const maximum=r3Number(r3Attr(el,'aria-valuemax'),1,9999);
+        if(maximum!==null)r3Push(s,'stat','maxHp',maximum,
+          {kind:'hp watch aria maximum',tab:'HP watch',label});
+      }
+      break;
+    }
+  }
+  if(explicitMax){s.stats.maxHp=explicitMax.value;s.provenance['stats.maxHp']=explicitMax.source;}
+  if(s.stats.hp!==undefined)s.diagnostics.tabs.push('HP watch');
+  return r3Coverage(s);
+}
