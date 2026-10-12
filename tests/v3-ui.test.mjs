@@ -65,7 +65,7 @@ function panelHarness(){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1008,4 +1008,62 @@ test('Shift+A toggles HUD outside text fields without accidentally triggering Ro
   fn({...base,target:{tagName:'DIV'}});assert.equal(h.api.R3_HUD.collapsed,true);
   assert.equal(stopped,1);assert.equal(prevented,1);
   fn({...base,target:{tagName:'DIV'}});assert.equal(h.api.R3_HUD.collapsed,false);
+});
+
+test('HUD live screenshot: portrait HP stays on one line and all stats stay in visible grid',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Nier';snap.stats.hp=82;snap.stats.maxHp=84;
+  snap.stats.ac=17;snap.stats.speed=55;snap.stats.initiative=2.14;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/hud-portrait-head/);
+  assert.match(html,/hud-portrait-hp/);
+  assert.match(html,/82 \u002f 84/);
+  assert.match(html,/AC<\/span><strong>17/);
+  assert.match(html,/SPEED<\/span><strong>55 ft/);
+  assert.match(html,/INIT<\/span><strong>2.14/);
+  const style=h.api.r3HudStyles();
+  assert.match(style,/\.hud-hp-label strong\{white-space:nowrap/);
+  assert.match(style,/\.hud-portrait-panel\{flex:0 0 204px/);
+  assert.match(style,/\.hud-reference-bar\{min-height:216px/);
+  assert.match(style,/\.hud-resources-bottom\{min-height:21px;overflow-x:auto/);
+  assert.match(style,/#r3-hud\{bottom:27px/);
+});
+test('HUD portrait uses only a visible exact-name journal thumbnail and never a lookalike',()=>{
+  const h=panelHarness();
+  const img=(text,src,shown=true)=>{
+    const parent={textContent:text,parentElement:null};
+    return {parentElement:parent,src,getClientRects:()=>shown?[{}]:[]};
+  };
+  const shadow=img('Shadow Nier','https://example.org/shadow.png');
+  const journal=img('Nier','https://app.roll20.net/images/nier-avatar.png');
+  let scans=0;
+  const prior=h.document.querySelectorAll;
+  h.document.querySelectorAll=sel=>{
+    if(sel==='img'){scans++;return [shadow,journal];}
+    return prior(sel);
+  };
+  const snap=h.api.r3Empty();snap.name='Nier';
+  h.api.r3StartUI();h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  assert.match(h.nodes.get('r3-hud').innerHTML,/<img class="hud-portrait-image" src="https:\/\/app.roll20.net\/images\/nier-avatar.png" alt="">/);
+  assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/shadow.png/);
+  const before=scans;
+  assert.equal(h.api.r3HudPortraitUrl(snap),'https://app.roll20.net/images/nier-avatar.png');
+  assert.equal(scans,before,'a resolved portrait is reused without repeated DOM image scans');
+});
+test('HUD portrait rejects non-HTTPS URLs, hidden art and mismatched character rows',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Nier';
+  const rogue={parentElement:{textContent:'Nier',parentElement:null},
+    src:'javascript:alert(1)',getClientRects:()=>[{}]};
+  const hidden={parentElement:{textContent:'Nier',parentElement:null},
+    src:'https://example.com/hidden.png',getClientRects:()=>[]};
+  const other={parentElement:{textContent:'Nier’s Journal',parentElement:null},
+    src:'https://example.com/journal.png',getClientRects:()=>[{}]};
+  h.document.querySelectorAll=sel=>sel==='img'?[other,rogue,hidden]:[];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.doesNotMatch(html,/<img class="hud-portrait-image"/);
+  assert.match(html,/class="hud-avatar" aria-hidden="true">N<\/div>/);
+  assert.equal(h.api.r3HudPortraitUrl(snap),'');
 });
