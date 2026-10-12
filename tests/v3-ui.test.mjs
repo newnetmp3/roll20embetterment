@@ -736,3 +736,101 @@ test('Inventory debug calls out a previously silent unknown quantity next to a d
   assert.match(html,/zero removal needs a readable counter/);
   assert.match(html,/headlessui-switch-100/);
 });
+
+
+test('HUD v1 displays real imported vital statistics, slots and attacks',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';
+  Object.assign(snap.stats,{hp:57,maxHp:84,ac:17,speed:55,initiative:2.14,passivePerception:16});
+  snap.attacks=[{name:'Handaxe',_key:'handaxe',tab:'Combat',visible:'Handaxe 1d6 damage'}];
+  snap.spells=[
+    {name:'Druidcraft',_key:'druidcraft',castingTime:'1 Action'},
+    {name:'Misty Step',_key:'misty step',castingTime:'Bonus Action',range:'Self'},
+    {name:'Shield',_key:'shield',castingTime:'Reaction'}
+  ];
+  snap.slots['1']={current:2,max:4};
+  snap.resources=[{name:'Wild Shape',_key:'wildshape',checkboxes:{total:2,checked:1}}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/NIER/);assert.match(html,/57 \/ 84/);assert.match(html,/width:68%/);
+  assert.match(html,/AC<\/span><strong>17/);assert.match(html,/SPEED<\/span><strong>55 ft/);
+  assert.match(html,/INIT<\/span><strong>2.14/);assert.match(html,/PASSIVE<\/span><strong>16/);
+  assert.match(html,/Slot 1 · 2\/4/);assert.match(html,/Wild Shape/);assert.match(html,/Handaxe/);
+  assert.equal(h.api.r3HudEntries(snap,'bonus').length,1);
+  assert.equal(h.api.r3HudEntries(snap,'reactions').length,1);
+  assert.equal(h.api.r3HudEntries(snap,'spells').length,3);
+});
+test('HUD shows missing fields as unknown and does not infer action economy',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;snap.stats.maxHp=84;
+  snap.features=[{name:'Action Surge',_key:'surge',visible:'Action Surge'}];
+  snap.spells=[{name:'Unknown Spell',_key:'spell',visible:'Some spell'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/AC<\/span><strong>—/);
+  assert.match(html,/SPEED<\/span><strong>—/);
+  assert.equal(h.api.r3HudEntries(snap,'bonus').length,0);
+  assert.equal(h.api.r3HudEntries(snap,'reactions').length,0);
+  assert.doesNotMatch(html,/Slot 1/);
+  assert.match(html,/Read-only preview/);
+});
+test('HUD category navigation and item counts do not execute Roll20 actions',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
+  snap.spells=[{name:'Misty Step',_key:'misty',castingTime:'Bonus Action',tab:'Spells',visible:'Teleport'}];
+  snap.inventory=[{name:'Crowbar',_key:'crowbar||',quantity:2,tab:'Inventory'},
+    {name:'Consumed Potion',_key:'potion||',quantity:0,tab:'Inventory'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudCategory:'bonus'}}});
+  assert.match(h.nodes.get('r3-hud').innerHTML,/Misty Step/);
+  h.shadow.handlers.get('click')({target:{dataset:{hudCategory:'inventory'}}});
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/Crowbar/);assert.doesNotMatch(html,/Consumed Potion/);
+  assert.equal(h.sent.length,0,'opening a card or category must not roll or cast');
+  assert.match(h.store.get('roll20-embetterment-v3:123:hud'),/"category":"inventory"/);
+});
+test('HUD minimize, expand and debug panel retain the importer snapshot',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.click('r3-hud-collapse');
+  assert.equal(h.api.R3_HUD.collapsed,true);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/hud-shell collapsed/);
+  h.click('r3-hud-collapse');
+  assert.equal(h.api.R3_HUD.collapsed,false);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/HIT POINTS/);
+  h.click('r3-hud-debug');assert.equal(h.nodes.get('r3-wrap').style.display,'block');
+  h.click('r3-hud-debug');assert.equal(h.nodes.get('r3-wrap').style.display,'none');
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+});
+test('HUD loads saved per-game category and collapsed state',()=>{
+  const h=panelHarness();
+  h.store.set('roll20-embetterment-v3:123:hud',JSON.stringify({category:'resources',collapsed:true}));
+  h.api.r3StartUI();
+  assert.equal(h.api.R3_HUD.category,'resources');assert.equal(h.api.R3_HUD.collapsed,true);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/Expand/);
+});
+test('existing HP watcher refreshes HUD while diagnostic importer stays hidden',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const initial=h.api.r3Empty();initial.name='NIER';initial.stats.hp=82;initial.stats.maxHp=84;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(initial);h.api.r3HudRender();
+  const before=h.nodes.get('r3-hud').innerHTML;
+  h.api.R3_AUTO.name='NIER';
+  const next=h.api.r3Empty();next.name='NIER';next.stats.hp=51;next.stats.maxHp=84;
+  assert.equal(h.api.r3AutoStoreHealth(h.api.r3Coverage(next)),true);
+  const after=h.nodes.get('r3-hud').innerHTML;
+  assert.notEqual(after,before);assert.match(after,/51 \/ 84/);
+  assert.equal(h.nodes.get('r3-wrap').style.display,'none');
+});
+test('HUD sync button controls the existing per-game auto importer',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.click('r3-hud-auto');
+  assert.equal(h.api.R3_AUTO.enabled,true);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/Sync On/);
+  assert.match(h.store.get('roll20-embetterment-v3:123:auto'),/"enabled":true/);
+  h.click('r3-hud-auto');
+  assert.equal(h.api.R3_AUTO.enabled,false);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/Sync Off/);
+});
