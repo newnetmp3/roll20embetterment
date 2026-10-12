@@ -450,3 +450,88 @@ test('stale popup scan response after window close is ignored',async()=>{
   await pending;
   assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
 });
+
+
+test('automatic Inventory-tab refresh works with no HP or other stat mounted',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const prev=h.api.r3Empty();prev.name='NIER';prev.stats.hp=82;
+  prev.inventory=[{name:'Potion',_key:'potion',tab:'Inventory',visible:'Potion x1'}];
+  prev.spells=[{name:'Druidcraft',_key:'druidcraft',tab:'Spells'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  const pending=h.api.r3AutoTick();
+  assert.equal(h.sent.at(-1).message.mode,'current');
+  const live=h.api.r3Empty();live.name='NIER';
+  live.inventory=[
+    {name:'Potion',_key:'potion',tab:'Inventory',visible:'Potion x3'},
+    {name:'Longbow',_key:'longbow',tab:'Inventory',visible:'Longbow'}
+  ];
+  h.respond(h.api.r3Coverage(live));await pending;
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+  assert.equal(h.api.R3_UI.snapshot.inventory.length,2);
+  assert.equal(h.api.R3_UI.snapshot.inventory.find(x=>x.name==='Potion').visible,'Potion x3');
+  assert.equal(h.api.R3_UI.snapshot.spells.length,1,'inventory refresh preserves off-tab spell list');
+  assert.match(h.nodes.get('r3-auto-status').textContent,/current import updated/);
+});
+test('current auto-sync accepts visible feature/resource/skill and spell slot changes with zero stats',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const prev=h.api.r3Empty();prev.name='NIER';prev.stats.hp=80;
+  prev.skills.Athletics=3;prev.slots['1']={current:3,max:4};
+  prev.resources=[{name:'Second Wind',_key:'second wind',observedValue:1}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);
+  h.api.R3_AUTO.name='NIER';
+  const partial=h.api.r3Empty();partial.name='NIER';
+  partial.skills.Athletics=5;partial.slots['1']={current:2};
+  partial.resources=[{name:'Second Wind',_key:'second wind',observedValue:0}];
+  partial.features=[{name:'Action Surge',_key:'action surge'}];
+  h.api.r3AutoStoreSnapshot(h.api.r3Coverage(partial),'current');
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,80);
+  assert.equal(h.api.R3_UI.snapshot.skills.Athletics,5);
+  assert.equal(h.api.R3_UI.snapshot.slots['1'].current,2);
+  assert.equal(h.api.R3_UI.snapshot.slots['1'].max,4);
+  assert.equal(h.api.R3_UI.snapshot.resources[0].observedValue,0);
+  assert.equal(h.api.R3_UI.snapshot.features[0].name,'Action Surge');
+});
+test('statless all-tabs import may replace removed entries when recognized cards are present',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const first=h.api.r3Empty();first.name='NIER';first.stats.hp=82;
+  first.spells=[{name:'Druidcraft',_key:'druidcraft'},{name:'Old Spell',_key:'old'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(first);h.api.R3_AUTO.name='NIER';
+  const next=h.api.r3Empty();next.name='NIER';
+  next.spells=[{name:'Detect Magic',_key:'detect magic'}];
+  h.api.r3AutoStoreSnapshot(h.api.r3Coverage(next),'all');
+  assert.deepEqual([...h.api.R3_UI.snapshot.spells.map(x=>x.name)],['Detect Magic']);
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,undefined,'all mode is authoritative');
+});
+test('empty, unrecognized and mismatched current views cannot erase a good full import',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const prev=h.api.r3Empty();prev.name='NIER';prev.stats.hp=82;
+  prev.inventory=[{name:'Potion',_key:'potion'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);h.api.R3_AUTO.name='NIER';
+  const empty=h.api.r3Empty();empty.name='NIER';
+  assert.throws(()=>h.api.r3AutoStoreSnapshot(h.api.r3Coverage(empty),'current'),/recognizable character values/);
+  empty.observations=[{label:'unrecognized UUID',value:'20'}];
+  assert.throws(()=>h.api.r3AutoStoreSnapshot(h.api.r3Coverage(empty),'current'),/recognizable character values/);
+  empty.inventory=[{name:'False Potion',_key:'false'}];empty.name='OTHER';
+  assert.throws(()=>h.api.r3AutoStoreSnapshot(h.api.r3Coverage(empty),'current'),/identity did not match/);
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+  assert.equal(h.api.R3_UI.snapshot.inventory.length,1);
+});
+
+
+test('automatic current-tab polling has a shorter gate than a full scan',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  h.api.R3_AUTO.lastScan=Date.now()-10000;
+  await h.api.r3AutoTick();
+  assert.equal(h.sent.length,0,'ten seconds is too soon for a new current-tab read');
+  h.api.R3_AUTO.lastScan=Date.now()-14000;
+  const pending=h.api.r3AutoTick();
+  assert.equal(h.sent.length,1,'14 seconds meets the 12-second minimum');
+  assert.equal(h.sent[0].message.mode,'current');
+  const snap=h.api.r3Empty();snap.name='NIER';snap.skills.Athletics=5;
+  h.respond(h.api.r3Coverage(snap));
+  await pending;
+  assert.equal(h.api.R3_UI.snapshot.skills.Athletics,5);
+  assert.equal(h.api.R3_AUTO.lastFull,0,'a current-tab poll does not claim a full import');
+});
