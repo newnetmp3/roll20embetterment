@@ -205,7 +205,7 @@ function r3Listen(event){
     // Only a known official iframe or authenticated popup session may
     // request a re-read. A name match alone never authorizes an unknown
     // postMessage source or a different character.
-    if(!candidate||typeof data.session!=='string'||!/[\w.:-]{6,100}/.test(data.session))return;
+    if(!candidate||typeof data.session!=='string'||!/^[\w.:-]{6,100}$/.test(data.session))return;
     if(candidate.type==='popout'&&candidate.key!=='popout-'+data.session)return;
     if(r3String(data.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())return;
     r3AutoQueueDirty(candidate);
