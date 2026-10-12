@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.1.1 merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.1.2 popout fix in development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -44,3 +44,6 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 **v3.1.1 merge checkpoint:** PR #38 was merged into main as `00bb39c9eb2aa3c2ea2fc71564f23ea454682647`. Final PR-head CI run 38307749208 passed all checks (221 tests at the code verification head). Feature implemented; live Floorp/Jumpgate background opening and roughly one-second real HP response remain unverified. Continue with browser evidence instead of assuming synthetic Journal events work.
 
 **Live feedback received (2026-10-12):** User reports the updates appear to work correctly. Mark HP refresh as **user-reported working, latency unmeasured**. Keep fully unattended automatic import with a closed sheet and Journal unopened as **unverified** until explicitly tested. Next check restart/reload without manually opening Nier's sheet; preserve the fast health path.
+
+
+**v3.1.2 — Popped-out official Roll20 sheet:** User-reported v3.1.1 regression: HP refreshing stops when the official 2024 sheet is opened in a separate window. Code inspection proves the auto reader filters out all `type=popout` candidates even though the existing authenticated bridge registers them. Implement popout preference for unique exact name (without weakening character-ID conflict checks), registration refresh after late Vue mount, closed-window cleanup, and unchanged one-second HP/30-second current-tab scan cadences. Preserve scroll and full-catalog data, and do not change player-owned popup tabs. Regression CI verified: PR #39 GitHub Actions run 38310552374, **228 tests passed**, zero failures and clean generated bundle. **Live Floorp/Jumpgate validation is still required**. The link requires a functioning popup-to-editor `window.opener` and userscript access on the official advanced-sheets host.

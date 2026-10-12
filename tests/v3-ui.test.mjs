@@ -6,7 +6,7 @@ import {resolve,join} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const files=readdirSync(join(root,'v3')).filter(x=>/^\d{2}_.*\.js$/.test(x)&&x!=='30_boot.js').sort();
 function panelHarness(){
-  const nodes=new Map(),windowListeners=new Map(),sent=[],intervals=[];
+  const nodes=new Map(),windowListeners=new Map(),sent=[],intervals=[],timeouts=new Map();
   const makeNode=id=>{
     const node={id,textContent:'',innerHTML:'',value:'',scrollTop:0,style:{},disabled:false,handlers:new Map(),
       addEventListener(type,fn){this.handlers.set(type,fn);}};
@@ -50,12 +50,12 @@ function panelHarness(){
     document,location:{origin:'https://app.roll20.net',pathname:'/editor/123',search:'?id=123'},
     window:{addEventListener(type,fn){windowListeners.set(type,fn);}},
     setInterval(fn,ms){intervals.push(ms);return intervals.length;},clearInterval(){},
-    setTimeout(){return 1;},clearTimeout(){},
+    setTimeout(fn,ms){const id=timeouts.size+1;timeouts.set(id,{fn,ms});return id;},clearTimeout(id){timeouts.delete(id);},
     localStorage:{getItem(key){return store.get(key)||null;},setItem(key,value){store.set(key,value);}}
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -65,7 +65,7 @@ function panelHarness(){
       data:{protocol:'r20eb:import:v3',type,id:msg.id,snapshot,error:'Simulated sheet failure'}
     });
   }
-  return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,windowListeners,click,respond};
+  return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,timeouts,windowListeners,click,respond};
 }
 test('real importer panel initializes and both scan buttons become enabled when a sheet appears',()=>{
   const h=panelHarness();
@@ -337,5 +337,116 @@ test('scheduled full import is not starved by an in-flight fast HP request',asyn
   assert.equal(h.sent.at(-1).message.mode,'current');
   const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
   h.respond(h.api.r3Coverage(snap));await pending;
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+});
+
+
+function registerOfficialPopout(h,name='NIER',session='popout-sess-123'){
+  const messages=[];
+  const popup={closed:false,postMessage(message,origin){messages.push({message,origin});}};
+  function announce(nextName=name){
+    h.windowListeners.get('message')({origin:'https://advanced-sheets.production.roll20preflight.net',
+      source:popup,data:{protocol:'r20eb:import:v3',type:'ready',mode:'popout',
+        session,name:nextName}});
+  }
+  function reply(snapshot,type='result'){
+    const request=messages.at(-1)?.message;
+    assert.ok(request?.id,'popup must receive a scan request first');
+    h.windowListeners.get('message')({
+      origin:'https://advanced-sheets.production.roll20preflight.net',source:popup,
+      data:{protocol:'r20eb:import:v3',type,id:request.id,snapshot}});
+  }
+  announce();
+  return {popup,messages,announce,reply};
+}
+test('automatically syncs fast HP directly from the official player popout',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const prev=h.api.r3Empty();prev.name='NIER';prev.stats={hp:82,maxHp:84};
+  prev.spells=[{name:'Druidcraft',_key:'druidcraft'}];
+  prev.inventory=[{name:'Healer kit',_key:'healer'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  // Roll20 may leave an embedded iframe mounted as well: the player
+  // popout takes precedence for live readings.
+  const p=registerOfficialPopout(h);
+  assert.equal(h.api.r3AutoCandidate().type,'popout');
+  assert.match(h.nodes.get('r3-choices').innerHTML,/popout/);
+  const tick=h.api.r3AutoHealthTick();
+  assert.equal(p.messages.length,1);
+  assert.equal(p.messages[0].message.mode,'hp');
+  assert.equal(p.messages[0].origin,'https://advanced-sheets.production.roll20preflight.net');
+  const next=h.api.r3Empty();next.name='NIER';next.stats={hp:76,maxHp:84};
+  p.reply(h.api.r3Coverage(next));await tick;
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,76);
+  assert.equal(h.api.R3_UI.snapshot.spells.length,1);
+  assert.equal(h.api.R3_UI.snapshot.inventory.length,1);
+});
+test('popout current-tab auto import remains read-only and does not navigate player tabs',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const p=registerOfficialPopout(h);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  const pending=h.api.r3AutoTick();
+  assert.equal(p.messages.length,1);
+  assert.equal(p.messages[0].message.mode,'current','player-owned popup must not receive all-tabs scan');
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=73;
+  p.reply(h.api.r3Coverage(snap));await pending;
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,73);
+  assert.match(h.nodes.get('r3-auto-status').textContent,/Popout sheet current import updated/);
+  assert.equal(h.api.R3_AUTO.ownedDialog,null);
+});
+test('popout ready announcements refresh a late-loaded Vue character name',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  const p=registerOfficialPopout(h,'Unnamed sheet');
+  assert.equal(h.api.r3AutoCandidate().type,'iframe','unnamed popout must not override an exact iframe');
+  p.announce('NIER');
+  assert.equal(h.api.r3AutoCandidate().type,'popout');
+  assert.match(h.nodes.get('r3-choices').innerHTML,/NIER \(popout\)/);
+  p.announce('Unnamed sheet');
+  assert.equal(h.api.r3AutoCandidate().type,'popout',
+    'temporary Vue loading states must not erase a confirmed name');
+});
+test('closed popout is pruned and the next fresh popout can take over',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  const first=registerOfficialPopout(h,'NIER','popup-one-session');
+  assert.equal(h.api.r3AutoCandidate().window,first.popup);
+  first.popup.closed=true;
+  assert.equal(h.api.r3AutoCandidate().type,'iframe');
+  assert.equal(h.api.r3Candidates().some(c=>c.type==='popout'),false);
+  const second=registerOfficialPopout(h,'NIER','popup-two-session');
+  assert.equal(h.api.r3AutoCandidate().window,second.popup);
+});
+test('invalid popout origin and ambiguous same-name popouts never become automatic reader',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  const impostor={closed:false,postMessage(){}};
+  h.windowListeners.get('message')({origin:'https://example.invalid',
+    source:impostor,data:{protocol:'r20eb:import:v3',type:'ready',
+      mode:'popout',session:'fake-popup-session',name:'NIER'}});
+  assert.equal(h.api.r3Candidates().filter(c=>c.type==='popout').length,0);
+  const first=registerOfficialPopout(h,'NIER','popup-aaa-session');
+  const second=registerOfficialPopout(h,'NIER','popup-bbb-session');
+  assert.equal(h.api.r3AutoCandidate(),null,'two popouts with identical names are ambiguous');
+  second.popup.closed=true;
+  assert.equal(h.api.r3AutoCandidate().window,first.popup);
+});
+test('stale popup scan response after window close is ignored',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const prev=h.api.r3Empty();prev.name='NIER';prev.stats.hp=82;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  const p=registerOfficialPopout(h);
+  const pending=h.api.r3AutoHealthTick();
+  p.popup.closed=true;
+  const next=h.api.r3Empty();next.name='NIER';next.stats.hp=1;
+  p.reply(h.api.r3Coverage(next));
+  // The closed window is not an authenticated candidate; any late response
+  // is ignored, then the request times out without applying stale health.
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+  const timeout=[...h.timeouts.values()].find(x=>x.ms===2500);
+  assert.ok(timeout,'HP watch has a bounded timeout');
+  timeout.fn();
+  await pending;
   assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
 });

@@ -48,12 +48,12 @@ function harness(fixture=docFixture()){
   };
   vm.createContext(context);
   const code=files.filter(f=>f!=='30_boot.js').map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n');
-  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3Merge,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
+  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3Merge,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
   return {h:context.testApi,context,fixture};
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.1\.1/);
+  assert.match(compiled,/\/\/ @version\s+3\.1\.2/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -424,4 +424,30 @@ test('HP watch rejects malformed and fully hidden health inputs without returnin
   assert.equal(snap.stats.hp,undefined);
   assert.equal(snap.stats.maxHp,undefined);
   assert.equal(snap.stats.tempHp,undefined);
+});
+
+
+test('official popout reader announces and answers only its Roll20 opener',async()=>{
+  const {h,context}=harness(docFixture({inputs:[
+    input({id:'hp-current',title:'Current Hitpoints',value:'70',ariaMax:'84'})
+  ]}));
+  const delivered=[];
+  const editor={closed:false,postMessage(data,origin){delivered.push({data,origin});}};
+  context.window.parent=context.window;
+  context.window.opener=editor;
+  context.location.origin='https://advanced-sheets.production.roll20preflight.net';
+  context.location.pathname='/dnd2024byroll20/test';
+  assert.equal(h.r3ReaderPeer(),editor);
+  h.r3ReaderAnnounce();
+  assert.equal(delivered.at(-1).data.type,'ready');
+  assert.equal(delivered.at(-1).data.mode,'popout');
+  assert.equal(delivered.at(-1).data.name,'NIER');
+  await h.r3ReaderReceive({source:editor,origin:'https://app.roll20.net',
+    data:{protocol:'r20eb:import:v3',type:'scan',mode:'hp',id:'r3-popup-valid-100'}});
+  assert.equal(delivered.at(-1).data.type,'result');
+  assert.equal(delivered.at(-1).data.snapshot.stats.hp,70);
+  const count=delivered.length;
+  await h.r3ReaderReceive({source:{},origin:'https://example.invalid',
+    data:{protocol:'r20eb:import:v3',type:'scan',mode:'hp',id:'r3-popup-invalid-100'}});
+  assert.equal(delivered.length,count);
 });
