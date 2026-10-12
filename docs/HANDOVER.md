@@ -3,9 +3,9 @@
 **Updated:** 2026-10-12  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `ee0a95dbee96fba9b8783863434d1cac621517fc` (v3.1.5, merged PR #42).  
-**Latest completed milestone:** v3.1.5 Inventory primary-tab resolution, observed numeric zero/toggle capture and debug display (PR #42; 244 tests).  
-**Known unresolved issues:** v3.1.5 inventory-control behavior passed CI but still requires live Floorp confirmation of the exact Roll20 toggle and zero-count markup; unattended Journal opening, some missing AC/speed/save/slot mappings remain.  
+**Current verified feature baseline:** `c2d16758ce255db5d834c22c808f2ee9f29d121b` (v3.1.6, merged PR #43).  
+**Latest completed milestone:** v3.1.6 explicit inventory quantity zero removes item from imported list; regression coverage added (PR #43; 251 tests).  
+**Known unresolved issues:** Zero-quantity Inventory removal is implemented and CI-tested but awaiting user live verification; if a zero count causes Roll20 to unmount the row before capture, a targeted row-removal signal may still be required. Closed-sheet Journal opening and missing AC/speed/save/slot mappings remain.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
 ## Resume process
@@ -311,3 +311,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **QA:** Added fixture regressions for numeric 0, positive reappearance, preserving unrelated/off-tab inventory, full/manual imports, persistence, old local snapshots and same-key full-tab precedence. **CI verified:** PR #43 head `635343534e703f92b0c2af5803ebb6a6a9e9c888`, GitHub Actions run 38316660508: **251 tests passed, zero failed**, `npm run check` and generated userscript diff green. **Live Floorp verification pending for zero-removal**; toggle is already user-verified. Do not infer deletion when a row disappears due to filtering, collapsed groups or virtualization.
 
 **Next:** Confirm Nier's zero-count entry vanishes from Inventory while other entries remain, and appears again if count becomes positive. Then return to closed-sheet Journal automation, non-HP event behavior on other tabs and evidence-backed AC/speed/save/slot fields.
+
+**v3.1.6 merged checkpoint (2026-10-12):** PR #43 squash-merged to `main` as `c2d16758ce255db5d834c22c808f2ee9f29d121b`. Final PR-head GitHub Actions run 38316709781 passed `npm run check` (**251 tests, zero failures**) and generated-userscript consistency. Production userscript v3.1.6. Live user confirmation still required that Nier's quantity-zero item disappears from the Inventory debug list and reappears if the quantity becomes positive. The user's toggle on/off test was already confirmed working in v3.1.5. This userscript does not delete any items from the official character sheet.
