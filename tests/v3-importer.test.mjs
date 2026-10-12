@@ -478,7 +478,7 @@ test('reader ignores generic clicks but tracks incrementers and editable control
   const scheduled=[],original=(fn,ms)=>{scheduled.push(ms);return scheduled.length;};
   context.setTimeout=original;
   const button={className:'regular button',getAttribute:()=>null};
-  const target={tagName:'SPAN',getClientRects:()=>[{}],closest:sel=>sel==='button'?button:null};
+  const target={tagName:'SPAN',getClientRects:()=>[{}],closest:sel=>sel.startsWith('button')?button:null};
   h.r3ReaderChanged({type:'click',target});
   assert.equal(scheduled.length,0,'ordinary clicks must not trigger a heavyweight re-read');
   button.className='utility-incrementer__button';
@@ -528,7 +528,7 @@ test('current Inventory scan observes zero quantity and checked/toggled controls
     getAttribute:k=>k==='aria-pressed'?'false':k==='aria-label'?'Use item':null,
     closest:sel=>sel.includes('item-row')?row:null};
   const title={innerText:'Healer Kit',getClientRects:()=>[{}],getAttribute:()=>null,
-    closest:()=>row};
+    closest:sel=>sel.includes('item-row')?row:null};
   row.querySelectorAll=sel=>{
     if(sel==='button')return [toggle];
     if(sel.includes('input,select,[role="spinbutton"]'))return [quantity,checkbox,toggle];
@@ -556,4 +556,18 @@ test('current Inventory scan observes zero quantity and checked/toggled controls
   assert.equal(after.inventory[0].controls.find(c=>c.kind==='toggle').value,false);
   assert.equal(after.inventory[0].visible,before.inventory[0].visible,
     'visible row text is unchanged, so captured controls must distinguish new state');
+});
+
+test('2024 inventory toggle buttons emit change hints without observing unrelated clicks',()=>{
+  const {h,context}=harness();
+  const timers=[];
+  context.setTimeout=(fn,ms)=>{timers.push({fn,ms});return timers.length};
+  const row={};
+  const toggle={tagName:'BUTTON',className:'item-use-toggle',getClientRects:()=>[{}],
+    getAttribute:k=>k==='aria-pressed'?'false':null};
+  const child={tagName:'SPAN',getClientRects:()=>[{}],
+    closest:sel=>sel.startsWith('button')?toggle:sel.includes('item-row')?row:null};
+  h.r3ReaderChanged({type:'click',target:child});
+  assert.equal(timers.length,1);
+  assert.equal(timers[0].ms,350);
 });
