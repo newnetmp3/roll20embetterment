@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.1.3 non-HP automatic import development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.1.3 merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -56,3 +56,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 
 
 **v3.1.3 — non-HP automatic current-view refresh:** Fix the confirmed source-level blocker in `r3AutoStoreSnapshot` that incorrectly requires a stat/HP on every automatic current-tab scan. Accept correctly identified recognized non-HP data from Inventory, Features, Resources, Skills, Spells and slot controls while rejecting unrecognized/blank snapshots and wrong character names. Preserve other tabs' data and original player-owned popup tabs. Reduce current-view scan gate from 30s to 12s on an 8s scheduler (~16s practical cadence), without changing the separate HP-only 1s polling or script-owned all-tabs scan. Regression tests added; **CI verified** in PR #40 run 38313102450 (**233 tests, zero failures**, generated bundle clean); corrected shallow spell-slot merge so current/maximum properties are both preserved. Live Floorp/Jumpgate non-HP refresh verification still required. **Outstanding:** non-HP live confirmation, deleted/off-tab and virtualized rows, closed-sheet Journal auto-open, source-backed AC/speed/save/slot mapping, future HUD redesign.
+
+**v3.1.3 post-merge checkpoint:** PR #40 squash-merged to `main` as `018584ffd46d7ba281c7ecddf9c78827cfbc7524`; final GitHub Actions run 38313162355 successful (**233 tests**, bundle diff clean). Next development: safe fully closed-sheet Journal recovery with browser QA; follow with source-backed AC/speed/saves/slots. Live non-HP auto-refresh has not been independently verified in Floorp; do not equate CI with live confirmation.
