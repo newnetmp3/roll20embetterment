@@ -1214,36 +1214,47 @@ function r3HudMarkup(snapshot){
   const hp=snapshot?.stats||{};
   const collapsed=R3_HUD.collapsed;
   const items=r3HudEntries(snapshot,R3_HUD.category);
+  const selected=R3_HUD_TABS.find(t=>t.key===R3_HUD.category);
   const tabs=R3_HUD_TABS.map(tab=>{
     const count=r3HudEntries(snapshot,tab.key).length;
     return '<button type="button" class="hud-tab'+(R3_HUD.category===tab.key?' selected':'')+
       '" data-hud-category="'+tab.key+'" aria-pressed="'+(R3_HUD.category===tab.key)+'">'+
-      '<span aria-hidden="true">'+tab.icon+'</span> '+tab.title+' <small>'+count+'</small></button>';
+      '<span aria-hidden="true">'+tab.icon+'</span> '+tab.title+
+      ' <small>'+count+'</small></button>';
   }).join('');
-  return '<section class="hud-shell'+(collapsed?' collapsed':'')+'" aria-label="R20 Embetterment combat HUD">'+
-    '<header class="hud-top"><div class="hud-avatar" aria-hidden="true">'+
-    r3Escape(name.slice(0,1).toUpperCase())+'</div>'+
+  const header='<header class="hud-top">'+
+    '<div class="hud-avatar" aria-hidden="true">'+r3Escape(name.slice(0,1).toUpperCase())+'</div>'+
     '<div class="hud-character"><span>R20 EMBETTERMENT</span><strong>'+r3Escape(name)+'</strong></div>'+
-    '<div class="hud-top-actions"><button type="button" id="r3-hud-auto" title="Toggle per-game automatic sheet synchronization">'+
+    '<div class="hud-top-actions">'+
+      '<button type="button" id="r3-hud-auto" title="Toggle per-game automatic sheet synchronization">'+
       (R3_AUTO.enabled?'● Sync On':'○ Sync Off')+'</button>'+
-    '<button type="button" id="r3-hud-debug" aria-expanded="'+R3_UI.shown+'">'+
+      '<button type="button" id="r3-hud-debug" aria-expanded="'+R3_UI.shown+'">'+
       (R3_UI.shown?'Close Debug':'Debug')+'</button>'+
-    '<button type="button" id="r3-hud-collapse" aria-expanded="'+!collapsed+'">'+
-      (collapsed?'Expand':'Minimize')+'</button></div></header>'+
-    (collapsed?'':'<div class="hud-main">'+
-      '<div class="hud-vitals">'+r3HudHp(snapshot)+
-        r3HudStat('AC',hp.ac)+r3HudStat('SPEED',hp.speed,r3HudHasValue(hp.speed)?' ft':'')+
-        r3HudStat('INIT',hp.initiative)+r3HudStat('PASSIVE',hp.passivePerception)+'</div>'+
-      r3HudResourceBar(snapshot)+
-      '<nav class="hud-tabs" aria-label="Combat action categories">'+tabs+'</nav>'+
-      '<div class="hud-body"><div class="hud-collection-label">'+
-        r3Escape(R3_HUD_TABS.find(t=>t.key===R3_HUD.category)?.title||'Actions')+
-        '<span>'+items.length+' observed</span></div>'+
-        (!snapshot?'<p class="hud-empty">Import a character through Debug once, then enable Sync to keep this HUD current.</p>':
-          items.length?'<div class="hud-cards">'+items.slice(0,80).map(r3HudCard).join('')+'</div>'+
-          '<p class="hud-empty">No confirmed entries in this category. Import more sheet tabs or check Debug diagnostics.</p>')+
-      '</div><footer class="hud-footer">Read-only preview · official Roll20 controls remain authoritative</footer>'+
-    '</div>')+'</section>';
+      '<button type="button" id="r3-hud-collapse" aria-expanded="'+!collapsed+'">'+
+      (collapsed?'Expand':'Minimize')+'</button>'+
+    '</div></header>';
+  const vitals='<div class="hud-vitals">'+r3HudHp(snapshot)+
+    r3HudStat('AC',hp.ac)+r3HudStat('SPEED',hp.speed,' ft')+
+    r3HudStat('INIT',hp.initiative)+r3HudStat('PASSIVE',hp.passivePerception)+'</div>';
+  let entries='';
+  if(!snapshot){
+    entries='<p class="hud-empty">Import a character through Debug once, then enable Sync to keep this HUD current.</p>';
+  }else if(items.length){
+    entries='<div class="hud-cards">'+items.slice(0,80).map(r3HudCard).join('')+'</div>';
+  }else{
+    entries='<p class="hud-empty">No confirmed entries in this category. Import more sheet tabs or check Debug diagnostics.</p>';
+  }
+  const body='<div class="hud-body"><div class="hud-collection-label">'+
+    r3Escape(selected?.title||'Actions')+'<span>'+items.length+
+    ' observed</span></div>'+entries+'</div>';
+  const main=collapsed?'':'<div class="hud-main">'+vitals+
+    r3HudResourceBar(snapshot)+
+    '<nav class="hud-tabs" aria-label="Combat action categories">'+tabs+'</nav>'+
+    body+
+    '<footer class="hud-footer">Read-only preview · official Roll20 controls remain authoritative</footer>'+
+    '</div>';
+  return '<section class="hud-shell'+(collapsed?' collapsed':'')+
+    '" aria-label="R20 Embetterment combat HUD">'+header+main+'</section>';
 }
 function r3HudRender(){
   const el=R3_UI.root?.getElementById('r3-hud');if(!el)return;
