@@ -6,7 +6,7 @@ import {resolve,join} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const files=readdirSync(join(root,'v3')).filter(x=>/^\d{2}_.*\.js$/.test(x)&&x!=='30_boot.js').sort();
 function panelHarness(){
-  const nodes=new Map(),windowListeners=new Map(),sent=[],intervals=[];
+  const nodes=new Map(),windowListeners=new Map(),sent=[],intervals=[],timeouts=new Map();
   const makeNode=id=>{
     const node={id,textContent:'',innerHTML:'',value:'',scrollTop:0,style:{},disabled:false,handlers:new Map(),
       addEventListener(type,fn){this.handlers.set(type,fn);}};
@@ -50,7 +50,7 @@ function panelHarness(){
     document,location:{origin:'https://app.roll20.net',pathname:'/editor/123',search:'?id=123'},
     window:{addEventListener(type,fn){windowListeners.set(type,fn);}},
     setInterval(fn,ms){intervals.push(ms);return intervals.length;},clearInterval(){},
-    setTimeout(){return 1;},clearTimeout(){},
+    setTimeout(fn,ms){const id=timeouts.size+1;timeouts.set(id,{fn,ms});return id;},clearTimeout(id){timeouts.delete(id);},
     localStorage:{getItem(key){return store.get(key)||null;},setItem(key,value){store.set(key,value);}}
   };
   vm.createContext(context);
@@ -65,7 +65,7 @@ function panelHarness(){
       data:{protocol:'r20eb:import:v3',type,id:msg.id,snapshot,error:'Simulated sheet failure'}
     });
   }
-  return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,windowListeners,click,respond};
+  return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,timeouts,windowListeners,click,respond};
 }
 test('real importer panel initializes and both scan buttons become enabled when a sheet appears',()=>{
   const h=panelHarness();
@@ -438,11 +438,12 @@ test('stale popup scan response after window close is ignored',async()=>{
   p.popup.closed=true;
   const next=h.api.r3Empty();next.name='NIER';next.stats.hp=1;
   p.reply(h.api.r3Coverage(next));
-  // A closed popout is no longer an authenticated active candidate.
-  // A real pending request times out; force a synthetic rejection by
-  // disabling auto before responding and verify it never publishes HP.
-  h.api.R3_AUTO.enabled=false;h.api.R3_AUTO.generation++;
-  // Promise would otherwise be left pending by mock timers; deliver
-  // a matching rejection through no-op timed test and rely on gating.
+  // The closed window is not an authenticated candidate; any late response
+  // is ignored, then the request times out without applying stale health.
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+  const timeout=[...h.timeouts.values()].find(x=>x.ms===2500);
+  assert.ok(timeout,'HP watch has a bounded timeout');
+  timeout.fn();
+  await pending;
   assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
 });
