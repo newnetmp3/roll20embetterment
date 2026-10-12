@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.2.1 screenshot-driven HUD correction merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.2.2 Argon core visual/interaction structural port in development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -88,3 +88,24 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 **v3.2.1 — Correct HUD design/data after live screenshot:** User showed v3.2.0 generic grid instead of requested Foundry/Argon interface and missing AC/speed/passive. Reviewed provided `enhancedcombathud-t2k4e-3.0.0.zip`: a Twilight 2000 Argon CORE **adapter**, organized around portrait panel, segmented action groups, item buttons/drawers (not a standalone design asset bundle). Redesign into portrait dock + small action icon groups for action/bonus/reaction, quick side stat readouts, popup category drawers. Keep debug importer and reader intact. Recover source-observed AC=17 and speed=55 for Nier from precise per-input nearby labels `ARMOR CLASS` and `SPEED (ft)` in previously exported JSON, not from UUID guesses. Passive authoritative value is absent; UI may display **PASSIVE BASE** `10 + observed Perception (5) = 15` with explicit non-authoritative qualification. Tests for field mapping with conflicts, old data load, drawer and responsive DOM. Next: real Floorp UI validation, then verified native Roll20 action dispatch; no unverified roll/cast semantics. **CI verified:** PR #46 run 38320187465, **271 tests passed, zero failures**, generated bundle clean. Live Floorp confirmation pending.
 
 **v3.2.1 merged:** PR #46, commit `6d7cc77310602ecc4e389ea8ade85aface761ed6`, final CI 38320244100 green (**271 tests** plus generated bundle check). HUD redraw uses compact portrait dock, small observed stat blocks and Action/Bonus/Reaction icon groups, with detailed category cards in an optional drawer. AC 17 and Speed 55 are source-grounded through explicit nearby captions already in Nier observations. The displayed Passive Base of 15 is *calculated*, not a confirmed Roll20 passive score. Live Floorp HUD screenshot/QA is next; avoid calling the underlying Argon Core styling fully replicated from the system adapter alone.
+
+
+## Argon Core faithful-port roadmap (official wiki reference; added in v3.2.2)
+
+Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `theripper93/enhancedcombathud` (GPL-3.0) and first-party D&D 5e implementation `theripper93/enhancedcombathud-dnd5e` (MIT). User expects faithful *layout AND behavior*, not generic styling. Implement independently in R20eb with license-safe original assets and retained authenticated official-sheet backend.
+
+| Original Argon capability | R20eb state | Next work |
+| --- | --- | --- |
+| Full horizontal bottom HUD, portrait, grouped main/bonus/free/reaction/pass | v3.2.2 implemented; needs live Floorp visual QA | Measure live sizing/spacing against wiki screenshots |
+| Three pairs of portrait-top weapon set slots | v3.2.2 HUD-native click-to-assign, per-game persistence | Real Roll20 token/sheet drag/drop and equipment semantics |
+| Spells panel expanding upward, grouped by cantrip/level and slots | v3.2.2 local read-only tier flyout from observed fields | Prepared spell visibility and native casting |
+| Skills, saves, tools flyout | v3.2.2 skills/saves/ability checks from actual import | Tool data mapping and native rolls |
+| Action tracking | v3.2.2 local manual used marks and manual reset | Tie to confirmed Roll20 action/turn events |
+| Shift+A HUD toggle | v3.2.2 keyboard control guarded for text fields | User-configurable keybind/keyboard QA |
+| Special actions, macro slot, item tooltips and actor config | Partial read-only labels, imported card details | Native dispatch, controls, macros/config UI |
+| Target picker with required/selected target count | Not implemented | Detect Roll20 native target selection without fake automation |
+| Movement tracker / dash color states | Not implemented | Source actual speed and measured token movement |
+| End Turn / pass action | Deliberately disabled pending verified Roll20 combat API | Integrate only after confirmed live behavior |
+| True portrait/token selection and screen size responsiveness | Name monogram placeholder and responsive CSS only | Token/portrait integration, mobile sizing and sidebar state |
+
+**v3.2.2 tests/CI:** GitHub Actions PR #47 run 38321191793 passed (**277 tests, 0 failures**, compiled userscript consistent); merge pending. Do not mark a function truly verified until both automated CI and live Floorp QA demonstrate it. Keep v3.2.1 source-grounded AC 17/speed 55 and 2024 popout importer behavior.

@@ -782,8 +782,8 @@ test('HUD shows missing fields as unknown and does not infer action economy',()=
   assert.equal(h.api.r3HudEntries(snap,'bonus').length,0);
   assert.equal(h.api.r3HudEntries(snap,'reactions').length,0);
   assert.doesNotMatch(html,/Slot 1/);
-  assert.match(html,/ARGON-INSPIRED COMBAT HUD/);
-  assert.match(html,/hud-action-panels/);
+  assert.match(html,/ARGON PORT/);
+  assert.match(html,/hud-main-segments/);
 });
 test('HUD category navigation and item counts do not execute Roll20 actions',()=>{
   const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
@@ -819,7 +819,7 @@ test('HUD loads saved per-game category and collapsed state',()=>{
   h.store.set('roll20-embetterment-v3:123:hud',JSON.stringify({category:'resources',collapsed:true}));
   h.api.r3StartUI();
   assert.equal(h.api.R3_HUD.category,'resources');assert.equal(h.api.R3_HUD.collapsed,true);
-  assert.match(h.nodes.get('r3-hud').innerHTML,/Expand/);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/Show HUD/);
 });
 test('existing HP watcher refreshes HUD while diagnostic importer stays hidden',()=>{
   const h=panelHarness();h.api.r3StartUI();
@@ -885,21 +885,23 @@ test('Argon-like portrait + segmented action panels replace giant grid as initia
     {name:'Misty Step',_key:'misty',castingTime:'Bonus Action'}];
   h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
   const html=h.nodes.get('r3-hud').innerHTML;
-  assert.match(html,/hud-portrait-dock/);
-  assert.match(html,/hud-portrait-rim/);
-  assert.match(html,/hud-action-panels/);
-  assert.match(html,/ACTION<\/span>/);
-  assert.match(html,/BONUS ACTION<\/span>/);
+  assert.match(html,/hud-portrait-panel/);
+  assert.match(html,/hud-loadout-pair/);
+  assert.match(html,/hud-main-segments/);
+  assert.match(html,/MAIN ACTION<\/span>/);
+  assert.match(html,/BONUS<\/span>/);
   assert.match(html,/REACTION<\/span>/);
+  assert.match(html,/FREE<\/span>/);
+  assert.match(html,/PASS<\/span>/);
   assert.match(html,/Crowbar/);
   assert.match(html,/Misty Step/);
   assert.match(html,/Shield/);
-  assert.doesNotMatch(html,/class="hud-drawer"/,'drawer should not overwhelm tabletop by default');
+  assert.doesNotMatch(html,/class="hud-flyout"/,'upward flyout is hidden by default');
   h.shadow.handlers.get('click')({target:{dataset:{hudCategory:'inventory'}}});
-  assert.match(h.nodes.get('r3-hud').innerHTML,/class="hud-drawer"/);
-  assert.equal(h.api.R3_HUD.drawerOpen,true);
-  h.click('r3-hud-drawer-close');
-  assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/class="hud-drawer"/);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/class="hud-flyout"/);
+  assert.equal(h.api.R3_HUD.flyout,'inventory');
+  h.click('r3-hud-flyout-close');
+  assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/class="hud-flyout"/);
 });
 test('passive perception explicit sheet observation outranks computed base',()=>{
   const h=panelHarness();h.api.r3StartUI();
@@ -908,4 +910,102 @@ test('passive perception explicit sheet observation outranks computed base',()=>
   const html=h.nodes.get('r3-hud').innerHTML;
   assert.match(html,/PASSIVE<\/span><strong>19/);
   assert.doesNotMatch(html,/PASSIVE BASE/);
+});
+
+test('reference HUD has three paired weapon sets and five segmented action groups',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.equal([...html.matchAll(/class="hud-loadout-pair/g)].length,3);
+  assert.equal([...html.matchAll(/data-hud-slot="/g)].length,6);
+  assert.match(html,/MAIN ACTION/);
+  assert.match(html,/BONUS/);
+  assert.match(html,/FREE/);
+  assert.match(html,/REACTION/);
+  assert.match(html,/PASS/);
+  assert.match(html,/END TURN/);
+  assert.match(html,/disabled/,'native end turn is not yet implemented');
+  assert.match(html,/CAST SPELL/);
+  assert.match(html,/USE FEATURE/);
+  assert.match(html,/USE ITEM/);
+});
+test('weapon set picker assigns imported weapons to action/bonus slots locally and restores selection',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snapshot=h.api.r3Empty();snapshot.name='NIER';snapshot.stats.hp=82;
+  snapshot.attacks=[{name:'Longbow',_key:'longbow',tab:'Combat'},
+    {name:'Dagger',_key:'dagger',tab:'Combat'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudSlot:'0'}}});
+  assert.equal(h.api.R3_HUD.chooser,0);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/QUICK SLOT 1/);
+  h.shadow.handlers.get('click')({target:{dataset:{hudAssign:'1'}}});
+  assert.equal(h.api.R3_HUD.weaponSets[0].key,'dagger');
+  assert.equal(h.api.R3_HUD.chooser,null);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/Dagger/);
+  assert.match(h.store.get('roll20-embetterment-v3:123:hud'),/"key":"dagger"/);
+  h.shadow.handlers.get('click')({target:{dataset:{hudSet:'2'}}});
+  assert.equal(h.api.R3_HUD.weaponSet,2);
+  assert.equal(h.sent.length,0,'assigning set slots never equips or casts in Roll20');
+  h.shadow.handlers.get('click')({target:{dataset:{hudSlot:'0'}}});
+  h.shadow.handlers.get('click')({target:{dataset:{hudAssign:'clear'}}});
+  assert.equal(h.api.R3_HUD.weaponSets[0],null);
+});
+test('spell flyout groups observed levels with observed slot counts and never casts',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
+  snap.spells=[
+    {name:'Fire Bolt',_key:'firebolt',level:0},
+    {name:'Cure Wounds',_key:'cure',level:1},
+    {name:'Misty Step',_key:'misty',level:2},
+    {name:'Unclassified',_key:'unknown'}
+  ];
+  snap.slots['1']={current:2,max:4};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'spells'}}});
+  let html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/class="hud-flyout"/);
+  assert.match(html,/Cantrip/);assert.match(html,/Level 1/);assert.match(html,/Level 2/);
+  h.shadow.handlers.get('click')({target:{dataset:{hudSpellLevel:'1'}}});
+  html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/Cure Wounds/);
+  assert.match(html,/Slots 2 \/ 4/);
+  assert.doesNotMatch(html,/Misty Step/);
+  assert.equal(h.sent.length,0,'viewing spell groups cannot cast');
+  h.click('r3-hud-flyout-close');
+  assert.equal(h.api.R3_HUD.flyout,'');
+});
+test('skills and saves shortcut opens an observed-only flyout',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const s=h.api.r3Empty();s.name='NIER';s.skills.Perception=5;s.saves.str=4;s.modifiers.dex=3;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(s);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'skills'}}});
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/SAVING THROWS/);
+  assert.match(html,/SKILLS/);
+  assert.match(html,/Perception/);
+  assert.match(html,/ABILITY CHECKS/);
+});
+test('action markers are local only and manually reset, including after hiding HUD',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudUsed:'action'}}});
+  assert.equal(h.api.R3_HUD.used.action,true);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/data-hud-used="action" aria-pressed="true"/);
+  assert.equal(h.sent.length,0);
+  h.click('r3-hud-reset-turn');
+  assert.equal(h.api.R3_HUD.used.action,false);
+  h.shadow.handlers.get('click')({target:{dataset:{hudUsed:'bonus'}}});
+  h.click('r3-hud-collapse');h.click('r3-hud-collapse');
+  assert.equal(h.api.R3_HUD.used.bonus,false);
+});
+test('Shift+A toggles HUD outside text fields without accidentally triggering Roll20 editor shortcuts',()=>{
+  const h=panelHarness();h.api.r3StartUI();const fn=h.windowListeners.get('keydown');
+  assert.equal(typeof fn,'function');
+  let stopped=0,prevented=0;
+  const base={key:'A',shiftKey:true,ctrlKey:false,altKey:false,metaKey:false,repeat:false,
+    preventDefault(){prevented++;},stopPropagation(){stopped++;}};
+  fn({...base,target:{tagName:'INPUT'}});assert.equal(h.api.R3_HUD.collapsed,false);
+  fn({...base,target:{tagName:'DIV'}});assert.equal(h.api.R3_HUD.collapsed,true);
+  assert.equal(stopped,1);assert.equal(prevented,1);
+  fn({...base,target:{tagName:'DIV'}});assert.equal(h.api.R3_HUD.collapsed,false);
 });
