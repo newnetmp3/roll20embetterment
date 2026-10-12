@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.2.2 Argon core visual/interaction structure merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.2.3 live Floorp HUD layout refinement under development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -111,3 +111,6 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 **v3.2.2 CI and merge:** PR #47 squash-merged as `e5c3dcf58ee745d4095391bad2721c84be6368cb`. Final run 38321249957 green (**277 tests, zero failures**, generated bundle consistent). Live Floorp verification and native combat action automation remain pending. Do not mark a function truly verified until both automated CI and live Floorp QA demonstrate it. Keep v3.2.1 source-grounded AC 17/speed 55 and 2024 popout importer behavior.
 
 **v3.2.2 implementation checkpoint:** `main` includes original-wiki reference visual structure: left character panel with 3×2 quick weapon slots, horizontal Main Action/Bonus/Free/Reaction/Pass bar, upward spell-level and item/skill flyouts, HUD-native per-game weapon assignments, Shift+A toggle and local-only spent indicators. Still no native D&D 2024 rolls/casts, GM turn control, target picker or movement tracking. This is a **structural-faithfulness milestone**, not total Argon functional parity.
+
+
+**v3.2.3 — Screenshot-confirmed HUD layout and visible Journal image (2026-10-12):** User supplied first Floorp screen of v3.2.2. **Confirmed live:** bottom horizontal segmented action bar, weapon-set selectors, Nier HP 82/84, AC 17, Speed 55ft and resources rendering. **Visible defects:** portrait dock compressed with HP/stat wrap; utility/action labels small; resource bar cramped. Implement larger stable portrait width, row height and bottom gutter, readable single-line HP, full 2×2 stat grid, readable actions and horizontally scrollable resource chips. Add exact-name **already displayed** Roll20 Journal portrait reuse with no API/remote searches, URL validation and safe fallback. Source data/authoritative action semantics unchanged. Re-test in Floorp after CI before treating the improved sizing/portrait as verified. Remaining: real Roll20 token/avatar connection, native rolls/casts, prepared spell state, targeting, movement tracking and end-turn.
