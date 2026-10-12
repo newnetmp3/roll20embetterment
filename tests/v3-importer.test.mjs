@@ -191,7 +191,7 @@ test('Inventory main tab detects named 2024 item-row titles without legacy inven
   };
   const {h}=harness(fixture);
   const snapshot=h.r3Capture(fixture.body,'Inventory');
-  assert.deepEqual(snapshot.inventory.map(x=>x.name),['Potion of Healing','Rope, Hempen']);
+  assert.deepEqual([...snapshot.inventory.map(x=>x.name)],['Potion of Healing','Rope, Hempen']);
   assert.equal(snapshot.inventory[0].visible,'Potion of Healing Qty 2 Weight 1 lb');
   const combat=h.r3Capture(fixture.body,'Combat');
   assert.equal(combat.inventory.length,0,'generic item rows are not inventory on other tabs');

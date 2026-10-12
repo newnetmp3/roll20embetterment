@@ -23,3 +23,5 @@ Updated: October 12, 2026 (v3.0.3). v2.3.13 continued to fail real Floorp/Roll20
 **Next:** Install v3.0.3 with the previous version disabled. Open the original 2024 sheet, import all tabs, verify HP 82/84, STR 18, AC 17, speed 55, initiative +2.14 and spell inventory; export JSON for any missed fields. Do not call the importer correct based solely on CI.
 
 Rolling rule: update this roadmap and docs/HANDOVER.md with each development milestone.
+
+**Planned UI phase (after trustworthy importer):** Use the user-supplied Foundry VTT module as the visual and interaction framework for the Roll20 companion. Port layout/components conceptually to a Roll20-native userscript; do not depend on Foundry runtime APIs, and review asset/code licensing before reuse. Await module file or URL and user sign-off on importer accuracy.
