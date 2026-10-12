@@ -3,10 +3,10 @@
 **Updated:** 2026-10-12  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `7b9ed80ea3a9920ede5da4a90845dc7f6fa7f47a` (v2.3.11, merged PR #26).  
-**Latest completed milestone:** v2.3.11 visible D&D 2024 stat-source fix (PR #26 merged, 173 tests passed).  
-**Known unresolved issues:** Real Jumpgate 2024 sheet-opening behavior and authoritative HP/AC/ability syncing still require direct browser verification.  
-**Pending:** Live Roll20 Jumpgate/Firefox verification of sheet opening and actual HP/AC/speed correctness.  
+**Current verified feature baseline:** `00bb39c9eb2aa3c2ea2fc71564f23ea454682647` (v3.1.1, merged PR #38).  
+**Latest completed milestone:** v3.1.1 fast HP watch and automatic-import identity safeguards (PR #38 merged; 221 tests passed).  
+**Known unresolved issues:** Automated Journal sheet opening and official 2024 HP timing still require live Floorp verification; AC, speed, saving throws and slots remain incompletely mapped.  
+**Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
 ## Resume process
 
@@ -234,3 +234,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Live Floorp checklist:** Update Tampermonkey from the production generated script once the PR is merged; confirm Nier's displayed HP changes within roughly 1–2 seconds with the official sheet mounted (allow for browser throttling). Test damage/healing and temp HP, sheet on another tab, disabled auto mode, and Journal closed/visible. Watch whether the auto-open creates a truly new owned dialog; if Roll20 suppresses synthetic events or unmounts HP outside Combat, log that specific limitation without substituting guessed token HP. Continue to collect exact DOM evidence for AC 17/speed 55/slots/saves, not the removed spells Power Word Pain or Blades of Disaster.
 
 **Next milestone:** Retest auto-open and fast health source in actual Floorp/Jumpgate, then target any reproducible Journal DOM failures without private APIs or unwanted sheet visibility; only then advance Foundry-inspired HUD redesign.
+
+**Post-merge checkpoint:** PR #38 merged into `main` as `00bb39c9eb2aa3c2ea2fc71564f23ea454682647`. Final PR head GitHub Actions run 38307749208 passed `npm run check` and generated-userscript diff. Production userscript on main is v3.1.1. Resume with real Floorp/Jumpgate QA; do not call automatic opening or sub-second latency proven without live evidence.
