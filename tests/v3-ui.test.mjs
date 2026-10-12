@@ -402,6 +402,9 @@ test('popout ready announcements refresh a late-loaded Vue character name',()=>{
   p.announce('NIER');
   assert.equal(h.api.r3AutoCandidate().type,'popout');
   assert.match(h.nodes.get('r3-choices').innerHTML,/NIER \(popout\)/);
+  p.announce('Unnamed sheet');
+  assert.equal(h.api.r3AutoCandidate().type,'popout',
+    'temporary Vue loading states must not erase a confirmed name');
 });
 test('closed popout is pruned and the next fresh popout can take over',()=>{
   const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
