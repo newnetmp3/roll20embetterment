@@ -478,7 +478,7 @@ test('reader ignores generic clicks but tracks incrementers and editable control
   const scheduled=[],original=(fn,ms)=>{scheduled.push(ms);return scheduled.length;};
   context.setTimeout=original;
   const button={className:'regular button',getAttribute:()=>null};
-  const target={tagName:'SPAN',getClientRects:()=>[{}],closest:()=>button};
+  const target={tagName:'SPAN',getClientRects:()=>[{}],closest:sel=>sel==='button'?button:null};
   h.r3ReaderChanged({type:'click',target});
   assert.equal(scheduled.length,0,'ordinary clicks must not trigger a heavyweight re-read');
   button.className='utility-incrementer__button';
