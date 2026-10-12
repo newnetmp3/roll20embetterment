@@ -5,7 +5,7 @@
 **Default branch:** `main`  
 **Current verified feature baseline:** `4f812a74a74d7b510628d08e78ecbffe89abbfc4` (v3.1.2, merged PR #39).  
 **Latest completed milestone:** v3.1.2 official popout automatic sync (PR #39 merged; 228 tests passed).  
-**Known unresolved issues:** Popout HP refresh is now user-verified, but non-HP popout imports, unattended Journal opening, and AC/speed/saving throw/slot mappings still require verification.  
+**Known unresolved issues:** Popout HP and manual all-tab import are now user-verified. Automated non-HP changes, unattended closed-sheet Journal opening, and AC/speed/saving throw/slot mappings still require verification.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
 ## Resume process
@@ -13,7 +13,7 @@
 1. Fetch `docs/HANDOVER.md` and `docs/ROADMAP.md` from GitHub main. Verify latest SHA, open PRs, build version and GitHub Actions.
 2. Implement meaningful, tested slices from the roadmap rather than tiny one-off commits.
 3. **Update both documents in every development PR** with implemented behavior, verifiable tests/CI, remaining problems and next action.
-4. Only edit `src/??_*.js`; `roll20-embetterment.user.js` is generated with `npm run build`.
+4. Edit the current v3 modules under `v3/`; `src/` contains legacy code. `roll20-embetterment.user.js` is generated with `npm run build`.
 5. Run `npm run check` and require green Actions before merging. Keep the handover factual and refresh the baseline after each merge.
 
 ## Existing implementation (v2.3.2)
@@ -257,3 +257,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Post-merge checkpoint (2026-10-12):** PR #39 merged into `main` as `4f812a74a74d7b510628d08e78ecbffe89abbfc4`. The final PR-head GitHub Actions run 38310601659 passed with 228 tests, no failures, generated-userscript check green. Production script is v3.1.2. User's popout bug is **implemented/fixed in code, but awaiting user confirmation in live Roll20/Floorp**. Next confirm popup-to-opener handshake and HP updates without closing/reopening the sheet; if still failing, capture the actual popout URL and whether it retains opener before changing cross-window transport.
 
 **2026-10-12 live user validation of v3.1.2:** User explicitly confirms **"popout Hp update works"**. Mark automatic HP refresh through a popped-out official character sheet as **user-verified working** (latency not measured). This supports working popout-to-editor messaging and the bounded HP scan in the user's Roll20 environment. It does **not** verify that every other field refreshes or every sheet tab imports automatically. Player-owned popouts only receive current-tab refreshes (~30-second gate) plus HP-only watch (~1-second best-effort), not automated tab traversal; full-tab import remains manual in this mode. Still pending: live popout Import all tabs, current-tab fields beyond HP, preserving catalog on state changes, automatic Journal opening with no sheet mounted, AC/speed/save/slot mappings, browser throttling/reconnect. Next validate a second changing statistic and manual Import all tabs in the same popout, then tackle the remaining source gaps. No code changes in this documentation-only checkpoint.
+
+**2026-10-12 live full-popout-import verification:** Following the successful official popped-out-sheet HP-sync test, the user confirms that **Import all tabs from the popped-out Nier sheet is successful**. Mark the cross-window full **manual** import workflow as user-verified, in addition to continuous HP sync. Do not overstate this as a complete validation of individual stats/cards, correct AC 17/speed 55/saves/slots, or unattended full-tab updates: `Import all tabs` is manually triggered, and Auto-sync never silently flips tabs in a player-owned popout. No code change or CI run was needed for this live QA checkpoint. **Next:** verify ordinary non-HP changes via the current-tab auto scan; test fully closed sheet and page-reload Journal opening; inspect exact evidence for unmapped attributes; then continue the Foundry-inspired combat HUD.
