@@ -302,8 +302,8 @@ test('live Nier export identifies temp HP, all five coin amounts, and named feat
     input({title:'Second Wind',type:'range',value:'1'}),
     input({title:'Unleash Incarnation',type:'range',value:'2'}),
     input({title:'Fleet-Footed Resources',type:'range',value:'1'}),
-    input({id:'de88942a-ba81-4f59-94b2-b02ad4f1f056',value:'17'}),
-    input({id:'ceefefe2-337c-4aaf-9549-345ec14a0b68',value:'55'})
+    input({id:'11111111-2222-4333-8444-555555555555',value:'17'}),
+    input({id:'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',value:'55'})
   ]}));
   const s=h.r3Capture(fixture.body,'Features & Traits');
   assert.equal(s.stats.tempHp,0);
