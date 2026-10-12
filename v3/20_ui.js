@@ -37,7 +37,7 @@ function r3CardsView(kind){
   if(!snap?.[kind]?.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
   return snap[kind].slice(0,400).map(item=>
     '<details class="entry"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
-    '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+
+    '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+    (item.checkboxes?'<div class="muted">Visible checkboxes: '+r3Escape(item.checkboxes.checked)+' of '+r3Escape(item.checkboxes.total)+' checked (sheet-specific meaning)</div>':'')+
     (item.actions?.length?'<div class="chips">'+item.actions.map(b=>'<span>'+r3Escape(b.label)+'</span>').join('')+'</div>':'')+
     '</details>').join('');
 }
@@ -74,7 +74,7 @@ function r3Results(){
 function r3UIStatus(message,coverage){
   R3_UI.status=message;
   const el=R3_UI.root?.getElementById('r3-status');
-  if(el)el.textContent=message+(coverage?' · '+Object.entries(coverage).filter(([k])=>['spells','attacks','inventory','features'].includes(k)).map(([k,v])=>k+' '+v).join(', '):'');
+  if(el)el.textContent=message+(coverage?' · '+Object.entries(coverage).filter(([k])=>['spells','attacks','inventory','features','resources'].includes(k)).map(([k,v])=>k+' '+v).join(', '):'');
 }
 function r3UIRefresh(){
   if(!R3_UI.root)return;

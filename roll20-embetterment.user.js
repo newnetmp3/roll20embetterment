@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.0.2
+// @version      3.0.3
 // @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -26,14 +26,14 @@ const R3_SKILLS=['Acrobatics','Animal Handling','Arcana','Athletics','Deception'
 const R3_CATEGORIES={
   spells:'.spell-item,[data-testid*="spell-item"],[data-testid*="spell-row"],.sheet-spell',
   attacks:'.attack-item,[data-testid*="attack-item"],.sheet-attack',
-  inventory:'.inventory-item,.equipment-item,[data-testid*="inventory-item"],[data-testid*="equipment-item"],.sheet-item',
+  inventory:'.inventory-item,.equipment-item,[data-testid*="inventory-item"],[data-testid*="equipment-item"],[data-testid*="inventory-row"],[data-testid*="equipment-row"],.item-row--inventory,.sheet-item',
   features:'.feature-item,.trait-item,.action-item,[data-testid*="feature-item"],[data-testid*="trait-item"],.sheet-feature',
-  resources:'.resource-item,[data-testid*="resource-item"],.sheet-resource'
+  resources:'.resource-item,[data-testid*="resource-item"],[data-testid*="resource-row"],.sheet-resource'
 };
 const R3_NAMES={
   spells:['.spell-item__name','.span--item-row-title','[data-testid*="spell-name"]','[class*="spell-name"]'],
   attacks:['.span--item-row-title','.attack-item__title-chat','.attack-item__title-col','[data-testid*="attack-name"]'],
-  inventory:['.inventory-item__name','.equipment-item__name','.span--item-row-title','[data-testid*="item-name"]'],
+  inventory:['.inventory-item__name','.equipment-item__name','.span--item-row-title','[class*="item-row-title"]','[data-testid*="item-name"]','[data-testid*="equipment-name"]'],
   features:['.action-item__name','.feature-item__name','.trait-item__name','.span--item-row-title'],
   resources:['.resource-item__name','.span--item-row-title']
 };
@@ -231,6 +231,79 @@ function r3CardInfo(card,kind,name,tab){
   }
   return info;
 }
+// Only named, rendered inventory rows are imported. Many 2024 sheets use
+// generic item-row components instead of .inventory-item/.equipment-item.
+function r3AddNamedCard(s,kind,row,name,tab){
+  if(!Array.isArray(s[kind])||!name||s[kind].length>=400)return;
+  const info=r3CardInfo(row,kind,name,tab);
+  const key=name.toLowerCase()+'|'+(kind==='spells'?info.level||'':'')+'|'+(kind==='attacks'?info.visible.slice(0,60):'');
+  if(!s[kind].some(x=>x._key===key))s[kind].push({...info,_key:key});
+}
+function r3InventoryRows(root,s,tab){
+  // Generic .item-row and .span--item-row-title also appear on other tabs.
+  // Use them only after visiting the *actual* Inventory tab.
+  if(!/^inventory\b/i.test(tab))return;
+  const names=Array.from(root.querySelectorAll?.(
+    '.span--item-row-title,[class*="item-row-title"],[data-testid*="item-name"],'+
+    '[data-testid*="equipment-name"],.inventory-item__name,.equipment-item__name'
+  )||[]).slice(0,500);
+  for(const el of names){
+    if(!r3Shown(el))continue;
+    const name=r3Text(el,125);
+    if(!name||/^(equipment|other possessions|attunement|inventory|add item|search)$/i.test(name))continue;
+    const row=el.closest?.(
+      '.item-row,[class*="item-row__"],[class*="item-row--"],[data-testid*="item-row"],'+
+      '.inventory-item,.equipment-item,[data-testid*="inventory-item"],[data-testid*="equipment-item"]'
+    )||el.parentElement?.parentElement||el.parentElement||el;
+    if(!r3Shown(row))continue;
+    // Don't manufacture a giant "item" whose wrapper holds several names.
+    if((row.querySelectorAll?.('.span--item-row-title,[data-testid*="item-name"]')||[]).length>1)continue;
+    r3AddNamedCard(s,'inventory',row,name,tab);
+  }
+}
+function r3ResourceControls(root,s,tab){
+  // 2024 resources are normally charge/checkbox trackers *inside* features
+  // or inventory items, not standalone .resource-item cards.
+  const controls=Array.from(root.querySelectorAll?.(
+    '.resource-tracker,[class*="resource-tracker"],[class*="resource-row"],'+
+    '[data-testid*="resource"],[class*="resource-uses"],[class*="charge-tracker"]'
+  )||[]).slice(0,500);
+  const seen=new Set();
+  for(const el of controls){
+    if(!r3Shown(el))continue;
+    const group=el.closest?.(
+      '.resource-item,[data-testid*="resource-row"],.resource-tracker,'+
+      '[class*="resource-tracker"],[class*="resource-row"]'
+    )||el;
+    if(seen.has(group))continue;seen.add(group);
+    if(!r3Shown(group))continue;
+    const parent=group.closest?.(
+      '.item-row,.inventory-item,.equipment-item,.feature-item,.trait-item,.action-item,'+
+      '[data-testid*="feature-item"],[data-testid*="inventory-item"]'
+    )||group.parentElement;
+    const resourceLabel=group.querySelector?.(
+      '[data-testid*="resource-name"],[class*="resource__name"],'+
+      '[class*="resource-name"],[class*="resource-label"]'
+    );
+    let name=r3Text(resourceLabel,125);
+    if(!name)name=r3Attr(group,'aria-label')||r3Attr(group,'title');
+    if(!name&&group!==el)name=r3Attr(el,'aria-label')||r3Attr(el,'title');
+    if(!name||/^(resources?|charges?|uses?|track(?:er)?|remaining|used)$/i.test(name)){
+      const owner=parent&&parent!==group?parent:null;
+      name=owner&&(r3Name(owner,'inventory')||r3Name(owner,'features')||r3Name(owner,'attacks'))||'';
+    }
+    if(!name||/^(resources?|charges?|uses?|track(?:er)?|remaining|used)$/i.test(name))continue;
+    const item=r3CardInfo(group,'resources',name,tab);
+    // Checkboxes describe *visible state*. Checked may mean expended or
+    // available depending on the sheet; never infer remaining charges.
+    const checks=Array.from(group.querySelectorAll?.('input[type="checkbox"],[role="checkbox"]')||[]).slice(0,100);
+    if(checks.length)item.checkboxes={total:checks.length,checked:checks.filter(c=>c.checked||r3Attr(c,'aria-checked')==='true').length};
+    if(!item.visible)item.visible=r3Text(parent,250);
+    const key=name.toLowerCase();
+    if(!s.resources.some(x=>x._key===key)&&s.resources.length<400)
+      s.resources.push({...item,_key:key});
+  }
+}
 function r3Cards(root,s,tab){
   // Card collections and keyed bonus maps have different data contracts.
   // Skills are parsed by r3VisibleStats into s.skills (an object), never here.
@@ -244,14 +317,11 @@ function r3Cards(root,s,tab){
     for(const row of cards){
       if(!r3Shown(row))continue;
       const name=r3Name(row,kind);if(!name)continue;
-      const info=r3CardInfo(row,kind,name,tab);
-      const key=name.toLowerCase()+'|'+(kind==='spells'?info.level||'':'')+'|'+(kind==='attacks'?info.visible.slice(0,60):'');
-      if(!s[kind].some(x=>x._key===key)){
-        if(s[kind].length>=400)continue;
-        s[kind].push({...info,_key:key});
-      }
+      r3AddNamedCard(s,kind,row,name,tab);
     }
   }
+  r3InventoryRows(root,s,tab);
+  r3ResourceControls(root,s,tab);
 }
 function r3Capture(root,tab='Current view'){
   const s=r3Empty();s.name=r3NameFromDocument(root);
@@ -324,40 +394,78 @@ function r3Tabs(){
 }
 function r3Active(tab){return tab?.getAttribute?.('aria-selected')==='true'||tab?.getAttribute?.('data-state')==='active'||/\b(active|selected|current)\b/i.test(String(tab?.className||''));}
 function r3Pause(ms){return new Promise(r=>setTimeout(r,ms));}
+function r3TabKey(tab){
+  const group=tab?.closest?.('[role="tablist"]');
+  const groupName=r3Attr(group,'aria-label')||r3Attr(group,'id')||
+    r3String(group?.className,80)||'tablist';
+  return groupName+'|'+r3TabLabel(tab).toLowerCase();
+}
+function r3ResolveTab(key,label){
+  const tabs=r3Tabs();
+  return tabs.find(tab=>r3TabKey(tab)===key)||
+    tabs.find(tab=>r3TabLabel(tab).toLowerCase()===label.toLowerCase())||null;
+}
 async function r3CollectAllTabs(progress){
-  const original=r3Tabs().filter(r3Active);
-  const acc=r3Empty();
-  const seen=new Set();let visited=0;
+  // Vue can replace every tab element after clicking a tab. Store labels
+  // and stable tablist identities, NOT stale element references.
+  const descriptors=()=>r3Tabs().map(tab=>({key:r3TabKey(tab),label:r3TabLabel(tab)}));
+  const original=r3Tabs().filter(r3Active).map(tab=>({key:r3TabKey(tab),label:r3TabLabel(tab)}));
+  const acc=r3Empty(),seen=new Set();
+  let visited=0;
+  const primaryLabel=/^(combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
   const collect=label=>{
-    const snap=r3Capture(document.body,label);r3Merge(acc,snap);visited++;
+    r3Merge(acc,r3Capture(document.body,label));visited++;
     progress?.(label,r3Coverage(acc));
   };
-  const visit=async tab=>{
-    if(!tab||!tab.isConnected||!r3Shown(tab)||visited>=32)return;
-    const label=r3TabLabel(tab);if(!label)return;
-    const identity=label+'|'+(tab.closest?.('[role="tablist"]')?.getAttribute?.('aria-label')||'');
-    if(seen.has(identity))return;
-    seen.add(identity);
-    if(!r3Active(tab)){tab.click();await r3Pause(210);}
+  const visit=async ({key,label})=>{
+    if(visited>=32||seen.has(key))return false;
+    const tab=r3ResolveTab(key,label);
+    if(!tab||!r3Shown(tab)){
+      acc.diagnostics.notes.push('Tab not available when visited: '+label);
+      return false;
+    }
+    seen.add(key);
+    if(!r3Active(tab)){
+      tab.click();await r3Pause(290);
+    }
     collect(label);
+    return true;
   };
   try{
     collect('Current view');
-    const top=r3Tabs().slice(0,14);
-    for(const tab of top){
+    const initial=descriptors();
+    // The six main 2024 sheet panels must not be pushed out of the first
+    // 14 tabs by nested filter tabs (a previous source of false zeroes).
+    const main=initial.filter(x=>primaryLabel.test(x.label));
+    for(const mainTab of main){
       if(visited>=32)break;
-      await visit(tab);
-      if(/^(spells|inventory|combat|features\s*(?:&|and)\s*traits|skills\s*&\s*tools)$/i.test(r3TabLabel(tab))){
-        const second=r3Tabs().filter(x=>!top.includes(x)).slice(0,20);
-        const prior=second.filter(r3Active);
-        try{for(const child of second){if(visited>=32)break;await visit(child);}}
-        finally{for(const child of prior)if(child?.isConnected&&!r3Active(child)){child.click();await r3Pause(100);}}
+      if(!await visit(mainTab))continue;
+      const children=descriptors().filter(x=>!primaryLabel.test(x.label)&&!seen.has(x.key)).slice(0,20);
+      for(const child of children){
+        if(visited>=32)break;
+        await visit(child);
       }
     }
+    // Visit any other initially visible tabs missed by the priority pass.
+    for(const extra of initial.filter(x=>!primaryLabel.test(x.label))){
+      if(visited>=32)break;
+      await visit(extra);
+    }
   }finally{
-    for(const tab of original)if(tab?.isConnected&&!r3Active(tab)){tab.click();await r3Pause(130);}
+    // Restore by identity rather than trying to click detached old nodes.
+    for(const prior of original){
+      const tab=r3ResolveTab(prior.key,prior.label);
+      if(tab&&!r3Active(tab)){tab.click();await r3Pause(130);}
+    }
   }
   if(visited>=32)acc.diagnostics.limits.push('32 tab views maximum');
+  const scanned=acc.diagnostics.tabs;
+  if(!scanned.some(label=>/^inventory\b/i.test(label)))
+    acc.diagnostics.notes.push('Inventory tab was not visited. Check whether its tab is exposed and visible.');
+  else if(!acc.inventory.length)
+    acc.diagnostics.notes.push('Inventory tab visited, but no identifiable item-name rows were rendered.');
+  if(!acc.resources.length)
+    acc.diagnostics.notes.push('No named resource trackers detected in rendered tabs; resource checkboxes may be nested or unmounted.');
   acc.diagnostics.notes.push('Only rendered DOM was read. Virtualized/offscreen rows are not guaranteed complete.');
   return r3Coverage(acc);
 }
@@ -494,7 +602,7 @@ function r3CardsView(kind){
   if(!snap?.[kind]?.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
   return snap[kind].slice(0,400).map(item=>
     '<details class="entry"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
-    '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+
+    '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+    (item.checkboxes?'<div class="muted">Visible checkboxes: '+r3Escape(item.checkboxes.checked)+' of '+r3Escape(item.checkboxes.total)+' checked (sheet-specific meaning)</div>':'')+
     (item.actions?.length?'<div class="chips">'+item.actions.map(b=>'<span>'+r3Escape(b.label)+'</span>').join('')+'</div>':'')+
     '</details>').join('');
 }
@@ -531,7 +639,7 @@ function r3Results(){
 function r3UIStatus(message,coverage){
   R3_UI.status=message;
   const el=R3_UI.root?.getElementById('r3-status');
-  if(el)el.textContent=message+(coverage?' · '+Object.entries(coverage).filter(([k])=>['spells','attacks','inventory','features'].includes(k)).map(([k,v])=>k+' '+v).join(', '):'');
+  if(el)el.textContent=message+(coverage?' · '+Object.entries(coverage).filter(([k])=>['spells','attacks','inventory','features','resources'].includes(k)).map(([k,v])=>k+' '+v).join(', '):'');
 }
 function r3UIRefresh(){
   if(!R3_UI.root)return;

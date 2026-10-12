@@ -53,7 +53,7 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.0\.2/);
+  assert.match(compiled,/\/\/ @version\s+3\.0\.3/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -156,6 +156,96 @@ test('importer card schema excludes keyed skills and protects against future arr
   assert.equal(snap.features.length,1);
   assert.deepEqual({...snap.skills},{});
   assert.equal(snap.coverage.features,1);
+});
+
+function namedInventoryRow(name,description){
+  const row=card('inventory',name,description);
+  const title={innerText:name,getClientRects(){return [{}]},getAttribute(){return null},
+    closest(selector){return selector.includes('item-row')?row:null},parentElement:row};
+  row.querySelectorAll=selector=>selector.includes('.span--item-row-title')?[title]:[];
+  return {row,title};
+}
+function namedResourceTracker(name,description,checkValues=[]){
+  const owner=card('features',name,description);
+  const marker={innerText:name,getClientRects(){return [{}]},getAttribute(){return null}};
+  const checks=checkValues.map(checked=>({
+    checked,getAttribute(){return null},getClientRects(){return [{}]}
+  }));
+  const tracker={innerText:description,disabled:false,getClientRects(){return [{}]},
+    getAttribute(){return null},
+    closest(selector){if(selector.startsWith('[hidden]'))return null;
+      return selector.includes('.resource-item')?tracker:selector.includes('.item-row')?owner:null},
+    querySelector(selector){return selector.includes('resource-name')?marker:null},
+    querySelectorAll(selector){return selector.includes('checkbox')?checks:[]}
+  };
+  return {owner,tracker};
+}
+test('Inventory main tab detects named 2024 item-row titles without legacy inventory classes',()=>{
+  const a=namedInventoryRow('Potion of Healing','Potion of Healing Qty 2 Weight 1 lb');
+  const b=namedInventoryRow('Rope, Hempen','Rope, Hempen Qty 1 50 ft');
+  const fixture=docFixture();
+  const previous=fixture.body.querySelectorAll.bind(fixture.body);
+  fixture.body.querySelectorAll=selector=>{
+    if(selector.startsWith('.span--item-row-title,'))return [a.title,b.title];
+    return previous(selector);
+  };
+  const {h}=harness(fixture);
+  const snapshot=h.r3Capture(fixture.body,'Inventory');
+  assert.deepEqual([...snapshot.inventory.map(x=>x.name)],['Potion of Healing','Rope, Hempen']);
+  assert.equal(snapshot.inventory[0].visible,'Potion of Healing Qty 2 Weight 1 lb');
+  const combat=h.r3Capture(fixture.body,'Combat');
+  assert.equal(combat.inventory.length,0,'generic item rows are not inventory on other tabs');
+});
+test('2024 embedded feature resource tracker is imported with checkbox observations, not invented remaining charges',()=>{
+  const r=namedResourceTracker('Second Wind','Second Wind Bonus Action Uses',[true,false,false]);
+  const fixture=docFixture();
+  const previous=fixture.body.querySelectorAll.bind(fixture.body);
+  fixture.body.querySelectorAll=selector=>
+    selector.startsWith('.resource-tracker,')?[r.tracker]:previous(selector);
+  const {h}=harness(fixture);
+  const snap=h.r3Capture(fixture.body,'Features & Traits');
+  assert.equal(snap.resources.length,1);
+  assert.equal(snap.resources[0].name,'Second Wind');
+  assert.deepEqual({...snap.resources[0].checkboxes},{total:3,checked:1});
+  assert.equal(snap.resources[0].current,undefined,'checkbox semantics are not assumed');
+  assert.equal(snap.coverage.resources,1);
+  const merged=h.r3Merge(h.r3Empty(),snap);
+  assert.equal(merged.resources.length,1);
+});
+test('Import all tabs reacquires Vue-replaced tab nodes and reaches inventory after many filter tabs',async()=>{
+  const item=namedInventoryRow('Dagger','Dagger Qty 1');
+  const resource=namedResourceTracker('Ki Points','Ki Points Uses',[false,true]);
+  const fixture=docFixture();
+  const {h,context}=harness(fixture);
+  let active='Combat',render=0;
+  const labels=[...Array.from({length:17},(_,i)=>'Filter '+(i+1)),
+    'Combat','Spells','Inventory','Features & Traits'];
+  const group={className:'main-sheet-tabs',getAttribute(key){return key==='aria-label'?'Main tabs':null}};
+  context.document.querySelectorAll=selector=>{
+    if(selector.startsWith('[role="tab"]'))return labels.map(label=>{
+      const born=render;
+      return {className:label===active?'active':'',isConnected:born===render,
+        disabled:false,getClientRects(){return [{}]},
+        getAttribute(key){return key==='aria-selected'?String(label===active):
+          key==='aria-label'?label:null},
+        closest(selector){return selector==='[role="tablist"]'?group:null},
+        click(){if(born!==render)throw new Error('Clicked stale Vue tab');active=label;render++;}};
+    });
+    return [];
+  };
+  context.setTimeout=callback=>{callback();return 1;};
+  const previous=fixture.body.querySelectorAll.bind(fixture.body);
+  fixture.body.querySelectorAll=selector=>{
+    if(active==='Inventory'&&selector.startsWith('.span--item-row-title,'))return [item.title];
+    if(active==='Features & Traits'&&selector.startsWith('.resource-tracker,'))return [resource.tracker];
+    return previous(selector);
+  };
+  const scan=await h.r3CollectAllTabs();
+  assert.equal(active,'Combat','selected view restored');
+  assert.ok(scan.diagnostics.tabs.includes('Inventory'));
+  assert.ok(scan.diagnostics.tabs.includes('Features & Traits'));
+  assert.equal(scan.coverage.inventory,1);
+  assert.equal(scan.coverage.resources,1);
 });
 test('multiple scans merge distinct categories and deduplicate repeated card names',()=>{
   const {h,fixture}=harness(docFixture({cards:{spells:[card('spells','Fire Bolt','Fire Bolt Cantrip')]}}));

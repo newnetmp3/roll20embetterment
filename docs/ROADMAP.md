@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.0.2). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.0.3). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -18,6 +18,10 @@ Updated: October 12, 2026 (v3.0.2). v2.3.13 continued to fail real Floorp/Roll20
 
 **v3.0.2 fix:** Removed accidental skill-object processing as a card array, which caused a live TypeError during import. Added regression coverage for populated skill rows alongside HP and spell data. The uploaded HTML confirms the original editor iframe, not its cross-origin sheet DOM; live browser verification remains pending.
 
-**Next:** Install v3.0.2 with the previous version disabled. Open the original 2024 sheet, import all tabs, verify HP 82/84, STR 18, AC 17, speed 55, initiative +2.14 and spell inventory; export JSON for any missed fields. Do not call the importer correct based solely on CI.
+**v3.0.3 work:** Inventory and resource zeros reported in Floorp. Added Inventory-tab-scoped named item-row reading and nested feature/item resource tracker support. Main tabs now have priority and fresh Vue references during all-tabs traversal. Added three regression fixtures and visible diagnostics for skipped vs empty Inventory tabs. Still need a live inside-iframe DOM sample to verify selectors and detect virtualization.
+
+**Next:** Install v3.0.3 with the previous version disabled. Open the original 2024 sheet, import all tabs, verify HP 82/84, STR 18, AC 17, speed 55, initiative +2.14 and spell inventory; export JSON for any missed fields. Do not call the importer correct based solely on CI.
 
 Rolling rule: update this roadmap and docs/HANDOVER.md with each development milestone.
+
+**Planned UI phase (after trustworthy importer):** Use the user-supplied Foundry VTT module as the visual and interaction framework for the Roll20 companion. Port layout/components conceptually to a Roll20-native userscript; do not depend on Foundry runtime APIs, and review asset/code licensing before reuse. Await module file or URL and user sign-off on importer accuracy.
