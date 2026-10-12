@@ -108,4 +108,4 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 | End Turn / pass action | Deliberately disabled pending verified Roll20 combat API | Integrate only after confirmed live behavior |
 | True portrait/token selection and screen size responsiveness | Name monogram placeholder and responsive CSS only | Token/portrait integration, mobile sizing and sidebar state |
 
-**v3.2.2 tests/CI and merge:** pending. Do not mark a function truly verified until both automated CI and live Floorp QA demonstrate it. Keep v3.2.1 source-grounded AC 17/speed 55 and 2024 popout importer behavior.
+**v3.2.2 tests/CI:** GitHub Actions PR #47 run 38321191793 passed (**277 tests, 0 failures**, compiled userscript consistent); merge pending. Do not mark a function truly verified until both automated CI and live Floorp QA demonstrate it. Keep v3.2.1 source-grounded AC 17/speed 55 and 2024 popout importer behavior.
