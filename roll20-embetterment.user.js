@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.1.3
+// @version      3.1.4
 // @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -483,7 +483,7 @@ function r3CaptureHealth(root=document.body){
 const R3_PENDING=new Map();
 const R3_POPOUTS=new Map();
 const R3_SESSION=(crypto.randomUUID?.()||('session-'+Date.now()+'-'+Math.random())).slice(0,100);
-let r3Counter=0,r3ListenerStarted=false;
+let r3Counter=0,r3ListenerStarted=false,r3ReaderDirtyTimer=null;
 function r3SheetContext(){return location.origin===R3_ORIGIN&&/\/dnd2024byroll20(?:\/|$)/.test(location.pathname);}
 function r3EditorContext(){return location.origin===R3_EDITOR&&/^\/editor(?:\/|$)/.test(location.pathname);}
 function r3ReaderPeer(){
@@ -598,8 +598,35 @@ function r3ReaderAnnounce(){
   try{peer.postMessage(r3Msg('ready',{session:R3_SESSION,name:r3NameFromDocument(document),
     mode:window.parent===window?'popout':'iframe'}),R3_EDITOR);}catch{}
 }
+function r3ReaderChanged(event){
+  const target=event?.target;
+  if(!target||!r3Shown(target))return;
+  if(event.type==='click'){
+    // Increment/decrement buttons are common on the official 2024 sheet.
+    // Ignore generic clicks, tab navigation, attack rolls and other controls
+    // that do not imply data changes.
+    const button=target.closest?.('button');
+    if(!button)return;
+    const hint=[r3Attr(button,'aria-label'),r3Attr(button,'title'),
+      r3Attr(button,'data-testid'),r3String(button.className,140)].join(' ');
+    if(!/(?:increment|decrement|stepper|counter|quantity|checkbox|charge|toggle-resource)/i.test(hint))return;
+  }else if(!['INPUT','TEXTAREA','SELECT'].includes(String(target.tagName||'').toUpperCase())
+    &&r3Attr(target,'role')!=='spinbutton')return;
+  if(r3ReaderDirtyTimer!==null)clearTimeout(r3ReaderDirtyTimer);
+  // Debounce inside the actual official sheet so keystrokes send one small
+  // authenticated hint instead of generating a cross-window message each.
+  r3ReaderDirtyTimer=setTimeout(()=>{
+    r3ReaderDirtyTimer=null;
+    const peer=r3ReaderPeer();
+    if(!peer)return;
+    try{peer.postMessage(r3Msg('dirty',{session:R3_SESSION,
+      name:r3NameFromDocument(document)}),R3_EDITOR);}catch{}
+  },350);
+}
 function r3StartReader(){
   window.addEventListener('message',r3ReaderReceive);
+  for(const type of ['input','change','click'])
+    document.addEventListener(type,r3ReaderChanged,true);
   r3ReaderAnnounce();
   let attempts=0;
   const timer=setInterval(()=>{if(++attempts>=24)clearInterval(timer);else r3ReaderAnnounce();},1500);
@@ -653,6 +680,16 @@ function r3Listen(event){
       }
     }
     r3UIRefresh?.();
+    return;
+  }
+  if(data.type==='dirty'){
+    // Only a known official iframe or authenticated popup session may
+    // request a re-read. A name match alone never authorizes an unknown
+    // postMessage source or a different character.
+    if(!candidate||typeof data.session!=='string'||!/^[\w.:-]{6,100}$/.test(data.session))return;
+    if(candidate.type==='popout'&&candidate.key!=='popout-'+data.session)return;
+    if(r3String(data.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())return;
+    r3AutoQueueDirty(candidate);
     return;
   }
   const pending=R3_PENDING.get(data.id);
@@ -911,7 +948,7 @@ function r3StartUI(){
 const R3_AUTO={
   enabled:false,name:'',characterId:'',running:false,active:false,opened:false,openedAt:0,
   lastScan:0,lastFull:0,lastOpenAttempt:0,lastError:'',timer:null,healthTimer:null,
-  healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,
+  healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,dirtyTimer:null,
   ownedDialog:null,originalPosition:null
 };
 function r3AutoKey(){return r3StorageKey()+':auto';}
@@ -1102,7 +1139,23 @@ function r3AutoStoreSnapshot(snapshot,mode){
     r3UIRefresh();
   }
 }
-async function r3AutoTick(){
+function r3AutoQueueDirty(candidate){
+  if(!R3_AUTO.enabled||R3_UI.busy||!R3_AUTO.name)return;
+  const current=r3AutoCandidate();
+  if(!current||current.window!==candidate?.window)return;
+  if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
+  const generation=R3_AUTO.generation;
+  // Normal edits start a scan after ~400ms. Limit full current-tab reads
+  // to once every 2 seconds during rapid typing/slider movement.
+  const ms=Math.max(400,2100-(Date.now()-R3_AUTO.lastScan));
+  R3_AUTO.dirtyTimer=setTimeout(()=>{
+    R3_AUTO.dirtyTimer=null;
+    if(!R3_AUTO.enabled||R3_AUTO.generation!==generation||R3_UI.busy)return;
+    if(r3AutoCandidate()?.window!==candidate.window)return;
+    r3AutoTick(true);
+  },ms);
+}
+async function r3AutoTick(eventTriggered=false){
   if(!R3_AUTO.enabled||R3_AUTO.running||R3_UI.busy||!R3_AUTO.name)return;
   const now=Date.now();
   const candidate=r3AutoCandidate();
@@ -1115,10 +1168,10 @@ async function r3AutoTick(){
   // Only navigate sheet tabs when the script itself opened an offscreen
   // dialog. A player-opened visible sheet is read without changing tabs.
   const mode=background&&now-R3_AUTO.lastFull>300000?'all':'current';
-  // Current-tab scans are read-only and do not navigate player-owned
-  // sheets. Poll their visible non-HP fields on a ~16-second cadence (the
-  // scheduler runs every eight seconds) while keeping full traversals rare.
-  if(now-R3_AUTO.lastScan<(mode==='all'?10000:12000))return;
+  // Event-triggered current-view checks bypass the periodic 12-second gate,
+  // but retain a 2-second minimum between heavier DOM reads. Full-tab
+  // traversal remains limited to the established background scheduler.
+  if(now-R3_AUTO.lastScan<(mode==='all'?10000:eventTriggered?2000:12000))return;
   R3_AUTO.running=true;
   const generation=R3_AUTO.generation;
   r3UIRefresh();
@@ -1180,7 +1233,10 @@ async function r3AutoHealthTick(){
 
 function r3ToggleAuto(){
   if(R3_AUTO.enabled){
-    R3_AUTO.enabled=false;R3_AUTO.generation++;r3AutoSave();r3AutoRestoreDialog();
+    R3_AUTO.enabled=false;R3_AUTO.generation++;
+    if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
+    R3_AUTO.dirtyTimer=null;
+    r3AutoSave();r3AutoRestoreDialog();
     r3AutoDisplay('');return;
   }
   const selected=r3Candidates().find(c=>c.key===R3_UI.selected);
