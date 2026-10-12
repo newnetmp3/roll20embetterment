@@ -170,8 +170,15 @@ function r3UIEvent(event){
   const target=event.target;
   // Clicking a glyph/count inside a category button must behave like
   // clicking the button itself; no handlers are assigned to inner markup.
-  const hudCategory=target?.dataset?.hudCategory||
-    target?.closest?.('[data-hud-category]')?.dataset?.hudCategory;
+  const field=(key,selector)=>target?.dataset?.[key]??
+    target?.closest?.(selector)?.dataset?.[key];
+  const hudCategory=field('hudCategory','[data-hud-category]');
+  const flyout=field('hudFlyout','[data-hud-flyout]');
+  const slot=field('hudSlot','[data-hud-slot]');
+  const weaponSet=field('hudSet','[data-hud-set]');
+  const assignment=field('hudAssign','[data-hud-assign]');
+  const spellLevel=field('hudSpellLevel','[data-hud-spell-level]');
+  const spent=field('hudUsed','[data-hud-used]');
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-refresh')r3UIRefresh();
   else if(target?.id==='r3-scan')return r3StartImport('current');
@@ -180,15 +187,49 @@ function r3UIEvent(event){
   else if(target?.id==='r3-auto'){r3ToggleAuto();r3HudRender();}
   else if(target?.id==='r3-hud-debug'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-hud-collapse'){
-    R3_HUD.collapsed=!R3_HUD.collapsed;r3HudSave();r3HudRender();
+    R3_HUD.collapsed=!R3_HUD.collapsed;
+    if(R3_HUD.collapsed){
+      R3_HUD.flyout='';R3_HUD.chooser=null;
+    }else R3_HUD.used={action:false,bonus:false,reaction:false};
+    r3HudSave();r3HudRender();
   }
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
-  else if(target?.id==='r3-hud-drawer-close'){
-    R3_HUD.drawerOpen=false;r3HudSave();r3HudRender();
+  else if(target?.id==='r3-hud-reset-turn'){
+    R3_HUD.used={action:false,bonus:false,reaction:false};r3HudRender();
+  }
+  else if(target?.id==='r3-hud-drawer-close'||target?.id==='r3-hud-flyout-close'){
+    R3_HUD.drawerOpen=false;R3_HUD.flyout='';R3_HUD.chooser=null;
+    r3HudSave();r3HudRender();
+  }
+  else if(slot!==undefined&&/^[0-5]$/.test(String(slot))){
+    R3_HUD.chooser=Number(slot);R3_HUD.flyout='';r3HudRender();
+  }
+  else if(assignment!==undefined&&R3_HUD.chooser!==null){
+    const chosen=assignment==='clear'?null:r3HudWeaponCandidates(R3_UI.snapshot)[Number(assignment)];
+    if(assignment==='clear'||chosen){
+      R3_HUD.weaponSets[R3_HUD.chooser]=chosen?{kind:chosen.kind,key:chosen.key}:null;
+      R3_HUD.chooser=null;r3HudSave();r3HudRender();
+    }
+  }
+  else if(weaponSet!==undefined&&/^[0-2]$/.test(String(weaponSet))){
+    R3_HUD.weaponSet=Number(weaponSet);r3HudSave();r3HudRender();
+  }
+  else if(spellLevel!==undefined&&/^(?:[0-9]|other)$/.test(String(spellLevel))){
+    R3_HUD.spellLevel=String(spellLevel);r3HudRender();
+  }
+  else if(spent&&['action','bonus','reaction'].includes(spent)){
+    R3_HUD.used[spent]=!R3_HUD.used[spent];r3HudRender();
+  }
+  else if(flyout&&['spells','skills','actions','bonus','reactions','inventory',
+    'features','resources'].includes(flyout)){
+    R3_HUD.chooser=null;
+    R3_HUD.flyout=R3_HUD.flyout===flyout?'':flyout;
+    R3_HUD.openKeys=[];R3_HUD.scrollTop=0;r3HudRender();
   }
   else if(hudCategory&&R3_HUD_TABS.some(tab=>tab.key===hudCategory)){
-    R3_HUD.category=hudCategory;R3_HUD.drawerOpen=true;R3_HUD.scrollTop=0;
-    R3_HUD.openKeys=[];r3HudSave();r3HudRender();
+    R3_HUD.category=hudCategory;R3_HUD.flyout=hudCategory;
+    R3_HUD.chooser=null;R3_HUD.openKeys=[];R3_HUD.scrollTop=0;
+    r3HudSave();r3HudRender();
   }
   else if(target?.dataset?.view){R3_UI.view=target.dataset.view;r3UIRefresh();}
 }
@@ -246,5 +287,19 @@ function r3StartUI(){
   root.addEventListener('keypress',event=>event.stopPropagation(),true);
   document.body.appendChild(host);
   r3UIRefresh();
+  // Wiki-compatible Shift+A toggle, scoped away from text entry and common
+  // modified shortcuts. Keeping this in the editor avoids touching Roll20's
+  // official sheet keyboard behavior.
+  window.addEventListener('keydown',event=>{
+    if(event.key?.toLowerCase()!=='a'||!event.shiftKey||event.ctrlKey||
+      event.altKey||event.metaKey||event.repeat)return;
+    const target=event.target;
+    if(target?.isContentEditable||/^(?:input|textarea|select)$/i.test(target?.tagName||''))return;
+    event.preventDefault?.();event.stopPropagation?.();
+    R3_HUD.collapsed=!R3_HUD.collapsed;
+    if(R3_HUD.collapsed){R3_HUD.flyout='';R3_HUD.chooser=null;}
+    else R3_HUD.used={action:false,bonus:false,reaction:false};
+    r3HudSave();r3HudRender();
+  },true);
   window.addEventListener('focus',()=>{if(!R3_UI.busy)r3UIRefresh();});
 }
