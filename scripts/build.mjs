@@ -2,12 +2,12 @@ import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const files=readdirSync(join(root,'v3')).filter(n=>/^\d{2}_.*\.js$/.test(n)).sort();
-if(files.length!==4)throw new Error('Missing v3 modules (expected capture, reader, ui, boot)');
+if(files.length!==5)throw new Error('Missing v3 modules (expected capture, reader, ui, auto, boot)');
 const header=[
 '// ==UserScript==',
 '// @name         roll20 Embetterment',
 '// @namespace    https://github.com/newnetmp3/roll20embetterment',
-'// @version      3.0.6',
+'// @version      3.1.0',
 '// @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.',
 '// @author       roll20 Embetterment contributors',
 '// @match        https://app.roll20.net/editor/*',

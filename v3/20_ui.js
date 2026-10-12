@@ -119,11 +119,14 @@ function r3UIRefresh(){
   // throw here and stop every button handler before it could launch a scan.
   R3_UI.root.getElementById('r3-toggle').textContent=R3_UI.shown?'Hide importer':'Show importer';
   const scan=R3_UI.root.getElementById('r3-scan'),all=R3_UI.root.getElementById('r3-all');
-  scan.disabled=R3_UI.busy||!R3_UI.selected;all.disabled=R3_UI.busy||!R3_UI.selected;
+  scan.disabled=R3_UI.busy||R3_AUTO.running||!R3_UI.selected;
+  all.disabled=R3_UI.busy||R3_AUTO.running||!R3_UI.selected;
   R3_UI.root.getElementById('r3-export').disabled=!R3_UI.snapshot;
   r3UIStatus(R3_UI.status);
+  r3AutoDisplay();
 }
 async function r3StartImport(mode){
+  if(R3_AUTO.running){r3UIStatus('Auto-sync is reading the sheet; wait for it to finish.');return;}
   const candidate=r3Candidates().find(x=>x.key===R3_UI.selected);
   if(!candidate){r3UIStatus('Open an official Roll20 2024 sheet and refresh the list.');return;}
   R3_UI.busy=true;r3UIRefresh();r3UIStatus(mode==='all'?'Reading all available sheet tabs…':'Reading current sheet tab…');
@@ -154,6 +157,7 @@ function r3UIEvent(event){
   else if(target?.id==='r3-scan')return r3StartImport('current');
   else if(target?.id==='r3-all')return r3StartImport('all');
   else if(target?.id==='r3-export')r3Export();
+  else if(target?.id==='r3-auto')r3ToggleAuto();
   else if(target?.dataset?.view){R3_UI.view=target.dataset.view;r3UIRefresh();}
 }
 function r3StartUI(){
@@ -188,8 +192,10 @@ function r3StartUI(){
     '<select id="r3-choices"></select><div class="actions"><button id="r3-refresh">Refresh list</button>'+
     '<button id="r3-scan">Read current tab</button><button id="r3-all">Import all tabs</button>'+
     '<button id="r3-export" disabled>Export JSON</button></div>'+
+    '<div class="actions"><button id="r3-auto" title="Automatically import the selected character. When available, Roll20 journal entry is opened offscreen.">Auto-sync: Off</button></div>'+
+    '<div id="r3-auto-status" class="notice" role="status" aria-live="polite">Auto-sync is off</div>'+
     '<div class="notice">New independent v3 importer · no old HUD/profile code · read-only for character data. '+
-    'Only player-opened 2024 sheets are scanned. Full import visits tabs you can see, then restores the original tab.</div>'+
+    'Auto-sync is optional and remembered per game. It uses the official Roll20 journal to open the chosen character in the background when available; if not, open the Journal sidebar once or use a visible sheet. Full background import visits tabs and restores the original selection. Visible player-opened sheets are read without switching tabs.</div>'+
     '<div id="r3-status" role="status" aria-live="polite"></div>'+
     '<div id="r3-results"></div></div></div>';
   // Surface handler errors in the panel instead of leaving apparently inert buttons.
