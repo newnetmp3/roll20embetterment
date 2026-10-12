@@ -602,7 +602,7 @@ test('turning Auto-sync off cancels queued event-triggered scans',()=>{
 });
 
 
-test('Inventory debug view visibly updates zero quantity and observed toggle state without losing off-tab data',()=>{
+test('Inventory quantity zero removes the item from debug view without losing off-tab data',()=>{
   const h=panelHarness();h.api.r3StartUI();
   h.api.R3_AUTO.name='NIER';
   const prev=h.api.r3Empty();prev.name='NIER';prev.stats.hp=82;
@@ -625,8 +625,96 @@ test('Inventory debug view visibly updates zero quantity and observed toggle sta
   h.api.r3AutoStoreSnapshot(h.api.r3Coverage(current),'current');
   const html=h.nodes.get('r3-results').innerHTML;
   assert.notEqual(html,first,'new observations must repaint Inventory debug details');
-  assert.match(html,/Observed quantity<\/span><strong>0</);
-  assert.match(html,/Use item<\/span><strong>Off</);
+  assert.doesNotMatch(html,/Healer Kit/,'zero item should disappear from Inventory debug');
+  assert.equal(h.api.R3_UI.snapshot.inventory.length,0);
+  assert.equal(h.api.R3_UI.snapshot.coverage.inventory,0);
+  assert.match(html,/No inventory found/i);
   assert.equal(h.api.R3_UI.snapshot.spells.length,1);
   assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+});
+
+test('one explicit zero removes only its matching item; unobserved and positive items survive',()=>{
+  const h=panelHarness();h.api.r3StartUI();h.api.R3_AUTO.name='NIER';
+  const prev=h.api.r3Empty();prev.name='NIER';prev.stats.hp=80;
+  prev.inventory=[
+    {name:'Potion',_key:'potion||',quantity:3},
+    {name:'Lantern',_key:'lantern||',quantity:1},
+    {name:'Rope',_key:'rope||'}
+  ];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);
+  const current=h.api.r3Empty();current.name='NIER';
+  current.inventory=[
+    {name:'Potion',_key:'potion||',quantity:0},
+    {name:'Lantern',_key:'lantern||',quantity:2}
+  ];
+  h.api.r3AutoStoreSnapshot(h.api.r3Coverage(current),'current');
+  assert.deepEqual([...h.api.R3_UI.snapshot.inventory.map(x=>x.name)],['Lantern','Rope']);
+  assert.equal(h.api.R3_UI.snapshot.inventory[0].quantity,2);
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,80);
+  // A subsequent positive observation re-adds the item.
+  const returnScan=h.api.r3Empty();returnScan.name='NIER';
+  returnScan.inventory=[{name:'Potion',_key:'potion||',quantity:2}];
+  h.api.r3AutoStoreSnapshot(h.api.r3Coverage(returnScan),'current');
+  assert.equal(h.api.R3_UI.snapshot.inventory.at(-1).quantity,2);
+  assert.equal(h.api.R3_UI.snapshot.coverage.inventory,3);
+});
+test('an unmounted or unlabelled item is never removed just because its row is missing',()=>{
+  const h=panelHarness();h.api.r3StartUI();h.api.R3_AUTO.name='NIER';
+  const prev=h.api.r3Empty();prev.name='NIER';prev.stats.hp=82;
+  prev.inventory=[{name:'Potion',_key:'potion||',quantity:2}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);
+  const unrelated=h.api.r3Empty();unrelated.name='NIER';
+  unrelated.skills.Athletics=5;
+  h.api.r3AutoStoreSnapshot(h.api.r3Coverage(unrelated),'current');
+  assert.equal(h.api.R3_UI.snapshot.inventory.length,1);
+  const quantityUnknown=h.api.r3Empty();quantityUnknown.name='NIER';
+  quantityUnknown.inventory=[{name:'Potion',_key:'potion||',visible:'Potion'}];
+  h.api.r3AutoStoreSnapshot(h.api.r3Coverage(quantityUnknown),'current');
+  assert.equal(h.api.R3_UI.snapshot.inventory.length,1);
+  assert.equal(h.api.R3_UI.snapshot.inventory[0].quantity,undefined);
+});
+test('full auto scan never persists zero-count items or retains stale previously imported entries',()=>{
+  const h=panelHarness();h.api.r3StartUI();h.api.R3_AUTO.name='NIER';
+  const prev=h.api.r3Empty();prev.name='NIER';prev.stats.hp=82;
+  prev.inventory=[{name:'Potion',_key:'potion||',quantity:2}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);
+  const full=h.api.r3Empty();full.name='NIER';full.stats.hp=82;
+  full.inventory=[
+    {name:'Potion',_key:'potion||',quantity:0},
+    {name:'Rope',_key:'rope||',quantity:1}
+  ];
+  h.api.r3AutoStoreSnapshot(h.api.r3Coverage(full),'all');
+  assert.deepEqual([...h.api.R3_UI.snapshot.inventory.map(x=>x.name)],['Rope']);
+  assert.equal(h.api.R3_UI.snapshot.coverage.inventory,1);
+  const saved=JSON.parse([...h.store.values()].find(x=>x.includes('"snapshot"')));
+  assert.equal(saved.snapshot.inventory[0].name,'Rope');
+});
+test('manual current-tab import drops observed zero items before saving and rendering',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  h.click('r3-scan');
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
+  snap.inventory=[
+    {name:'Potion',_key:'potion||',quantity:0,tab:'Inventory'},
+    {name:'Lantern',_key:'lantern||',quantity:4,tab:'Inventory'}
+  ];
+  h.respond(h.api.r3Coverage(snap));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.api.R3_UI.snapshot.coverage.inventory,1);
+  assert.equal(h.api.R3_UI.snapshot.inventory[0].name,'Lantern');
+  h.shadow.handlers.get('click')({target:{dataset:{view:'inventory'}}});
+  const html=h.nodes.get('r3-results').innerHTML;
+  assert.doesNotMatch(html,/Potion/);
+  assert.match(html,/Lantern/);
+});
+test('older stored zero-count items are hidden and discarded on load',()=>{
+  const h=panelHarness();
+  const saved=h.api.r3Empty();saved.name='NIER';
+  saved.inventory=[
+    {name:'Potion',_key:'potion||',quantity:0,tab:'Inventory'},
+    {name:'Rope',_key:'rope||',quantity:2,tab:'Inventory'}
+  ];
+  h.store.set('roll20-embetterment-v3:123',JSON.stringify({schema:3,snapshot:saved}));
+  h.api.r3StartUI();
+  assert.deepEqual([...h.api.R3_UI.snapshot.inventory.map(x=>x.name)],['Rope']);
+  assert.equal(h.api.R3_UI.snapshot.coverage.inventory,1);
 });

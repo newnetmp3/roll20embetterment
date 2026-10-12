@@ -439,6 +439,17 @@ function r3NameFromDocument(root){
   }
   return r3String(root.ownerDocument?.title||root.title,120).replace(/\s+[—–]\s+.*$/,'')||'Unnamed sheet';
 }
+// Quantity zero is an explicit observation, unlike a row absent because a
+// tab is offscreen, filtered or virtualized. Keep zero rows in reader scans
+// as removal signals; prune only when publishing an editor-side snapshot.
+function r3InventoryZero(item){
+  return item?.quantity===0;
+}
+function r3InventoryPrune(snapshot){
+  if(Array.isArray(snapshot?.inventory))
+    snapshot.inventory=snapshot.inventory.filter(item=>!r3InventoryZero(item));
+  return r3Coverage(snapshot);
+}
 function r3Coverage(s){
   s.coverage={stats:Object.keys(s.stats).length,abilities:Object.keys(s.abilities).length,
     modifiers:Object.keys(s.modifiers).length,saves:Object.keys(s.saves).length,
@@ -458,8 +469,17 @@ function r3Merge(target,source){
   for(const kind of Object.keys(R3_CATEGORIES)){
     if(!Array.isArray(target[kind])||!Array.isArray(source[kind]))continue;
     const keys=new Set(target[kind].map(x=>x._key));
-    for(const item of source[kind])if(!keys.has(item._key)&&target[kind].length<400){
-      target[kind].push(item);keys.add(item._key);
+    for(const item of source[kind]){
+      if(keys.has(item._key)){
+        // On a full traversal, a later Inventory-tab observation takes
+        // precedence over the generic first view, including quantity 0.
+        if(kind==='inventory'){
+          const index=target[kind].findIndex(x=>x._key===item._key);
+          if(index>=0)target[kind][index]=item;
+        }
+      }else if(target[kind].length<400){
+        target[kind].push(item);keys.add(item._key);
+      }
     }
   }
   const obs=new Set(target.observations.map(o=>o.tab+'|'+o.label+'|'+o.value));

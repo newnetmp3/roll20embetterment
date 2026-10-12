@@ -48,12 +48,12 @@ function harness(fixture=docFixture()){
   };
   vm.createContext(context);
   const code=files.filter(f=>f!=='30_boot.js').map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n');
-  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3CurrentTabLabel,r3StartReader,r3Merge,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
+  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3CurrentTabLabel,r3StartReader,r3Merge,r3InventoryZero,r3InventoryPrune,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
   return {h:context.testApi,context,fixture};
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.1\.5/);
+  assert.match(compiled,/\/\/ @version\s+3\.1\.6/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -570,4 +570,31 @@ test('2024 inventory toggle buttons emit change hints without observing unrelate
   h.r3ReaderChanged({type:'click',target:child});
   assert.equal(timers.length,1);
   assert.equal(timers[0].ms,350);
+});
+
+test('zero-count inventory rows stay in reader snapshots as explicit deletion observations',()=>{
+  const {h}=harness();
+  const s=h.r3Empty();s.name='NIER';
+  s.inventory=[{name:'Potion',_key:'potion||',quantity:0}];
+  h.r3Coverage(s);
+  assert.equal(s.inventory.length,1,'reader must preserve zero rows for current-view merges');
+  assert.equal(h.r3InventoryZero(s.inventory[0]),true);
+  assert.equal(h.r3InventoryZero({name:'Potion'}),false);
+  assert.equal(h.r3InventoryZero({name:'Potion',quantity:'0'}),false,
+    'string zero is not a trusted numeric observation');
+  assert.equal(h.r3InventoryZero({name:'Potion',quantity:undefined}),false);
+  const published=h.r3InventoryPrune(s);
+  assert.equal(published.inventory.length,0);
+  assert.equal(published.coverage.inventory,0);
+});
+test('full tab merge uses later zero observation instead of earlier positive inventory quantity',()=>{
+  const {h}=harness();
+  const prior=h.r3Empty();prior.name='NIER';
+  prior.inventory=[{name:'Potion',_key:'potion||',quantity:3,tab:'Current view'}];
+  const later=h.r3Empty();later.name='NIER';
+  later.inventory=[{name:'Potion',_key:'potion||',quantity:0,tab:'Inventory'}];
+  h.r3Merge(prior,later);
+  assert.equal(prior.inventory.length,1,'zero is not silently discarded in full reader merge');
+  assert.equal(prior.inventory[0].quantity,0);
+  assert.equal(h.r3InventoryPrune(prior).inventory.length,0);
 });

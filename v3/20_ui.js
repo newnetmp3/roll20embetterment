@@ -9,7 +9,8 @@ function r3StorageKey(){
 function r3Load(){
   try{
     const s=JSON.parse(localStorage.getItem(r3StorageKey())||'null');
-    if(s?.schema===3&&s.snapshot?.schema===3&&JSON.stringify(s).length<4000000)R3_UI.snapshot=s.snapshot;
+    if(s?.schema===3&&s.snapshot?.schema===3&&JSON.stringify(s).length<4000000)
+      R3_UI.snapshot=r3InventoryPrune(s.snapshot);
   }catch{/* Corrupted storage should never prevent scanning. */}
 }
 function r3Save(snapshot){
@@ -35,8 +36,12 @@ function r3ObjectRows(obj,lookup,prefix){
 }
 function r3CardsView(kind){
   const snap=R3_UI.snapshot;
-  if(!snap?.[kind]?.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
-  return snap[kind].slice(0,400).map(item=>
+  // Defend against old v3.1.5 local caches and manually seeded snapshots.
+  // Explicitly zeroed items do not belong in the active Inventory list.
+  const items=kind==='inventory'?(snap?.inventory||[]).filter(item=>!r3InventoryZero(item)):
+    (snap?.[kind]||[]);
+  if(!items.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
+  return items.slice(0,400).map(item=>
     '<details class="entry" data-entry-key="'+r3Escape(kind+':'+item.tab+':'+item.name)+'"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
     '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+
     (kind==='inventory'&&Object.prototype.hasOwnProperty.call(item,'quantity')?
@@ -142,7 +147,7 @@ async function r3StartImport(mode){
     if(!snapshot||snapshot.schema!==3)throw new Error('Unexpected sheet format');
     // Replace the previous profile only on an explicit successful import.
     // A partially rendered sheet remains explicit in its diagnostics.
-    R3_UI.snapshot=r3Coverage(snapshot);r3Save(R3_UI.snapshot);
+    R3_UI.snapshot=r3InventoryPrune(snapshot);r3Save(R3_UI.snapshot);
     R3_UI.view='summary';
     R3_UI.status='Imported '+snapshot.name+'. Review each category and Diagnostics for coverage.';
   }catch(err){
