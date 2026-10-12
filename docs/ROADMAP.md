@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.2.2 Argon core visual/interaction structural port in development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.2.2 Argon core visual/interaction structure merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -108,4 +108,6 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 | End Turn / pass action | Deliberately disabled pending verified Roll20 combat API | Integrate only after confirmed live behavior |
 | True portrait/token selection and screen size responsiveness | Name monogram placeholder and responsive CSS only | Token/portrait integration, mobile sizing and sidebar state |
 
-**v3.2.2 tests/CI:** GitHub Actions PR #47 run 38321191793 passed (**277 tests, 0 failures**, compiled userscript consistent); merge pending. Do not mark a function truly verified until both automated CI and live Floorp QA demonstrate it. Keep v3.2.1 source-grounded AC 17/speed 55 and 2024 popout importer behavior.
+**v3.2.2 CI and merge:** PR #47 squash-merged as `e5c3dcf58ee745d4095391bad2721c84be6368cb`. Final run 38321249957 green (**277 tests, zero failures**, generated bundle consistent). Live Floorp verification and native combat action automation remain pending. Do not mark a function truly verified until both automated CI and live Floorp QA demonstrate it. Keep v3.2.1 source-grounded AC 17/speed 55 and 2024 popout importer behavior.
+
+**v3.2.2 implementation checkpoint:** `main` includes original-wiki reference visual structure: left character panel with 3×2 quick weapon slots, horizontal Main Action/Bonus/Free/Reaction/Pass bar, upward spell-level and item/skill flyouts, HUD-native per-game weapon assignments, Shift+A toggle and local-only spent indicators. Still no native D&D 2024 rolls/casts, GM turn control, target picker or movement tracking. This is a **structural-faithfulness milestone**, not total Argon functional parity.
