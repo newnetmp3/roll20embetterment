@@ -411,10 +411,7 @@ test('one-second HP reader only samples labeled live health controls, not full s
   assert.equal(snap.abilities.str,undefined);
   assert.equal(snap.inventory.length,0);
   assert.equal(snap.observations.length,0);
-  const original=h.context.document;
-  h.context.document=fixture.document;
   const routed=await h.r3ReaderScan('hp');
-  h.context.document=original;
   assert.equal(routed.stats.hp,81);
 });
 test('HP watch rejects malformed and fully hidden health inputs without returning zero',()=>{
