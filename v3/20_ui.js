@@ -1,5 +1,5 @@
 // v3 minimal companion: explicit imports, provenance, completeness, JSON export.
-const R3_UI={host:null,root:null,shown:true,busy:false,status:'Open your official Roll20 2024 character sheet, then select it below.',
+const R3_UI={host:null,root:null,shown:false,busy:false,status:'Open your official Roll20 2024 character sheet, then select it below.',
   snapshot:null,selected:'',view:'summary',storageWarning:'',renderedSnapshot:null,renderedView:null,
   renderedChoices:null,scrollByView:Object.create(null),openByView:Object.create(null)};
 function r3Escape(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -128,6 +128,8 @@ function r3UIRefresh(){
   if(R3_UI.renderedChoices!==selector){choice.innerHTML=selector;R3_UI.renderedChoices=selector;}
   if(choice.value!==R3_UI.selected)choice.value=R3_UI.selected;
   r3RenderResults();
+  r3HudRender();
+  R3_UI.root.getElementById('r3-wrap').style.display=R3_UI.shown?'block':'none';
   R3_UI.root.getElementById('r3-content').style.display=R3_UI.shown?'block':'none';
   // The actual toggle is r3-toggle. A stale reference to r3-title used to
   // throw here and stop every button handler before it could launch a scan.
@@ -171,19 +173,28 @@ function r3UIEvent(event){
   else if(target?.id==='r3-scan')return r3StartImport('current');
   else if(target?.id==='r3-all')return r3StartImport('all');
   else if(target?.id==='r3-export')r3Export();
-  else if(target?.id==='r3-auto')r3ToggleAuto();
+  else if(target?.id==='r3-auto'){r3ToggleAuto();r3HudRender();}
+  else if(target?.id==='r3-hud-debug'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
+  else if(target?.id==='r3-hud-collapse'){
+    R3_HUD.collapsed=!R3_HUD.collapsed;r3HudSave();r3HudRender();
+  }
+  else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
+  else if(target?.dataset?.hudCategory){
+    R3_HUD.category=target.dataset.hudCategory;R3_HUD.scrollTop=0;
+    R3_HUD.openKeys=[];r3HudSave();r3HudRender();
+  }
   else if(target?.dataset?.view){R3_UI.view=target.dataset.view;r3UIRefresh();}
 }
 function r3StartUI(){
   if(document.getElementById('r20eb-v3-root'))return;
-  r3Load();
+  r3Load();r3HudLoad();
   const host=document.createElement('div');host.id='r20eb-v3-root';
-  host.style.cssText='position:fixed;bottom:16px;right:16px;z-index:2147483000;pointer-events:auto';
+  host.style.cssText='position:fixed;inset:0;z-index:2147483000;pointer-events:none';
   const root=host.attachShadow({mode:'open'});R3_UI.host=host;R3_UI.root=root;
   const style=[
     ':host{all:initial;color-scheme:dark;font:13px/1.5 system-ui,sans-serif}',
     '*{box-sizing:border-box}button,select{font:inherit}',
-    '#r3-wrap{width:min(520px,calc(100vw - 28px));max-height:calc(100vh - 40px);border:1px solid #77829c;border-radius:12px;background:#161b28;color:#eef0f7;box-shadow:0 10px 40px #000b;overflow:hidden}',
+    '#r3-wrap{position:absolute;top:14px;right:14px;width:min(520px,calc(100vw - 28px));max-height:calc(100vh - 28px);pointer-events:auto;border:1px solid #77829c;border-radius:12px;background:#161b28;color:#eef0f7;box-shadow:0 10px 40px #000b;overflow:hidden}',
     '#r3-toggle{width:100%;background:#303d58;color:#fff;border:0;padding:11px 14px;text-align:left;font-weight:700;cursor:pointer}',
     '#r3-content{padding:12px;max-height:calc(100vh - 90px);overflow:auto}',
     'button{background:#34465f;color:#f7f8fd;border:1px solid #66748e;border-radius:6px;padding:7px 10px;cursor:pointer}',
@@ -200,8 +211,8 @@ function r3StartUI(){
     '.entrybody{padding:9px;white-space:pre-wrap;overflow-wrap:anywhere;color:#bac7da}.chips{display:flex;flex-wrap:wrap;gap:5px}.chips span{border:1px solid #4e617c;border-radius:8px;padding:2px 6px}',
     '#r3-status{font-size:12px;color:#f1d39d;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}',
     '.notice{font-size:11px;color:#b8c5d8;line-height:1.4}label{font-weight:650}'
-  ].join('');
-  root.innerHTML='<style>'+style+'</style><div id="r3-wrap"><button id="r3-toggle">Hide importer</button>'+
+  ].join('')+r3HudStyles();
+  root.innerHTML='<style>'+style+'</style><div id="r3-hud"></div><div id="r3-wrap"><button id="r3-toggle">Hide importer</button>'+
     '<div id="r3-content"><label for="r3-choices">Official character sheet</label>'+
     '<select id="r3-choices"></select><div class="actions"><button id="r3-refresh">Refresh list</button>'+
     '<button id="r3-scan">Read current tab</button><button id="r3-all">Import all tabs</button>'+
