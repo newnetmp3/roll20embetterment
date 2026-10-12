@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.2.4 second Floorp HUD QA fixes in development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.2.4 Floorp HUD overflow fixes merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -119,3 +119,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 
 
 **v3.2.4 — Live screenshot #2:** Real Floorp view on Chat tab shows HP82/84, AC17, Speed55, Initiative2.14 and Passive Base15 correctly; the portrait's lower stats remain partially clipped, despite v3.2.3 improved formatting, due to inherited hard max-height 229px on its containing bar. Remove maximum cap and allow content-driven min 242px with 2×2 grid stat rows minimum 21px. The real character image remains unavailable when Journal is hidden. Once an exact-name HTTPS thumbnail is observed on the visible Journal row, persist its name/URL in per-game HUD preferences so switching to Chat retains it without navigation, private API calls or substring guesses. Keep initial monogram when character art is unobserved. **CI verified:** PR #49 run 38323806848 (**284 tests passed, zero failures**, production userscript consistent). Live Floorp validation still required. Remaining high priorities: genuine attack/spell native controls, target selector, turn state and safe token linkage.
+
+**v3.2.4 merged:** PR #49 squash `b47ec4c13470d751e81dd057fe6f9a7658d59ac9`; final CI 38323846235 passed (**284 tests, zero failures**, generated userscript consistent). The second Floorp screenshot confirmed structured HP/AC/Speed/Initiative/Passive but showed bottom portrait stats clipped by the fixed max-height; removed the cap with content-sized layout. Journal portrait observed once can persist while switching to Chat and across reloads, but no unseen image can be inferred and the monogram is the fallback. Live QA next; keep native roll/cast and token behavior as the next major functional milestone.
