@@ -311,7 +311,7 @@ function r3HudMarkup(snapshot){
     r3HudBarButton('USE ITEM','bag','inventory')
   ].join('');
   const bonusButtons=[
-    r3HudBarButton(bonusItem?.name||'OFF HAND','blade','bonus','hud-color-bonus'),
+    r3HudBarButton(bonusItem?.name||r3HudEntries(snapshot,'bonus')[0]?.name||'OFF HAND','blade','bonus','hud-color-bonus'),
     r3HudBarButton('CAST SPELL','book','spells','hud-color-bonus')
   ].join('');
   const freeButtons=r3HudBarButton('FEATURE','star','features','hud-color-free');
@@ -338,7 +338,7 @@ function r3HudMarkup(snapshot){
   const controls='<div class="hud-controller">'+
     '<div class="hud-toolbar"><span>R20 EMBETTERMENT <small>ARGON PORT</small></span>'+
     '<div class="hud-toolbar-actions">'+
-    '<button type="button" id="r3-hud-auto">'+(R3_AUTO.enabled?'● Sync':'○ Sync')+'</button>'+
+    '<button type="button" id="r3-hud-auto">'+(R3_AUTO.enabled?'● Sync On':'○ Sync Off')+'</button>'+
     '<button type="button" id="r3-hud-debug">Debug</button>'+
     '<button type="button" id="r3-hud-collapse">'+(collapsed?'Show HUD':'Hide')+'</button></div></div>'+
     '<div class="hud-action-track"><span>Action tracking (local)</span>'+
