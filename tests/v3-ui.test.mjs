@@ -129,14 +129,18 @@ test('all UI control failures are surfaced in a visible status element',()=>{
 
 test('focus and Refresh list preserve scroll, view and existing result DOM',()=>{
   const h=panelHarness();h.api.r3StartUI();
+  const snapshot=h.api.r3Empty();snapshot.stats.hp=82;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
+  h.click('r3-refresh');
   const results=h.nodes.get('r3-results'),content=h.nodes.get('r3-content');
-  assert.equal(results.writes,1);
+  assert.equal(results.writes,2);
   const list=results.querySelector('.results');
+  assert.ok(list);
   list.scrollTop=317;content.scrollTop=88;
   h.click('r3-refresh');
   h.windowListeners.get('focus')();
   h.windowListeners.get('focus')();
-  assert.equal(results.writes,1,'focus/refresh must not repaint results');
+  assert.equal(results.writes,2,'focus/refresh must not repaint results');
   assert.equal(results.querySelector('.results'),list);
   assert.equal(list.scrollTop,317);
   assert.equal(content.scrollTop,88);
