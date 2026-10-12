@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.0.5
+// @version      3.0.6
 // @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -58,6 +58,13 @@ function r3Canonical(raw){return r3String(raw,100).toLowerCase().replace(/[_-]+/
 function r3Descriptor(el){
   const parts=[r3Attr(el,'title'),r3Attr(el,'aria-label'),r3Attr(el,'name'),r3Attr(el,'data-attribute'),r3Attr(el,'id')];
   const label=el?.labels?.[0];if(label)parts.push(r3Text(label,100));
+  // Follow explicit aria-labelledby references; never infer from UUIDs.
+  const refs=r3Attr(el,'aria-labelledby').split(/\s+/).filter(Boolean).slice(0,4);
+  for(const id of refs){
+    if(!/^[\w:.-]{1,80}$/.test(id))continue;
+    const target=el?.ownerDocument?.getElementById?.(id);
+    const name=r3Text(target,100);if(name)parts.push(name);
+  }
   return [...new Set(parts.filter(Boolean))];
 }
 function r3Field(raw){
@@ -105,10 +112,27 @@ function r3Push(s,kind,key,value,source,limit=400){
     s[kind][key]=value;s.provenance[kind+'.'+key]=source;
   }
 }
+function r3NearbyFieldText(el){
+  // At most three ancestors and two compact labels; never copy HTML.
+  const hints=[];
+  for(let p=el?.parentElement,depth=0;p&&depth<3;p=p.parentElement,depth++){
+    const controls=p.querySelectorAll?.('input,textarea,select')?.length;
+    if(controls!==undefined&&controls>1)break;
+    const text=r3Text(p,105);
+    if(text&&text.length<=100&&!hints.includes(text))hints.push(text);
+  }
+  return hints.slice(0,2);
+}
 function r3Observation(s,el,labels,raw,tab){
   if(s.observations.length>=750){if(!s.diagnostics.limits.includes('750 form controls'))s.diagnostics.limits.push('750 form controls');return;}
   const value=el.type==='checkbox'?!!el.checked:raw;
-  s.observations.push({label:labels.slice(0,4).join(' / ').slice(0,180),value,tab,element:r3String(el.tagName,20),type:r3String(el.type,40)});
+  const obs={label:labels.slice(0,4).join(' / ').slice(0,180),value,tab,element:r3String(el.tagName,20),type:r3String(el.type,40)};
+  if(labels.length===1&&/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(labels[0])&&
+      el.type==='text'&&r3Number(raw,0,1000)!==null){
+    const nearby=r3NearbyFieldText(el);
+    if(nearby.length)obs.nearbyText=nearby;
+  }
+  s.observations.push(obs);
 }
 function r3Inputs(root,s,tab){
   for(const el of Array.from(root.querySelectorAll?.('input,textarea,select,[data-attribute]')||[]).slice(0,1250)){
@@ -253,16 +277,29 @@ function r3CardInfo(card,kind,name,tab){
       if(explicit)info.range=r3String(explicit[1],60);
     }
     const explicitCasting=header.match(/\bcasting\s*time\s*:\s*(?:\d+\s+)?(?:bonus action|action|reaction|minutes?|hours?)\b/i);
-    const compactCasting=header.match(/\b(?:\d+\s+)?(?:bonus action|action|reaction)\b(?=\s+(?:V|S|M|R|C)\b)/i);
-    if(explicitCasting||compactCasting)
-      info.castingTime=r3String((explicitCasting||compactCasting)[0],70);
+    // Only 1 action is valid numeric shorthand; CON 11 Action is a save DC.
+    const compactCasting=header.match(/\b(?:1\s+)?(?:bonus action|action|reaction)\b(?=\s+(?:V|S|M|R|C)\b)/i);
+    const casting=explicitCasting||compactCasting;
+    if(casting){
+      info.castingTime=r3String(casting[0],70);
+      // Read V/S/M components and R/C flags only immediately after
+      // the casting time in the official sheet's compact header.
+      const tail=header.slice(casting.index+casting[0].length);
+      const tokens=tail.match(/^\s*([VSMRC](?:\s+[VSMRC])*)(?=\s|$)/);
+      if(tokens){
+        const codes=tokens[1].split(/\s+/);
+        const components=[...new Set(codes.filter(x=>/^[VSM]$/.test(x)))];
+        if(components.length)info.components=components.join(' ');
+        if(codes.includes('R'))info.ritual=true;
+        if(codes.includes('C'))info.concentration=true;
+      }
+    }
     const duration=header.match(/\bduration\s*:\s*(?:instantaneous|concentration|up to\s+\d+|\d+\s+(?:rounds?|minutes?|hours?|days?))[^,;.]{0,20}/i);
     if(duration)info.duration=r3String(duration[0],70);
     const components=header.match(/\bcomponents\s*:\s*[VSM](?:\s*,?\s*[VSM]){0,2}\b/i);
     if(components)info.components=r3String(components[0],45);
-    // Absence of readable metadata means "unknown", not a false flag.
-    if(/\britual\b/i.test(header))info.ritual=true;
-    if(/\bconcentration\b/i.test(header))info.concentration=true;
+    // Plain words in the description are not proof of spell flags.
+    // The flags above require the official single-letter header tokens.
   }
   return info;
 }

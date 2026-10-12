@@ -7,7 +7,7 @@ const header=[
 '// ==UserScript==',
 '// @name         roll20 Embetterment',
 '// @namespace    https://github.com/newnetmp3/roll20embetterment',
-'// @version      3.0.5',
+'// @version      3.0.6',
 '// @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.',
 '// @author       roll20 Embetterment contributors',
 '// @match        https://app.roll20.net/editor/*',
