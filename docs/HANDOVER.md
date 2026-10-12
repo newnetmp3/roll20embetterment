@@ -272,3 +272,14 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Next:** Address any real current-view refresh failures; test fully closed-sheet Journal opening after reload with the Journal sidebar loaded; inspect precise labels for AC 17, speed 55, saves and slots without guessing UUID fields; only then advance Foundry-inspired combat HUD work.
 
 **v3.1.3 post-merge checkpoint (2026-10-12):** PR #40 merged to `main` as `018584ffd46d7ba281c7ecddf9c78827cfbc7524`. Final PR-head GitHub Actions run 38313162355 passed all checks (233 tests, zero failures, clean generated userscript). Source and production bundle are v3.1.3. No live Floorp non-HP automatic-update confirmation yet. Next practical test: with Nier's sheet popped out on Inventory or Features, change a visible named value, leave Auto-sync enabled and do not click Import; verify R20eb changes within ~16–24s. Full Journal auto-opening without any sheet remains unverified.
+
+
+## v3.1.4 — Event-driven current-view sync (October 12, 2026)
+
+**User observation:** The ~16-second non-HP refresh delay is excessive when the user changes a field locally. This delay was a conservative polling throttle for the heavy current-view DOM scan, **not a required backend/network latency**. The v3.1.3 ~one-second HP watch is distinct and already live-verified on Nier's popout.
+
+**Implementation:** In the official sheet's `v3/10_reader.js`, listen to capture-phase `input`/`change` events and clicks on recognized incrementer/resource buttons only. Debounce input events 350ms inside the official reader and send a tiny `dirty` hint over the established, strict-origin `postMessage` bridge. The editor checks known iframe or registered popout source, popup session and selected character identity, then schedules a current-tab read after ~400ms, with at least two seconds between expensive DOM scans during rapid edits. Never navigate user-owned tabs, and cancel pending event scans when Auto-sync is disabled. Maintain ~16-second current-tab polling for silent programmatic/remote updates and ~one-second HP watch as safety fallbacks.
+
+**QA:** Added tests for event listener registration, debounce and rejected generic clicks, authenticated popup event scans, non-HP value refresh, forged source/session/name/origin rejection, burst throttling and cancellation after disable. CI status to be recorded after verification. This is **not a claim of all fields being updated in <1 second**; own Render/Vue processing, virtualized tabs, some button interactions, background-window throttling, and browser-specific behavior can delay/omit browser events. Test Nier's popout with a resource/quantity change and observe updates without clicking Import.
+
+**Next:** Verify live event delivery in Floorp and characterize cases lacking DOM input/change; only then consider targeted mutation observation if needed. Fully closed-sheet Journal opening and unmapped AC/speed/saves/slots remain outstanding.
