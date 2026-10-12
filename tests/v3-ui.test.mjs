@@ -600,3 +600,33 @@ test('turning Auto-sync off cancels queued event-triggered scans',()=>{
   assert.equal(h.timeouts.has(id),false);
   assert.equal(popup.messages.length,0);
 });
+
+
+test('Inventory debug view visibly updates zero quantity and observed toggle state without losing off-tab data',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  h.api.R3_AUTO.name='NIER';
+  const prev=h.api.r3Empty();prev.name='NIER';prev.stats.hp=82;
+  prev.spells=[{name:'Druidcraft',_key:'druidcraft'}];
+  prev.inventory=[{name:'Healer Kit',_key:'healer kit||',tab:'Inventory',
+    visible:'Healer Kit',quantity:3,
+    controls:[{kind:'quantity',label:'Item quantity',value:3,source:'utility-incrementer__input'},
+      {kind:'toggle',label:'Use item',value:true,source:'aria-pressed'}]}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);
+  h.shadow.handlers.get('click')({target:{dataset:{view:'inventory'}}});
+  const first=h.nodes.get('r3-results').innerHTML;
+  assert.match(first,/Observed quantity/);
+  assert.match(first,/Use item/);
+  assert.match(first,/>On</);
+  const current=h.api.r3Empty();current.name='NIER';
+  current.inventory=[{name:'Healer Kit',_key:'healer kit||',tab:'Inventory',
+    visible:'Healer Kit',quantity:0,
+    controls:[{kind:'quantity',label:'Item quantity',value:0,source:'utility-incrementer__input'},
+      {kind:'toggle',label:'Use item',value:false,source:'aria-pressed'}]}];
+  h.api.r3AutoStoreSnapshot(h.api.r3Coverage(current),'current');
+  const html=h.nodes.get('r3-results').innerHTML;
+  assert.notEqual(html,first,'new observations must repaint Inventory debug details');
+  assert.match(html,/Observed quantity<\/span><strong>0</);
+  assert.match(html,/Use item<\/span><strong>Off</);
+  assert.equal(h.api.R3_UI.snapshot.spells.length,1);
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+});
