@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.2.1 screenshot-driven HUD correction in progress). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.2.1 screenshot-driven HUD correction merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -86,3 +86,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 
 
 **v3.2.1 — Correct HUD design/data after live screenshot:** User showed v3.2.0 generic grid instead of requested Foundry/Argon interface and missing AC/speed/passive. Reviewed provided `enhancedcombathud-t2k4e-3.0.0.zip`: a Twilight 2000 Argon CORE **adapter**, organized around portrait panel, segmented action groups, item buttons/drawers (not a standalone design asset bundle). Redesign into portrait dock + small action icon groups for action/bonus/reaction, quick side stat readouts, popup category drawers. Keep debug importer and reader intact. Recover source-observed AC=17 and speed=55 for Nier from precise per-input nearby labels `ARMOR CLASS` and `SPEED (ft)` in previously exported JSON, not from UUID guesses. Passive authoritative value is absent; UI may display **PASSIVE BASE** `10 + observed Perception (5) = 15` with explicit non-authoritative qualification. Tests for field mapping with conflicts, old data load, drawer and responsive DOM. Next: real Floorp UI validation, then verified native Roll20 action dispatch; no unverified roll/cast semantics. **CI verified:** PR #46 run 38320187465, **271 tests passed, zero failures**, generated bundle clean. Live Floorp confirmation pending.
+
+**v3.2.1 merged:** PR #46, commit `6d7cc77310602ecc4e389ea8ade85aface761ed6`, final CI 38320244100 green (**271 tests** plus generated bundle check). HUD redraw uses compact portrait dock, small observed stat blocks and Action/Bonus/Reaction icon groups, with detailed category cards in an optional drawer. AC 17 and Speed 55 are source-grounded through explicit nearby captions already in Nier observations. The displayed Passive Base of 15 is *calculated*, not a confirmed Roll20 passive score. Live Floorp HUD screenshot/QA is next; avoid calling the underlying Argon Core styling fully replicated from the system adapter alone.
