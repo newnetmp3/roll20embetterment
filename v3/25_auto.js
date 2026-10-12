@@ -25,7 +25,7 @@ function r3AutoDisplay(message){
   if(message!==undefined)R3_AUTO.lastError=message||'';
   const status=R3_UI.root?.getElementById('r3-auto-status');
   if(status)status.textContent=R3_AUTO.enabled?
-    ('Auto-sync: '+(message||'watching for your character sheet')):'Auto-sync is off';
+    ('Auto-sync: '+(R3_AUTO.lastError||'watching for your character sheet')):'Auto-sync is off';
   const toggle=R3_UI.root?.getElementById('r3-auto');
   if(toggle)toggle.textContent=R3_AUTO.enabled?'Auto-sync: On':'Auto-sync: Off';
 }
@@ -174,6 +174,7 @@ async function r3AutoTick(){
   const mode=background&&now-R3_AUTO.lastFull>300000?'all':'current';
   if(now-R3_AUTO.lastScan<(mode==='all'?10000:30000))return;
   R3_AUTO.running=true;
+  r3UIRefresh();
   try{
     const snapshot=await r3SendScan(candidate,mode);
     // A disabled auto-sync must never publish a late response.
@@ -186,7 +187,7 @@ async function r3AutoTick(){
   }catch(e){
     R3_AUTO.lastScan=Date.now();
     if(R3_AUTO.enabled)r3AutoDisplay('Waiting: '+r3String(e?.message||e,170));
-  }finally{R3_AUTO.running=false;}
+  }finally{R3_AUTO.running=false;r3UIRefresh();}
 }
 function r3ToggleAuto(){
   if(R3_AUTO.enabled){
