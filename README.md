@@ -1,6 +1,6 @@
-# roll20 Embetterment 3.0.5 — Independent D&D 2024 sheet importer
+# roll20 Embetterment 3.0.6 — Independent D&D 2024 sheet importer
 
-**v3.0.5:** Improves Import all tabs: reacquires Vue-replaced tab elements, prioritizes the primary Inventory and Features & Traits tabs over long nested filter lists, reads named inventory item rows and embedded resource/charge trackers, and exposes observed checkbox counts without guessing available/used status. Diagnostics now distinguish an unvisited Inventory tab from a visited tab with no recognized rows. Automated DOM fixtures cover all three cases. **These are conservative DOM adapters; live Floorp confirmation and an inside-iframe fixture are still needed.**
+**v3.0.6:** Improves Import all tabs: reacquires Vue-replaced tab elements, prioritizes the primary Inventory and Features & Traits tabs over long nested filter lists, reads named inventory item rows and embedded resource/charge trackers, and exposes observed checkbox counts without guessing available/used status. Diagnostics now distinguish an unvisited Inventory tab from a visited tab with no recognized rows. Automated DOM fixtures cover all three cases. **These are conservative DOM adapters; live Floorp confirmation and an inside-iframe fixture are still needed.**
 
 **v3.0.2:** Fixes `s[kind].some is not a function` when real skill rows are present in the official sheet. Skill bonuses are a keyed object, not named-card lists; the importer now separates these data types and tests skill row + HP + spells capture and merging. Supplied HTML confirms the Nier iframe but contains only outer editor markup. Browser end-to-end QA remains pending.
 

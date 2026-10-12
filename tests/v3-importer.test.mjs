@@ -53,7 +53,7 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.0\.5/);
+  assert.match(compiled,/\/\/ @version\s+3\.0\.6/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -342,4 +342,55 @@ test('spell metadata never treats free-text range or duration as structured labe
   assert.equal(s.spells[1].range,'60 feet');
   assert.equal(s.spells[1].castingTime,'Bonus Action');
   assert.equal(s.spells[2].range,'Self 30 ft radius');
+});
+
+test('actual Nier spell headers prevent save DC from becoming casting time',()=>{
+  const {h,fixture}=harness(docFixture({cards:{spells:[
+    card('spells','Power Word Pain','Power Word Pain 60 feet CON 11 Action V You speak a word of power within range.'),
+    card('spells','Druidcraft','Druidcraft 30 feet 1 action V S Whispering to nature.')
+  ]}}));
+  const s=h.r3Capture(fixture.body,'Spells');
+  assert.equal(s.spells[0].castingTime,'Action');
+  assert.equal(s.spells[0].components,'V');
+  assert.equal(s.spells[0].range,'60 feet');
+  assert.equal(s.spells[1].castingTime,'1 action');
+  assert.equal(s.spells[1].components,'V S');
+});
+test('compact official V S R C flags do not accidentally read descriptive prose',()=>{
+  const {h,fixture}=harness(docFixture({cards:{spells:[
+    card('spells','Detect Magic','Detect Magic Self 30 ft radius 1 action V S R C For the duration you sense magic.'),
+    card('spells','Blade of Disaster','Blade of Disaster 60 feet +3 Attack 4d12 Bonus Action V S C You create a blade.'),
+    card('spells','Frost','Frost 60 feet Action V S You can perform a ritual involving concentration.')
+  ]}}));
+  const s=h.r3Capture(fixture.body,'Spells');
+  assert.equal(s.spells[0].components,'V S');
+  assert.equal(s.spells[0].ritual,true);
+  assert.equal(s.spells[0].concentration,true);
+  assert.equal(s.spells[1].concentration,true);
+  assert.equal(s.spells[1].ritual,undefined);
+  assert.equal(s.spells[2].ritual,undefined);
+  assert.equal(s.spells[2].concentration,undefined);
+});
+test('explicit aria-labelledby identifies armor class while UUID-only speed remains unknown',()=>{
+  const fixture=docFixture({inputs:[]});
+  const ac=input({id:'11111111-2222-4333-8444-555555555555',value:'17'});
+  const sp=input({id:'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',value:'55'});
+  const get=ac.getAttribute.bind(ac);
+  ac.getAttribute=k=>k==='aria-labelledby'?'armor-label':get(k);
+  ac.ownerDocument={getElementById:id=>id==='armor-label'?{innerText:'Armor Class'}:null};
+  fixture.body.querySelectorAll=sel=>sel==='input,textarea,select,[data-attribute]'?[ac,sp]:[];
+  const {h}=harness(fixture);
+  const snap=h.r3Capture(fixture.body);
+  assert.equal(snap.stats.ac,17);
+  assert.equal(snap.stats.speed,undefined);
+});
+test('anonymous numeric field exports only bounded local text and no guessed value',()=>{
+  const fixture=docFixture({inputs:[]});
+  const mystery=input({id:'11111111-2222-4333-8444-555555555555',value:'55'});
+  mystery.parentElement={innerText:'Speed 55 feet',querySelectorAll:()=>[mystery],parentElement:null};
+  fixture.body.querySelectorAll=sel=>sel==='input,textarea,select,[data-attribute]'?[mystery]:[];
+  const {h}=harness(fixture);
+  const snap=h.r3Capture(fixture.body);
+  assert.equal(snap.stats.speed,undefined);
+  assert.deepEqual([...snap.observations[0].nearbyText],['Speed 55 feet']);
 });

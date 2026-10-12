@@ -201,3 +201,12 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 **Important safety boundary:** The export also shows persistent unlabeled UUID text controls containing 17 and 55, plausibly armor class and movement speed, but provides no trustworthy semantic linkage. Do not hardcode these UUIDs or infer field identity from numeric matches. A *targeted* parent element/accessible label sample is needed for them. Saving throws, modifiers and slots remain unverified. No full user-supplied JSON was added to the repo; tests use only minimal synthetic observations.
 
 **Validation:** New fixtures cover real anonymized label/value patterns, slider dedup/semantics, safe handling of anonymous 17/55, and avoidance of false spell fields. Check GitHub CI before merging and verify against a fresh Floorp export after installing v3.0.5.
+
+
+## v3.0.6 — Second live Nier export, targeted diagnostics and spell syntax (October 12, 2026)
+
+The second JSON at 20:17 UTC independently verifies v3.0.5: HP 82/84, temporary HP 0, 5 coin denominations, 5 named slider resources, 18 skills, 5 spells, 22 attacks, 37 inventory items and 34 features across 7 sheet views. Unclassified controls fell from 58 to 36. Still missing actual AC/speed, saving throws, ability modifiers and spell slots.
+
+Definite bug in the real spell export: Power Word Pain's `CON 11 Action V` was parsed as `11 Action`. Limit compact numeric casting shorthand to `1 action`, read official V/S/M and R/C tokens immediately after casting time, and add tests for this spell, Detect Magic and Blade of Disaster.
+
+Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs or infer AC/speed from the numbers. Add read-only support for `aria-labelledby` and short, local, at-most-2-string context hints for otherwise unnamed numeric inputs. Exported Nier character JSON is not checked in. These hints do not auto-classify a value. Actual saving throw/modifier/slot adapters remain follow-up work. New browser import required to see additional diagnostic hints.
