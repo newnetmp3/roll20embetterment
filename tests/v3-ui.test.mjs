@@ -517,3 +517,21 @@ test('empty, unrecognized and mismatched current views cannot erase a good full 
   assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
   assert.equal(h.api.R3_UI.snapshot.inventory.length,1);
 });
+
+
+test('automatic current-tab polling has a shorter gate than a full scan',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='NIER';
+  h.api.R3_AUTO.lastScan=Date.now()-10000;
+  await h.api.r3AutoTick();
+  assert.equal(h.sent.length,0,'ten seconds is too soon for a new current-tab read');
+  h.api.R3_AUTO.lastScan=Date.now()-14000;
+  const pending=h.api.r3AutoTick();
+  assert.equal(h.sent.length,1,'14 seconds meets the 12-second minimum');
+  assert.equal(h.sent[0].message.mode,'current');
+  const snap=h.api.r3Empty();snap.name='NIER';snap.skills.Athletics=5;
+  h.respond(h.api.r3Coverage(snap));
+  await pending;
+  assert.equal(h.api.R3_UI.snapshot.skills.Athletics,5);
+  assert.equal(h.api.R3_AUTO.lastFull,0,'a current-tab poll does not claim a full import');
+});
