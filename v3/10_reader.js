@@ -92,10 +92,18 @@ async function r3CollectAllTabs(progress){
   acc.diagnostics.notes.push('Only rendered DOM was read. Virtualized/offscreen rows are not guaranteed complete.');
   return r3Coverage(acc);
 }
+function r3CurrentTabLabel(){
+  // An ordinary current-view scan must carry the real active primary tab:
+  // generic 2024 inventory rows are deliberately imported only in Inventory.
+  // Avoid guessing from a nested filter (e.g. "Weapons") or hidden tabs.
+  const main=/^(?:combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
+  const active=r3Tabs().filter(r3Active);
+  return active.map(r3TabLabel).find(name=>main.test(name))||'Current view';
+}
 async function r3ReaderScan(mode,sendProgress){
   if(mode==='all')return r3CollectAllTabs(sendProgress);
   if(mode==='hp')return r3CaptureHealth(document.body);
-  return r3Capture(document.body,'Current view');
+  return r3Capture(document.body,r3CurrentTabLabel());
 }
 async function r3ReaderReceive(event){
   const peer=r3ReaderPeer();if(!peer||event.source!==peer||event.origin!==R3_EDITOR)return;
@@ -121,16 +129,21 @@ function r3ReaderChanged(event){
   const target=event?.target;
   if(!target||!r3Shown(target))return;
   if(event.type==='click'){
-    // Increment/decrement buttons are common on the official 2024 sheet.
-    // Ignore generic clicks, tab navigation, attack rolls and other controls
-    // that do not imply data changes.
-    const button=target.closest?.('button');
-    if(!button)return;
-    const hint=[r3Attr(button,'aria-label'),r3Attr(button,'title'),
-      r3Attr(button,'data-testid'),r3String(button.className,140)].join(' ');
-    if(!/(?:increment|decrement|stepper|counter|quantity|checkbox|charge|toggle-resource)/i.test(hint))return;
+    // Support native checkbox/switch roles and inventory toggles even when
+    // Roll20 renders them as non-input controls. Ordinary clicks, tab
+    // navigation and attack rolls must not initiate an expensive scan.
+    const control=target.closest?.('button,[role="checkbox"],[role="switch"],[aria-pressed]');
+    if(!control)return;
+    const hint=[r3Attr(control,'aria-label'),r3Attr(control,'title'),
+      r3Attr(control,'data-testid'),r3String(control.className,140)].join(' ');
+    const role=r3Attr(control,'role');
+    const inventory=!!target.closest?.(
+      '.item-row,.inventory-item,.equipment-item,[data-testid*="inventory-row"]');
+    if(!/(?:increment|decrement|stepper|counter|quantity|checkbox|charge|toggle-resource)/i.test(hint)&&
+      !['checkbox','switch'].includes(role)&&
+      !(inventory&&(/toggle/i.test(hint)||r3Attr(control,'aria-pressed'))))return;
   }else if(!['INPUT','TEXTAREA','SELECT'].includes(String(target.tagName||'').toUpperCase())
-    &&r3Attr(target,'role')!=='spinbutton')return;
+    &&!['spinbutton','checkbox','switch'].includes(r3Attr(target,'role')))return;
   if(r3ReaderDirtyTimer!==null)clearTimeout(r3ReaderDirtyTimer);
   // Debounce inside the actual official sheet so keystrokes send one small
   // authenticated hint instead of generating a cross-window message each.

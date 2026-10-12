@@ -48,12 +48,12 @@ function harness(fixture=docFixture()){
   };
   vm.createContext(context);
   const code=files.filter(f=>f!=='30_boot.js').map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n');
-  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3StartReader,r3Merge,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
+  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3CurrentTabLabel,r3StartReader,r3Merge,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
   return {h:context.testApi,context,fixture};
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.1\.4/);
+  assert.match(compiled,/\/\/ @version\s+3\.1\.5/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -478,7 +478,7 @@ test('reader ignores generic clicks but tracks incrementers and editable control
   const scheduled=[],original=(fn,ms)=>{scheduled.push(ms);return scheduled.length;};
   context.setTimeout=original;
   const button={className:'regular button',getAttribute:()=>null};
-  const target={tagName:'SPAN',getClientRects:()=>[{}],closest:sel=>sel==='button'?button:null};
+  const target={tagName:'SPAN',getClientRects:()=>[{}],closest:sel=>sel.startsWith('button')?button:null};
   h.r3ReaderChanged({type:'click',target});
   assert.equal(scheduled.length,0,'ordinary clicks must not trigger a heavyweight re-read');
   button.className='utility-incrementer__button';
@@ -497,4 +497,77 @@ test('reader registers capture-phase form and incrementer event listeners',()=>{
   assert.deepEqual(added.map(x=>x.type),['input','change','click']);
   assert.ok(added.every(x=>x.capture===true&&typeof x.callback==='function'));
   assert.ok(windowAdded.includes('message')&&windowAdded.includes('focus'));
+});
+
+test('current view recognizes an active 2024 Inventory tab even with a nested filter',async()=>{
+  const fixture=docFixture();
+  const tab=(label,active)=>({getClientRects:()=>[{}],disabled:false,
+    getAttribute:k=>k==='aria-label'?label:k==='aria-selected'?(active?'true':'false'):null,
+    className:'',closest:()=>null});
+  fixture.document.querySelectorAll=sel=>sel.startsWith('[role="tab"]')?[
+    tab('Combat',false),tab('Inventory',true),tab('All Items',true)
+  ]:[];
+  const {h}=harness(fixture);
+  assert.equal(h.r3CurrentTabLabel(),'Inventory');
+  const s=await h.r3ReaderScan('current');
+  assert.deepEqual([...s.diagnostics.tabs],['Inventory']);
+});
+test('current Inventory scan observes zero quantity and checked/toggled controls independently of row text',async()=>{
+  const fixture=docFixture({name:'NIER'});
+  const row={innerText:'Healer Kit',className:'item-row',getClientRects:()=>[{}],
+    getAttribute:()=>null,closest:()=>null};
+  const control=(value,attributes={})=>({value,tagName:'INPUT',type:'number',
+    className:'utility-incrementer__input',getClientRects:()=>[{}],
+    getAttribute:k=>attributes[k]??(k==='data-testid'?'utility-incrementer__input':null),
+    closest:sel=>sel.includes('item-row')?row:null});
+  const quantity=control('4');
+  const checkbox={tagName:'INPUT',type:'checkbox',checked:true,value:'on',
+    getClientRects:()=>[{}],getAttribute:()=>null,
+    closest:sel=>sel.includes('item-row')?row:null};
+  const toggle={tagName:'BUTTON',type:'button',getClientRects:()=>[{}],
+    getAttribute:k=>k==='aria-pressed'?'false':k==='aria-label'?'Use item':null,
+    closest:sel=>sel.includes('item-row')?row:null};
+  const title={innerText:'Healer Kit',getClientRects:()=>[{}],getAttribute:()=>null,
+    closest:sel=>sel.includes('item-row')?row:null};
+  row.querySelectorAll=sel=>{
+    if(sel==='button')return [toggle];
+    if(sel.includes('input,select,[role="spinbutton"]'))return [quantity,checkbox,toggle];
+    if(sel.includes('.span--item-row-title'))return [title];
+    return [];
+  };
+  row.querySelector=()=>null;
+  fixture.body.querySelectorAll=sel=>{
+    if(sel.startsWith('.span--item-row-title,'))return [title];
+    return [];
+  };
+  const active={getClientRects:()=>[{}],disabled:false,className:'',
+    getAttribute:k=>k==='aria-label'?'Inventory':k==='aria-selected'?'true':null,
+    closest:()=>null};
+  fixture.document.querySelectorAll=sel=>sel.startsWith('[role="tab"]')?[active]:[];
+  const {h}=harness(fixture);
+  const before=await h.r3ReaderScan('current');
+  assert.equal(before.inventory.length,1);
+  assert.equal(before.inventory[0].quantity,4);
+  assert.equal(before.inventory[0].controls.find(c=>c.kind==='toggle').value,true);
+  assert.equal(before.inventory[0].tab,'Inventory');
+  quantity.value='0';checkbox.checked=false;
+  const after=await h.r3ReaderScan('current');
+  assert.equal(after.inventory[0].quantity,0,'zero is a real observed value, never missing');
+  assert.equal(after.inventory[0].controls.find(c=>c.kind==='toggle').value,false);
+  assert.equal(after.inventory[0].visible,before.inventory[0].visible,
+    'visible row text is unchanged, so captured controls must distinguish new state');
+});
+
+test('2024 inventory toggle buttons emit change hints without observing unrelated clicks',()=>{
+  const {h,context}=harness();
+  const timers=[];
+  context.setTimeout=(fn,ms)=>{timers.push({fn,ms});return timers.length};
+  const row={};
+  const toggle={tagName:'BUTTON',className:'item-use-toggle',getClientRects:()=>[{}],
+    getAttribute:k=>k==='aria-pressed'?'false':null};
+  const child={tagName:'SPAN',getClientRects:()=>[{}],
+    closest:sel=>sel.startsWith('button')?toggle:sel.includes('item-row')?row:null};
+  h.r3ReaderChanged({type:'click',target:child});
+  assert.equal(timers.length,1);
+  assert.equal(timers[0].ms,350);
 });
