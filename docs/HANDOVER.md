@@ -3,9 +3,9 @@
 **Updated:** 2026-10-12  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `e5c3dcf58ee745d4095391bad2721c84be6368cb` (v3.2.2, merged PR #47).  
-**Latest completed milestone:** v3.2.2 wiki-guided original Argon HUD horizontal bar, 3 paired loadouts, upward spell/item/skills flyouts, local action markers, Shift+A (PR #47; 277 tests passed).  
-**Known unresolved issues:** v3.2.2 has passed CI but its horizontal Argon-aligned UI needs live Floorp visual QA. Native Roll20 rolls/casts, native end turn, real token portrait/drag-drop sets/targeting and movement tracking are not yet implemented. Official passive/saves/slots mappings may still be incomplete.  
+**Current verified feature baseline:** `b37b33c57c74adb390616a705ed4dbf59211d4b9` (v3.2.3, merged PR #48).  
+**Latest completed milestone:** v3.2.3 screenshot-led HUD legibility: larger portrait, single-line HP, full stat grid, readable utility/action labels and exact-name visible Journal avatar reuse (PR #48, 280 tests).  
+**Known unresolved issues:** v3.2.3 layout and optional Journal portrait have passed automated tests but require fresh Floorp screenshot verification. Native Roll20 rolls/casts, token targeting, drag/drop and end turn remain unimplemented, as do some unverified sheet mappings.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
 ## Resume process
@@ -376,3 +376,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Journal art:** Implement `r3HudPortraitUrl(snapshot)` to re-use an already visible image from the Roll20 editor if an ancestor row has **exactly** the selected character name, without partial matches (`Nier` must not select `Shadow Nier` or `Nier's Journal`). Permit only HTTPS image URLs, escape in generated markup, ignore hidden img elements; retain monogram fallback and cache successful finds, throttling missing-art scans to once / 15 s. Does not discover token ownership or query undocumented Roll20 endpoints. Browser-specific markup requires Floorp QA.
 
 **QA:** Tests added for structured portrait head, nowrap HP, spacing/resource CSS and exact-named Journal portrait, caching and spoofed/hidden/unsafe image rejection. All earlier importer/HUD tests remain. **CI verified:** PR #48 head `e6d7d1a2e3f5f10deedf4278a21848c73e00f349`, run 38322073424, **280 tests passed, zero failures**, userscript generation and syntax checks green. Final docs-only CI and merge pending. **Next:** user screenshot of revised legibility and actual journal picture detection, then continue native action-dispatch feasibility and special-action fidelity in separate milestones.
+
+**v3.2.3 merged checkpoint (2026-10-12):** PR #48 squash-merged to `main` at `b37b33c57c74adb390616a705ed4dbf59211d4b9`; final PR-head GitHub Actions run 38322126103 passed `npm run check` (**280 tests, zero failures**) and generated userscript comparison. Production userscript version 3.2.3. Source screenshot v3.2.2 verified AC17, Speed55, HP82/84 and horizontal Argon action sections but showed small cramped portrait/HP/utility elements. This update widens portrait, gives all stats space, lifts HUD from bottom edge, makes resource list scrollable and allows reuse of an already-rendered matching Journal thumbnail. Live browser success for new sizing and portrait is not yet confirmed; no native combat actions were added. Next: screenshot feedback and validated Roll20 action execution bridge investigation. Both rolling docs updated.
