@@ -280,9 +280,8 @@ function r3CardInfo(card,kind,name,tab){
     if(duration)info.duration=r3String(duration[0],70);
     const components=header.match(/\bcomponents\s*:\s*[VSM](?:\s*,?\s*[VSM]){0,2}\b/i);
     if(components)info.components=r3String(components[0],45);
-    // Absence of readable metadata means "unknown", not a false flag.
-    if(/\britual\b/i.test(header))info.ritual=true;
-    if(/\bconcentration\b/i.test(header))info.concentration=true;
+    // Plain words in the description are not proof of spell flags.
+    // The flags above require the official single-letter header tokens.
   }
   return info;
 }
