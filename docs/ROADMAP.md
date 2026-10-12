@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.1.7 screenshot-driven inventory stepper development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.1.7 screenshot-driven inventory stepper merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -76,3 +76,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 
 
 **v3.1.7 — Unlabeled Inventory quantity stepper from user screenshot:** User confirms Inventory On/Off works, but screenshot proves Crowbar shows numeric **0** in official sheet while R20eb still shows Crowbar with only `headlessui-switch-100 On`; v3.1.6's deletion logic needs a real `quantity:0` that was absent from the captured item. Fix selecting the full item row, recognize a unique anonymous numeric input bounded by visible +/- controls, emit dirty notifications for unlabeled +/- buttons, and report unrecognized quantity in Inventory debug when switch is captured but count is not. Do not guess random UUID fields, resource counters or row absence as item quantity/deletion. **CI verified:** PR #44 run 38317619492 (**257 tests passed, zero failures**, generated bundle consistent). Live actual Floorp evidence still pending. Next, once verified, resume closed-sheet Journal import and missing character field mappings.
+
+**v3.1.7 merge checkpoint:** PR #44 merged to `main` as `614fa130b404df9eb3c85a1fe9f81f10d8995e32`; final head CI run 38317669511 passed **257 tests** with a clean generated userscript. Re-test Crowbar at 0 on the official popped-out sheet: it should be excluded from the imported Inventory list; an observed positive count should add it back. Live Floorp proof still required. If non-working, request DOM markup scoped to that item's count control and enclosing stepper.
