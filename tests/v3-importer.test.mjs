@@ -48,12 +48,12 @@ function harness(fixture=docFixture()){
   };
   vm.createContext(context);
   const code=files.filter(f=>f!=='30_boot.js').map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n');
-  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3Merge,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
+  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3Merge,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
   return {h:context.testApi,context,fixture};
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.1\.0/);
+  assert.match(compiled,/\/\/ @version\s+3\.1\.1/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -393,4 +393,38 @@ test('anonymous numeric field exports only bounded local text and no guessed val
   const snap=h.r3Capture(fixture.body);
   assert.equal(snap.stats.speed,undefined);
   assert.deepEqual([...snap.observations[0].nearbyText],['Speed 55 feet']);
+});
+
+
+test('one-second HP reader only samples labeled live health controls, not full sheet collections',async()=>{
+  const {h,fixture}=harness(docFixture({inputs:[
+    input({id:'hp-current',title:'Current Hitpoints',value:'81',ariaMax:'84'}),
+    input({title:'Max Hitpoints',value:'92'}),
+    input({title:'Temporary Hitpoints',value:'0'}),
+    input({title:'STR',value:'18'}),
+    input({title:'Current Hitpoints',value:'44',visible:false}),
+    input({title:'unrelated counter',value:'700'})
+  ],cards:{inventory:[card('inventory','Rope','Rope 50 ft')]}}));
+  const snap=h.r3CaptureHealth(fixture.body);
+  assert.equal(snap.name,'NIER');
+  assert.deepEqual({...snap.stats},{hp:81,maxHp:92,tempHp:0});
+  assert.equal(snap.abilities.str,undefined);
+  assert.equal(snap.inventory.length,0);
+  assert.equal(snap.observations.length,0);
+  const original=h.context.document;
+  h.context.document=fixture.document;
+  const routed=await h.r3ReaderScan('hp');
+  h.context.document=original;
+  assert.equal(routed.stats.hp,81);
+});
+test('HP watch rejects malformed and fully hidden health inputs without returning zero',()=>{
+  const {h,fixture}=harness(docFixture({inputs:[
+    input({title:'Current Hitpoints',value:'broken'}),
+    input({title:'Maximum Hitpoints',value:'84',visible:false}),
+    input({title:'temporary hp',value:'-1'})
+  ]}));
+  const snap=h.r3CaptureHealth(fixture.body);
+  assert.equal(snap.stats.hp,undefined);
+  assert.equal(snap.stats.maxHp,undefined);
+  assert.equal(snap.stats.tempHp,undefined);
 });
