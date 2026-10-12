@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.1.4
+// @version      3.1.5
 // @description  Independent read-only D&D 2024 sheet importer with comprehensive capture and diagnostics.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -262,6 +262,7 @@ function r3CardInfo(card,kind,name,tab){
     .filter(r3Shown).map(b=>({label:r3String(r3Attr(b,'aria-label')||r3Attr(b,'title')||r3Text(b,70),70)}))
     .filter(b=>b.label);
   if(buttons.length)info.actions=buttons;
+  if(kind==='inventory')r3InventoryControls(card,info);
   if(kind==='spells'){
     // The official 2024 card flattens header and description into one
     // innerText string. Words like "range", "duration" and "action" in the
@@ -302,6 +303,52 @@ function r3CardInfo(card,kind,name,tab){
     // The flags above require the official single-letter header tokens.
   }
   return info;
+}
+// Keep only raw, explicitly observed states in an inventory item's own row.
+// 2024 quantity controls can be Vue incrementers; changing their number to
+// zero often leaves the item's ordinary innerText unchanged. Don't infer
+// whether a toggle means equipped, carried, attuned or consumed.
+function r3InventoryControls(row,info){
+  const controls=Array.from(row.querySelectorAll?.(
+    'input,select,[role="spinbutton"],[role="checkbox"],[role="switch"],button[aria-pressed]'
+  )||[]).slice(0,36);
+  const observed=[];
+  const quantities=[];
+  for(const el of controls){
+    if(!r3Shown(el))continue;
+    // Nested inventory cards/resource sections must not be mistaken for
+    // another item's quantity. Only the innermost named inventory row owns
+    // a control when there is a nested row.
+    const owner=el.closest?.('.item-row,.inventory-item,.equipment-item,[data-testid*="inventory-row"]');
+    if(owner&&owner!==row)continue;
+    const role=r3Attr(el,'role'),type=r3String(el.type,35).toLowerCase();
+    const labels=r3Descriptor(el);
+    const label=r3String(labels.find(l=>!/(?:^[0-9a-f]{8}-[0-9a-f-]{27,}$)/i.test(l))||'',100);
+    const testId=r3Attr(el,'data-testid');
+    const state=type==='checkbox'?(!!el.checked):
+      role==='checkbox'||role==='switch'?r3Attr(el,'aria-checked')==='true':
+      r3Attr(el,'aria-pressed')?r3Attr(el,'aria-pressed')==='true':null;
+    if(state!==null){
+      observed.push({kind:'toggle',label:label||role||'Checkbox',
+        value:state,source:role||type||'aria-pressed'});
+      continue;
+    }
+    if(String(el.tagName||'').toUpperCase()==='BUTTON')continue;
+    const numeric=r3Number(r3Read(el),0,9999);
+    if(numeric===null)continue;
+    // Exact quantity/incrementer semantics only; a resource counter from
+    // a potion or magic item is not necessarily an item count.
+    const quantity=/(?:quantity|qty|item count|stack count)/i.test(
+      [label,testId,r3Attr(el,'aria-label')].join(' '))||
+      /(?:utility-incrementer__input|item-quantity)/i.test(
+        [testId,r3String(el.className,120)].join(' '));
+    if(quantity)quantities.push(numeric);
+    observed.push({kind:quantity?'quantity':'number',
+      label:label||(quantity?'Item quantity':'Unlabeled numeric control'),
+      value:numeric,source:testId||type||role||'input'});
+  }
+  if(observed.length)info.controls=observed.slice(0,24);
+  if(quantities.length===1)info.quantity=quantities[0];
 }
 // Only named, rendered inventory rows are imported. Many 2024 sheets use
 // generic item-row components instead of .inventory-item/.equipment-item.
@@ -573,10 +620,18 @@ async function r3CollectAllTabs(progress){
   acc.diagnostics.notes.push('Only rendered DOM was read. Virtualized/offscreen rows are not guaranteed complete.');
   return r3Coverage(acc);
 }
+function r3CurrentTabLabel(){
+  // An ordinary current-view scan must carry the real active primary tab:
+  // generic 2024 inventory rows are deliberately imported only in Inventory.
+  // Avoid guessing from a nested filter (e.g. "Weapons") or hidden tabs.
+  const main=/^(?:combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
+  const active=r3Tabs().filter(r3Active);
+  return active.map(r3TabLabel).find(name=>main.test(name))||'Current view';
+}
 async function r3ReaderScan(mode,sendProgress){
   if(mode==='all')return r3CollectAllTabs(sendProgress);
   if(mode==='hp')return r3CaptureHealth(document.body);
-  return r3Capture(document.body,'Current view');
+  return r3Capture(document.body,r3CurrentTabLabel());
 }
 async function r3ReaderReceive(event){
   const peer=r3ReaderPeer();if(!peer||event.source!==peer||event.origin!==R3_EDITOR)return;
@@ -602,16 +657,21 @@ function r3ReaderChanged(event){
   const target=event?.target;
   if(!target||!r3Shown(target))return;
   if(event.type==='click'){
-    // Increment/decrement buttons are common on the official 2024 sheet.
-    // Ignore generic clicks, tab navigation, attack rolls and other controls
-    // that do not imply data changes.
-    const button=target.closest?.('button');
-    if(!button)return;
-    const hint=[r3Attr(button,'aria-label'),r3Attr(button,'title'),
-      r3Attr(button,'data-testid'),r3String(button.className,140)].join(' ');
-    if(!/(?:increment|decrement|stepper|counter|quantity|checkbox|charge|toggle-resource)/i.test(hint))return;
+    // Support native checkbox/switch roles and inventory toggles even when
+    // Roll20 renders them as non-input controls. Ordinary clicks, tab
+    // navigation and attack rolls must not initiate an expensive scan.
+    const control=target.closest?.('button,[role="checkbox"],[role="switch"],[aria-pressed]');
+    if(!control)return;
+    const hint=[r3Attr(control,'aria-label'),r3Attr(control,'title'),
+      r3Attr(control,'data-testid'),r3String(control.className,140)].join(' ');
+    const role=r3Attr(control,'role');
+    const inventory=!!target.closest?.(
+      '.item-row,.inventory-item,.equipment-item,[data-testid*="inventory-row"]');
+    if(!/(?:increment|decrement|stepper|counter|quantity|checkbox|charge|toggle-resource)/i.test(hint)&&
+      !['checkbox','switch'].includes(role)&&
+      !(inventory&&(/toggle/i.test(hint)||r3Attr(control,'aria-pressed'))))return;
   }else if(!['INPUT','TEXTAREA','SELECT'].includes(String(target.tagName||'').toUpperCase())
-    &&r3Attr(target,'role')!=='spinbutton')return;
+    &&!['spinbutton','checkbox','switch'].includes(r3Attr(target,'role')))return;
   if(r3ReaderDirtyTimer!==null)clearTimeout(r3ReaderDirtyTimer);
   // Debounce inside the actual official sheet so keystrokes send one small
   // authenticated hint instead of generating a cross-window message each.
@@ -763,7 +823,14 @@ function r3CardsView(kind){
   if(!snap?.[kind]?.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
   return snap[kind].slice(0,400).map(item=>
     '<details class="entry" data-entry-key="'+r3Escape(kind+':'+item.tab+':'+item.name)+'"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
-    '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+    (item.checkboxes?'<div class="muted">Visible checkboxes: '+r3Escape(item.checkboxes.checked)+' of '+r3Escape(item.checkboxes.total)+' checked (sheet-specific meaning)</div>':'')+
+    '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+
+    (kind==='inventory'&&Object.prototype.hasOwnProperty.call(item,'quantity')?
+      '<div class="kv"><span>Observed quantity</span><strong>'+r3Escape(item.quantity)+'</strong></div>':'')+
+    (kind==='inventory'&&item.controls?.length?item.controls.map(control=>
+      '<div class="kv"><span>'+r3Escape(control.label||control.kind)+'</span><strong>'+
+      r3Escape(control.value===true?'On':control.value===false?'Off':control.value)+'</strong>'+
+      '<small>'+r3Escape(control.source||'observed')+'</small></div>').join(''):'')+
+    (item.checkboxes?'<div class="muted">Visible checkboxes: '+r3Escape(item.checkboxes.checked)+' of '+r3Escape(item.checkboxes.total)+' checked (sheet-specific meaning)</div>':'')+
     (item.actions?.length?'<div class="chips">'+item.actions.map(b=>'<span>'+r3Escape(b.label)+'</span>').join('')+'</div>':'')+
     '</details>').join('');
 }
