@@ -782,7 +782,8 @@ test('HUD shows missing fields as unknown and does not infer action economy',()=
   assert.equal(h.api.r3HudEntries(snap,'bonus').length,0);
   assert.equal(h.api.r3HudEntries(snap,'reactions').length,0);
   assert.doesNotMatch(html,/Slot 1/);
-  assert.match(html,/Read-only preview/);
+  assert.match(html,/ARGON-INSPIRED COMBAT HUD/);
+  assert.match(html,/hud-action-panels/);
 });
 test('HUD category navigation and item counts do not execute Roll20 actions',()=>{
   const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
@@ -852,4 +853,59 @@ test('clicking inner glyph of a HUD tab selects its category, without extra scan
   h.shadow.handlers.get('click')({target:inner});
   assert.equal(h.api.R3_HUD.category,'features');
   assert.equal(h.sent.length,0);
+});
+
+
+test('Nier previous export promotes exact labeled AC/speed to the redesigned HUD without a rescan',()=>{
+  const h=panelHarness();
+  const save=h.api.r3Empty();save.name='Nier';save.stats.hp=82;save.stats.maxHp=84;
+  save.skills.Perception=5;
+  save.observations=[
+    {label:'59a75333-038c-491a-a93f-be3022111d42',value:'17',
+      nearbyText:['ARMOR CLASS'],tab:'COMBAT'},
+    {label:'b89b2c57-491e-4f8c-b43f-7b21bc42aa96',value:'55',
+      nearbyText:['SPEED (ft)'],tab:'INVENTORY'}
+  ];
+  h.store.set('roll20-embetterment-v3:123',JSON.stringify({schema:3,snapshot:save}));
+  h.api.r3StartUI();
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/AC<\/span><strong>17/);
+  assert.match(html,/SPEED<\/span><strong>55 ft/);
+  assert.match(html,/PASSIVE BASE<\/span><strong>15/);
+  assert.equal(h.api.R3_UI.snapshot.stats.passivePerception,undefined,
+    'base passive is displayed as calculation, not fabricated sheet value');
+  assert.equal(h.api.R3_UI.snapshot.stats.ac,17);
+  assert.equal(h.api.R3_UI.snapshot.stats.speed,55);
+});
+test('Argon-like portrait + segmented action panels replace giant grid as initial HUD',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Nier';snap.stats.hp=82;snap.stats.maxHp=84;
+  snap.attacks=[{name:'Crowbar',_key:'crowbar',tab:'Combat'}];
+  snap.spells=[{name:'Shield',_key:'shield',castingTime:'Reaction'},
+    {name:'Misty Step',_key:'misty',castingTime:'Bonus Action'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/hud-portrait-dock/);
+  assert.match(html,/hud-portrait-rim/);
+  assert.match(html,/hud-action-panels/);
+  assert.match(html,/ACTION<\/span>/);
+  assert.match(html,/BONUS ACTION<\/span>/);
+  assert.match(html,/REACTION<\/span>/);
+  assert.match(html,/Crowbar/);
+  assert.match(html,/Misty Step/);
+  assert.match(html,/Shield/);
+  assert.doesNotMatch(html,/class="hud-drawer"/,'drawer should not overwhelm tabletop by default');
+  h.shadow.handlers.get('click')({target:{dataset:{hudCategory:'inventory'}}});
+  assert.match(h.nodes.get('r3-hud').innerHTML,/class="hud-drawer"/);
+  assert.equal(h.api.R3_HUD.drawerOpen,true);
+  h.click('r3-hud-drawer-close');
+  assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/class="hud-drawer"/);
+});
+test('passive perception explicit sheet observation outranks computed base',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Nier';snap.skills.Perception=5;snap.stats.passivePerception=19;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/PASSIVE<\/span><strong>19/);
+  assert.doesNotMatch(html,/PASSIVE BASE/);
 });
