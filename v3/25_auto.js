@@ -149,7 +149,7 @@ function r3AutoSignature(s){
 }
 function r3AutoCombine(prev,current){
   if(!prev||r3String(prev.name).toLowerCase()!==r3String(current.name).toLowerCase())
-    return r3Coverage(current);
+    return r3InventoryPrune(current);
   // Current-view scans refresh only fields they genuinely observed; don't
   // erase saved inventory/spells/features because their tabs were not visited.
   const merged={...prev,capturedAt:current.capturedAt,stats:{...prev.stats,...current.stats},
@@ -164,7 +164,13 @@ function r3AutoCombine(prev,current){
   }
   for(const kind of ['resources','attacks','spells','inventory','features']){
     const indexed=new Map((prev[kind]||[]).map(item=>[item._key||item.name,item]));
-    for(const entry of current[kind]||[])indexed.set(entry._key||entry.name,entry);
+    for(const entry of current[kind]||[]){
+      const key=entry._key||entry.name;
+      // A positively observed quantity of zero removes an item from the
+      // saved inventory. Missing/off-tab/virtualized rows never do.
+      if(kind==='inventory'&&r3InventoryZero(entry))indexed.delete(key);
+      else indexed.set(key,entry);
+    }
     merged[kind]=[...indexed.values()];
   }
   // Keep bounded observations from the last full import, not every poll.
@@ -188,7 +194,7 @@ function r3AutoStoreSnapshot(snapshot,mode){
   if(!r3AutoHasRecognizedData(snapshot))
     throw new Error('Sheet has not populated recognizable character values yet');
   // A partial scan cannot erase the full inventory, spells and actions.
-  const next=mode==='all'?snapshot:r3AutoCombine(R3_UI.snapshot,snapshot);
+  const next=mode==='all'?r3InventoryPrune(snapshot):r3AutoCombine(R3_UI.snapshot,snapshot);
   if(r3AutoSignature(R3_UI.snapshot||{})!==r3AutoSignature(next)){
     R3_UI.snapshot=r3Coverage(next);r3Save(R3_UI.snapshot);
     r3UIRefresh();
