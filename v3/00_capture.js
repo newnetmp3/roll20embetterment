@@ -47,13 +47,14 @@ function r3Field(raw){
   const hit={
     'current hp':'hp','hp current':'hp','hp':'hp','hp remaining':'hp','remaining hp':'hp',
     'max hp':'maxHp','maximum hp':'maxHp','hp max':'maxHp','hp maximum':'maxHp',
-    'temp hp':'tempHp','temporary hp':'tempHp','hp temp':'tempHp',
+    'temp hp':'tempHp','temporary hp':'tempHp','hp temp':'tempHp','temp':'tempHp','temphp':'tempHp',
     'armor class':'ac','ac':'ac','speed':'speed','speed (ft)':'speed','walking speed':'speed',
     'initiative':'initiative','initiative bonus':'initiative','initiative modifier':'initiative',
     'proficiency bonus':'proficiency','pb':'proficiency','level':'level','character level':'level',
     'spell save dc':'spellSaveDc','spell attack bonus':'spellAttackBonus',
     'passive perception':'passivePerception','inspiration':'inspiration',
-    'cp':'cp','sp':'sp','ep':'ep','gp':'gp','pp':'pp'
+    'cp':'cp','sp':'sp','ep':'ep','gp':'gp','pp':'pp',
+    'copper':'cp','silver':'sp','electrum':'ep','gold':'gp','platinum':'pp'
   };
   if(hit[name])return {kind:'stat',key:hit[name]};
   const ability=name.match(/^(str|dex|con|int|wis|cha|strength|dexterity|constitution|intelligence|wisdom|charisma)(?: (score|modifier|mod|save|saving throw))?$/);
@@ -115,6 +116,23 @@ function r3Inputs(root,s,tab){
         if(ariaMax!==null&&s.stats.maxHp===undefined)r3Push(s,'stat','maxHp',ariaMax,{kind:'aria-valuemax',tab,label});
       }
       mapped=true;break;
+    }
+    // The real 2024 sheet uses named input[type=range] for feature/item
+    // trackers (Second Wind, Unleash Incarnation, Healer's Kit, etc.).
+    // Record their *observed slider positions*, not guessed remaining uses.
+    if(!mapped&&el.type==='range'&&/^(?:current view|combat|features\s*(?:&|and)\s*traits)$/i.test(tab)){
+      const label=labels.find(name=>name.length<=100&&!/^[0-9a-f-]{32,}$/i.test(name)&&
+        !/^(?:resource|resources|track|tracker|charge|charges|uses|remaining|used)$/i.test(name));
+      const n=r3Number(raw,0,9999);
+      if(label&&n!==null&&s.resources.length<400){
+        const key=r3String(label,100).toLowerCase();
+        if(!s.resources.some(x=>x._key===key))
+          s.resources.push({name:r3String(label,100),tab,
+            visible:'Observed slider position: '+n+' (availability/expended meaning not verified)',
+            observedValue:n,controlType:'range',source:{kind:'named range input',tab,label},
+            _key:key});
+        mapped=true;
+      }
     }
     if(!mapped)s.diagnostics.unclassified++;
   }
@@ -203,13 +221,30 @@ function r3CardInfo(card,kind,name,tab){
     .filter(b=>b.label);
   if(buttons.length)info.actions=buttons;
   if(kind==='spells'){
-    for(const [key,re] of [['level',/\b(?:cantrip|level\s*[1-9])\b/i],['castingTime',/\b(?:casting time|bonus action|reaction|action|ritual)\s*[:\-]?\s*[^,\n]{0,40}/i],
-      ['range',/\b(?:range|reach)\s*[:\-]?\s*[^,\n]{0,40}/i],['duration',/\bduration\s*[:\-]?\s*[^,\n]{0,40}/i],
-      ['components',/\bcomponents?\s*[:\-]?\s*[^,\n]{0,45}/i]]){
-      const m=info.visible.match(re);if(m)info[key]=r3String(m[0],70);
+    // The official 2024 card flattens header and description into one
+    // innerText string. Words like "range", "duration" and "action" in the
+    // description are NOT field labels. Only use the short header, or
+    // explicit labeled fields with recognizable values.
+    const header=info.visible.slice(name.length,name.length+100);
+    const level=header.match(/\b(?:cantrip|level\s*[1-9])\b/i);
+    if(level)info.level=r3String(level[0],30);
+    const range=header.match(/^\s*(self(?:\s+\d+\s*(?:ft\.?|feet)\s+radius)?|touch|\d+\s*(?:ft\.?|feet|miles?))\b/i);
+    if(range)info.range=r3String(range[1],60);
+    else {
+      const explicit=header.match(/\brange\s*:\s*(self|touch|\d+\s*(?:ft\.?|feet|miles?))\b/i);
+      if(explicit)info.range=r3String(explicit[1],60);
     }
-    info.concentration=/\bconcentration\b/i.test(info.visible);
-    info.ritual=/\britual\b/i.test(info.visible);
+    const explicitCasting=header.match(/\bcasting\s*time\s*:\s*(?:\d+\s+)?(?:bonus action|action|reaction|minutes?|hours?)\b/i);
+    const compactCasting=header.match(/\b(?:\d+\s+)?(?:bonus action|action|reaction)\b(?=\s+(?:V|S|M|R|C)\b)/i);
+    if(explicitCasting||compactCasting)
+      info.castingTime=r3String((explicitCasting||compactCasting)[0],70);
+    const duration=header.match(/\bduration\s*:\s*(?:instantaneous|concentration|up to\s+\d+|\d+\s+(?:rounds?|minutes?|hours?|days?))[^,;.]{0,20}/i);
+    if(duration)info.duration=r3String(duration[0],70);
+    const components=header.match(/\bcomponents\s*:\s*[VSM](?:\s*,?\s*[VSM]){0,2}\b/i);
+    if(components)info.components=r3String(components[0],45);
+    // Absence of readable metadata means "unknown", not a false flag.
+    if(/\britual\b/i.test(header))info.ritual=true;
+    if(/\bconcentration\b/i.test(header))info.concentration=true;
   }
   return info;
 }

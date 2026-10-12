@@ -53,7 +53,7 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.0\.4/);
+  assert.match(compiled,/\/\/ @version\s+3\.0\.5/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -115,7 +115,8 @@ test('extracts identifiable spells attacks inventory features resources and asso
   const s=h.r3Capture(fixture.body,'Combat');
   for(const kind of ['spells','attacks','inventory','features','resources'])assert.ok(s[kind].length>0,kind);
   assert.equal(s.spells[0].name,'Fire Bolt');
-  assert.equal(s.spells[1].castingTime,'Casting Time: Reaction Duration: 1 round'.slice(0,70));
+  assert.equal(s.spells[1].castingTime,'Casting Time: Reaction');
+  assert.match(s.spells[1].duration,/Duration: 1 round/);
   assert.equal(s.inventory[0].visible,'Rope 50 feet');
   assert.equal(s.attacks[0].tab,'Combat');
 });
@@ -287,4 +288,58 @@ test('origin-checked message handler ignores forged frame responses',async()=>{
   listener({origin:'https://advanced-sheets.production.roll20preflight.net',source:candidate.window,
     data:{protocol:'r20eb:import:v3',type:'result',id:record.message.id,snapshot:snap}});
   assert.equal((await p).name,'NIER');
+});
+
+test('live Nier export identifies temp HP, all five coin amounts, and named feature sliders',()=>{
+  // Minimal fixture from exported control labels only. Do not commit the
+  // character JSON: it also contains private notes and full backstory.
+  const {h,fixture}=harness(docFixture({inputs:[
+    input({id:'tempHP',title:'Temp',value:'0'}),
+    input({title:'Copper',value:'0'}),input({title:'Silver',value:'3'}),
+    input({title:'Electrum',value:'2'}),input({title:'Gold',value:'29'}),
+    input({title:'Platinum',value:'1'}),
+    input({title:'Action Surge',type:'range',value:'1'}),
+    input({title:'Second Wind',type:'range',value:'1'}),
+    input({title:'Unleash Incarnation',type:'range',value:'2'}),
+    input({title:'Fleet-Footed Resources',type:'range',value:'1'}),
+    input({id:'11111111-2222-4333-8444-555555555555',value:'17'}),
+    input({id:'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',value:'55'})
+  ]}));
+  const s=h.r3Capture(fixture.body,'Features & Traits');
+  assert.equal(s.stats.tempHp,0);
+  assert.deepEqual({cp:s.stats.cp,sp:s.stats.sp,ep:s.stats.ep,gp:s.stats.gp,pp:s.stats.pp},
+    {cp:0,sp:3,ep:2,gp:29,pp:1});
+  assert.deepEqual([...s.resources.map(x=>x.name+':'+x.observedValue)],[
+    'Action Surge:1','Second Wind:1','Unleash Incarnation:2','Fleet-Footed Resources:1']);
+  assert.equal(s.stats.ac,undefined,'unlabeled 17 cannot be assigned to armor class');
+  assert.equal(s.stats.speed,undefined,'unlabeled 55 cannot be assigned to speed');
+  const again=h.r3Capture(fixture.body,'Combat');
+  assert.equal(h.r3Merge(s,again).resources.length,4,'same named sliders deduplicate across tabs');
+});
+test('named 2024 slider observations are retained without guessing expended charges',()=>{
+  const {h,fixture}=harness(docFixture({inputs:[
+    input({title:"Healer's Kit",type:'range',value:'9'}),
+    input({title:'Action Surge',type:'range',value:'1'})
+  ]}));
+  const s=h.r3Capture(fixture.body,'Combat');
+  assert.equal(s.coverage.resources,2);
+  assert.equal(s.resources[0].controlType,'range');
+  assert.equal(s.resources[0].observedValue,9);
+  assert.equal(s.resources[0].remaining,undefined);
+  assert.match(s.resources[0].visible,/not verified/);
+});
+test('spell metadata never treats free-text range or duration as structured labels',()=>{
+  const {h,fixture}=harness(docFixture({cards:{spells:[
+    card('spells','Druidcraft','Druidcraft 30 feet 1 action V S Whispering to spirits, within range: You create a tiny effect for the duration.'),
+    card('spells','Blade of Disaster','Blade of Disaster 60 feet +3 Attack 4d12 Bonus Action V S C You create a blade. The blade lasts for the duration.'),
+    card('spells','Detect Magic','Detect Magic Self 30 ft radius 1 action V S R C For the duration, you sense magic.')
+  ]}}));
+  const s=h.r3Capture(fixture.body,'Spells');
+  assert.equal(s.spells[0].range,'30 feet');
+  assert.equal(s.spells[0].castingTime,'1 action');
+  assert.equal(s.spells[0].duration,undefined);
+  assert.equal(s.spells[0].concentration,undefined);
+  assert.equal(s.spells[1].range,'60 feet');
+  assert.equal(s.spells[1].castingTime,'Bonus Action');
+  assert.equal(s.spells[2].range,'Self 30 ft radius');
 });

@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.0.4). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.0.5). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -27,3 +27,5 @@ Rolling rule: update this roadmap and docs/HANDOVER.md with each development mil
 **Planned UI phase (after trustworthy importer):** Use the user-supplied Foundry VTT module as the visual and interaction framework for the Roll20 companion. Port layout/components conceptually to a Roll20-native userscript; do not depend on Foundry runtime APIs, and review asset/code licensing before reuse. Await module file or URL and user sign-off on importer accuracy.
  
 **v3.0.4 UI stability:** Focus and Refresh list no longer rebuild unchanged results; preserve individual category scroll and expanded cards across category changes and reimports. Regression tests added; pending live Floorp confirmation.
+
+**v3.0.5 actual Nier export:** Import verified from user JSON for 37 inventory, 34 features, 22 attacks, 18 skills, 5 spells, 82/84 HP and six scores. The previous zero-resources report is explained by named range controls being absent from resource-wrapper selectors; v3.0.5 reads named sliders as observations (not presumed remaining uses), temp HP, and coin counts. Spell fields no longer parse prose as metadata. **Next:** request narrowly scoped accessible parent markup for two unlabeled numeric controls (17 and 55) to establish AC/speed, plus actual official saving throw/modifier controls. Do not infer UUID identity from values; continue validating slots and whether spells are virtualized. Then proceed with user-selected Foundry module UI.
