@@ -55,7 +55,7 @@ function panelHarness(){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -170,4 +170,85 @@ test('category changes and explicit reimports restore scroll and expanded invent
   const repainted=results.querySelector('.results');
   assert.equal(repainted.scrollTop,239);
   assert.equal(repainted.entries[0].open,true);
+});
+
+test('opt-in auto-sync sends a real current-view request without manually clicking Import',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const previous=h.api.r3Empty();
+  previous.name='NIER';previous.stats.hp=80;
+  previous.inventory=[{name:'Dagger',tab:'INVENTORY',_key:'dagger||',visible:'Dagger Gear'}];
+  previous.spells=[{name:'Druidcraft',tab:'SPELLS',_key:'druidcraft||',visible:'Druidcraft'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(previous);
+  h.click('r3-refresh');
+  h.click('r3-auto');
+  assert.equal(h.api.R3_AUTO.enabled,true);
+  assert.equal(h.nodes.get('r3-auto').textContent,'Auto-sync: On');
+  assert.equal(h.sent.length,1);
+  assert.equal(h.sent[0].message.type,'scan');
+  assert.equal(h.sent[0].message.mode,'current','a user-opened sheet is not navigated through tabs');
+  const latest=h.api.r3Empty();latest.name='NIER';latest.stats.hp=82;latest.stats.maxHp=84;
+  h.respond(h.api.r3Coverage(latest));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+  assert.equal(h.api.R3_UI.snapshot.inventory.length,1,'current-only refresh preserves inventory');
+  assert.equal(h.api.R3_UI.snapshot.spells.length,1,'current-only refresh preserves spell list');
+  assert.ok([...h.store.keys()].some(k=>k.endsWith(':auto')),'opt-in is remembered for this game');
+  h.click('r3-auto');
+  assert.equal(h.api.R3_AUTO.enabled,false);
+});
+test('auto import fails closed when official character identity mismatches',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const prev=h.api.r3Empty();prev.name='Nier';prev.stats.hp=82;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(prev);
+  h.api.R3_AUTO.name='Nier';
+  const other=h.api.r3Empty();other.name='Different Character';other.stats.hp=12;
+  assert.throws(()=>h.api.r3AutoStoreSnapshot(h.api.r3Coverage(other),'all'),/identity did not match/);
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,82);
+});
+test('auto background importer locates exact journal character then moves only script-opened dialog',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const a=h.api.R3_AUTO;
+  a.enabled=true;a.name='NIER';a.characterId='-my-character-id';
+  const frame=h.api.r3Candidates()[0].frame;
+  const dialog={style:{position:'absolute',left:'70px',top:'45px'},
+    getAttribute(k){return k==='data-characterid'?'-my-character-id':null;}};
+  // Without the journal entry/iframe target, open through the real journal.
+  const originalQuery=h.document.querySelectorAll.bind(h.document);
+  let opened=0,frameReady=false;
+  const entry={getAttribute(k){return k==='data-characterid'?'-my-character-id':null;},
+    dispatchEvent(e){opened++;assert.equal(e.type,'dblclick');}};
+  h.context.MouseEvent=function(type,options){this.type=type;this.options=options;};
+  h.document.querySelectorAll=selector=>{
+    if(selector==='iframe')return frameReady?[frame]:[];
+    if(selector.includes('#journal'))return [entry];
+    return originalQuery(selector);
+  };
+  await h.api.r3AutoTick();
+  assert.equal(opened,1);assert.equal(a.opened,true);
+  frameReady=true;
+  frame.closest=selector=>selector.includes('.characterdialog')?dialog:null;
+  const promise=h.api.r3AutoTick();
+  assert.equal(h.sent.length,1);
+  assert.equal(h.sent[0].message.mode,'all');
+  assert.equal(dialog.style.left,'-20000px');
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=82;
+  snap.inventory=[{name:'Dagger',tab:'INVENTORY',_key:'dagger||'}];
+  h.respond(h.api.r3Coverage(snap));
+  await promise;
+  assert.equal(h.api.R3_UI.snapshot.inventory.length,1);
+  h.api.r3ToggleAuto();
+  assert.equal(dialog.style.left,'70px','disabling restores the original dialog');
+  assert.equal(dialog.style.top,'45px');
+});
+test('full automatic imports replace deleted spells rather than merging stale spell cards',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const first=h.api.r3Empty();first.name='Nier';
+  first.stats.hp=82;
+  first.spells=[{name:'Power Word Pain',_key:'old-spell'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(first);
+  h.api.R3_AUTO.name='Nier';
+  const next=h.api.r3Empty();next.name='Nier';next.stats.hp=82;
+  next.spells=[{name:'Druidcraft',_key:'druidcraft'}];
+  h.api.r3AutoStoreSnapshot(h.api.r3Coverage(next),'all');
+  assert.deepEqual([...h.api.R3_UI.snapshot.spells.map(x=>x.name)],['Druidcraft']);
 });
