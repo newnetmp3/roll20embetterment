@@ -183,3 +183,11 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 **Verification:** Pending final GitHub Actions checks. **Still unverified live:** exact 2024 iframe DOM shape, number of virtualized inventory rows, and real resource checkbox semantics. If counts remain zero, the next evidence should be a bounded inner-iframe DOM probe or the exported importer JSON with Diagnostics (not another entire editor body).
 
 **New user direction:** Once import is working properly, rebuild the UI using a Foundry VTT plugin as the design framework. Priority remains correct read-only stats/spells/inventory/resources first. No plugin file or URL is currently identifiable in the visible task context; request the exact module reference before implementation, and verify license before copying code/assets. Design adapters must not depend on the Foundry runtime.
+ 
+## v3.0.4 — Non-disruptive importer refresh (October 12, 2026)
+
+**Reported live issue:** Importer focus refreshes reset scroll during reading. **Cause:** `r3UIRefresh()` replaces `#r3-results.innerHTML` on every focus, recreating nested scrolling elements and closing expanded entries.
+
+**Implementation:** Repaint results only when the selected category or imported snapshot actually changes. Remember per-category nested scroll positions and expanded entry keys, and retain outer panel scroll during genuine redraws. Avoid rewriting the sheet selector if its available choices did not change; still update buttons, busy state and status normally.
+
+**Verification:** Added focus/Refresh and category/expanded-item regression tests with a scrolling VM UI fixture. Verify final GitHub CI outcome. Live Floorp interaction and data completeness remain to be checked.

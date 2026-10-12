@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 12, 2026 (v3.0.3). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 12, 2026 (v3.0.4). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -25,3 +25,5 @@ Updated: October 12, 2026 (v3.0.3). v2.3.13 continued to fail real Floorp/Roll20
 Rolling rule: update this roadmap and docs/HANDOVER.md with each development milestone.
 
 **Planned UI phase (after trustworthy importer):** Use the user-supplied Foundry VTT module as the visual and interaction framework for the Roll20 companion. Port layout/components conceptually to a Roll20-native userscript; do not depend on Foundry runtime APIs, and review asset/code licensing before reuse. Await module file or URL and user sign-off on importer accuracy.
+ 
+**v3.0.4 UI stability:** Focus and Refresh list no longer rebuild unchanged results; preserve individual category scroll and expanded cards across category changes and reimports. Regression tests added; pending live Floorp confirmation.

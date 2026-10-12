@@ -7,8 +7,26 @@ const root=resolve(import.meta.dirname,'..');
 const files=readdirSync(join(root,'v3')).filter(x=>/^\d{2}_.*\.js$/.test(x)&&x!=='30_boot.js').sort();
 function panelHarness(){
   const nodes=new Map(),windowListeners=new Map(),sent=[];
-  const makeNode=id=>({id,textContent:'',innerHTML:'',value:'',style:{},disabled:false,handlers:new Map(),
-    addEventListener(type,fn){this.handlers.set(type,fn);}});
+  const makeNode=id=>{
+    const node={id,textContent:'',innerHTML:'',value:'',scrollTop:0,style:{},disabled:false,handlers:new Map(),
+      addEventListener(type,fn){this.handlers.set(type,fn);}};
+    if(id==='r3-results'){
+      let markup='',scroller=null;
+      node.writes=0;
+      Object.defineProperty(node,'innerHTML',{get(){return markup;},set(value){
+        markup=value;node.writes++;
+        const entries=[...markup.matchAll(/data-entry-key="([^"]+)"/g)].map(([,key])=>({
+          key,open:false,getAttribute(name){return name==='data-entry-key'?key:null;}
+        }));
+        scroller=markup.includes('class="results"')?{scrollTop:0,entries,querySelectorAll(selector){
+          if(selector==='details.entry[open]')return entries.filter(x=>x.open);
+          return selector==='details.entry'?entries:[];
+        }}:null;
+      }});
+      node.querySelector=selector=>selector==='.results'?scroller:null;
+    }
+    return node;
+  };
   const shadow={
     handlers:new Map(),nodes,
     getElementById(id){return nodes.get(id)||null;},
@@ -47,7 +65,7 @@ function panelHarness(){
       data:{protocol:'r20eb:import:v3',type,id:msg.id,snapshot,error:'Simulated sheet failure'}
     });
   }
-  return {context,api:context.uiApi,nodes,shadow,document,sent,store,click,respond};
+  return {context,api:context.uiApi,nodes,shadow,document,sent,store,windowListeners,click,respond};
 }
 test('real importer panel initializes and both scan buttons become enabled when a sheet appears',()=>{
   const h=panelHarness();
@@ -107,4 +125,45 @@ test('all UI control failures are surfaced in a visible status element',()=>{
   };
   h.click('r3-refresh');
   assert.match(h.nodes.get('r3-status').textContent,/Action failed: Deliberate broken control/);
+});
+
+test('focus and Refresh list preserve scroll, view and existing result DOM',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const results=h.nodes.get('r3-results'),content=h.nodes.get('r3-content');
+  assert.equal(results.writes,1);
+  const list=results.querySelector('.results');
+  list.scrollTop=317;content.scrollTop=88;
+  h.click('r3-refresh');
+  h.windowListeners.get('focus')();
+  h.windowListeners.get('focus')();
+  assert.equal(results.writes,1,'focus/refresh must not repaint results');
+  assert.equal(results.querySelector('.results'),list);
+  assert.equal(list.scrollTop,317);
+  assert.equal(content.scrollTop,88);
+});
+test('category changes and explicit reimports restore scroll and expanded inventory',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const data=h.api.r3Empty();
+  data.name='Nier';data.inventory=[{name:'Healing Potion',tab:'Inventory',visible:'2 bottles'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(data);
+  h.click('r3-refresh');
+  const view=name=>h.shadow.handlers.get('click')({target:{dataset:{view:name}}});
+  view('inventory');
+  const results=h.nodes.get('r3-results');
+  const inventory=results.querySelector('.results');
+  assert.equal(inventory.entries.length,1);
+  inventory.scrollTop=239;inventory.entries[0].open=true;
+  h.nodes.get('r3-content').scrollTop=65;
+  view('summary');view('inventory');
+  const returned=results.querySelector('.results');
+  assert.equal(returned.scrollTop,239);
+  assert.equal(returned.entries[0].open,true);
+  assert.equal(h.nodes.get('r3-content').scrollTop,65);
+  const updated=h.api.r3Empty();
+  updated.name='Nier';updated.inventory=[{name:'Healing Potion',tab:'Inventory',visible:'3 bottles'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(updated);
+  h.click('r3-refresh');
+  const repainted=results.querySelector('.results');
+  assert.equal(repainted.scrollTop,239);
+  assert.equal(repainted.entries[0].open,true);
 });
