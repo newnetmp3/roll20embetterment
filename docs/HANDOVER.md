@@ -168,3 +168,16 @@ Improve wheel keyboard accessibility and command-palette navigation; continue li
 **Confirmed cause:** `R3_CATEGORIES.skills` was included in `r3Cards()`, which calls `.some()` on category arrays. But `r3Empty().skills` is a keyed object, populated by `r3VisibleStats()`. A visible skill row would trigger a fatal TypeError before a snapshot could reach the editor. **Fix:** Exclude `skills` from named-card category scanning, retain proper skill bonus extraction from visible labeled rows, add defensive `Array.isArray` checks during capture and merging, add two type/skill regressions, and regenerate version 3.0.2.
 
 **Next:** confirm CI and merge; manually validate actual Floorp current-tab import and then all-tabs capture, paying particular attention to skill values and available HP/spell controls. Passing tests must not be misrepresented as browser verification.
+
+## v3.0.3 — Inventory and embedded resource capture / tab traversal (2026-10-12)
+
+**Live report:** "inventory and resources both report none found when using import all tabs" after v3.0.2. The only previously uploaded HTML is Roll20's *outer* editor; it confirms the 2024 sheet iframe is mounted but does not include the inner inventory or resource markup. Do **not** assert the real CSS selectors were confirmed by the screenshot/outer HTML.
+
+**Source audit found:**
+1. The previous inventory category only recognized narrow selectors (.inventory-item/.equipment-item/data-testid variants). Many modern list rows may expose a generic named .span--item-row-title rather than those wrappers. Added a *tab-scoped* Inventory adapter to avoid treating spell/action item-rows as inventory.
+2. The resource category only recognized standalone .resource-item rows. Roll20's documented 2024 UI puts charge/checkbox resource trackers *inside* features, inventory items, and actions, so added a read-only nested resource control adapter. Records visible checked/total checkbox observations; never interprets checked as "available" because semantics can vary.
+3. Import all tabs took an early slice of 14 tab elements including nested filters and held stale DOM node references through Vue rerenders, so primary Inventory/Features tabs could be skipped entirely. Now captures tab identities, resolves fresh nodes on every click, prioritizes main views, restores original selection by identity, and explicitly logs whether Inventory was visited.
+
+**Regression fixtures:** generic item-row titles (with negative Combat-context check), embedded features resource controls with no guessed remaining count, and a simulated Vue-replaced tab list with 17 filter tabs before Inventory, checking traversal and restore. The UI displays observed checkbox state and includes resource counts in progress.
+
+**Verification:** Pending final GitHub Actions checks. **Still unverified live:** exact 2024 iframe DOM shape, number of virtualized inventory rows, and real resource checkbox semantics. If counts remain zero, the next evidence should be a bounded inner-iframe DOM probe or the exported importer JSON with Diagnostics (not another entire editor body).
