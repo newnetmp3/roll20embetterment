@@ -5,7 +5,7 @@
 **Default branch:** `main`  
 **Current verified feature baseline:** `4f812a74a74d7b510628d08e78ecbffe89abbfc4` (v3.1.2, merged PR #39).  
 **Latest completed milestone:** v3.1.2 official popout automatic sync (PR #39 merged; 228 tests passed).  
-**Known unresolved issues:** Live Floorp validation of popout HP updates and unattended Journal opening remains; AC/speed, saving throws and slots are still incompletely mapped.  
+**Known unresolved issues:** Popout HP refresh is now user-verified, but non-HP popout imports, unattended Journal opening, and AC/speed/saving throw/slot mappings still require verification.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
 ## Resume process
@@ -255,3 +255,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Next:** Verify official popup runtime, Journal auto-open when the sheet is fully closed, then remaining AC/speed/saves/slots adapters; only then resume Foundry-inspired combat HUD.
 
 **Post-merge checkpoint (2026-10-12):** PR #39 merged into `main` as `4f812a74a74d7b510628d08e78ecbffe89abbfc4`. The final PR-head GitHub Actions run 38310601659 passed with 228 tests, no failures, generated-userscript check green. Production script is v3.1.2. User's popout bug is **implemented/fixed in code, but awaiting user confirmation in live Roll20/Floorp**. Next confirm popup-to-opener handshake and HP updates without closing/reopening the sheet; if still failing, capture the actual popout URL and whether it retains opener before changing cross-window transport.
+
+**2026-10-12 live user validation of v3.1.2:** User explicitly confirms **"popout Hp update works"**. Mark automatic HP refresh through a popped-out official character sheet as **user-verified working** (latency not measured). This supports working popout-to-editor messaging and the bounded HP scan in the user's Roll20 environment. It does **not** verify that every other field refreshes or every sheet tab imports automatically. Player-owned popouts only receive current-tab refreshes (~30-second gate) plus HP-only watch (~1-second best-effort), not automated tab traversal; full-tab import remains manual in this mode. Still pending: live popout Import all tabs, current-tab fields beyond HP, preserving catalog on state changes, automatic Journal opening with no sheet mounted, AC/speed/save/slot mappings, browser throttling/reconnect. Next validate a second changing statistic and manual Import all tabs in the same popout, then tackle the remaining source gaps. No code changes in this documentation-only checkpoint.
