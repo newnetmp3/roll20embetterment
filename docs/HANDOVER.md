@@ -3,9 +3,9 @@
 **Updated:** 2026-10-12  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `018584ffd46d7ba281c7ecddf9c78827cfbc7524` (v3.1.3, merged PR #40).  
-**Latest completed milestone:** v3.1.3 statless current-view automatic updates + per-level spell slot merges (PR #40 merged; 233 tests passed).  
-**Known unresolved issues:** User verified popout HP and manual all-tab import, but v3.1.3 non-HP auto-sync is not yet live tested. Completely closed-sheet Journal auto-opening and AC/speed/save/slot mapping require verification.  
+**Current verified feature baseline:** `c7f3a9074b53a7ac8f1a1f781fe402633c27a2ee` (v3.1.4, merged PR #41).  
+**Latest completed milestone:** v3.1.4 event-driven, authenticated current-tab refresh with safe scan throttling (PR #41, 240 tests).  
+**Known unresolved issues:** v3.1.4 event-driven updates have passed CI but not live Floorp latency validation; unattended closed-sheet Journal opening and incomplete AC/speed/save/slot mappings remain.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
 ## Resume process
@@ -283,3 +283,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **QA:** Added tests for event listener registration, debounce and rejected generic clicks, authenticated popup event scans, non-HP value refresh, forged source/session/name/origin rejection, burst throttling and cancellation after disable. **CI verified:** PR #41 GitHub Actions run 38314500857 at `78ab6c945c54affa4a55966f515b340e87a29fdb`, **240 tests passed, zero failed**, `npm run check` green and generated-userscript diff clean. Awaiting PR merge and user-confirmed live latency. This is **not a claim of all fields being updated in <1 second**; own Render/Vue processing, virtualized tabs, some button interactions, background-window throttling, and browser-specific behavior can delay/omit browser events. Test Nier's popout with a resource/quantity change and observe updates without clicking Import.
 
 **Next:** Verify live event delivery in Floorp and characterize cases lacking DOM input/change; only then consider targeted mutation observation if needed. Fully closed-sheet Journal opening and unmapped AC/speed/saves/slots remain outstanding.
+
+**v3.1.4 merged checkpoint (2026-10-12):** PR #41 squash-merged to `main` as `c7f3a9074b53a7ac8f1a1f781fe402633c27a2ee`. Final PR-head GitHub Actions run 38314565901 passed `npm run check` (**240 tests, zero failures**) and regenerated userscript diff. Production bundle v3.1.4. The user has previously verified popout HP and manual full import on v3.1.2; live v3.1.4 event-driven speed needs confirmation. Next Floorp test: update script, pop out Nier, enable Auto-sync and modify a named Inventory or Features field. Expected fast update after reader ~350ms debounce + editor ~400ms debounce, subject to a 2s minimum between current-tab scans and browser throttling. If event not emitted, ~16s fallback applies. Do not claim automatic import without sheet tested.
