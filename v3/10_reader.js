@@ -139,19 +139,34 @@ function r3FrameList(){
     });
 }
 function r3Candidates(){
-  const frames=r3FrameList(),other=[...R3_POPOUTS.values()].filter(x=>!x.window.closed);
-  return [...frames,...other];
+  // Drop windows which were closed by the player. Don't retain dead popout
+  // references or allow their stale names to block the next real sheet.
+  for(const [session,candidate] of R3_POPOUTS){
+    try{if(candidate.window.closed)R3_POPOUTS.delete(session);}
+    catch{R3_POPOUTS.delete(session);}
+  }
+  return [...r3FrameList(),...R3_POPOUTS.values()];
 }
 function r3Listen(event){
   if(event.origin!==R3_ORIGIN||event.data?.protocol!==R3_PROTOCOL||!event.source)return;
   const data=event.data,candidate=r3Candidates().find(c=>c.window===event.source);
   if(data.type==='ready'){
-    // Popouts can announce from their authenticated origin and only when
-    // their opener is the Roll20 editor. Never accept arbitrary origins.
-    if(!candidate&&data.mode==='popout'&&/^[\w.:-]{6,100}$/.test(String(data.session||''))){
-      R3_POPOUTS.set(data.session,{key:'popout-'+data.session,
-        name:r3String(data.name||'Official sheet popout',90),
-        window:event.source,visible:true,type:'popout'});
+    // Cross-origin official popouts announce their opener with the same
+    // authenticated bridge as embedded official sheets. Roll20 often sends
+    // an initial "ready" before Vue has populated the character's name.
+    // Later announcements must refresh that session's identity.
+    if(data.mode==='popout'&&/^[\w.:-]{6,100}$/.test(String(data.session||''))){
+      const existing=R3_POPOUTS.get(data.session);
+      if(existing&&existing.window!==event.source)return; // session collision
+      if(!existing&&R3_POPOUTS.size>=16)return; // bounded registry
+      const name=r3String(data.name,90);
+      if(existing){
+        if(name)existing.name=name;
+      }else{
+        R3_POPOUTS.set(data.session,{key:'popout-'+data.session,
+          name:name||'Official sheet popout',window:event.source,
+          visible:true,type:'popout'});
+      }
     }
     r3UIRefresh?.();
     return;
