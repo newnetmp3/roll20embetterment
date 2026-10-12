@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.2.2
+// @version      3.2.3
 // @description  Player-first combat HUD backed by authenticated D&D 2024 sheet data.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -1192,7 +1192,7 @@ function r3StartUI(){
 // Roll20 Embetterment HUD v1: read-only combat presentation of v3 sheet data.
 // This module never dispatches native Roll20 rolls, casts or sheet mutations.
 const R3_HUD={category:'actions',collapsed:false,drawerOpen:false,flyout:'',spellLevel:'',weaponSet:0,weaponSets:[null,null,null,null,null,null],chooser:null,used:{action:false,bonus:false,reaction:false},renderedSnapshot:null,
-  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedDebug:null,openKeys:[],scrollTop:0};
+  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedDebug:null,portraitName:'',portraitUrl:'',portraitChecked:0,openKeys:[],scrollTop:0};
 const R3_HUD_TABS=[
   {key:'actions',title:'Actions',icon:'⚔'},
   {key:'bonus',title:'Bonus',icon:'✦'},
@@ -1311,6 +1311,34 @@ function r3HudCard(item,index){
 // panels. The provided Twilight: 2000 module is a system adapter, NOT a
 // standalone HUD/theme; this is a Roll20-native implementation of its layout
 // concepts, not a Foundry runtime dependency or asset copy.
+// Use only an image the Roll20 editor has already displayed inside an
+// exactly named Journal entry. No network queries or substring name guesses.
+function r3HudPortraitUrl(snapshot){
+  const name=r3String(snapshot?.name,80),now=Date.now();
+  if(!name){R3_HUD.portraitName='';R3_HUD.portraitUrl='';return '';}
+  if(name!==R3_HUD.portraitName){
+    R3_HUD.portraitName=name;R3_HUD.portraitUrl='';R3_HUD.portraitChecked=0;
+  }
+  if(R3_HUD.portraitUrl||now-R3_HUD.portraitChecked<15000)return R3_HUD.portraitUrl;
+  R3_HUD.portraitChecked=now;
+  for(const img of Array.from(document.querySelectorAll?.('img')||[]).slice(0,500)){
+    if(typeof img.getClientRects==='function'&&!img.getClientRects().length)continue;
+    let matched=false,ancestor=img.parentElement;
+    for(let depth=0;ancestor&&depth<5;ancestor=ancestor.parentElement,depth++){
+      if(r3String(ancestor.textContent,110).toLowerCase()===name.toLowerCase()){
+        matched=true;break;
+      }
+    }
+    if(!matched)continue;
+    const raw=img.currentSrc||img.src||img.getAttribute?.('src')||'';
+    try{
+      const uri=new URL(raw,location.origin);
+      if(uri.protocol!=='https:')continue;
+      R3_HUD.portraitUrl=uri.href;break;
+    }catch{}
+  }
+  return R3_HUD.portraitUrl;
+}
 function r3HudPassive(snapshot){
   const authoritative=snapshot?.stats?.passivePerception;
   if(r3HudHasValue(authoritative))return {label:'PASSIVE',value:authoritative,source:'Observed on official sheet'};
@@ -1488,6 +1516,7 @@ function r3HudMarkup(snapshot){
   const hp=snapshot?.stats||{};
   const collapsed=R3_HUD.collapsed;
   const passive=r3HudPassive(snapshot);
+  const portraitUrl=r3HudPortraitUrl(snapshot);
   const actionIndex=R3_HUD.weaponSet*2;
   const actionItem=r3HudLoadoutItem(snapshot,actionIndex);
   const bonusItem=r3HudLoadoutItem(snapshot,actionIndex+1);
@@ -1522,9 +1551,12 @@ function r3HudMarkup(snapshot){
     r3HudSetMarkup(snapshot)+
     '<button type="button" class="hud-portrait-shortcuts" data-hud-flyout="skills">'+
     'SAVES / SKILLS / TOOLS ▾</button>'+
-    '<div class="hud-avatar-pane"><div class="hud-avatar" aria-hidden="true">'+
-    r3Escape(name.slice(0,1).toUpperCase())+'</div>'+
-    '<div class="hud-portrait-name">'+r3Escape(name)+'</div>'+r3HudHp(snapshot)+
+    '<div class="hud-avatar-pane"><div class="hud-portrait-head">'+
+    '<div class="hud-portrait-name">'+r3Escape(name)+'</div>'+
+    '<div class="hud-avatar" aria-hidden="true">'+
+    (portraitUrl?'<img class="hud-portrait-image" src="'+r3Escape(portraitUrl)+'" alt="">':
+      r3Escape(name.slice(0,1).toUpperCase()))+
+    '</div></div><div class="hud-portrait-hp">'+r3HudHp(snapshot)+'</div>'+
     statRow+'</div></aside>';
   const controls='<div class="hud-controller">'+
     '<div class="hud-toolbar"><span>R20 EMBETTERMENT <small>ARGON PORT</small></span>'+
@@ -1551,7 +1583,8 @@ function r3HudMarkup(snapshot){
 }
 function r3HudRender(){
   const el=R3_UI.root?.getElementById('r3-hud');if(!el)return;
-  if(R3_HUD.renderedSnapshot===R3_UI.snapshot&&
+  const portrait=r3HudPortraitUrl(R3_UI.snapshot);
+  if(R3_HUD.renderedPortrait===portrait&&R3_HUD.renderedSnapshot===R3_UI.snapshot&&
     R3_HUD.renderedCategory===R3_HUD.category&&
     R3_HUD.renderedCollapsed===R3_HUD.collapsed&&
     R3_HUD.renderedDrawer===R3_HUD.drawerOpen&&
@@ -1571,6 +1604,7 @@ function r3HudRender(){
   }
   el.innerHTML=r3HudMarkup(R3_UI.snapshot);
   R3_HUD.renderedSnapshot=R3_UI.snapshot;
+  R3_HUD.renderedPortrait=portrait;
   R3_HUD.renderedCategory=R3_HUD.category;
   R3_HUD.renderedCollapsed=R3_HUD.collapsed;
   R3_HUD.renderedDrawer=R3_HUD.drawerOpen;
@@ -1652,6 +1686,35 @@ function r3HudStyles(){
     '@media(max-width:1280px){#r3-hud{width:calc(100vw - 325px)}.hud-portrait-panel{flex-basis:135px}.hud-flyout{left:141px}.hud-segment-action{flex-basis:370px}.hud-bar-button{min-width:47px}.hud-bar-art svg{width:27px;height:27px}}',
     '@media(max-width:980px){#r3-hud{width:calc(100vw - 24px)}.hud-main-segments{overflow-x:auto}.hud-segment{flex-shrink:0}.hud-segment-action{width:370px}.hud-segment-bonus{width:140px}.hud-segment-free{width:70px}.hud-segment-reaction{width:75px}.hud-segment-pass{width:70px}}',
     '@media(max-width:650px){.hud-portrait-panel{flex-basis:105px}.hud-loadout{height:44px}.hud-bar-art svg{width:24px;height:24px}.hud-portrait-stats{grid-template-columns:1fr 1fr}.hud-portrait-name{font-size:10px}.hud-flyout{left:0;width:calc(100vw - 24px)}.hud-brand small{display:none}.hud-toolbar>span{font-size:8px}}'
+,
+    "#r3-hud{bottom:27px;width:min(1260px,calc(100vw - 325px))}",
+    ".hud-reference-bar{min-height:216px;max-height:229px}",
+    ".hud-portrait-panel{flex:0 0 204px;gap:3px}",
+    ".hud-loadout{height:53px}",
+    ".hud-portrait-shortcuts{min-height:25px;white-space:nowrap;font-size:11px!important;padding:6px!important;letter-spacing:.01em}",
+    ".hud-avatar-pane{display:flex;flex-direction:column;gap:3px;padding:5px 8px 7px;min-height:0}",
+    ".hud-portrait-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:59px}",
+    ".hud-avatar{float:none;flex:0 0 60px;width:60px;height:60px;margin:0;position:relative;overflow:hidden}",
+    ".hud-portrait-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}",
+    ".hud-portrait-name{flex:1;min-width:0;max-width:none;min-height:0;max-height:55px;overflow:hidden;font-size:13px;line-height:1.15;overflow-wrap:anywhere}",
+    ".hud-portrait-hp{clear:none;padding-top:1px;flex:none}",
+    ".hud-hp-label{white-space:nowrap;font-size:11px;line-height:1.2}",
+    ".hud-hp-label span,.hud-hp-label strong{white-space:nowrap;font-size:11px}",
+    ".hud-hp-track{height:7px;margin-top:3px}",
+    ".hud-portrait-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;margin-top:auto}",
+    ".hud-portrait-stats .hud-stat{align-items:center;padding:4px 5px;min-height:20px;gap:3px}",
+    ".hud-stat span{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+    ".hud-stat strong{font-size:11px;white-space:nowrap}",
+    ".hud-main-segments{overflow-x:auto;scrollbar-width:thin}",
+    ".hud-bar-label{font-size:10px!important;padding-left:3px;padding-right:3px}",
+    ".hud-small-button .hud-bar-label{font-size:9px!important}",
+    ".hud-resources-bottom{min-height:21px;overflow-x:auto;scrollbar-width:thin}",
+    ".hud-resources{flex:none;overflow:visible}",
+    ".hud-res-chip{padding:3px 6px;font-size:10px}",
+    ".hud-flyout{left:210px}",
+    "@media(max-width:1280px){.hud-portrait-panel{flex-basis:184px}.hud-flyout{left:190px}.hud-reference-bar{min-height:212px}.hud-avatar{width:55px;height:55px;flex-basis:55px}.hud-portrait-head{min-height:55px}}",
+    "@media(max-width:980px){#r3-hud{width:calc(100vw - 24px)}.hud-portrait-panel{flex-basis:182px}.hud-flyout{left:0}}",
+    "@media(max-width:650px){.hud-portrait-panel{flex-basis:175px}.hud-avatar{width:49px;height:49px;flex-basis:49px}.hud-portrait-head{min-height:49px}.hud-portrait-name{font-size:11px}.hud-hp-label span,.hud-hp-label strong{font-size:10px}.hud-portrait-stats .hud-stat{padding:3px}.hud-stat span{font-size:8px}}"
   ].join('');
 }
 
