@@ -1,7 +1,7 @@
 // Roll20 Embetterment HUD v1: read-only combat presentation of v3 sheet data.
 // This module never dispatches native Roll20 rolls, casts or sheet mutations.
 const R3_HUD={category:'actions',collapsed:false,drawerOpen:false,flyout:'',spellLevel:'',weaponSet:0,weaponSets:[null,null,null,null,null,null],chooser:null,used:{action:false,bonus:false,reaction:false},renderedSnapshot:null,
-  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedDebug:null,openKeys:[],scrollTop:0};
+  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedDebug:null,portraitName:'',portraitUrl:'',portraitChecked:0,openKeys:[],scrollTop:0};
 const R3_HUD_TABS=[
   {key:'actions',title:'Actions',icon:'⚔'},
   {key:'bonus',title:'Bonus',icon:'✦'},
@@ -120,6 +120,34 @@ function r3HudCard(item,index){
 // panels. The provided Twilight: 2000 module is a system adapter, NOT a
 // standalone HUD/theme; this is a Roll20-native implementation of its layout
 // concepts, not a Foundry runtime dependency or asset copy.
+// Use only an image the Roll20 editor has already displayed inside an
+// exactly named Journal entry. No network queries or substring name guesses.
+function r3HudPortraitUrl(snapshot){
+  const name=r3String(snapshot?.name,80),now=Date.now();
+  if(!name){R3_HUD.portraitName='';R3_HUD.portraitUrl='';return '';}
+  if(name!==R3_HUD.portraitName){
+    R3_HUD.portraitName=name;R3_HUD.portraitUrl='';R3_HUD.portraitChecked=0;
+  }
+  if(R3_HUD.portraitUrl||now-R3_HUD.portraitChecked<15000)return R3_HUD.portraitUrl;
+  R3_HUD.portraitChecked=now;
+  for(const img of Array.from(document.querySelectorAll?.('img')||[]).slice(0,500)){
+    if(typeof img.getClientRects==='function'&&!img.getClientRects().length)continue;
+    let matched=false,ancestor=img.parentElement;
+    for(let depth=0;ancestor&&depth<5;ancestor=ancestor.parentElement,depth++){
+      if(r3String(ancestor.textContent,110).toLowerCase()===name.toLowerCase()){
+        matched=true;break;
+      }
+    }
+    if(!matched)continue;
+    const raw=img.currentSrc||img.src||img.getAttribute?.('src')||'';
+    try{
+      const uri=new URL(raw,location.origin);
+      if(uri.protocol!=='https:')continue;
+      R3_HUD.portraitUrl=uri.href;break;
+    }catch{}
+  }
+  return R3_HUD.portraitUrl;
+}
 function r3HudPassive(snapshot){
   const authoritative=snapshot?.stats?.passivePerception;
   if(r3HudHasValue(authoritative))return {label:'PASSIVE',value:authoritative,source:'Observed on official sheet'};
@@ -297,6 +325,7 @@ function r3HudMarkup(snapshot){
   const hp=snapshot?.stats||{};
   const collapsed=R3_HUD.collapsed;
   const passive=r3HudPassive(snapshot);
+  const portraitUrl=r3HudPortraitUrl(snapshot);
   const actionIndex=R3_HUD.weaponSet*2;
   const actionItem=r3HudLoadoutItem(snapshot,actionIndex);
   const bonusItem=r3HudLoadoutItem(snapshot,actionIndex+1);
@@ -331,9 +360,12 @@ function r3HudMarkup(snapshot){
     r3HudSetMarkup(snapshot)+
     '<button type="button" class="hud-portrait-shortcuts" data-hud-flyout="skills">'+
     'SAVES / SKILLS / TOOLS ▾</button>'+
-    '<div class="hud-avatar-pane"><div class="hud-avatar" aria-hidden="true">'+
-    r3Escape(name.slice(0,1).toUpperCase())+'</div>'+
-    '<div class="hud-portrait-name">'+r3Escape(name)+'</div>'+r3HudHp(snapshot)+
+    '<div class="hud-avatar-pane"><div class="hud-portrait-head">'+
+    '<div class="hud-portrait-name">'+r3Escape(name)+'</div>'+
+    '<div class="hud-avatar" aria-hidden="true">'+
+    (portraitUrl?'<img class="hud-portrait-image" src="'+r3Escape(portraitUrl)+'" alt="">':
+      r3Escape(name.slice(0,1).toUpperCase()))+
+    '</div></div><div class="hud-portrait-hp">'+r3HudHp(snapshot)+'</div>'+
     statRow+'</div></aside>';
   const controls='<div class="hud-controller">'+
     '<div class="hud-toolbar"><span>R20 EMBETTERMENT <small>ARGON PORT</small></span>'+
@@ -360,7 +392,8 @@ function r3HudMarkup(snapshot){
 }
 function r3HudRender(){
   const el=R3_UI.root?.getElementById('r3-hud');if(!el)return;
-  if(R3_HUD.renderedSnapshot===R3_UI.snapshot&&
+  const portrait=r3HudPortraitUrl(R3_UI.snapshot);
+  if(R3_HUD.renderedPortrait===portrait&&R3_HUD.renderedSnapshot===R3_UI.snapshot&&
     R3_HUD.renderedCategory===R3_HUD.category&&
     R3_HUD.renderedCollapsed===R3_HUD.collapsed&&
     R3_HUD.renderedDrawer===R3_HUD.drawerOpen&&
@@ -380,6 +413,7 @@ function r3HudRender(){
   }
   el.innerHTML=r3HudMarkup(R3_UI.snapshot);
   R3_HUD.renderedSnapshot=R3_UI.snapshot;
+  R3_HUD.renderedPortrait=portrait;
   R3_HUD.renderedCategory=R3_HUD.category;
   R3_HUD.renderedCollapsed=R3_HUD.collapsed;
   R3_HUD.renderedDrawer=R3_HUD.drawerOpen;
