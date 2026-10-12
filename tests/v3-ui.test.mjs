@@ -65,7 +65,7 @@ function panelHarness(){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1066,4 +1066,69 @@ test('HUD portrait rejects non-HTTPS URLs, hidden art and mismatched character r
   assert.doesNotMatch(html,/<img class="hud-portrait-image"/);
   assert.match(html,/class="hud-avatar" aria-hidden="true">N<\/div>/);
   assert.equal(h.api.r3HudPortraitUrl(snap),'');
+});
+
+test('second row of Floorp character stats is not capped by fixed portrait max-height',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Nier';snap.stats.hp=82;snap.stats.maxHp=84;
+  snap.stats.ac=17;snap.stats.speed=55;snap.stats.initiative=2.14;
+  snap.skills.Perception=5;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/AC<\/span><strong>17/);
+  assert.match(html,/SPEED<\/span><strong>55 ft/);
+  assert.match(html,/INIT<\/span><strong>2.14/);
+  assert.match(html,/PASSIVE BASE<\/span><strong>15/);
+  const css=h.api.r3HudStyles();
+  assert.match(css,/\.hud-reference-bar\{min-height:242px;max-height:none/);
+  assert.match(css,/\.hud-avatar-pane\{min-height:151px;overflow:visible/);
+  assert.match(css,/\.hud-portrait-stats\{margin-top:auto;grid-auto-rows:minmax\(21px,auto\)/);
+});
+test('observed exact-name character art stays visible when Journal sidebar becomes Chat',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const row={textContent:'Nier',parentElement:null};
+  const img={parentElement:row,src:'https://files.example.net/visible-nier.webp',getClientRects:()=>[{}]};
+  h.document.querySelectorAll=sel=>sel==='img'?[img]:[];
+  const snap=h.api.r3Empty();snap.name='Nier';
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  assert.match(h.nodes.get('r3-hud').innerHTML,/visible-nier.webp/);
+  const saved=JSON.parse(h.store.get('roll20-embetterment-v3:123:hud'));
+  assert.equal(saved.portrait.name,'Nier');
+  assert.equal(saved.portrait.url,'https://files.example.net/visible-nier.webp');
+  h.document.querySelectorAll=()=>[];
+  const other=h.api.r3Empty();other.name='Shadow Nier';
+  h.api.R3_UI.snapshot=h.api.r3Coverage(other);h.api.r3HudRender();
+  assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/visible-nier.webp/,
+    'portrait is scoped to exactly one selected character');
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  assert.match(h.nodes.get('r3-hud').innerHTML,/visible-nier.webp/,
+    'an already observed portrait survives when Journal is not displayed');
+});
+test('an already saved per-game Journal portrait loads in Chat without opening Journal',()=>{
+  const h=panelHarness();
+  h.store.set('roll20-embetterment-v3:123:hud',JSON.stringify({
+    category:'actions',collapsed:false,portrait:{name:'Nier',url:'https://images.example.net/nier.webp'}
+  }));
+  h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Nier';
+  h.document.querySelectorAll=()=>[];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  assert.match(h.nodes.get('r3-hud').innerHTML,/https:\/\/images.example.net\/nier.webp/);
+});
+test('invalid or cross-character persisted portrait URLs cannot be reused',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Nier';
+  for(const bad of [
+    {name:'Nier',url:'javascript:alert(1)'},
+    {name:'Shadow Nier',url:'https://example.org/shadow.webp'},
+    {name:'Nier',url:'data:image/svg+xml,<svg/onload=alert(1)>'}
+  ]){
+    h.api.R3_HUD.portraitName='';
+    h.api.R3_HUD.portraitUrl='';
+    h.api.R3_HUD.portraitCache=null;
+    h.store.set('roll20-embetterment-v3:123:hud',JSON.stringify({portrait:bad}));
+    h.api.r3HudLoad();
+    h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+    assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/<img class="hud-portrait-image"/);
+  }
 });
