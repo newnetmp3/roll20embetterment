@@ -1,6 +1,7 @@
 // v3 minimal companion: explicit imports, provenance, completeness, JSON export.
 const R3_UI={host:null,root:null,shown:true,busy:false,status:'Open your official Roll20 2024 character sheet, then select it below.',
-  snapshot:null,selected:'',view:'summary',storageWarning:''};
+  snapshot:null,selected:'',view:'summary',storageWarning:'',renderedSnapshot:null,renderedView:null,
+  renderedChoices:null,scrollByView:Object.create(null),openByView:Object.create(null)};
 function r3Escape(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function r3StorageKey(){
   return 'roll20-embetterment-v3:'+(new URLSearchParams(location.search).get('id')||location.pathname.match(/\/editor\/(\d+)/)?.[1]||'editor');
@@ -36,7 +37,7 @@ function r3CardsView(kind){
   const snap=R3_UI.snapshot;
   if(!snap?.[kind]?.length)return '<p class="muted">No '+r3Escape(kind)+' found in the scanned, rendered sheet tabs.</p>';
   return snap[kind].slice(0,400).map(item=>
-    '<details class="entry"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
+    '<details class="entry" data-entry-key="'+r3Escape(kind+':'+item.tab+':'+item.name)+'"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
     '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+    (item.checkboxes?'<div class="muted">Visible checkboxes: '+r3Escape(item.checkboxes.checked)+' of '+r3Escape(item.checkboxes.total)+' checked (sheet-specific meaning)</div>':'')+
     (item.actions?.length?'<div class="chips">'+item.actions.map(b=>'<span>'+r3Escape(b.label)+'</span>').join('')+'</div>':'')+
     '</details>').join('');
@@ -76,15 +77,43 @@ function r3UIStatus(message,coverage){
   const el=R3_UI.root?.getElementById('r3-status');
   if(el)el.textContent=message+(coverage?' · '+Object.entries(coverage).filter(([k])=>['spells','attacks','inventory','features','resources'].includes(k)).map(([k,v])=>k+' '+v).join(', '):'');
 }
+// Avoid replacing the scrollable results DOM whenever Roll20 restores window focus.
+function r3RenderResults(){
+  const results=R3_UI.root.getElementById('r3-results');
+  if(R3_UI.renderedSnapshot===R3_UI.snapshot&&R3_UI.renderedView===R3_UI.view)return;
+  const priorView=R3_UI.renderedView;
+  const previous=results.querySelector?.('.results');
+  if(previous&&priorView){
+    R3_UI.scrollByView[priorView]=previous.scrollTop;
+    R3_UI.openByView[priorView]=[...previous.querySelectorAll('details.entry[open]')]
+      .map(entry=>entry.getAttribute('data-entry-key')).filter(Boolean);
+  }
+  const content=R3_UI.root.getElementById('r3-content');
+  const outerScroll=content.scrollTop;
+  results.innerHTML=r3Results();
+  R3_UI.renderedSnapshot=R3_UI.snapshot;
+  R3_UI.renderedView=R3_UI.view;
+  const current=results.querySelector?.('.results');
+  if(current){
+    current.scrollTop=R3_UI.scrollByView[R3_UI.view]??0;
+    const expanded=new Set(R3_UI.openByView[R3_UI.view]||[]);
+    for(const entry of current.querySelectorAll('details.entry')){
+      if(expanded.has(entry.getAttribute('data-entry-key')))entry.open=true;
+    }
+  }
+  content.scrollTop=outerScroll;
+}
 function r3UIRefresh(){
   if(!R3_UI.root)return;
   const frames=r3Candidates();
-  const selector=frames.map(c=>'<option value="'+r3Escape(c.key)+'"'+(c.key===R3_UI.selected?' selected':'')+'>'+
-    r3Escape(c.name)+' ('+c.type+(c.visible?'':' — HIDDEN')+')</option>').join('');
-  R3_UI.root.getElementById('r3-choices').innerHTML=selector||'<option value="">No official sheet detected</option>';
   if(!frames.some(c=>c.key===R3_UI.selected))R3_UI.selected=frames.find(c=>c.visible)?.key||'';
-  R3_UI.root.getElementById('r3-choices').value=R3_UI.selected;
-  R3_UI.root.getElementById('r3-results').innerHTML=r3Results();
+  const selector=frames.map(c=>'<option value="'+r3Escape(c.key)+'"'+(c.key===R3_UI.selected?' selected':'')+'>'+
+    r3Escape(c.name)+' ('+c.type+(c.visible?'':' — HIDDEN')+')</option>').join('')||
+    '<option value="">No official sheet detected</option>';
+  const choice=R3_UI.root.getElementById('r3-choices');
+  if(R3_UI.renderedChoices!==selector){choice.innerHTML=selector;R3_UI.renderedChoices=selector;}
+  if(choice.value!==R3_UI.selected)choice.value=R3_UI.selected;
+  r3RenderResults();
   R3_UI.root.getElementById('r3-content').style.display=R3_UI.shown?'block':'none';
   // The actual toggle is r3-toggle. A stale reference to r3-title used to
   // throw here and stop every button handler before it could launch a scan.
