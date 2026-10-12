@@ -48,12 +48,12 @@ function harness(fixture=docFixture()){
   };
   vm.createContext(context);
   const code=files.filter(f=>f!=='30_boot.js').map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n');
-  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3CurrentTabLabel,r3StartReader,r3Merge,r3InventoryZero,r3InventoryPrune,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
+  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3CurrentTabLabel,r3StartReader,r3Merge,r3InventoryZero,r3InventoryPrune,r3InventoryStepper,r3InventoryRowFor,r3AutoStoreSnapshot,R3_AUTO,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
   return {h:context.testApi,context,fixture};
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.1\.6/);
+  assert.match(compiled,/\/\/ @version\s+3\.1\.7/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -597,4 +597,93 @@ test('full tab merge uses later zero observation instead of earlier positive inv
   assert.equal(prior.inventory.length,1,'zero is not silently discarded in full reader merge');
   assert.equal(prior.inventory[0].quantity,0);
   assert.equal(h.r3InventoryPrune(prior).inventory.length,0);
+});
+
+function screenshotInventoryFixture(){
+  // Reproduce the visible Crowbar row: name, switch and a − 0 + quantity
+  // cluster whose text input has only a generated ID, no quantity metadata.
+  const fixture=docFixture({name:'NIER'});
+  const row={innerText:'Crowbar Gear',getClientRects:()=>[{}],getAttribute:()=>null,closest:()=>null};
+  const nested={getClientRects:()=>[{}],querySelectorAll:()=>[]};
+  const sign=text=>({tagName:'BUTTON',innerText:text,className:'',getClientRects:()=>[{}],
+    getAttribute:()=>null,closest:sel=>sel.includes('item-row')?row:null});
+  const minus=sign('−'),plus=sign('+');
+  const cluster={parentElement:row,querySelectorAll:sel=>sel==='button'?[minus,plus]:
+    sel==='input,[role="spinbutton"]'?[quantity]:[]};
+  const quantity={tagName:'INPUT',type:'text',value:'0',className:'',parentElement:cluster,
+    getClientRects:()=>[{}],getAttribute:key=>key==='id'?'qty-random-uuid':null,
+    closest:sel=>sel.includes('.item-row')?row:null};
+  const sw={tagName:'BUTTON',type:'button',innerText:'',getClientRects:()=>[{}],
+    getAttribute:key=>key==='id'?'headlessui-switch-100':
+      key==='role'?'switch':key==='aria-checked'?'true':null,
+    closest:sel=>sel.includes('item-row')?row:null};
+  const title={innerText:'Crowbar',getClientRects:()=>[{}],getAttribute:()=>null,
+    parentElement:nested,closest:sel=>sel.includes('item-row__')?nested:
+      sel.includes('item-row')?row:null};
+  row.querySelectorAll=sel=>sel==='button'?[minus,plus,sw]:
+    sel.startsWith('input,select,[role="spinbutton"]')?[quantity,sw]:
+    sel.includes('.span--item-row-title')?[title]:[];
+  row.querySelector=()=>null;
+  fixture.body.querySelectorAll=sel=>sel.startsWith('.span--item-row-title,')?[title]:[];
+  const activeTab={getClientRects:()=>[{}],disabled:false,className:'',
+    getAttribute:key=>key==='aria-label'?'Inventory':key==='aria-selected'?'true':null,
+    closest:()=>null};
+  fixture.document.querySelectorAll=sel=>sel.startsWith('[role="tab"]')?[activeTab]:[];
+  return {fixture,row,title,quantity,minus,plus,sw};
+}
+test('Crowbar screenshot-like unlabelled minus/count/plus controls report exact numeric zero',async()=>{
+  const x=screenshotInventoryFixture(),{h}=harness(x.fixture);
+  assert.equal(h.r3InventoryRowFor(x.title),x.row,
+    'prefer enclosing item row instead of its nested title wrapper');
+  assert.equal(h.r3InventoryStepper(x.quantity),true);
+  const result=await h.r3ReaderScan('current');
+  assert.equal(result.inventory.length,1);
+  assert.equal(result.inventory[0].name,'Crowbar');
+  assert.equal(result.inventory[0].quantity,0,
+    'the screenshot stepper uses an unlabelled numeric input');
+  assert.equal(result.inventory[0].controls.find(x=>x.kind==='quantity').value,0);
+  assert.equal(result.inventory[0].controls.find(x=>x.kind==='toggle').value,true);
+  assert.equal(h.r3InventoryPrune(result).inventory.length,0);
+});
+test('Crowbar screenshot-like current scan removes its imported item, but not another item',async()=>{
+  const x=screenshotInventoryFixture(),{h}=harness(x.fixture);
+  const prev=h.r3Empty();prev.name='NIER';prev.stats.hp=82;
+  prev.inventory=[{name:'Crowbar',_key:'crowbar||',tab:'Inventory'},
+    {name:'Net',_key:'net||',tab:'Inventory',quantity:1}];
+  h.R3_UI.snapshot=h.r3Coverage(prev);h.R3_AUTO.name='NIER';
+  h.r3AutoStoreSnapshot(await h.r3ReaderScan('current'),'current');
+  assert.deepEqual([...h.R3_UI.snapshot.inventory.map(x=>x.name)],['Net']);
+  x.quantity.value='2';
+  h.r3AutoStoreSnapshot(await h.r3ReaderScan('current'),'current');
+  assert.deepEqual([...h.R3_UI.snapshot.inventory.map(x=>x.name)],['Net','Crowbar']);
+  assert.equal(h.R3_UI.snapshot.inventory[1].quantity,2);
+  assert.equal(h.R3_UI.snapshot.stats.hp,82);
+});
+test('paired plus/minus are not enough to erase an ambiguous row with two number inputs',async()=>{
+  const x=screenshotInventoryFixture(),{h}=harness(x.fixture);
+  const another={tagName:'INPUT',type:'text',value:'0',getClientRects:()=>[{}]};
+  x.quantity.getAttribute=()=>null;
+  const old=x.quantity.parentElement.querySelectorAll;
+  x.quantity.parentElement.querySelectorAll=sel=>
+    sel==='input,[role="spinbutton"]'?[x.quantity,another]:old(sel);
+  const result=await h.r3ReaderScan('current');
+  assert.equal(result.inventory[0].quantity,undefined,
+    'several controls in one group are not proof of item quantity');
+  assert.equal(h.r3InventoryPrune(result).inventory.length,1);
+});
+test('unlabeled quantity must be next to both decrement and increment, not an unrelated number',async()=>{
+  const x=screenshotInventoryFixture(),{h}=harness(x.fixture);
+  const old=x.quantity.parentElement.querySelectorAll;
+  x.quantity.parentElement.querySelectorAll=sel=>sel==='button'?[x.minus]:old(sel);
+  const result=await h.r3ReaderScan('current');
+  assert.equal(result.inventory[0].quantity,undefined);
+  assert.equal(h.r3InventoryPrune(result).inventory.length,1);
+});
+test('live unlabelled inventory plus/minus clicks signal the authenticated reader',()=>{
+  const x=screenshotInventoryFixture(),{h,context}=harness(x.fixture);
+  const calls=[];context.setTimeout=(fn,ms)=>{calls.push(ms);return calls.length};
+  const target={tagName:'SPAN',getClientRects:()=>[{}],
+    closest:sel=>sel.startsWith('button')?x.minus:sel.includes('item-row')?x.row:null};
+  h.r3ReaderChanged({type:'click',target});
+  assert.deepEqual(calls,[350]);
 });
