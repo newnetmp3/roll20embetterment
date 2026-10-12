@@ -161,7 +161,7 @@ test('importer card schema excludes keyed skills and protects against future arr
 function namedInventoryRow(name,description){
   const row=card('inventory',name,description);
   const title={innerText:name,getClientRects(){return [{}]},getAttribute(){return null},
-    closest(){return row},parentElement:row};
+    closest(selector){return selector.includes('item-row')?row:null},parentElement:row};
   row.querySelectorAll=selector=>selector.includes('.span--item-row-title')?[title]:[];
   return {row,title};
 }
@@ -173,7 +173,8 @@ function namedResourceTracker(name,description,checkValues=[]){
   }));
   const tracker={innerText:description,disabled:false,getClientRects(){return [{}]},
     getAttribute(){return null},
-    closest(selector){return selector.includes('.resource-item')?tracker:owner},
+    closest(selector){if(selector.startsWith('[hidden]'))return null;
+      return selector.includes('.resource-item')?tracker:selector.includes('.item-row')?owner:null},
     querySelector(selector){return selector.includes('resource-name')?marker:null},
     querySelectorAll(selector){return selector.includes('checkbox')?checks:[]}
   };
