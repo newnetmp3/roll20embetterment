@@ -2,7 +2,7 @@
 const R3_PENDING=new Map();
 const R3_POPOUTS=new Map();
 const R3_SESSION=(crypto.randomUUID?.()||('session-'+Date.now()+'-'+Math.random())).slice(0,100);
-let r3Counter=0,r3ListenerStarted=false;
+let r3Counter=0,r3ListenerStarted=false,r3ReaderDirtyTimer=null;
 function r3SheetContext(){return location.origin===R3_ORIGIN&&/\/dnd2024byroll20(?:\/|$)/.test(location.pathname);}
 function r3EditorContext(){return location.origin===R3_EDITOR&&/^\/editor(?:\/|$)/.test(location.pathname);}
 function r3ReaderPeer(){
@@ -117,8 +117,35 @@ function r3ReaderAnnounce(){
   try{peer.postMessage(r3Msg('ready',{session:R3_SESSION,name:r3NameFromDocument(document),
     mode:window.parent===window?'popout':'iframe'}),R3_EDITOR);}catch{}
 }
+function r3ReaderChanged(event){
+  const target=event?.target;
+  if(!target||!r3Shown(target))return;
+  if(event.type==='click'){
+    // Increment/decrement buttons are common on the official 2024 sheet.
+    // Ignore generic clicks, tab navigation, attack rolls and other controls
+    // that do not imply data changes.
+    const button=target.closest?.('button');
+    if(!button)return;
+    const hint=[r3Attr(button,'aria-label'),r3Attr(button,'title'),
+      r3Attr(button,'data-testid'),r3String(button.className,140)].join(' ');
+    if(!/(?:increment|decrement|stepper|counter|quantity|checkbox|charge|toggle-resource)/i.test(hint))return;
+  }else if(!['INPUT','TEXTAREA','SELECT'].includes(String(target.tagName||'').toUpperCase())
+    &&r3Attr(target,'role')!=='spinbutton')return;
+  if(r3ReaderDirtyTimer!==null)clearTimeout(r3ReaderDirtyTimer);
+  // Debounce inside the actual official sheet so keystrokes send one small
+  // authenticated hint instead of generating a cross-window message each.
+  r3ReaderDirtyTimer=setTimeout(()=>{
+    r3ReaderDirtyTimer=null;
+    const peer=r3ReaderPeer();
+    if(!peer)return;
+    try{peer.postMessage(r3Msg('dirty',{session:R3_SESSION,
+      name:r3NameFromDocument(document)}),R3_EDITOR);}catch{}
+  },350);
+}
 function r3StartReader(){
   window.addEventListener('message',r3ReaderReceive);
+  for(const type of ['input','change','click'])
+    document.addEventListener(type,r3ReaderChanged,true);
   r3ReaderAnnounce();
   let attempts=0;
   const timer=setInterval(()=>{if(++attempts>=24)clearInterval(timer);else r3ReaderAnnounce();},1500);
@@ -172,6 +199,16 @@ function r3Listen(event){
       }
     }
     r3UIRefresh?.();
+    return;
+  }
+  if(data.type==='dirty'){
+    // Only a known official iframe or authenticated popup session may
+    // request a re-read. A name match alone never authorizes an unknown
+    // postMessage source or a different character.
+    if(!candidate||typeof data.session!=='string'||!/[\w.:-]{6,100}/.test(data.session))return;
+    if(candidate.type==='popout'&&candidate.key!=='popout-'+data.session)return;
+    if(r3String(data.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())return;
+    r3AutoQueueDirty(candidate);
     return;
   }
   const pending=R3_PENDING.get(data.id);
