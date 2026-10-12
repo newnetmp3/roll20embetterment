@@ -45,7 +45,9 @@ function r3CardsView(kind){
     '<details class="entry" data-entry-key="'+r3Escape(kind+':'+item.tab+':'+item.name)+'"><summary>'+r3Escape(item.name)+' <small>'+r3Escape(item.tab)+'</small></summary>'+
     '<div class="entrybody">'+r3Escape(item.visible||'')+'</div>'+
     (kind==='inventory'&&Object.prototype.hasOwnProperty.call(item,'quantity')?
-      '<div class="kv"><span>Observed quantity</span><strong>'+r3Escape(item.quantity)+'</strong></div>':'')+
+      '<div class="kv"><span>Observed quantity</span><strong>'+r3Escape(item.quantity)+'</strong></div>':
+      kind==='inventory'&&item.controls?.length?
+        '<div class="muted">Quantity not detected from this item row; zero removal needs a readable counter.</div>':'')+
     (kind==='inventory'&&item.controls?.length?item.controls.map(control=>
       '<div class="kv"><span>'+r3Escape(control.label||control.kind)+'</span><strong>'+
       r3Escape(control.value===true?'On':control.value===false?'Off':control.value)+'</strong>'+
