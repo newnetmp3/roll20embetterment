@@ -1,11 +1,11 @@
 # R20 Embetterment — Rolling Development Handover
 
-**Updated:** 2026-10-12  
+**Updated:** 2026-10-13  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `b47ec4c13470d751e81dd057fe6f9a7658d59ac9` (v3.2.4, PR #49 merged).  
-**Latest completed milestone:** v3.2.4 remove HUD max-height clipping, preserve exact-name HTTPS Journal art across Chat sidebar and reload (PR #49; 284 tests).  
-**Known unresolved issues:** v3.2.4 unclipped portrait/stat layout and Journal-to-Chat portrait persistence are now user-verified. Native Roll20 attack pilot v3.3.0 needs live verification with each player's own sheet; source roll controls may be unlabeled and must fail safely. Spell casting, End Turn, targeting and automatic combat expenditure are not implemented. Some field mappings remain incomplete.  
+**Current verified feature baseline:** `521f442cceaf86e265f250b0ec4dbf04829b0f71` (v3.3.0, merged PR #50).  
+**Latest completed milestone:** v3.3.0 character-agnostic two-stage native attack pilot and previous-character Auto-sync ID reset (PR #50, 295 tests passed).  
+**Known unresolved issues:** Native pilot's narrow official 2024 Roll Attack selector passed fixture CI but has not been verified in real Floorp; unsupported button markup fails closed. No live Roll20 attack/chat result is claimed. Native spells, movement, targeting and End Turn remain undone. HUD loadout preferences are currently per game, not per character when changing profiles inside one game.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
 ## Resume process
@@ -406,3 +406,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **QA added:** Multi-character fixtures (Elowen Dawnsong, Brom Stonebeard, Sora Windfall and others) independently probe/confirm different attack names, reject cross-character identity, same-name ambiguous actions, mismatched attack replay, missing roll labeling, wrong tab, stale Auto-sync pin, switch character while confirmation pending and explicit cancel. The official sheet and editor still need live Floorp testing to determine which button labels actually exist. **CI verified:** PR #50 head `1f20a64162438bbe3628e80d851b2bdd6a1890e2`, GitHub Actions run 38467635644, **295 tests passed, zero failures**; `npm run check` and generated script consistency green. Final documentation-only CI and merge pending. Keep existing importer tests and complete roadmap live.
 
 **Next after a safe pilot:** Collect screenshot/DOM around the official 2024 row for one arbitrary player attack if the narrow control matcher cannot find native roll buttons. Expand only based on actual observed labels and ensure peer/session binding. Then broaden to verified spellcasting, targeting and turn controls without a Nier-specific workaround.
+
+**v3.3.0 merged checkpoint (2026-10-13):** PR #50 merged into `main` at `521f442cceaf86e265f250b0ec4dbf04829b0f71`. Final PR-head GitHub Actions run 38467803354 passed, **295 tests and zero failures** plus clean generated userscript check. The user explicitly requires universal support: no Nier-specific runtime logic; the addon reads the current imported player's official character and matches an authenticated same-character sheet before any native interaction. Test characters Elowen Dawnsong, Brom Stonebeard, Sora Windfall, Orin, Kaela and others cover different attack names, preventing cross-character requests/replay and resetting stale auto-sync character pins. **Live attack dispatch still requires testing**; if matching Roll Attack button not found, request narrow real DOM details, don't guess selectors. User has separately confirmed the previous v3.2.4 portrait/stat HUD layout in Floorp. Continue per-character settings isolation later if users switch between multiple PCs in the same Roll20 game, and preserve working importer and debug tools.
