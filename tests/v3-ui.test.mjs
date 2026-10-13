@@ -1201,3 +1201,18 @@ test('native UI cancel does not post a confirmation to the official sheet',async
   assert.equal(h.sent.length,size);
   assert.equal(h.api.R3_NATIVE.preview,null);
 });
+
+test('switching auto-sync to another imported character clears the previous character ID',()=>{
+  const h=panelHarness('Liora');h.api.r3StartUI();
+  const next=h.api.r3Empty();next.name='Liora';
+  next.attacks=[{name:'Rapier',_key:'rapier'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(next);
+  h.api.R3_AUTO.name='Old Adventurer';
+  h.api.R3_AUTO.characterId='previous-character-id';
+  h.api.R3_AUTO.enabled=false;
+  h.click('r3-hud-auto');
+  assert.equal(h.api.R3_AUTO.enabled,true);
+  assert.equal(h.api.R3_AUTO.name,'Liora');
+  assert.equal(h.api.R3_AUTO.characterId,'');
+  assert.match(h.store.get('roll20-embetterment-v3:123:auto'),/"name":"Liora"/);
+});
