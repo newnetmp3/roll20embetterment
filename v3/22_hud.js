@@ -12,8 +12,14 @@ const R3_HUD_TABS=[
   {key:'resources',title:'Resources',icon:'◉'}
 ];
 function r3HudLoad(){
+  // Always reset character-specific preferences before entering a different
+  // character's profile. Otherwise previous weapon sets/icons would leak.
+  R3_HUD.category='actions';R3_HUD.collapsed=false;R3_HUD.drawerOpen=false;
+  R3_HUD.weaponSet=0;R3_HUD.weaponSets=[null,null,null,null,null,null];
+  R3_HUD.portraitCache=null;R3_HUD.renderedSnapshot=null;
+  R3_HUD.renderedLoadouts=null;
   try{
-    const stored=JSON.parse(localStorage.getItem(r3StorageKey()+':hud')||'null');
+    const stored=JSON.parse(localStorage.getItem(r3TokenSettingsKey())||'null');
     if(stored&&R3_HUD_TABS.some(t=>t.key===stored.category))
       R3_HUD.category=stored.category;
     if(typeof stored?.collapsed==='boolean')R3_HUD.collapsed=stored.collapsed;
@@ -38,7 +44,7 @@ function r3HudLoad(){
   }catch{}
 }
 function r3HudSave(){
-  try{localStorage.setItem(r3StorageKey()+':hud',JSON.stringify({
+  try{localStorage.setItem(r3TokenSettingsKey(),JSON.stringify({
     category:R3_HUD.category,collapsed:R3_HUD.collapsed,drawerOpen:R3_HUD.drawerOpen,
     weaponSet:R3_HUD.weaponSet,weaponSets:R3_HUD.weaponSets,
     portrait:R3_HUD.portraitCache
@@ -136,6 +142,10 @@ function r3HudCard(item,index){
 // exactly named Journal entry. No network queries or substring name guesses.
 function r3HudPortraitUrl(snapshot){
   const name=r3String(snapshot?.name,80),now=Date.now();
+  const linked=R3_TOKEN.active;
+  // Current player-controlled token is the portrait's authoritative source.
+  if(linked&&linked.name.toLowerCase()===name.toLowerCase()&&linked.tokenImage)
+    return linked.tokenImage;
   if(!name){R3_HUD.portraitName='';R3_HUD.portraitUrl='';return '';}
   if(name!==R3_HUD.portraitName){
     R3_HUD.portraitName=name;
