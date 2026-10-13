@@ -104,6 +104,8 @@ function r3NativeReaderHandle(peer,data){
   };
   const characterName=r3String(data.characterName,120);
   const attackName=r3String(data.attackName,125);
+  const attackKey=r3String(data.attackKey,240);
+  const attackText=r3String(data.attackText,550);
   // The character identity and attack name are intentionally separate.
   // Characters across games do not share a fixed name or fixed attack list.
   if(data.kind!=='attacks'||!characterName||!attackName||
@@ -111,24 +113,26 @@ function r3NativeReaderHandle(peer,data){
     respond('blocked','This action does not belong to the open character sheet.');return;
   }
   if(data.type==='native-probe'){
-    const found=r3NativeAttackControl(attackName);
+    const found=r3NativeAttackControl(attackName,{visible:attackText});
     if(!found.button){respond('blocked',found.error);return;}
     if(R3_NATIVE.tokens.size>=8)R3_NATIVE.tokens.clear();
     const token=(crypto.randomUUID?.()||('native-'+Date.now()+'-'+Math.random())).slice(0,100);
-    R3_NATIVE.tokens.set(token,{characterName,attackName,label:found.label,peer,
-      until:Date.now()+15000});
+    R3_NATIVE.tokens.set(token,{characterName,attackName,attackKey,attackText,
+      label:found.label,fingerprint:found.fingerprint,peer,until:Date.now()+15000});
     respond('ready','A single native roll control was found. Confirm to click it once.',
       {token,label:found.label});return;
   }
   const token=r3String(data.token,100),record=R3_NATIVE.tokens.get(token);
   if(!record||record.peer!==peer||record.until<Date.now()||
      record.characterName.toLowerCase()!==characterName.toLowerCase()||
-     record.attackName.toLowerCase()!==attackName.toLowerCase()){
+     record.attackName.toLowerCase()!==attackName.toLowerCase()||
+     record.attackKey!==attackKey||record.attackText!==attackText){
     respond('blocked','Native action confirmation expired. Inspect the roll again.');return;
   }
   R3_NATIVE.tokens.delete(token);
-  const found=r3NativeAttackControl(attackName);
-  if(!found.button||found.label!==record.label){
+  const found=r3NativeAttackControl(attackName,{visible:attackText});
+  if(!found.button||found.label!==record.label||
+     found.fingerprint!==record.fingerprint){
     respond('blocked','The native roll control changed. No click was performed.');return;
   }
   try{
@@ -174,25 +178,38 @@ function r3NativeResult(event,data){
   clearTimeout(request.timeout);R3_NATIVE.pending.delete(data.id);
   request.resolve(data);
 }
+// Resolve the exact imported attack card by its captured identity. Legacy
+// callers passing a name are accepted only when that name is unambiguous.
+function r3NativeSelectAttack(input,snapshot=R3_UI.snapshot){
+  const items=Array.isArray(snapshot?.attacks)?snapshot.attacks:[];
+  const key=items.filter(x=>x._key===input&&x._key);
+  if(key.length===1)return key[0];
+  const named=items.filter(x=>x.name===input);
+  return named.length===1?named[0]:null;
+}
 async function r3NativeProbe(name){
   if(R3_NATIVE.busy)return;
   R3_NATIVE.preview=null;
   const snap=R3_UI.snapshot;
-  const match=snap?.attacks?.filter(x=>x.name===name)||[];
-  if(match.length!==1||!snap?.name){
+  const chosen=r3NativeSelectAttack(name,snap);
+  if(!chosen||!snap?.name){
     r3NativeStatus('Choose a unique attack from the imported character.');return;
   }
+  const attackName=r3String(chosen.name,125);
+  const attackKey=r3String(chosen._key,240);
+  const attackText=r3String(chosen.visible,550);
   const characterName=r3String(snap.name,120);
   const candidate=r3NativeCandidate(characterName);
   if(!candidate){r3NativeStatus('Open the matching official 2024 character sheet, then try again.');return;}
   R3_NATIVE.busy=true;r3NativeStatus('Checking the native roll control…');
   try{
-    const result=await r3NativeRequest(candidate,'native-probe',{characterName,attackName:name});
+    const result=await r3NativeRequest(candidate,'native-probe',
+      {characterName,attackName,attackKey,attackText});
     if(result.status==='ready'&&typeof result.token==='string'){
-      R3_NATIVE.preview={characterName,attackName:name,token:result.token,
-        window:candidate.window,label:result.label};
+      R3_NATIVE.preview={characterName,attackName,attackKey,attackText,
+        token:result.token,window:candidate.window,label:result.label};
       r3NativeStatus('Roll20 shows a native '+r3String(result.label,65)+
-        ' control for '+name+'. Confirm to click once.');
+        ' control for '+attackName+'. Confirm to click once.');
     }else r3NativeStatus(result.message||'No verified native roll button was found.');
   }catch(e){r3NativeStatus(e.message||'Native action probe failed.');}
   finally{R3_NATIVE.busy=false;r3HudRender();}
@@ -202,16 +219,19 @@ async function r3NativeConfirm(){
   if(!preview||R3_NATIVE.busy)return;
   R3_NATIVE.preview=null; // one-time user confirmation, no double-click
   const characterName=r3String(R3_UI.snapshot?.name,120);
-  const stillPresent=R3_UI.snapshot?.attacks?.filter(x=>x.name===preview.attackName)||[];
+  const selected=r3NativeSelectAttack(preview.attackKey||preview.attackName);
   const candidate=r3NativeCandidate(characterName);
   if(characterName.toLowerCase()!==preview.characterName.toLowerCase()||
-     stillPresent.length!==1||!candidate||candidate.window!==preview.window){
+     !selected||selected.name!==preview.attackName||
+     r3String(selected.visible,550)!==preview.attackText||
+     !candidate||candidate.window!==preview.window){
     r3NativeStatus('The official sheet changed. Inspect the roll again.');return;
   }
   R3_NATIVE.busy=true;r3NativeStatus('Requesting one native Roll20 click…');
   try{
     const response=await r3NativeRequest(candidate,'native-invoke',
-      {characterName,attackName:preview.attackName,token:preview.token});
+      {characterName,attackName:preview.attackName,attackKey:preview.attackKey,
+        attackText:preview.attackText,token:preview.token});
     r3NativeStatus(response.message||'No native action result returned.');
   }catch(e){r3NativeStatus(e.message||'Native roll request failed.');}
   finally{R3_NATIVE.busy=false;r3HudRender();}
