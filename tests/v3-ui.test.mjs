@@ -65,7 +65,7 @@ function panelHarness(character='NIER'){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1217,4 +1217,110 @@ test('switching auto-sync to another imported character clears the previous char
   assert.equal(h.api.R3_AUTO.name,'Liora');
   assert.equal(h.api.R3_AUTO.characterId,'');
   assert.match(h.store.get('roll20-embetterment-v3:123:auto'),/"name":"Liora"/);
+});
+
+function multiTokenRig(){
+  const h=panelHarness('Elowen');h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const characters=new Map();
+  const collection={models:[],get(id){return characters.get(id)}};
+  const selections=[];
+  h.context.window.d20={player:{id:'player-one'},
+    Campaign:{characters:collection},engine:{selected(){return selections.slice()}}};
+  const make=(id,name,controllers='player-one')=>{
+    const ch={id,attributes:{name,controlledby:controllers},
+      get(key){return this.attributes[key]}};
+    characters.set(id,ch);collection.models.push(ch);
+    const token={id:'token-'+id,attributes:{represents:id,
+      imgsrc:'https://images.example.org/'+id+'.png'},
+      get(key){return this.attributes[key]}};
+    return {model:token};
+  };
+  const a=make('char-elf','Elowen Dawnsong');
+  const b=make('char-dwarf','Brom Stonebeard');
+  const outsider=make('char-gm','GM Monster','other-player');
+  return {h,selections,make,a,b,outsider};
+}
+test('HUD automatically follows most recently selected controllable linked token',()=>{
+  const x=multiTokenRig(),h=x.h;
+  x.selections.push(x.a);
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.active.name,'Elowen Dawnsong');
+  assert.equal(h.api.R3_UI.snapshot.name,'Elowen Dawnsong');
+  assert.match(h.nodes.get('r3-hud').innerHTML,/char-elf\.png/);
+  const elf=h.api.r3Empty();elf.name='Elowen Dawnsong';elf.stats.hp=41;
+  elf.attacks=[{name:'Staff',_key:'staff'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(elf);h.api.r3TokenRecordSnapshot(h.api.R3_UI.snapshot);
+  h.api.R3_HUD.weaponSets[0]={kind:'attacks',key:'staff'};h.api.r3HudSave();
+  x.selections.push(x.b);
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.active.name,'Brom Stonebeard');
+  assert.equal(h.api.R3_UI.snapshot.name,'Brom Stonebeard');
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,undefined);
+  assert.equal(h.api.R3_HUD.weaponSets[0],null,'loadout must not leak to other character');
+  assert.match(h.nodes.get('r3-hud').innerHTML,/char-dwarf\.png/);
+  const dwarf=h.api.r3Empty();dwarf.name='Brom Stonebeard';dwarf.stats.hp=73;
+  dwarf.attacks=[{name:'Axe',_key:'axe'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(dwarf);h.api.r3TokenRecordSnapshot(h.api.R3_UI.snapshot);
+  h.api.R3_HUD.weaponSets[0]={kind:'attacks',key:'axe'};h.api.r3HudSave();
+  x.selections.length=0;h.api.r3TokenPoll();
+  x.selections.push(x.a);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,41);
+  assert.equal(h.api.R3_HUD.weaponSets[0].key,'staff');
+  assert.match(h.nodes.get('r3-hud').innerHTML,/char-elf\.png/);
+  x.selections.length=0;h.api.r3TokenPoll();
+  x.selections.push(x.b);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,73);
+  assert.equal(h.api.R3_HUD.weaponSets[0].key,'axe');
+});
+test('noncontrollable and unlinked token selections cannot switch the current player HUD',()=>{
+  const x=multiTokenRig(),h=x.h;
+  x.selections.push(x.a);h.api.r3TokenPoll();
+  const before=h.api.R3_TOKEN.active.characterId;
+  x.selections.length=0;h.api.r3TokenPoll();
+  x.selections.push(x.outsider);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.active.characterId,before);
+  x.selections.length=0;h.api.r3TokenPoll();
+  x.selections.push({model:{id:'unlinked',get(key){return key==='represents'?'':null}}});
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.active.characterId,before);
+});
+test('latest newly selected controllable token wins in a multiselect without displaying GM tokens',()=>{
+  const x=multiTokenRig(),h=x.h;
+  x.selections.push(x.a,x.outsider,x.b);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.active.name,'Brom Stonebeard');
+  x.selections.length=0;h.api.r3TokenPoll();
+  x.selections.push(x.outsider,x.a);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.active.name,'Elowen Dawnsong');
+});
+test('token selection follows each player-controlled character even when auto-sync is enabled',()=>{
+  const x=multiTokenRig(),h=x.h;
+  x.selections.push(x.a);h.api.r3TokenPoll();
+  h.api.R3_AUTO.enabled=true;
+  h.api.R3_AUTO.name='Elowen Dawnsong';
+  h.api.R3_AUTO.characterId='char-elf';
+  const previousGeneration=h.api.R3_AUTO.generation;
+  x.selections.push(x.b);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_AUTO.name,'Brom Stonebeard');
+  assert.equal(h.api.R3_AUTO.characterId,'char-dwarf');
+  assert.equal(h.api.R3_AUTO.generation,previousGeneration+1);
+});
+test('two different characters with the same name never share a name-only cached snapshot',()=>{
+  const x=multiTokenRig(),h=x.h;
+  x.make('same-one','Twin');
+  const duplicate=x.make('same-two','Twin');
+  const legacy=h.api.r3Empty();legacy.name='Twin';legacy.stats.hp=999;
+  h.api.R3_TOKEN.legacy=h.api.r3Coverage(legacy);
+  x.selections.push(duplicate);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,undefined);
+  assert.equal(h.api.R3_TOKEN.snapshots.has('same-two'),false);
+  const after=h.api.r3Empty();after.name='Twin';after.stats.hp=45;
+  h.api.r3TokenRecordSnapshot(h.api.r3Coverage(after));
+  assert.equal(h.api.R3_TOKEN.snapshots.has('same-two'),false);
+});
+test('real authenticated pending native attack is cancelled on character-token switch',()=>{
+  const x=multiTokenRig(),h=x.h;
+  x.selections.push(x.a);h.api.r3TokenPoll();
+  h.api.R3_NATIVE.preview={characterName:'Elowen Dawnsong',attackName:'Staff',token:'one'};
+  x.selections.push(x.b);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_NATIVE.preview,null);
 });
