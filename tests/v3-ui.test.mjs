@@ -65,7 +65,7 @@ function panelHarness(character='NIER'){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1371,4 +1371,90 @@ test('legacy name-only native probe refuses two identically named imported attac
   h.shadow.handlers.get('click')({target:{dataset:{hudProbe:'Dagger'}}});
   assert.equal(h.sent.length,before);
   assert.match(h.api.R3_NATIVE.status,/unique attack/);
+});
+
+
+function backgroundNativeRig(){
+  const h=panelHarness('Elowen'),dialogs=[],frames=[],overlays=[],log=[];
+  h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const original=h.document.querySelectorAll.bind(h.document);
+  h.document.querySelectorAll=selector=>
+    selector==='iframe'?frames:selector==='.characterdialog'?dialogs:
+      selector==='.ui-widget-overlay'?overlays:original(selector);
+  const characters=new Map(),models=[];
+  function create(id,name,controlledby='player-one'){
+    const model={id,attributes:{name,controlledby},get(k){return this.attributes[k]}};
+    model.view={showDialog(){
+      log.push({kind:'show',id});
+      const dialog={id:'new-'+id,isConnected:true,style:{position:'absolute',left:'30px',top:'40px'},
+        getAttribute(k){return k==='data-characterid'?id:null},
+        closest(){return null}};
+      const win={postMessage(message){log.push({kind:'post',id,type:message.type})}};
+      const frame={src:'https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/test',
+        contentWindow:win,getClientRects(){return [{}]},
+        getAttribute(k){return k==='title'?name:null},
+        closest(selector){return selector.includes('.characterdialog')?dialog:null}};
+      dialogs.push(dialog);frames.push(frame);
+      return dialog;
+    }};
+    characters.set(id,model);models.push(model);
+    return model;
+  }
+  create('char-elf','Elowen');create('char-dwarf','Brom');
+  create('char-locked','Secret NPC','other-player');
+  h.context.window.d20={player:{id:'player-one'},
+    Campaign:{characters:{models,get(id){return characters.get(id)}}}};
+  return {h,dialogs,frames,overlays,log,create};
+}
+test('background native reader opens only a new linked controllable player sheet and moves it offscreen',async()=>{
+  const x=backgroundNativeRig();
+  const manual={style:{left:'400px',top:'100px',position:'absolute'},
+    getAttribute(k){return k==='data-characterid'?'other-character':null}};
+  x.dialogs.push(manual);
+  const c=await x.h.api.r3NativeBgEnsure('Elowen');
+  assert.equal(c.name,'Elowen');
+  assert.equal(x.log.filter(y=>y.kind==='show').length,1);
+  assert.equal(x.dialogs.length,2);
+  assert.equal(x.dialogs[1].style.left,'-20000px');
+  assert.equal(x.dialogs[1].style.top,'-20000px');
+  assert.equal(manual.style.left,'400px','unrelated manually opened sheet was not moved');
+  assert.equal(manual.style.position,'absolute');
+  assert.equal(x.h.api.r3NativeBgCandidate().window,c.window);
+  assert.equal(x.h.api.r3NativeIsOwned(c),true);
+});
+test('background attack session refuses to move or reopen a manually opened same-character sheet',async()=>{
+  const x=backgroundNativeRig();
+  const manual={style:{left:'300px',top:'20px',position:'absolute'},
+    getAttribute(k){return k==='data-characterid'?'char-elf':null}};
+  x.dialogs.push(manual);
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Elowen'),/already open/);
+  assert.equal(x.log.length,0);
+  assert.equal(manual.style.left,'300px');
+});
+test('no controller permission and duplicate names block creating background character sessions',async()=>{
+  const x=backgroundNativeRig();
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Secret NPC'),/Cannot verify/);
+  x.create('char-elf2','Elowen');
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Elowen'),/Cannot verify/);
+  assert.equal(x.log.length,0);
+});
+test('two owned background readers are isolated and reusable when switching selected characters',async()=>{
+  const x=backgroundNativeRig();
+  const first=await x.h.api.r3NativeBgEnsure('Elowen');
+  const second=await x.h.api.r3NativeBgEnsure('Brom');
+  assert.notEqual(first.window,second.window);
+  assert.equal(x.dialogs.length,2);
+  assert.equal(x.dialogs[0].style.left,'-20000px');
+  assert.equal(x.dialogs[1].style.left,'-20000px');
+  const again=await x.h.api.r3NativeBgEnsure('Elowen');
+  assert.equal(again.window,first.window);
+  assert.equal(x.log.filter(x=>x.kind==='show').length,2);
+  assert.equal(x.h.api.r3NativeIsOwned(again),true);
+});
+test('background sheets are not synthesized from existing iframes or unrelated character names',async()=>{
+  const x=backgroundNativeRig();
+  const manual=x.create('other','Different Player','player-one');
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Nier'),/Cannot verify/);
+  assert.equal(x.log.length,0);
+  assert.ok(manual);
 });
