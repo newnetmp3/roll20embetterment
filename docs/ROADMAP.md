@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 13, 2026 (v3.3.2 screenshot-driven native attack identity correction in development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 13, 2026 (v3.3.2 native attack source identity fix merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -145,3 +145,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 
 
 **v3.3.2 — Native attack source identity correction from two live user screenshots:** Current 2024 official sheet contains `+7 Attack` (to-hit) and `1d6+4` (damage) in the uniquely named Handaxe row. Former matcher incorrectly required the words `Roll Attack`. Current HUD import also contains two attack entries named Dagger, so name-only probe rejected both as ambiguous before contacting the native sheet. Implement per-card exact `_key` selection and carry character/attack/source details through the authenticated probe and single-use confirmation, matching same-name native rows only when explicit numeric hit/damage metrics distinguish them. Recognize signed numeric to-hit buttons and NEVER the damage dice or a generic `Attack` button. Ambiguous identical rows, changed source numbers or multiple hit controls remain blocked. Tests include multiple unrelated player characters and duplicate attack names. **CI verified:** PR #52 run 38486142000 passed **312 tests, zero failures** with generated script consistent. A real Roll20 chat-confirmed hit roll remains pending.
+
+**v3.3.2 merged:** PR #52 `9436c76e021fdda660099b21dda9a7dc1fb500b6`, final Actions run 38486218400 passed (**312 tests, zero failures; generated userscript consistent**). Correct duplicate-name Dagger source identity in action cards and accept source-verified numeric Roll20 `+7 Attack` hit-roll controls but not neighboring damage dice. Authenticated token and exact character checks unchanged; confirmation rechecks source/row fingerprint. Live Floorp validation with real chat rolls and selected-token behavior is the next gate. Truly ambiguous identical attack rows still fail closed, never click arbitrary first occurrence.
