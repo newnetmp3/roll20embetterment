@@ -95,7 +95,7 @@ function r3NativeAttackControl(name,source={}){
   const fingerprint=wanted+'|'+actual.bonus+'|'+actual.damage+'|'+label;
   return {button:roll[0].button,label,fingerprint};
 }
-function r3NativeReaderHandle(peer,data){
+async function r3NativeReaderHandle(peer,data){
   if(!['native-probe','native-invoke'].includes(data?.type)||
       typeof data.id!=='string'||!/^r3-[\w.-]{4,100}$/.test(data.id))return;
   const respond=(status,message,extras={})=>{
@@ -111,6 +111,19 @@ function r3NativeReaderHandle(peer,data){
   if(data.kind!=='attacks'||!characterName||!attackName||
     characterName.toLowerCase()!==r3NameFromDocument(document).toLowerCase()){
     respond('blocked','This action does not belong to the open character sheet.');return;
+  }
+  // Only HUD-owned or Auto-sync-owned hidden sheets may have their tabs
+  // switched automatically. A player-opened sheet is never navigated.
+  if(data.background===true&&!/^combat$/i.test(r3CurrentTabLabel())){
+    const combat=r3Tabs().find(tab=>/^combat$/i.test(r3TabLabel(tab)));
+    if(!combat||!r3Shown(combat)){
+      respond('blocked','Background official sheet did not expose Combat.');return;
+    }
+    combat.click();
+    await r3Pause(320);
+    if(!/^combat$/i.test(r3CurrentTabLabel())){
+      respond('blocked','Background sheet Combat tab did not become active.');return;
+    }
   }
   if(data.type==='native-probe'){
     const found=r3NativeAttackControl(attackName,{visible:attackText});
@@ -268,6 +281,12 @@ async function r3NativeBgEnsure(name){
   finally{if(R3_NATIVE_BG.opening===task)R3_NATIVE_BG.opening=null;}
 }
 
+function r3NativeIsOwned(candidate){
+  return !!candidate&&(
+    candidate===r3NativeBgCandidate()||
+    (R3_AUTO.ownedDialog&&r3AutoDialogFor(candidate)===R3_AUTO.ownedDialog)
+  );
+}
 function r3NativeCandidate(name){
   // Select exactly one authenticated official sheet with the same character
   // identity; prefer a unique popout. Disallow conflicting IDs.
@@ -337,7 +356,9 @@ async function r3NativeProbe(name){
     }
     if(r3String(R3_UI.snapshot?.name,120)!==characterName)
       throw new Error('Selected character changed. No roll requested.');
-    let background=candidate===r3NativeBgCandidate();
+    let background=r3NativeIsOwned(candidate);
+    if(background&&R3_AUTO.running)
+      throw new Error('Background import is using the character sheet. Retry the attack shortly.');
     let result=await r3NativeRequest(candidate,'native-probe',
       {characterName,attackName,attackKey,attackText,background});
     // Never change a player-opened sheet's selected tab. If it is not on
@@ -346,7 +367,7 @@ async function r3NativeProbe(name){
         /^Open Combat on the official sheet/i.test(result.message||'')){
       r3NativeStatus('Opening a separate background Combat sheet…');
       candidate=await r3NativeBgEnsure(characterName);
-      background=true;
+      background=r3NativeIsOwned(candidate);
       result=await r3NativeRequest(candidate,'native-probe',
         {characterName,attackName,attackKey,attackText,background});
     }
