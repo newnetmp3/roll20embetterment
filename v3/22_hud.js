@@ -1,7 +1,7 @@
 // Roll20 Embetterment HUD v1: read-only combat presentation of v3 sheet data.
 // This module never dispatches native Roll20 rolls, casts or sheet mutations.
 const R3_HUD={category:'actions',collapsed:false,drawerOpen:false,flyout:'',spellLevel:'',weaponSet:0,weaponSets:[null,null,null,null,null,null],chooser:null,used:{action:false,bonus:false,reaction:false},renderedSnapshot:null,
-  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedDebug:null,portraitName:'',portraitUrl:'',portraitChecked:0,portraitCache:null,openKeys:[],scrollTop:0};
+  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedNative:-1,renderedDebug:null,portraitName:'',portraitUrl:'',portraitChecked:0,portraitCache:null,openKeys:[],scrollTop:0};
 const R3_HUD_TABS=[
   {key:'actions',title:'Actions',icon:'⚔'},
   {key:'bonus',title:'Bonus',icon:'✦'},
@@ -125,7 +125,8 @@ function r3HudCard(item,index){
     '<span class="hud-card-caret">⌄</span></summary>'+
     '<div class="hud-card-body">'+(tags.length?'<div class="hud-card-tags">'+tags.join('')+'</div>':'')+
     (details?'<p>'+r3Escape(details)+'</p>':'<p>No further labeled details were observed on the sheet.</p>')+
-    controls+'<div class="hud-card-note">Reference only · no Roll20 action performed</div></div></details>';
+    controls+(item._hudSource==='Attack'?'<button type="button" class="hud-native-probe" data-hud-probe="'+r3Escape(item.name)+'">Find native Roll20 attack</button>':'')+
+    '<div class="hud-card-note">Browsing a card does not perform an action. Native attacks require separate confirmation.</div></div></details>';
 }
 // Argon core has a portrait panel + side-stat stacks and segmented action
 // panels. The provided Twilight: 2000 module is a system adapter, NOT a
@@ -325,7 +326,7 @@ function r3HudFlyoutMarkup(snapshot){
     '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
     '<small>Read-only · official sheet remains authoritative</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
-    content+'</section>';
+    content+r3NativeMarkup()+'</section>';
 }
 function r3HudSegment(label,kind,buttons){
   const tracks=kind==='action'||kind==='bonus'||kind==='reaction';
@@ -419,6 +420,7 @@ function r3HudRender(){
     R3_HUD.renderedLoadouts===JSON.stringify(R3_HUD.weaponSets)&&
     R3_HUD.renderedWeaponSet===R3_HUD.weaponSet&&
     R3_HUD.renderedChooser===R3_HUD.chooser&&
+    R3_HUD.renderedNative===R3_NATIVE.revision&&
     R3_HUD.renderedUsed===JSON.stringify(R3_HUD.used)&&
     R3_HUD.renderedDebug===R3_UI.shown&&
     R3_HUD.renderedSync===R3_AUTO.enabled)return;
@@ -439,6 +441,7 @@ function r3HudRender(){
   R3_HUD.renderedLoadouts=JSON.stringify(R3_HUD.weaponSets);
   R3_HUD.renderedWeaponSet=R3_HUD.weaponSet;
   R3_HUD.renderedChooser=R3_HUD.chooser;
+  R3_HUD.renderedNative=R3_NATIVE.revision;
   R3_HUD.renderedUsed=JSON.stringify(R3_HUD.used);
   R3_HUD.renderedDebug=R3_UI.shown;
   R3_HUD.renderedSync=R3_AUTO.enabled;
@@ -550,6 +553,11 @@ function r3HudStyles(){
     ".hud-portrait-stats .hud-stat{min-height:21px;overflow:hidden}",
     ".hud-portrait-stats>div[title]{min-width:0}",
     ".hud-portrait-stats>div[title] .hud-stat{height:100%}",
-    "@media(max-width:650px){.hud-reference-bar{min-height:235px}.hud-portrait-panel{min-height:235px}.hud-avatar-pane{min-height:142px}}"
+    "@media(max-width:650px){.hud-reference-bar{min-height:235px}.hud-portrait-panel{min-height:235px}.hud-avatar-pane{min-height:142px}}",
+    ".hud-native-status{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px;background:#354c5d;border-top:1px solid #8cacc0;color:#f3f8ff;font-size:11px}",
+    ".hud-native-status span{flex:1 1 280px}",
+    ".hud-native-status button,.hud-native-probe{padding:5px 9px!important;border:1px solid #aec5d4!important;background:#263f51!important;color:#fff!important;font-size:11px!important;border-radius:3px!important}",
+    ".hud-native-probe{margin-top:7px!important;cursor:pointer}"
+
   ].join('');
 }
