@@ -745,7 +745,7 @@ function nativeAttackFixture(character,attacks=[{name:'Quarterstaff',label:'Roll
     const row=card('attacks',attack.name,attack.name);
     row.contains=other=>row===other;
     const original=row.querySelectorAll;
-    row.querySelectorAll=selector=>selector==='button,[role="button"]'?[button]:
+    row.querySelectorAll=selector=>selector.startsWith('button,[role="button"]')?[button]:
       original(selector);
     return row;
   });
