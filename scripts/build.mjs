@@ -2,12 +2,12 @@ import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const files=readdirSync(join(root,'v3')).filter(n=>/^\d{2}_.*\.js$/.test(n)).sort();
-if(files.length!==6)throw new Error('Missing v3 modules (expected capture, reader, UI, HUD, auto and boot)');
+if(files.length!==7)throw new Error('Missing v3 modules (expected capture, reader, UI, native bridge, HUD, auto and boot)');
 const header=[
 '// ==UserScript==',
 '// @name         roll20 Embetterment',
 '// @namespace    https://github.com/newnetmp3/roll20embetterment',
-'// @version      3.2.4',
+'// @version      3.3.0',
 '// @description  Player-first combat HUD backed by authenticated D&D 2024 sheet data.',
 '// @author       roll20 Embetterment contributors',
 '// @match        https://app.roll20.net/editor/*',
