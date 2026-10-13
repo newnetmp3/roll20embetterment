@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 13, 2026 (v3.3.1 token-follow HUD and attack probe fixes in development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 13, 2026 (v3.3.1 token-follow HUD and attack probe diagnostics merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -140,3 +140,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - Auto-sync: Invalidate old pending scans when changing selected characters, and use the selected sheet ID/name; never send pending native roll confirmation to another PC.
 - Attack probe: User reports that v3.3.0 finds no corresponding attack. Read the same generic 2024 attack-title rows as the importer, and only accept explicitly marked attack-roll controls; give clear diagnostic labels and row counts when blocked. Current live Roll20 attack markup is not yet verified. Keep two-stage confirm and fail-closed behavior.
 - QA: Multiple distinct PCs, same-name ambiguity, unauthorized token selection, snapshot/loadout isolation, source-matched attack controls, readable failure diagnostics. **CI verified:** PR #51 run 38479316434 passed **304 tests with zero failures** and consistent generated userscript. Live Floorp validation required.
+
+**v3.3.1 merged:** PR #51 (`ad8cd6e7ff260a349c0dcb0f6584857bcca3849f`) with final CI run 38479476464 green (304 tests, zero failures; generated bundle clean). User-facing milestone: most recent player-controllable token follows its character's saved HUD/portrait/loadouts, separate identity-keyed caches, and expanded native attack matching with diagnostic reasons. Live Roll20/Firefox verification is essential, especially whether in-page token selection models are exposed and whether current 2024 attack buttons have explicit actionable semantics. Native roll/cast success remains unverified; do not broaden to arbitrary clickable text without source evidence.
