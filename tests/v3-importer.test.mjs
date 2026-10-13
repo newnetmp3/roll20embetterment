@@ -53,7 +53,7 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.3\.2/);
+  assert.match(compiled,/\/\/ @version\s+3\.3\.3/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -947,4 +947,42 @@ test('native hit roll refuses a changed attack bonus before confirm',()=>{
   assert.equal(x.request('native-invoke',{token:ready.token,attackKey:'warhammer-one',
     attackText:row.visible}).status,'blocked');
   assert.equal(x.clicks.length,0);
+});
+
+test('script-owned background reader may switch its own official sheet to Combat for an attack',async()=>{
+  const x=nativeAttackFixture('Aria',[{name:'Spear',label:'+4 Attack'}]);
+  let current='Spells',clicks=0;
+  const getTab=name=>({
+    getClientRects(){return [{}]},disabled:false,
+    getAttribute(k){return k==='aria-label'?name:k==='aria-selected'?
+      (current===name?'true':'false'):null},
+    click(){current=name;clicks++}
+  });
+  const tabs=[getTab('Spells'),getTab('Combat')];
+  const original=x.fixture.document.querySelectorAll.bind(x.fixture.document);
+  x.fixture.document.querySelectorAll=sel=>sel.startsWith('[role="tab"]')?
+    tabs:original(sel);
+  x.context.setTimeout=(fn,ms)=>{if(ms===320)fn();return 1};
+  await x.h.r3NativeReaderHandle(x.peer,{
+    type:'native-probe',id:'r3-bgrun12345',kind:'attacks',
+    background:true,characterName:'Aria',attackName:'Spear'
+  });
+  assert.equal(current,'Combat');
+  assert.equal(clicks,1);
+  assert.equal(x.sent.at(-1).message.status,'ready');
+  assert.equal(x.clickedControls.length,0,'probe must not roll just from tab switching');
+});
+test('manual official sheet never changes tabs on native attack inspection',async()=>{
+  const x=nativeAttackFixture('Aria',[{name:'Spear',label:'+4 Attack'}]);
+  let clicks=0;
+  x.tab.getAttribute=k=>k==='aria-label'?'Spells':
+    k==='aria-selected'?'true':null;
+  x.tab.click=()=>clicks++;
+  await x.h.r3NativeReaderHandle(x.peer,{
+    type:'native-probe',id:'r3-manual1234',kind:'attacks',
+    background:false,characterName:'Aria',attackName:'Spear'
+  });
+  assert.equal(clicks,0);
+  assert.equal(x.sent.at(-1).message.status,'blocked');
+  assert.match(x.sent.at(-1).message.message,/Open Combat/);
 });
