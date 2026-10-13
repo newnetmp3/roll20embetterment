@@ -9,33 +9,66 @@ function r3NativeStatus(message){
   r3HudRender?.();
 }
 function r3NativeAttackControl(name){
-  // Native action requests never navigate tabs or search the whole page for
-  // matching buttons. Only the currently visible Combat tab is eligible.
-  if(!/^combat$/i.test(r3CurrentTabLabel()))return {error:'Open the Combat tab on the official character sheet.'};
-  const rows=Array.from(document.querySelectorAll(
-    R3_CATEGORIES.attacks+',.item-row'
-  )||[]).slice(0,220).filter(r3Shown);
+  const actualTab=r3CurrentTabLabel();
+  if(!/^combat$/i.test(actualTab))
+    return {error:'Open Combat on the official sheet (currently '+r3String(actualTab,35)+').'};
   const wanted=r3String(name,125).toLowerCase();
-  if(!wanted||wanted.length>125)return {error:'A named attack is required.'};
+  if(!wanted)return {error:'A named attack is required.'};
+  // The current importer recognizes both dedicated attack rows and generic
+  // 2024 item titles. The native reader must use those SAME row families.
+  const rows=Array.from(document.querySelectorAll(
+    R3_CATEGORIES.attacks+',.item-row,[data-testid*="item-row"]'
+  )||[]).slice(0,300).filter(r3Shown);
   const matches=rows.filter(row=>r3Name(row,'attacks').toLowerCase()===wanted);
-  // Nested duplicate selectors may point to the same row; avoid counting
-  // shared parent/child rows as independent attack candidates.
-  const distinct=matches.filter(row=>!matches.some(other=>other!==row&&
+  const titleElements=Array.from(document.querySelectorAll(
+    '.span--item-row-title,.attack-item__title-chat,.attack-item__title-col,'+
+    '[data-testid*="attack-name"]'
+  )||[]).slice(0,250).filter(r3Shown)
+    .filter(el=>r3Text(el,125).toLowerCase()===wanted);
+  const found=[...matches];
+  for(const el of titleElements){
+    const row=r3InventoryRowFor(el);
+    if(row&&r3Shown(row)&&!found.includes(row))found.push(row);
+  }
+  // Exclude overlapping nested candidates; a wrapper containing one matching
+  // title is preferable to a child title alone.
+  const distinct=found.filter(row=>!found.some(other=>other!==row&&
     other.contains?.(row)));
   if(distinct.length!==1)return {error:distinct.length?
-    'Several matching visible attack rows; no action was triggered.':
-    'No unique visible matching attack row. Open that attack on the Combat tab.'};
+    'Multiple visible rows for "'+r3String(name,45)+'" ('+distinct.length+
+      '). No native click.':
+    'No matching visible attack row for "'+r3String(name,45)+
+      '" on Combat. Rows examined: '+rows.length+
+      ', matching named titles: '+titleElements.length+'.'};
   const row=distinct[0];
-  const buttons=Array.from(row.querySelectorAll?.('button,[role="button"]')||[])
-    .slice(0,30).filter(r3Shown);
-  const rolls=buttons.map(button=>({
-    button,
-    label:r3String(r3Attr(button,'aria-label')||r3Attr(button,'title')||r3Text(button,70),70)
-  })).filter(x=>/^(?:roll\s+(?:attack|to\s+hit|attack\s+roll)|attack\s+roll|roll\s+to\s+hit)$/i.test(x.label));
-  if(rolls.length!==1)return {error:rolls.length?
-    'Several matching roll controls; no action was triggered.':
-    'No explicitly labeled Roll Attack control in that row. No action was triggered.'};
-  return {button:rolls[0].button,label:rolls[0].label};
+  const buttons=Array.from(row.querySelectorAll?.(
+    'button,[role="button"],[data-sheet-action="attack"],[data-action="attack"]'
+  )||[]).slice(0,45).filter(r3Shown);
+  const recognized=buttons.map(button=>{
+    const label=r3String(r3Attr(button,'aria-label')||
+      r3Attr(button,'title')||r3Text(button,70),70);
+    const action=r3Attr(button,'data-sheet-action')||
+      r3Attr(button,'data-action');
+    const testId=r3Attr(button,'data-testid');
+    const rollName=r3Attr(button,'name');
+    const explicitlyLabeled=/^(?:roll\s+(?:attack|to\s+hit|attack\s+roll)|attack\s+roll|roll\s+to\s+hit)$/i.test(label);
+    const explicitAction=action==='attack'||/^(?:roll[-_]?attack|attack[-_]?roll)$/i.test(testId)||
+      (r3Attr(button,'type')==='roll'&&/^roll_attack(?:_|$)/i.test(rollName));
+    return {button,label,explicitlyLabeled,explicitAction};
+  }).filter(c=>c.explicitlyLabeled||c.explicitAction);
+  if(recognized.length!==1){
+    // Diagnostics deliberately contain only short public UI labels, never
+    // private IDs, raw DOM, roll expressions, chat output or token secrets.
+    const labels=buttons.map(button=>r3String(
+      r3Attr(button,'aria-label')||r3Attr(button,'title')||
+        r3Text(button,30),30)).filter(Boolean).slice(0,5);
+    return {error:recognized.length?
+      'Multiple possible attack roll controls; no click performed.':
+      'Matched the attack row, but no verified roll control. '+
+      'Visible button labels: '+(labels.join(', ')||'(unlabeled)')+'.'};
+  }
+  return {button:recognized[0].button,
+    label:recognized[0].label||'Native attack roll'};
 }
 function r3NativeReaderHandle(peer,data){
   if(!['native-probe','native-invoke'].includes(data?.type)||

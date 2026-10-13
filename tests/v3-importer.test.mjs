@@ -53,11 +53,11 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.3\.0/);
+  assert.match(compiled,/\/\/ @version\s+3\.3\.1/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
-  assert.deepEqual(files,['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','25_auto.js','30_boot.js']);
+  assert.deepEqual(files,['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','23_token.js','25_auto.js','30_boot.js']);
 });
 test('real official Vue inputs yield 82 of 84 HP and STR 18 even when innerText is empty',()=>{
   const inputHp=input({id:'hp-current',title:'Current Hitpoints',value:'82',ariaMax:'84'});
@@ -740,12 +740,12 @@ function nativeAttackFixture(character,attacks=[{name:'Quarterstaff',label:'Roll
   const clicks=[];
   const rows=attacks.map(attack=>{
     const button={getClientRects(){return [{}]},
-      getAttribute(key){return key==='aria-label'?attack.label:null;},
+      getAttribute(key){return key==='aria-label'?attack.label:key==='data-sheet-action'?(attack.action||null):null;},
       click(){clicks.push(attack.name)}};
     const row=card('attacks',attack.name,attack.name);
     row.contains=other=>row===other;
     const original=row.querySelectorAll;
-    row.querySelectorAll=selector=>selector==='button,[role="button"]'?[button]:
+    row.querySelectorAll=selector=>selector.startsWith('button,[role="button"]')?[button]:
       original(selector);
     return row;
   });
@@ -831,4 +831,31 @@ test('stale auto-sync character pin does not prevent another imported character 
   x.h.R3_POPOUTS.set('orla-session',a);
   assert.equal(x.h.r3NativeCandidate('Orla')?.name,'Orla');
   assert.equal(x.h.r3NativeCandidate('Old Character'),null);
+});
+
+test('generic 2024 item row with observed item-title and explicit attack action is recognized',()=>{
+  const x=nativeAttackFixture('Liora Moonfall',[{
+    name:'Moonblade',label:'Attack',action:'attack'
+  }]);
+  const result=x.request('native-probe');
+  assert.equal(result.status,'ready');
+  assert.equal(x.clicks.length,0);
+  assert.equal(x.request('native-invoke',{token:result.token}).status,'clicked');
+  assert.deepEqual(x.clicks,['Moonblade']);
+});
+test('a generic action label is never clicked without source-observed roll semantics',()=>{
+  const x=nativeAttackFixture('Bramble',[
+    {name:'Hammer',label:'Attack'}
+  ]);
+  const result=x.request('native-probe');
+  assert.equal(result.status,'blocked');
+  assert.match(result.message,/Visible button labels: Attack/);
+  assert.equal(x.clicks.length,0);
+});
+test('missing attack row explains visible candidates without leaking raw character HTML',()=>{
+  const x=nativeAttackFixture('Scout',[{name:'Bow',label:'Roll Attack'}]);
+  const result=x.request('native-probe',{attackName:'Unseen Rapier'});
+  assert.equal(result.status,'blocked');
+  assert.match(result.message,/No matching visible attack row/);
+  assert.equal(x.clicks.length,0);
 });

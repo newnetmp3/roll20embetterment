@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.3.0
+// @version      3.3.1
 // @description  Player-first combat HUD backed by authenticated D&D 2024 sheet data.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -1042,9 +1042,17 @@ async function r3StartImport(mode){
     if(!snapshot||snapshot.schema!==3)throw new Error('Unexpected sheet format');
     // Replace the previous profile only on an explicit successful import.
     // A partially rendered sheet remains explicit in its diagnostics.
-    R3_UI.snapshot=r3InventoryPrune(snapshot);r3Save(R3_UI.snapshot);
+    const imported=r3InventoryPrune(snapshot);
+    r3Save(imported);
+    r3TokenRecordSnapshot(imported);
+    if(!R3_TOKEN.active||R3_TOKEN.active.name.toLowerCase()===imported.name.toLowerCase())
+      R3_UI.snapshot=imported;
+    // Do not show another imported PC over the current selected token.
     R3_UI.view='summary';
-    R3_UI.status='Imported '+snapshot.name+'. Review each category and Diagnostics for coverage.';
+    R3_UI.status='Imported '+snapshot.name+
+      (R3_TOKEN.active&&R3_TOKEN.active.name.toLowerCase()!==snapshot.name.toLowerCase()?
+        '. Select its token to view that character.':
+        '. Review each category and Diagnostics for coverage.');
   }catch(err){
     R3_UI.status='Import failed: '+r3String(err?.message||err,320);
   }finally{R3_UI.busy=false;r3UIRefresh();}
@@ -1132,7 +1140,7 @@ function r3UIEvent(event){
 }
 function r3StartUI(){
   if(document.getElementById('r20eb-v3-root'))return;
-  r3Load();r3HudLoad();
+  r3Load();r3TokenLoad();r3HudLoad();
   const host=document.createElement('div');host.id='r20eb-v3-root';
   host.style.cssText='position:fixed;inset:0;z-index:2147483000;pointer-events:none';
   const root=host.attachShadow({mode:'open'});R3_UI.host=host;R3_UI.root=root;
@@ -1213,33 +1221,66 @@ function r3NativeStatus(message){
   r3HudRender?.();
 }
 function r3NativeAttackControl(name){
-  // Native action requests never navigate tabs or search the whole page for
-  // matching buttons. Only the currently visible Combat tab is eligible.
-  if(!/^combat$/i.test(r3CurrentTabLabel()))return {error:'Open the Combat tab on the official character sheet.'};
-  const rows=Array.from(document.querySelectorAll(
-    R3_CATEGORIES.attacks+',.item-row'
-  )||[]).slice(0,220).filter(r3Shown);
+  const actualTab=r3CurrentTabLabel();
+  if(!/^combat$/i.test(actualTab))
+    return {error:'Open Combat on the official sheet (currently '+r3String(actualTab,35)+').'};
   const wanted=r3String(name,125).toLowerCase();
-  if(!wanted||wanted.length>125)return {error:'A named attack is required.'};
+  if(!wanted)return {error:'A named attack is required.'};
+  // The current importer recognizes both dedicated attack rows and generic
+  // 2024 item titles. The native reader must use those SAME row families.
+  const rows=Array.from(document.querySelectorAll(
+    R3_CATEGORIES.attacks+',.item-row,[data-testid*="item-row"]'
+  )||[]).slice(0,300).filter(r3Shown);
   const matches=rows.filter(row=>r3Name(row,'attacks').toLowerCase()===wanted);
-  // Nested duplicate selectors may point to the same row; avoid counting
-  // shared parent/child rows as independent attack candidates.
-  const distinct=matches.filter(row=>!matches.some(other=>other!==row&&
+  const titleElements=Array.from(document.querySelectorAll(
+    '.span--item-row-title,.attack-item__title-chat,.attack-item__title-col,'+
+    '[data-testid*="attack-name"]'
+  )||[]).slice(0,250).filter(r3Shown)
+    .filter(el=>r3Text(el,125).toLowerCase()===wanted);
+  const found=[...matches];
+  for(const el of titleElements){
+    const row=r3InventoryRowFor(el);
+    if(row&&r3Shown(row)&&!found.includes(row))found.push(row);
+  }
+  // Exclude overlapping nested candidates; a wrapper containing one matching
+  // title is preferable to a child title alone.
+  const distinct=found.filter(row=>!found.some(other=>other!==row&&
     other.contains?.(row)));
   if(distinct.length!==1)return {error:distinct.length?
-    'Several matching visible attack rows; no action was triggered.':
-    'No unique visible matching attack row. Open that attack on the Combat tab.'};
+    'Multiple visible rows for "'+r3String(name,45)+'" ('+distinct.length+
+      '). No native click.':
+    'No matching visible attack row for "'+r3String(name,45)+
+      '" on Combat. Rows examined: '+rows.length+
+      ', matching named titles: '+titleElements.length+'.'};
   const row=distinct[0];
-  const buttons=Array.from(row.querySelectorAll?.('button,[role="button"]')||[])
-    .slice(0,30).filter(r3Shown);
-  const rolls=buttons.map(button=>({
-    button,
-    label:r3String(r3Attr(button,'aria-label')||r3Attr(button,'title')||r3Text(button,70),70)
-  })).filter(x=>/^(?:roll\s+(?:attack|to\s+hit|attack\s+roll)|attack\s+roll|roll\s+to\s+hit)$/i.test(x.label));
-  if(rolls.length!==1)return {error:rolls.length?
-    'Several matching roll controls; no action was triggered.':
-    'No explicitly labeled Roll Attack control in that row. No action was triggered.'};
-  return {button:rolls[0].button,label:rolls[0].label};
+  const buttons=Array.from(row.querySelectorAll?.(
+    'button,[role="button"],[data-sheet-action="attack"],[data-action="attack"]'
+  )||[]).slice(0,45).filter(r3Shown);
+  const recognized=buttons.map(button=>{
+    const label=r3String(r3Attr(button,'aria-label')||
+      r3Attr(button,'title')||r3Text(button,70),70);
+    const action=r3Attr(button,'data-sheet-action')||
+      r3Attr(button,'data-action');
+    const testId=r3Attr(button,'data-testid');
+    const rollName=r3Attr(button,'name');
+    const explicitlyLabeled=/^(?:roll\s+(?:attack|to\s+hit|attack\s+roll)|attack\s+roll|roll\s+to\s+hit)$/i.test(label);
+    const explicitAction=action==='attack'||/^(?:roll[-_]?attack|attack[-_]?roll)$/i.test(testId)||
+      (r3Attr(button,'type')==='roll'&&/^roll_attack(?:_|$)/i.test(rollName));
+    return {button,label,explicitlyLabeled,explicitAction};
+  }).filter(c=>c.explicitlyLabeled||c.explicitAction);
+  if(recognized.length!==1){
+    // Diagnostics deliberately contain only short public UI labels, never
+    // private IDs, raw DOM, roll expressions, chat output or token secrets.
+    const labels=buttons.map(button=>r3String(
+      r3Attr(button,'aria-label')||r3Attr(button,'title')||
+        r3Text(button,30),30)).filter(Boolean).slice(0,5);
+    return {error:recognized.length?
+      'Multiple possible attack roll controls; no click performed.':
+      'Matched the attack row, but no verified roll control. '+
+      'Visible button labels: '+(labels.join(', ')||'(unlabeled)')+'.'};
+  }
+  return {button:recognized[0].button,
+    label:recognized[0].label||'Native attack roll'};
 }
 function r3NativeReaderHandle(peer,data){
   if(!['native-probe','native-invoke'].includes(data?.type)||
@@ -1387,8 +1428,14 @@ const R3_HUD_TABS=[
   {key:'resources',title:'Resources',icon:'◉'}
 ];
 function r3HudLoad(){
+  // Always reset character-specific preferences before entering a different
+  // character's profile. Otherwise previous weapon sets/icons would leak.
+  R3_HUD.category='actions';R3_HUD.collapsed=false;R3_HUD.drawerOpen=false;
+  R3_HUD.weaponSet=0;R3_HUD.weaponSets=[null,null,null,null,null,null];
+  R3_HUD.portraitCache=null;R3_HUD.renderedSnapshot=null;
+  R3_HUD.renderedLoadouts=null;
   try{
-    const stored=JSON.parse(localStorage.getItem(r3StorageKey()+':hud')||'null');
+    const stored=JSON.parse(localStorage.getItem(r3TokenSettingsKey())||'null');
     if(stored&&R3_HUD_TABS.some(t=>t.key===stored.category))
       R3_HUD.category=stored.category;
     if(typeof stored?.collapsed==='boolean')R3_HUD.collapsed=stored.collapsed;
@@ -1413,7 +1460,7 @@ function r3HudLoad(){
   }catch{}
 }
 function r3HudSave(){
-  try{localStorage.setItem(r3StorageKey()+':hud',JSON.stringify({
+  try{localStorage.setItem(r3TokenSettingsKey(),JSON.stringify({
     category:R3_HUD.category,collapsed:R3_HUD.collapsed,drawerOpen:R3_HUD.drawerOpen,
     weaponSet:R3_HUD.weaponSet,weaponSets:R3_HUD.weaponSets,
     portrait:R3_HUD.portraitCache
@@ -1511,6 +1558,10 @@ function r3HudCard(item,index){
 // exactly named Journal entry. No network queries or substring name guesses.
 function r3HudPortraitUrl(snapshot){
   const name=r3String(snapshot?.name,80),now=Date.now();
+  const linked=R3_TOKEN.active;
+  // Current player-controlled token is the portrait's authoritative source.
+  if(linked&&linked.name.toLowerCase()===name.toLowerCase()&&linked.tokenImage)
+    return linked.tokenImage;
   if(!name){R3_HUD.portraitName='';R3_HUD.portraitUrl='';return '';}
   if(name!==R3_HUD.portraitName){
     R3_HUD.portraitName=name;
@@ -1937,6 +1988,184 @@ function r3HudStyles(){
   ].join('');
 }
 
+// ===== v3/23_token.js =====
+// Follow the most recently selected player-controllable token, not a fixed PC.
+// Reads the in-page Roll20 editor's current Fabric/Backbone models, not the
+// GM-only Mod API or undocumented remote endpoints. Fail closed when the
+// selected token's represented character and its permissions are unavailable.
+const R3_TOKEN={
+  active:null,selectionIds:[],snapshots:new Map(),legacy:null,
+  timer:null,started:false
+};
+function r3TokenModelGet(model,key){
+  try{return model?.get?.(key)??model?.attributes?.[key];}catch{return undefined;}
+}
+function r3TokenPlayerId(){
+  const d=window.d20;
+  return r3String(d?.player?.id||r3TokenModelGet(d?.player,'_id')||
+    r3TokenModelGet(d?.player,'id')||d?.player_id,100);
+}
+function r3TokenSelected(){
+  try{
+    const selected=window.d20?.engine?.selected?.();
+    return Array.isArray(selected)?selected.slice(0,80):[];
+  }catch{return [];}
+}
+function r3TokenSafeArt(raw){
+  try{
+    const uri=new URL(r3String(raw,4096),location.origin);
+    return uri.protocol==='https:'&&uri.href.length<=4096?uri.href:'';
+  }catch{return '';}
+}
+function r3TokenLinkedInfo(object){
+  const model=object?.model||object;
+  const tokenId=r3String(model?.id||r3TokenModelGet(model,'_id'),110);
+  const charId=r3String(r3TokenModelGet(model,'represents')||
+    r3TokenModelGet(model,'_represents'),110);
+  if(!tokenId||!charId)return null;
+  const d=window.d20;
+  const character=d?.Campaign?.characters?.get?.(charId);
+  if(!character)return null;
+  const name=r3String(r3TokenModelGet(character,'name'),120);
+  const playerId=r3TokenPlayerId();
+  if(!name||!playerId)return null;
+  // Character permissions override token permissions for linked graphics.
+  // An empty list cannot prove access. GM selection alone is not permission.
+  const controlling=r3String(r3TokenModelGet(character,'controlledby'),1000)
+    .split(',').map(x=>x.trim()).filter(Boolean);
+  if(!controlling.includes('all')&&!controlling.includes(playerId))return null;
+  const tokenImage=r3TokenSafeArt(r3TokenModelGet(model,'imgsrc')||
+    object?._element?.src);
+  return {tokenId,characterId:charId,name,tokenImage};
+}
+function r3TokenUnambiguousName(name){
+  const collection=window.d20?.Campaign?.characters;
+  const all=Array.isArray(collection?.models)?collection.models:null;
+  if(!all)return true; // No exposed full collection; require linked token below.
+  return all.filter(model=>r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===
+    r3String(name,120).toLowerCase()).length<=1;
+}
+function r3TokenCacheKey(){return r3StorageKey()+':character-snapshots';}
+function r3TokenSettingsKey(){
+  return r3StorageKey()+':hud'+(R3_TOKEN.active?
+    ':character:'+encodeURIComponent(R3_TOKEN.active.characterId):'');
+}
+function r3TokenLoad(){
+  R3_TOKEN.legacy=R3_UI.snapshot;
+  try{
+    const stored=JSON.parse(localStorage.getItem(r3TokenCacheKey())||'null');
+    if(stored?.schema!==1||!Array.isArray(stored.profiles))return;
+    for(const entry of stored.profiles.slice(0,16)){
+      if(typeof entry.id!=='string'||entry.id.length>110||
+         typeof entry.name!=='string'||!entry.name||entry.name.length>120||
+         entry.snapshot?.schema!==3||
+         r3String(entry.snapshot.name,120).toLowerCase()!==entry.name.toLowerCase())
+        continue;
+      R3_TOKEN.snapshots.set(entry.id,{name:entry.name,
+        snapshot:r3InventoryPrune(entry.snapshot)});
+    }
+  }catch{/* Corrupted cache cannot stop HUD startup. */}
+}
+function r3TokenSaveCache(){
+  const profiles=[...R3_TOKEN.snapshots.entries()].slice(-12)
+    .map(([id,data])=>({id,name:data.name,snapshot:data.snapshot}));
+  try{
+    const payload=JSON.stringify({schema:1,profiles});
+    if(payload.length<3400000)
+      localStorage.setItem(r3TokenCacheKey(),payload);
+  }catch{/* Keep in-memory snapshots even when browser storage is full. */}
+}
+function r3TokenRecordSnapshot(snapshot){
+  if(snapshot?.schema!==3||!snapshot.name)return;
+  R3_TOKEN.legacy=snapshot;
+  const active=R3_TOKEN.active;
+  // Do not associate a new character's snapshot with an unrelated selected
+  // token, even when it arrived after a manual import or stale async scan.
+  if(!active||active.name.toLowerCase()!==snapshot.name.toLowerCase()||
+     !r3TokenUnambiguousName(snapshot.name))return;
+  R3_TOKEN.snapshots.set(active.characterId,{name:active.name,
+    snapshot:r3InventoryPrune(snapshot)});
+  r3TokenSaveCache();
+}
+function r3TokenSnapshotFor(info){
+  const saved=R3_TOKEN.snapshots.get(info.characterId);
+  if(saved&&saved.name.toLowerCase()===info.name.toLowerCase())
+    return r3InventoryPrune(saved.snapshot);
+  // Migrate only a legacy snapshot explicitly naming the selected sheet.
+  const legacy=R3_TOKEN.legacy;
+  if(legacy?.schema===3&&r3TokenUnambiguousName(info.name)&&
+     r3String(legacy.name,120).toLowerCase()===info.name.toLowerCase()){
+    R3_TOKEN.snapshots.set(info.characterId,{name:info.name,snapshot:legacy});
+    r3TokenSaveCache();
+    return r3InventoryPrune(legacy);
+  }
+  // Never show a previous PC's HP, spells or attacks while a new sheet loads.
+  const blank=r3Empty();blank.name=info.name;
+  blank.diagnostics.notes.push('This character has not been imported. Open its official sheet and import through Debug.');
+  return r3Coverage(blank);
+}
+function r3TokenSwitch(info){
+  const previous=R3_TOKEN.active;
+  const same=previous?.characterId===info.characterId;
+  if(same){
+    if(previous.tokenId!==info.tokenId||previous.tokenImage!==info.tokenImage){
+      R3_TOKEN.active=info;
+      R3_HUD.renderedPortrait=null;r3HudRender();
+    }
+    return;
+  }
+  if(previous)r3HudSave();
+  R3_TOKEN.active=info;
+  R3_UI.snapshot=r3TokenSnapshotFor(info);
+  R3_UI.view='summary';
+  R3_UI.renderedSnapshot=null;
+  R3_HUD.portraitName='';R3_HUD.portraitUrl='';R3_HUD.portraitChecked=0;
+  R3_HUD.flyout='';R3_HUD.chooser=null;
+  R3_NATIVE.preview=null;
+  R3_NATIVE.status='';
+  R3_NATIVE.revision++;
+  r3HudLoad();
+  if(R3_AUTO.enabled){
+    // Old in-flight reads cannot overwrite the newly selected character.
+    R3_AUTO.generation++;
+    if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
+    R3_AUTO.dirtyTimer=null;
+    R3_AUTO.name=info.name;
+    R3_AUTO.characterId=info.characterId;
+    R3_AUTO.lastScan=0;R3_AUTO.lastHealth=0;
+    r3AutoSave();
+    r3AutoDisplay('Following selected token: '+info.name);
+  }
+  r3UIStatus('Selected '+info.name+'. '+(R3_UI.snapshot.coverage?.attacks?
+    'Using this character’s saved sheet.':
+    'Import its official sheet through Debug if no data appears.'));
+  r3UIRefresh();
+}
+function r3TokenPoll(){
+  const picked=r3TokenSelected();
+  const tokens=picked.map(item=>{
+    const model=item?.model||item;
+    return r3String(model?.id||r3TokenModelGet(model,'_id'),110);
+  }).filter(Boolean);
+  const fresh=tokens.filter(id=>!R3_TOKEN.selectionIds.includes(id));
+  R3_TOKEN.selectionIds=tokens;
+  if(!fresh.length)return;
+  // For group selection, choose the last newly selected eligible linked
+  // token. A later click on a token in the group becomes the current focus.
+  for(const id of fresh.slice().reverse()){
+    const index=tokens.lastIndexOf(id);
+    const info=r3TokenLinkedInfo(picked[index]);
+    if(info){r3TokenSwitch(info);return;}
+  }
+}
+function r3StartTokenWatch(){
+  if(R3_TOKEN.started)return;
+  R3_TOKEN.started=true;r3TokenPoll();
+  // Roll20's editor doesn't expose a documented browser-side selection event;
+  // cheap read-only polling works for clicks, lasso selection and keyboard ops.
+  R3_TOKEN.timer=setInterval(r3TokenPoll,400);
+}
+
 // ===== v3/25_auto.js =====
 // Opt-in background importer for a character the player can already open.
 // Never fetch privileged data, synthesize character records, or scan other sheets.
@@ -2131,12 +2360,15 @@ function r3AutoStoreSnapshot(snapshot,mode){
   const candidateName=r3String(snapshot?.name,120);
   if(snapshot?.schema!==3||candidateName.toLowerCase()!==R3_AUTO.name.toLowerCase())
     throw new Error('Sheet identity did not match the auto-sync character');
+  if(R3_TOKEN.active&&R3_TOKEN.active.name.toLowerCase()!==candidateName.toLowerCase())
+    throw new Error('Scan character differs from the selected controllable token');
   if(!r3AutoHasRecognizedData(snapshot))
     throw new Error('Sheet has not populated recognizable character values yet');
   // A partial scan cannot erase the full inventory, spells and actions.
   const next=mode==='all'?r3InventoryPrune(snapshot):r3AutoCombine(R3_UI.snapshot,snapshot);
   if(r3AutoSignature(R3_UI.snapshot||{})!==r3AutoSignature(next)){
     R3_UI.snapshot=r3Coverage(next);r3Save(R3_UI.snapshot);
+    r3TokenRecordSnapshot(R3_UI.snapshot);
     r3UIRefresh();
   }
 }
@@ -2209,7 +2441,7 @@ function r3AutoStoreHealth(snapshot){
   if(!changed)return false;
   R3_UI.snapshot=r3Coverage({...prior,stats:nextStats,provenance:nextSources,
     capturedAt:snapshot.capturedAt});
-  r3Save(R3_UI.snapshot);r3UIRefresh();
+  r3Save(R3_UI.snapshot);r3TokenRecordSnapshot(R3_UI.snapshot);r3UIRefresh();
   r3AutoDisplay('HP '+nextStats.hp+(nextStats.maxHp!==undefined?'/'+nextStats.maxHp:'')+
     ' updated '+new Date().toLocaleTimeString());
   return true;
@@ -2268,7 +2500,7 @@ function r3StartAuto(){
 // Production v3 entry point. v2 source is deliberately not bundled.
 function r3Boot(){
   if(r3SheetContext()){r3StartReader();return;}
-  if(r3EditorContext()){r3StartEditorBridge();r3StartUI();r3StartAuto();}
+  if(r3EditorContext()){r3StartEditorBridge();r3StartUI();r3StartAuto();r3StartTokenWatch();}
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',r3Boot,{once:true});
 else r3Boot();

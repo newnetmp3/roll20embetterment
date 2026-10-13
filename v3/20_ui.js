@@ -151,9 +151,17 @@ async function r3StartImport(mode){
     if(!snapshot||snapshot.schema!==3)throw new Error('Unexpected sheet format');
     // Replace the previous profile only on an explicit successful import.
     // A partially rendered sheet remains explicit in its diagnostics.
-    R3_UI.snapshot=r3InventoryPrune(snapshot);r3Save(R3_UI.snapshot);
+    const imported=r3InventoryPrune(snapshot);
+    r3Save(imported);
+    r3TokenRecordSnapshot(imported);
+    if(!R3_TOKEN.active||R3_TOKEN.active.name.toLowerCase()===imported.name.toLowerCase())
+      R3_UI.snapshot=imported;
+    // Do not show another imported PC over the current selected token.
     R3_UI.view='summary';
-    R3_UI.status='Imported '+snapshot.name+'. Review each category and Diagnostics for coverage.';
+    R3_UI.status='Imported '+snapshot.name+
+      (R3_TOKEN.active&&R3_TOKEN.active.name.toLowerCase()!==snapshot.name.toLowerCase()?
+        '. Select its token to view that character.':
+        '. Review each category and Diagnostics for coverage.');
   }catch(err){
     R3_UI.status='Import failed: '+r3String(err?.message||err,320);
   }finally{R3_UI.busy=false;r3UIRefresh();}
@@ -241,7 +249,7 @@ function r3UIEvent(event){
 }
 function r3StartUI(){
   if(document.getElementById('r20eb-v3-root'))return;
-  r3Load();r3HudLoad();
+  r3Load();r3TokenLoad();r3HudLoad();
   const host=document.createElement('div');host.id='r20eb-v3-root';
   host.style.cssText='position:fixed;inset:0;z-index:2147483000;pointer-events:none';
   const root=host.attachShadow({mode:'open'});R3_UI.host=host;R3_UI.root=root;
