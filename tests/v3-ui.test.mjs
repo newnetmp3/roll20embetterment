@@ -1169,6 +1169,7 @@ test('native attack confirm refuses a changed active character snapshot',async()
   const elf=h.api.r3Empty();elf.name='Elowen';
   elf.attacks=[{name:'Spear',_key:'spear'}];
   h.api.R3_UI.snapshot=h.api.r3Coverage(elf);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
   h.shadow.handlers.get('click')({target:{dataset:{hudProbe:'Spear'}}});
   const id=h.sent.at(-1).message.id;
   h.windowListeners.get('message')({
@@ -1188,6 +1189,7 @@ test('native UI cancel does not post a confirmation to the official sheet',async
   const h=panelHarness('Kaela');h.api.r3StartEditorBridge();h.api.r3StartUI();
   const snap=h.api.r3Empty();snap.name='Kaela';snap.attacks=[{name:'Mace',_key:'mace'}];
   h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
   h.shadow.handlers.get('click')({target:{dataset:{hudProbe:'Mace'}}});
   const id=h.sent.at(-1).message.id;
   h.windowListeners.get('message')({
