@@ -187,7 +187,8 @@ function r3UIEvent(event){
   const assignment=field('hudAssign','[data-hud-assign]');
   const spellLevel=field('hudSpellLevel','[data-hud-spell-level]');
   const spent=field('hudUsed','[data-hud-used]');
-  const nativeProbe=field('hudProbe','[data-hud-probe]');
+  const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
+    field('hudProbe','[data-hud-probe]');
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-refresh')r3UIRefresh();
   else if(target?.id==='r3-scan')return r3StartImport('current');
@@ -205,7 +206,7 @@ function r3UIEvent(event){
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
   else if(target?.id==='r3-hud-native-confirm')return r3NativeConfirm();
   else if(target?.id==='r3-hud-native-cancel')return r3NativeCancel();
-  else if(typeof nativeProbe==='string'&&nativeProbe.length<=125){
+  else if(typeof nativeProbe==='string'&&nativeProbe.length<=240){
     return r3NativeProbe(nativeProbe);
   }
   else if(target?.id==='r3-hud-reset-turn'){

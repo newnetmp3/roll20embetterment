@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 13, 2026 (v3.3.1 token-follow HUD and attack probe diagnostics merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 13, 2026 (v3.3.2 screenshot-driven native attack identity correction in development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -142,3 +142,6 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - QA: Multiple distinct PCs, same-name ambiguity, unauthorized token selection, snapshot/loadout isolation, source-matched attack controls, readable failure diagnostics. **CI verified:** PR #51 run 38479316434 passed **304 tests with zero failures** and consistent generated userscript. Live Floorp validation required.
 
 **v3.3.1 merged:** PR #51 (`ad8cd6e7ff260a349c0dcb0f6584857bcca3849f`) with final CI run 38479476464 green (304 tests, zero failures; generated bundle clean). User-facing milestone: most recent player-controllable token follows its character's saved HUD/portrait/loadouts, separate identity-keyed caches, and expanded native attack matching with diagnostic reasons. Live Roll20/Firefox verification is essential, especially whether in-page token selection models are exposed and whether current 2024 attack buttons have explicit actionable semantics. Native roll/cast success remains unverified; do not broaden to arbitrary clickable text without source evidence.
+
+
+**v3.3.2 — Native attack source identity correction from two live user screenshots:** Current 2024 official sheet contains `+7 Attack` (to-hit) and `1d6+4` (damage) in the uniquely named Handaxe row. Former matcher incorrectly required the words `Roll Attack`. Current HUD import also contains two attack entries named Dagger, so name-only probe rejected both as ambiguous before contacting the native sheet. Implement per-card exact `_key` selection and carry character/attack/source details through the authenticated probe and single-use confirmation, matching same-name native rows only when explicit numeric hit/damage metrics distinguish them. Recognize signed numeric to-hit buttons and NEVER the damage dice or a generic `Attack` button. Ambiguous identical rows, changed source numbers or multiple hit controls remain blocked. Tests include multiple unrelated player characters and duplicate attack names. **CI verified:** PR #52 run 38486142000 passed **312 tests, zero failures** with generated script consistent. A real Roll20 chat-confirmed hit roll remains pending.

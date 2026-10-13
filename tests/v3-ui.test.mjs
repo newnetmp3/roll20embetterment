@@ -1324,3 +1324,51 @@ test('real authenticated pending native attack is cancelled on character-token s
   x.selections.push(x.b);h.api.r3TokenPoll();
   assert.equal(h.api.R3_NATIVE.preview,null);
 });
+
+test('two imported attacks named Dagger get different per-card native probe identities',async()=>{
+  const h=panelHarness('Different Player');
+  h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Different Player';
+  const a={name:'Dagger',_key:'dagger|melee|+7|1d4+4',
+    visible:'Dagger Melee +7 Attack 1d4+4',tab:'Combat'};
+  const b={name:'Dagger',_key:'dagger|offhand|+5|1d4+2',
+    visible:'Dagger Melee +5 Attack 1d4+2',tab:'Combat'};
+  snap.attacks=[a,b];h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/data-hud-probe-key="dagger\|melee\|\+7\|1d4\+4"/);
+  assert.match(html,/data-hud-probe-key="dagger\|offhand\|\+5\|1d4\+2"/);
+  h.shadow.handlers.get('click')({target:{dataset:{hudProbeKey:b._key}}});
+  const outgoing=h.sent.at(-1).message;
+  assert.equal(outgoing.type,'native-probe');
+  assert.equal(outgoing.characterName,'Different Player');
+  assert.equal(outgoing.attackName,'Dagger');
+  assert.equal(outgoing.attackKey,b._key);
+  assert.equal(outgoing.attackText,b.visible);
+  h.windowListeners.get('message')({
+    origin:'https://advanced-sheets.production.roll20preflight.net',
+    source:h.frameWindow,data:{protocol:'r20eb:import:v3',
+      type:'native-result',id:outgoing.id,status:'ready',
+      token:'unique-second-dagger',label:'+5 Attack'}
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  h.click('r3-hud-native-confirm');
+  const invoke=h.sent.at(-1).message;
+  assert.equal(invoke.type,'native-invoke');
+  assert.equal(invoke.attackKey,b._key);
+  assert.equal(invoke.attackText,b.visible);
+});
+test('legacy name-only native probe refuses two identically named imported attacks',()=>{
+  const h=panelHarness('Another Player');h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Another Player';
+  snap.attacks=[
+    {name:'Dagger',_key:'a',visible:'Dagger +7 Attack 1d4+4'},
+    {name:'Dagger',_key:'b',visible:'Dagger +5 Attack 1d4+2'}
+  ];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  const before=h.sent.length;
+  h.shadow.handlers.get('click')({target:{dataset:{hudProbe:'Dagger'}}});
+  assert.equal(h.sent.length,before);
+  assert.match(h.api.R3_NATIVE.status,/unique attack/);
+});

@@ -53,7 +53,7 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.3\.1/);
+  assert.match(compiled,/\/\/ @version\s+3\.3\.2/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -738,14 +738,19 @@ function nativeAttackFixture(character,attacks=[{name:'Quarterstaff',label:'Roll
     getAttribute(key){return key==='aria-label'?'Combat':
       key==='aria-selected'?'true':null;}};
   const clicks=[];
+  const clickedControls=[];
   const rows=attacks.map(attack=>{
-    const button={getClientRects(){return [{}]},
-      getAttribute(key){return key==='aria-label'?attack.label:key==='data-sheet-action'?(attack.action||null):null;},
-      click(){clicks.push(attack.name)}};
-    const row=card('attacks',attack.name,attack.name);
+    const labels=attack.controls||[attack.label];
+    const buttons=labels.map(label=>({
+      getClientRects(){return [{}]},
+      getAttribute(key){return key==='aria-label'?label:
+        key==='data-sheet-action'?(attack.action||null):null;},
+      click(){clicks.push(attack.name);clickedControls.push(label);}
+    }));
+    const row=card('attacks',attack.name,attack.visible||attack.name);
     row.contains=other=>row===other;
     const original=row.querySelectorAll;
-    row.querySelectorAll=selector=>selector.startsWith('button,[role="button"]')?[button]:
+    row.querySelectorAll=selector=>selector.startsWith('button,[role="button"]')?buttons:
       original(selector);
     return row;
   });
@@ -762,7 +767,7 @@ function nativeAttackFixture(character,attacks=[{name:'Quarterstaff',label:'Roll
       characterName:character,attackName:attacks[0]?.name,...params});
     return sent.at(-1)?.message;
   };
-  return {h,context,fixture,rows,tab,peer,sent,clicks,request};
+  return {h,context,fixture,rows,tab,peer,sent,clicks,clickedControls,request};
 }
 test('native roll pilot is character-agnostic: three unrelated characters can each use their own attack',()=>{
   for(const [name,attack] of [
@@ -849,13 +854,97 @@ test('a generic action label is never clicked without source-observed roll seman
   ]);
   const result=x.request('native-probe');
   assert.equal(result.status,'blocked');
-  assert.match(result.message,/Visible button labels: Attack/);
+  assert.match(result.message,/Labels: Attack/);
   assert.equal(x.clicks.length,0);
 });
 test('missing attack row explains visible candidates without leaking raw character HTML',()=>{
   const x=nativeAttackFixture('Scout',[{name:'Bow',label:'Roll Attack'}]);
   const result=x.request('native-probe',{attackName:'Unseen Rapier'});
   assert.equal(result.status,'blocked');
-  assert.match(result.message,/No matching visible attack row/);
+  assert.match(result.message,/No unique matching/);
+  assert.equal(x.clicks.length,0);
+});
+
+
+test('real 2024 +7 Attack is recognized as hit roll and 1d6+4 damage never clicked',()=>{
+  const x=nativeAttackFixture('Dorian',[
+    {name:'Handaxe',visible:'Handaxe Melee 5 ft. +7 Attack 1d6+4',
+      controls:['+7 Attack','1d6+4']}
+  ]);
+  const ready=x.request('native-probe',{
+    attackKey:'handaxe||Handaxe Melee 5 ft. +7 Attack 1d6+4',
+    attackText:'Handaxe Melee 5 ft. +7 Attack 1d6+4'
+  });
+  assert.equal(ready.status,'ready',ready.message);
+  assert.equal(x.clicks.length,0);
+  const invoked=x.request('native-invoke',{
+    token:ready.token,attackKey:'handaxe||Handaxe Melee 5 ft. +7 Attack 1d6+4',
+    attackText:'Handaxe Melee 5 ft. +7 Attack 1d6+4'
+  });
+  assert.equal(invoked.status,'clicked');
+  assert.deepEqual(x.clickedControls,['+7 Attack']);
+});
+test('same-name Dagger variants are matched by own imported attack evidence, not first row',()=>{
+  const rows=[
+    {name:'Dagger',visible:'Dagger Melee 5 ft. +7 Attack 1d4+4',
+      controls:['+7 Attack','1d4+4']},
+    {name:'Dagger',visible:'Dagger Melee 5 ft. +5 Attack 1d4+2',
+      controls:['+5 Attack','1d4+2']}
+  ];
+  const x=nativeAttackFixture('Tavern Scout',rows);
+  const text=rows[1].visible,key='dagger||'+text;
+  const ready=x.request('native-probe',{attackKey:key,attackText:text});
+  assert.equal(ready.status,'ready',ready.message);
+  assert.equal(x.clicks.length,0);
+  const clicked=x.request('native-invoke',{token:ready.token,attackKey:key,attackText:text});
+  assert.equal(clicked.status,'clicked');
+  assert.deepEqual(x.clickedControls,['+5 Attack']);
+});
+test('ambiguous same-name attack without metrics cannot choose the first row',()=>{
+  const x=nativeAttackFixture('Any Player',[
+    {name:'Dagger',visible:'Dagger Melee +7 Attack 1d4+4',controls:['+7 Attack','1d4+4']},
+    {name:'Dagger',visible:'Dagger Melee +5 Attack 1d4+2',controls:['+5 Attack','1d4+2']}
+  ]);
+  const ready=x.request('native-probe');
+  assert.equal(ready.status,'blocked');
+  assert.match(ready.message,/Multiple "Dagger"/);
+  assert.equal(x.clicks.length,0);
+});
+test('identical same-name and same-metric rows are still blocked, not chosen by order',()=>{
+  const x=nativeAttackFixture('Any Player',[
+    {name:'Dagger',visible:'Dagger Melee +7 Attack 1d4+4',controls:['+7 Attack','1d4+4']},
+    {name:'Dagger',visible:'Dagger Melee +7 Attack 1d4+4',controls:['+7 Attack','1d4+4']}
+  ]);
+  const ready=x.request('native-probe',{attackKey:'dagger-a',
+    attackText:'Dagger Melee +7 Attack 1d4+4'});
+  assert.equal(ready.status,'blocked');
+  assert.match(ready.message,/Multiple indistinguishable/);
+  assert.equal(x.clicks.length,0);
+});
+test('attack keys and observed metrics are bound to the 15 second single-use confirmation',()=>{
+  const x=nativeAttackFixture('Any Player',[
+    {name:'Spear',visible:'Spear Melee +4 Attack 1d6+2',controls:['+4 Attack','1d6+2']}
+  ]);
+  const ready=x.request('native-probe',{attackKey:'spear-one',
+    attackText:'Spear Melee +4 Attack 1d6+2'});
+  assert.equal(ready.status,'ready');
+  assert.equal(x.request('native-invoke',{token:ready.token,attackKey:'different',
+    attackText:'Spear Melee +4 Attack 1d6+2'}).status,'blocked');
+  assert.equal(x.clicks.length,0);
+  assert.equal(x.request('native-invoke',{token:ready.token,attackKey:'spear-one',
+    attackText:'Spear Melee +4 Attack 1d6+2'}).status,'clicked');
+  assert.deepEqual(x.clickedControls,['+4 Attack']);
+});
+test('native hit roll refuses a changed attack bonus before confirm',()=>{
+  const row={name:'Warhammer',visible:'Warhammer Melee +6 Attack 1d8+4',
+    controls:['+6 Attack','1d8+4']};
+  const x=nativeAttackFixture('Another Player',[row]);
+  const ready=x.request('native-probe',{attackKey:'warhammer-one',
+    attackText:row.visible});
+  assert.equal(ready.status,'ready');
+  // The official sheet visibly changed its attack bonus after probe.
+  x.rows[0].innerText='Warhammer Melee +8 Attack 1d8+4';
+  assert.equal(x.request('native-invoke',{token:ready.token,attackKey:'warhammer-one',
+    attackText:row.visible}).status,'blocked');
   assert.equal(x.clicks.length,0);
 });
