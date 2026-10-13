@@ -8,67 +8,92 @@ function r3NativeStatus(message){
   R3_NATIVE.revision++;
   r3HudRender?.();
 }
-function r3NativeAttackControl(name){
-  const actualTab=r3CurrentTabLabel();
-  if(!/^combat$/i.test(actualTab))
-    return {error:'Open Combat on the official sheet (currently '+r3String(actualTab,35)+').'};
+// Attack name alone is NOT unique on an official sheet. A player may have
+// multiple differently configured weapons all called "Dagger". The imported
+// _key selects an item locally; explicit observed attack bonus/damage is used
+// to disambiguate same-name native rows, never an arbitrary array index.
+function r3NativeAttackMetric(raw){
+  const text=r3String(raw,600).replace(/\u2212/g,'-');
+  const bonus=text.match(/(?:^|\s)([+-]\d{1,3})\s*Attack\b/i);
+  const damage=text.match(/\b\d{1,3}d\d{1,3}(?:[+-]\d{1,3})?\b/i);
+  return {bonus:bonus?bonus[1]:'',damage:damage?damage[0].toLowerCase():''};
+}
+function r3NativeAttackControl(name,source={}){
+  const tab=r3CurrentTabLabel();
+  if(!/^combat$/i.test(tab))
+    return {error:'Open Combat on the official sheet (currently '+r3String(tab,35)+').'};
   const wanted=r3String(name,125).toLowerCase();
   if(!wanted)return {error:'A named attack is required.'};
-  // The current importer recognizes both dedicated attack rows and generic
-  // 2024 item titles. The native reader must use those SAME row families.
   const rows=Array.from(document.querySelectorAll(
     R3_CATEGORIES.attacks+',.item-row,[data-testid*="item-row"]'
   )||[]).slice(0,300).filter(r3Shown);
-  const matches=rows.filter(row=>r3Name(row,'attacks').toLowerCase()===wanted);
-  const titleElements=Array.from(document.querySelectorAll(
+  const found=rows.filter(row=>r3Name(row,'attacks').toLowerCase()===wanted);
+  const titles=Array.from(document.querySelectorAll(
     '.span--item-row-title,.attack-item__title-chat,.attack-item__title-col,'+
     '[data-testid*="attack-name"]'
   )||[]).slice(0,250).filter(r3Shown)
     .filter(el=>r3Text(el,125).toLowerCase()===wanted);
-  const found=[...matches];
-  for(const el of titleElements){
+  for(const el of titles){
     const row=r3InventoryRowFor(el);
     if(row&&r3Shown(row)&&!found.includes(row))found.push(row);
   }
-  // Exclude overlapping nested candidates; a wrapper containing one matching
-  // title is preferable to a child title alone.
-  const distinct=found.filter(row=>!found.some(other=>other!==row&&
+  // Keep the highest complete single-title row, never a nested copy.
+  let candidates=found.filter(row=>!found.some(other=>other!==row&&
     other.contains?.(row)));
-  if(distinct.length!==1)return {error:distinct.length?
-    'Multiple visible rows for "'+r3String(name,45)+'" ('+distinct.length+
-      '). No native click.':
-    'No matching visible attack row for "'+r3String(name,45)+
-      '" on Combat. Rows examined: '+rows.length+
-      ', matching named titles: '+titleElements.length+'.'};
-  const row=distinct[0];
+  const expected=r3NativeAttackMetric(source.visible||'');
+  if(candidates.length>1){
+    // A same-name row without explicit differentiating evidence is unsafe.
+    if(!expected.bonus&&!expected.damage)
+      return {error:'Multiple "'+r3String(name,45)+
+        '" attack rows. Re-import the official Combat tab to identify each variant.'};
+    candidates=candidates.filter(row=>{
+      const actual=r3NativeAttackMetric(r3Text(row,650));
+      return (!expected.bonus||actual.bonus===expected.bonus)&&
+        (!expected.damage||actual.damage===expected.damage);
+    });
+  }
+  if(candidates.length!==1)return {error:candidates.length?
+    'Multiple indistinguishable "'+r3String(name,45)+
+      '" attack rows. No native click.':
+    'No unique matching "'+r3String(name,45)+'" attack row on Combat. '+
+      'Visible named rows: '+found.length+', matching name titles: '+titles.length+'.'};
+  const row=candidates[0],actual=r3NativeAttackMetric(r3Text(row,650));
+  // If a selected imported attack has specific metrics and the sole current
+  // sheet row has different metrics, refuse rather than click the wrong build.
+  if((expected.bonus&&actual.bonus&&actual.bonus!==expected.bonus)||
+     (expected.damage&&actual.damage&&actual.damage!==expected.damage))
+    return {error:'The named attack changed since import. Refresh the Combat data before rolling.'};
   const buttons=Array.from(row.querySelectorAll?.(
     'button,[role="button"],[data-sheet-action="attack"],[data-action="attack"]'
   )||[]).slice(0,45).filter(r3Shown);
-  const recognized=buttons.map(button=>{
+  const roll=buttons.map(button=>{
     const label=r3String(r3Attr(button,'aria-label')||
-      r3Attr(button,'title')||r3Text(button,70),70);
+      r3Attr(button,'title')||r3Text(button,70),70).replace(/\u2212/g,'-');
     const action=r3Attr(button,'data-sheet-action')||
       r3Attr(button,'data-action');
     const testId=r3Attr(button,'data-testid');
     const rollName=r3Attr(button,'name');
+    // Real D&D 2024 markup shows "+7 Attack" adjacent to "1d6+4".
+    // The numeric Attack button is a hit roll. The die button is DAMAGE
+    // and must never be used to satisfy the hit-roll probe.
+    const numericAttack=/^[+-]\d{1,3}\s*Attack$/i.test(label);
     const explicitlyLabeled=/^(?:roll\s+(?:attack|to\s+hit|attack\s+roll)|attack\s+roll|roll\s+to\s+hit)$/i.test(label);
     const explicitAction=action==='attack'||/^(?:roll[-_]?attack|attack[-_]?roll)$/i.test(testId)||
       (r3Attr(button,'type')==='roll'&&/^roll_attack(?:_|$)/i.test(rollName));
-    return {button,label,explicitlyLabeled,explicitAction};
-  }).filter(c=>c.explicitlyLabeled||c.explicitAction);
-  if(recognized.length!==1){
-    // Diagnostics deliberately contain only short public UI labels, never
-    // private IDs, raw DOM, roll expressions, chat output or token secrets.
-    const labels=buttons.map(button=>r3String(
-      r3Attr(button,'aria-label')||r3Attr(button,'title')||
-        r3Text(button,30),30)).filter(Boolean).slice(0,5);
-    return {error:recognized.length?
-      'Multiple possible attack roll controls; no click performed.':
-      'Matched the attack row, but no verified roll control. '+
-      'Visible button labels: '+(labels.join(', ')||'(unlabeled)')+'.'};
+    return {button,label,valid:numericAttack||explicitlyLabeled||explicitAction};
+  }).filter(x=>x.valid);
+  if(roll.length!==1){
+    const labels=buttons.map(b=>r3String(
+      r3Attr(b,'aria-label')||r3Attr(b,'title')||r3Text(b,30),30)).filter(Boolean).slice(0,5);
+    return {error:roll.length?'Multiple attack-roll buttons; no click performed.':
+      'Matched the attack row but found no verified attack-roll button. Labels: '+
+      (labels.join(', ')||'(unlabeled)')+'.'};
   }
-  return {button:recognized[0].button,
-    label:recognized[0].label||'Native attack roll'};
+  const label=roll[0].label||'Native attack roll';
+  // Use the row's observed metrics to bind probe and later confirmation,
+  // preventing a same-name attack switching to a different roll mid-request.
+  const fingerprint=wanted+'|'+actual.bonus+'|'+actual.damage+'|'+label;
+  return {button:roll[0].button,label,fingerprint};
 }
 function r3NativeReaderHandle(peer,data){
   if(!['native-probe','native-invoke'].includes(data?.type)||
