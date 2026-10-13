@@ -191,12 +191,15 @@ function r3AutoStoreSnapshot(snapshot,mode){
   const candidateName=r3String(snapshot?.name,120);
   if(snapshot?.schema!==3||candidateName.toLowerCase()!==R3_AUTO.name.toLowerCase())
     throw new Error('Sheet identity did not match the auto-sync character');
+  if(R3_TOKEN.active&&R3_TOKEN.active.name.toLowerCase()!==candidateName.toLowerCase())
+    throw new Error('Scan character differs from the selected controllable token');
   if(!r3AutoHasRecognizedData(snapshot))
     throw new Error('Sheet has not populated recognizable character values yet');
   // A partial scan cannot erase the full inventory, spells and actions.
   const next=mode==='all'?r3InventoryPrune(snapshot):r3AutoCombine(R3_UI.snapshot,snapshot);
   if(r3AutoSignature(R3_UI.snapshot||{})!==r3AutoSignature(next)){
     R3_UI.snapshot=r3Coverage(next);r3Save(R3_UI.snapshot);
+    r3TokenRecordSnapshot(R3_UI.snapshot);
     r3UIRefresh();
   }
 }
@@ -269,7 +272,7 @@ function r3AutoStoreHealth(snapshot){
   if(!changed)return false;
   R3_UI.snapshot=r3Coverage({...prior,stats:nextStats,provenance:nextSources,
     capturedAt:snapshot.capturedAt});
-  r3Save(R3_UI.snapshot);r3UIRefresh();
+  r3Save(R3_UI.snapshot);r3TokenRecordSnapshot(R3_UI.snapshot);r3UIRefresh();
   r3AutoDisplay('HP '+nextStats.hp+(nextStats.maxHp!==undefined?'/'+nextStats.maxHp:'')+
     ' updated '+new Date().toLocaleTimeString());
   return true;
