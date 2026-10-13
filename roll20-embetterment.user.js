@@ -1527,8 +1527,11 @@ async function r3NativeBgEnsure(name){
 }
 
 function r3NativeIsOwned(candidate){
-  return !!candidate&&(
-    candidate===r3NativeBgCandidate()||
+  const owned=r3NativeBgCandidate();
+  // Candidate descriptors are rebuilt on every DOM scan. Compare the
+  // authenticated window reference rather than ephemeral object identity.
+  return !!candidate&&!!(
+    (owned&&candidate.window===owned.window)||
     (R3_AUTO.ownedDialog&&r3AutoDialogFor(candidate)===R3_AUTO.ownedDialog)
   );
 }
