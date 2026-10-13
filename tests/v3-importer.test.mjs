@@ -48,16 +48,16 @@ function harness(fixture=docFixture()){
   };
   vm.createContext(context);
   const code=files.filter(f=>f!=='30_boot.js').map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n');
-  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3CurrentTabLabel,r3StartReader,r3Merge,r3InventoryZero,r3InventoryPrune,r3InventoryStepper,r3InventoryRowFor,r3AutoStoreSnapshot,R3_AUTO,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI};',context);
+  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3CurrentTabLabel,r3StartReader,r3Merge,r3InventoryZero,r3InventoryPrune,r3InventoryStepper,r3InventoryRowFor,r3AutoStoreSnapshot,R3_AUTO,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI,R3_NATIVE,R3_POPOUTS,r3NativeReaderHandle,r3NativeAttackControl,r3NativeCandidate};',context);
   return {h:context.testApi,context,fixture};
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.2\.4/);
+  assert.match(compiled,/\/\/ @version\s+3\.3\.0/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
-  assert.deepEqual(files,['00_capture.js','10_reader.js','20_ui.js','22_hud.js','25_auto.js','30_boot.js']);
+  assert.deepEqual(files,['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','25_auto.js','30_boot.js']);
 });
 test('real official Vue inputs yield 82 of 84 HP and STR 18 even when innerText is empty',()=>{
   const inputHp=input({id:'hp-current',title:'Current Hitpoints',value:'82',ariaMax:'84'});
@@ -729,4 +729,106 @@ test('inconsistent AC evidence across visited tabs remains unresolved',()=>{
   h.r3Coverage(snap);assert.equal(snap.stats.ac,undefined);
   // An authoritative labeled value wins, even with old conflicting raw samples.
   snap.stats.ac=19;h.r3Coverage(snap);assert.equal(snap.stats.ac,19);
+});
+
+
+function nativeAttackFixture(character,attacks=[{name:'Quarterstaff',label:'Roll Attack'}]){
+  const tab={className:'',disabled:false,
+    getClientRects(){return [{}]},
+    getAttribute(key){return key==='aria-label'?'Combat':
+      key==='aria-selected'?'true':null;}};
+  const clicks=[];
+  const rows=attacks.map(attack=>{
+    const button={getClientRects(){return [{}]},
+      getAttribute(key){return key==='aria-label'?attack.label:null;},
+      click(){clicks.push(attack.name)}};
+    const row=card('attacks',attack.name,attack.name);
+    row.contains=other=>row===other;
+    const original=row.querySelectorAll;
+    row.querySelectorAll=selector=>selector==='button,[role="button"]'?[button]:
+      original(selector);
+    return row;
+  });
+  const fixture=docFixture({name:character,tabs:[tab],cards:{attacks:rows}});
+  const original=fixture.document.querySelectorAll;
+  fixture.document.querySelectorAll=selector=>
+    selector.includes('.item-row')?rows:original(selector);
+  const sent=[];
+  const peer={postMessage(message,origin){sent.push({message,origin})}};
+  const {h,context}=harness(fixture);
+  const request=(type,params={})=>{
+    const id='r3-valid-request-'+sent.length+'00';
+    h.r3NativeReaderHandle(peer,{type,id,kind:'attacks',
+      characterName:character,attackName:attacks[0]?.name,...params});
+    return sent.at(-1)?.message;
+  };
+  return {h,context,fixture,rows,tab,peer,sent,clicks,request};
+}
+test('native roll pilot is character-agnostic: three unrelated characters can each use their own attack',()=>{
+  for(const [name,attack] of [
+    ['Elowen Dawnsong','Quarterstaff'],
+    ['Brom Stonebeard','Warhammer'],
+    ['Sora Windfall','Shortbow']
+  ]){
+    const x=nativeAttackFixture(name,[{name:attack,label:'Roll Attack'}]);
+    const ready=x.request('native-probe');
+    assert.equal(ready.status,'ready',name);
+    assert.equal(x.clicks.length,0,'probing may not click');
+    const clicked=x.request('native-invoke',{token:ready.token});
+    assert.equal(clicked.status,'clicked',name);
+    assert.deepEqual(x.clicks,[attack],name);
+    assert.equal(x.request('native-invoke',{token:ready.token}).status,'blocked',
+      'one-time token must not roll again');
+  }
+});
+test('native pilot refuses a wrong-character request even with the same attack name',()=>{
+  const x=nativeAttackFixture('Elowen Dawnsong',[{name:'Dagger',label:'Roll Attack'}]);
+  const result=x.request('native-probe',{characterName:'Brom Stonebeard'});
+  assert.equal(result.status,'blocked');
+  assert.equal(x.clicks.length,0);
+  assert.equal(x.h.R3_NATIVE.tokens.size,0);
+});
+test('native pilot confirms attack identity separately from character name',()=>{
+  const x=nativeAttackFixture('Orin the Bold',[{name:'Longbow',label:'Roll Attack'}]);
+  assert.equal(x.request('native-probe',{attackName:'Orin the Bold'}).status,'blocked');
+  assert.equal(x.request('native-probe',{attackName:'Longbow'}).status,'ready');
+  assert.equal(x.clicks.length,0);
+});
+test('native pilot blocks unlabeled, ambiguous or hidden controls rather than guessing clicks',()=>{
+  for(const inputs of [
+    [{name:'Spear',label:'Spear'}],
+    [{name:'Spear',label:'Roll damage'}],
+    [{name:'Spear',label:'Roll Attack'},{name:'Spear',label:'Roll Attack'}]
+  ]){
+    const x=nativeAttackFixture('Kaela',inputs);
+    assert.equal(x.request('native-probe').status,'blocked');
+    assert.equal(x.clicks.length,0);
+  }
+});
+test('native token cannot switch attacks or character during confirm',()=>{
+  const x=nativeAttackFixture('Tamsin',[{name:'Sling',label:'Roll Attack'},
+    {name:'Dagger',label:'Roll Attack'}]);
+  const ready=x.request('native-probe');
+  assert.equal(ready.status,'ready');
+  assert.equal(x.request('native-invoke',{token:ready.token,attackName:'Dagger'}).status,'blocked');
+  assert.equal(x.clicks.length,0);
+  assert.equal(x.request('native-invoke',{token:ready.token,characterName:'Someone Else'}).status,'blocked');
+  assert.equal(x.clicks.length,0);
+});
+test('native action refused when official sheet is not on Combat tab',()=>{
+  const x=nativeAttackFixture('Azura',[{name:'Staff',label:'Roll Attack'}]);
+  x.tab.getAttribute=key=>key==='aria-label'?'Inventory':
+    key==='aria-selected'?'true':null;
+  assert.equal(x.request('native-probe').status,'blocked');
+  assert.equal(x.clicks.length,0);
+});
+test('stale auto-sync character pin does not prevent another imported character using their own sheet',()=>{
+  const x=nativeAttackFixture('Orla');
+  const a={window:{closed:false},type:'popout',key:'popout-orla-session',
+    visible:true,name:'Orla',characterId:'different-id'};
+  x.h.R3_AUTO.name='Old Character';x.h.R3_AUTO.characterId='pinned-other-id';
+  // Populate the same authenticated popout registry used by the real reader.
+  x.h.R3_POPOUTS.set('orla-session',a);
+  assert.equal(x.h.r3NativeCandidate('Orla')?.name,'Orla');
+  assert.equal(x.h.r3NativeCandidate('Old Character'),null);
 });

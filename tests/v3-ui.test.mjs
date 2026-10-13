@@ -5,7 +5,7 @@ import {readFileSync,readdirSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const files=readdirSync(join(root,'v3')).filter(x=>/^\d{2}_.*\.js$/.test(x)&&x!=='30_boot.js').sort();
-function panelHarness(){
+function panelHarness(character='NIER'){
   const nodes=new Map(),windowListeners=new Map(),sent=[],intervals=[],timeouts=new Map();
   const makeNode=id=>{
     const node={id,textContent:'',innerHTML:'',value:'',scrollTop:0,style:{},disabled:false,handlers:new Map(),
@@ -47,7 +47,7 @@ function panelHarness(){
   };
   const frameWindow={postMessage(message,origin){sent.push({message,origin});}};
   const frame={src:'https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/test',
-    getClientRects(){return [{}]},getAttribute(key){return key==='title'?'NIER':null;},
+    getClientRects(){return [{}]},getAttribute(key){return key==='title'?character:null;},
     closest(){return null},contentWindow:frameWindow};
   const body={appendChild(host){document.host=host;}};
   const document={
@@ -65,7 +65,7 @@ function panelHarness(){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -75,7 +75,7 @@ function panelHarness(){
       data:{protocol:'r20eb:import:v3',type,id:msg.id,snapshot,error:'Simulated sheet failure'}
     });
   }
-  return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,timeouts,windowListeners,click,respond};
+  return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,timeouts,windowListeners,frameWindow,click,respond};
 }
 test('real importer panel initializes and both scan buttons become enabled when a sheet appears',()=>{
   const h=panelHarness();
@@ -1131,4 +1131,90 @@ test('invalid or cross-character persisted portrait URLs cannot be reused',()=>{
     h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
     assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/<img class="hud-portrait-image"/);
   }
+});
+
+test('native attack UI supports arbitrary imported character names and own actions',async()=>{
+  for(const [character,attack] of [
+    ['Elowen Dawnsong','Longbow'],['Brom Stonebeard','Warhammer'],
+    ['Sora Windfall','Shortbow']
+  ]){
+    const h=panelHarness(character);h.api.r3StartEditorBridge();h.api.r3StartUI();
+    const snap=h.api.r3Empty();snap.name=character;
+    snap.attacks=[{name:attack,tab:'Combat',_key:attack.toLowerCase()}];
+    h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+    h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+    assert.match(h.nodes.get('r3-hud').innerHTML,/Find native Roll20 attack/);
+    h.shadow.handlers.get('click')({target:{dataset:{hudProbe:attack}}});
+    assert.equal(h.sent.at(-1).message.type,'native-probe');
+    assert.equal(h.sent.at(-1).message.characterName,character);
+    assert.equal(h.sent.at(-1).message.attackName,attack);
+    const id=h.sent.at(-1).message.id;
+    h.windowListeners.get('message')({
+      origin:'https://advanced-sheets.production.roll20preflight.net',
+      source:h.frameWindow,
+      data:{protocol:'r20eb:import:v3',type:'native-result',id,status:'ready',
+        label:'Roll Attack',token:'single-use-token'}
+    });
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.match(h.nodes.get('r3-hud').innerHTML,/Confirm native roll/);
+    h.click('r3-hud-native-confirm');
+    assert.equal(h.sent.at(-1).message.type,'native-invoke');
+    assert.equal(h.sent.at(-1).message.characterName,character);
+    assert.equal(h.sent.at(-1).message.attackName,attack);
+    assert.equal(h.sent.at(-1).message.token,'single-use-token');
+  }
+});
+test('native attack confirm refuses a changed active character snapshot',async()=>{
+  const h=panelHarness('Elowen');h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const elf=h.api.r3Empty();elf.name='Elowen';
+  elf.attacks=[{name:'Spear',_key:'spear'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(elf);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  h.shadow.handlers.get('click')({target:{dataset:{hudProbe:'Spear'}}});
+  const id=h.sent.at(-1).message.id;
+  h.windowListeners.get('message')({
+    origin:'https://advanced-sheets.production.roll20preflight.net',
+    source:h.frameWindow,data:{protocol:'r20eb:import:v3',type:'native-result',
+      id,status:'ready',token:'token-elf',label:'Roll Attack'}
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  const other=h.api.r3Empty();other.name='Brom';other.attacks=[{name:'Spear',_key:'spear'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(other);h.api.r3HudRender();
+  const count=h.sent.length;
+  h.click('r3-hud-native-confirm');
+  assert.equal(h.sent.length,count,'no native click may be requested after switching character');
+  assert.match(h.api.R3_NATIVE.status,/sheet changed/);
+});
+test('native UI cancel does not post a confirmation to the official sheet',async()=>{
+  const h=panelHarness('Kaela');h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Kaela';snap.attacks=[{name:'Mace',_key:'mace'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  h.shadow.handlers.get('click')({target:{dataset:{hudProbe:'Mace'}}});
+  const id=h.sent.at(-1).message.id;
+  h.windowListeners.get('message')({
+    origin:'https://advanced-sheets.production.roll20preflight.net',
+    source:h.frameWindow,data:{protocol:'r20eb:import:v3',type:'native-result',
+      id,status:'ready',token:'token-kaela',label:'Roll Attack'}
+  });
+  await new Promise(resolve=>setImmediate(resolve));
+  const size=h.sent.length;
+  h.click('r3-hud-native-cancel');
+  assert.equal(h.sent.length,size);
+  assert.equal(h.api.R3_NATIVE.preview,null);
+});
+
+test('switching auto-sync to another imported character clears the previous character ID',()=>{
+  const h=panelHarness('Liora');h.api.r3StartUI();
+  const next=h.api.r3Empty();next.name='Liora';
+  next.attacks=[{name:'Rapier',_key:'rapier'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(next);
+  h.api.R3_AUTO.name='Old Adventurer';
+  h.api.R3_AUTO.characterId='previous-character-id';
+  h.api.R3_AUTO.enabled=false;
+  h.click('r3-hud-auto');
+  assert.equal(h.api.R3_AUTO.enabled,true);
+  assert.equal(h.api.R3_AUTO.name,'Liora');
+  assert.equal(h.api.R3_AUTO.characterId,'');
+  assert.match(h.store.get('roll20-embetterment-v3:123:auto'),/"name":"Liora"/);
 });

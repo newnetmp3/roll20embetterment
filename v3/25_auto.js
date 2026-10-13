@@ -307,6 +307,10 @@ function r3ToggleAuto(){
     r3AutoDisplay();
     return;
   }
+  // Auto-sync is bound to a character identity, not to the first sheet
+  // ever imported in this campaign. Clear the old character's ID before
+  // enabling a different character (the user selected this explicitly).
+  if(R3_AUTO.name.toLowerCase()!==name.toLowerCase())R3_AUTO.characterId='';
   R3_AUTO.enabled=true;R3_AUTO.generation++;R3_AUTO.name=name;
   if(selected&&selected.name.toLowerCase()===name.toLowerCase())r3AutoRemember(selected);
   r3AutoSave();r3AutoDisplay('Enabled for '+name+'; checking Roll20 session');

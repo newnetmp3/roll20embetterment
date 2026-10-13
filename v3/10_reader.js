@@ -109,6 +109,9 @@ async function r3ReaderReceive(event){
   const peer=r3ReaderPeer();if(!peer||event.source!==peer||event.origin!==R3_EDITOR)return;
   const data=event.data;if(data?.protocol!==R3_PROTOCOL)return;
   if(data.type==='hello'){r3ReaderAnnounce();return;}
+  if(data.type==='native-probe'||data.type==='native-invoke'){
+    r3NativeReaderHandle(peer,data);return;
+  }
   if(data.type!=='scan'||typeof data.id!=='string'||!/^r3-[\w.-]{4,100}$/.test(data.id))return;
   if(!['current','all','hp'].includes(data.mode))return;
   try{
@@ -225,6 +228,10 @@ function r3Listen(event){
     if(r3String(data.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())return;
     r3AutoQueueDirty(candidate);
     return;
+  }
+  if(data.type==='native-result'){
+    if(!candidate)return;
+    r3NativeResult(event,data);return;
   }
   const pending=R3_PENDING.get(data.id);
   if(!candidate||!pending||pending.window!==event.source)return;
