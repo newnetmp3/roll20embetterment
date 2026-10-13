@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.3.1
+// @version      3.3.2
 // @description  Player-first combat HUD backed by authenticated D&D 2024 sheet data.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -1078,7 +1078,8 @@ function r3UIEvent(event){
   const assignment=field('hudAssign','[data-hud-assign]');
   const spellLevel=field('hudSpellLevel','[data-hud-spell-level]');
   const spent=field('hudUsed','[data-hud-used]');
-  const nativeProbe=field('hudProbe','[data-hud-probe]');
+  const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
+    field('hudProbe','[data-hud-probe]');
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-refresh')r3UIRefresh();
   else if(target?.id==='r3-scan')return r3StartImport('current');
@@ -1096,7 +1097,7 @@ function r3UIEvent(event){
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
   else if(target?.id==='r3-hud-native-confirm')return r3NativeConfirm();
   else if(target?.id==='r3-hud-native-cancel')return r3NativeCancel();
-  else if(typeof nativeProbe==='string'&&nativeProbe.length<=125){
+  else if(typeof nativeProbe==='string'&&nativeProbe.length<=240){
     return r3NativeProbe(nativeProbe);
   }
   else if(target?.id==='r3-hud-reset-turn'){
@@ -1220,67 +1221,92 @@ function r3NativeStatus(message){
   R3_NATIVE.revision++;
   r3HudRender?.();
 }
-function r3NativeAttackControl(name){
-  const actualTab=r3CurrentTabLabel();
-  if(!/^combat$/i.test(actualTab))
-    return {error:'Open Combat on the official sheet (currently '+r3String(actualTab,35)+').'};
+// Attack name alone is NOT unique on an official sheet. A player may have
+// multiple differently configured weapons all called "Dagger". The imported
+// _key selects an item locally; explicit observed attack bonus/damage is used
+// to disambiguate same-name native rows, never an arbitrary array index.
+function r3NativeAttackMetric(raw){
+  const text=r3String(raw,600).replace(/\u2212/g,'-');
+  const bonus=text.match(/(?:^|\s)([+-]\d{1,3})\s*Attack\b/i);
+  const damage=text.match(/\b\d{1,3}d\d{1,3}(?:[+-]\d{1,3})?\b/i);
+  return {bonus:bonus?bonus[1]:'',damage:damage?damage[0].toLowerCase():''};
+}
+function r3NativeAttackControl(name,source={}){
+  const tab=r3CurrentTabLabel();
+  if(!/^combat$/i.test(tab))
+    return {error:'Open Combat on the official sheet (currently '+r3String(tab,35)+').'};
   const wanted=r3String(name,125).toLowerCase();
   if(!wanted)return {error:'A named attack is required.'};
-  // The current importer recognizes both dedicated attack rows and generic
-  // 2024 item titles. The native reader must use those SAME row families.
   const rows=Array.from(document.querySelectorAll(
     R3_CATEGORIES.attacks+',.item-row,[data-testid*="item-row"]'
   )||[]).slice(0,300).filter(r3Shown);
-  const matches=rows.filter(row=>r3Name(row,'attacks').toLowerCase()===wanted);
-  const titleElements=Array.from(document.querySelectorAll(
+  const found=rows.filter(row=>r3Name(row,'attacks').toLowerCase()===wanted);
+  const titles=Array.from(document.querySelectorAll(
     '.span--item-row-title,.attack-item__title-chat,.attack-item__title-col,'+
     '[data-testid*="attack-name"]'
   )||[]).slice(0,250).filter(r3Shown)
     .filter(el=>r3Text(el,125).toLowerCase()===wanted);
-  const found=[...matches];
-  for(const el of titleElements){
+  for(const el of titles){
     const row=r3InventoryRowFor(el);
     if(row&&r3Shown(row)&&!found.includes(row))found.push(row);
   }
-  // Exclude overlapping nested candidates; a wrapper containing one matching
-  // title is preferable to a child title alone.
-  const distinct=found.filter(row=>!found.some(other=>other!==row&&
+  // Keep the highest complete single-title row, never a nested copy.
+  let candidates=found.filter(row=>!found.some(other=>other!==row&&
     other.contains?.(row)));
-  if(distinct.length!==1)return {error:distinct.length?
-    'Multiple visible rows for "'+r3String(name,45)+'" ('+distinct.length+
-      '). No native click.':
-    'No matching visible attack row for "'+r3String(name,45)+
-      '" on Combat. Rows examined: '+rows.length+
-      ', matching named titles: '+titleElements.length+'.'};
-  const row=distinct[0];
+  const expected=r3NativeAttackMetric(source.visible||'');
+  if(candidates.length>1){
+    // A same-name row without explicit differentiating evidence is unsafe.
+    if(!expected.bonus&&!expected.damage)
+      return {error:'Multiple "'+r3String(name,45)+
+        '" attack rows. Re-import the official Combat tab to identify each variant.'};
+    candidates=candidates.filter(row=>{
+      const actual=r3NativeAttackMetric(r3Text(row,650));
+      return (!expected.bonus||actual.bonus===expected.bonus)&&
+        (!expected.damage||actual.damage===expected.damage);
+    });
+  }
+  if(candidates.length!==1)return {error:candidates.length?
+    'Multiple indistinguishable "'+r3String(name,45)+
+      '" attack rows. No native click.':
+    'No unique matching "'+r3String(name,45)+'" attack row on Combat. '+
+      'Visible named rows: '+found.length+', matching name titles: '+titles.length+'.'};
+  const row=candidates[0],actual=r3NativeAttackMetric(r3Text(row,650));
+  // If a selected imported attack has specific metrics and the sole current
+  // sheet row has different metrics, refuse rather than click the wrong build.
+  if((expected.bonus&&actual.bonus&&actual.bonus!==expected.bonus)||
+     (expected.damage&&actual.damage&&actual.damage!==expected.damage))
+    return {error:'The named attack changed since import. Refresh the Combat data before rolling.'};
   const buttons=Array.from(row.querySelectorAll?.(
     'button,[role="button"],[data-sheet-action="attack"],[data-action="attack"]'
   )||[]).slice(0,45).filter(r3Shown);
-  const recognized=buttons.map(button=>{
+  const roll=buttons.map(button=>{
     const label=r3String(r3Attr(button,'aria-label')||
-      r3Attr(button,'title')||r3Text(button,70),70);
+      r3Attr(button,'title')||r3Text(button,70),70).replace(/\u2212/g,'-');
     const action=r3Attr(button,'data-sheet-action')||
       r3Attr(button,'data-action');
     const testId=r3Attr(button,'data-testid');
     const rollName=r3Attr(button,'name');
+    // Real D&D 2024 markup shows "+7 Attack" adjacent to "1d6+4".
+    // The numeric Attack button is a hit roll. The die button is DAMAGE
+    // and must never be used to satisfy the hit-roll probe.
+    const numericAttack=/^[+-]\d{1,3}\s*Attack$/i.test(label);
     const explicitlyLabeled=/^(?:roll\s+(?:attack|to\s+hit|attack\s+roll)|attack\s+roll|roll\s+to\s+hit)$/i.test(label);
     const explicitAction=action==='attack'||/^(?:roll[-_]?attack|attack[-_]?roll)$/i.test(testId)||
       (r3Attr(button,'type')==='roll'&&/^roll_attack(?:_|$)/i.test(rollName));
-    return {button,label,explicitlyLabeled,explicitAction};
-  }).filter(c=>c.explicitlyLabeled||c.explicitAction);
-  if(recognized.length!==1){
-    // Diagnostics deliberately contain only short public UI labels, never
-    // private IDs, raw DOM, roll expressions, chat output or token secrets.
-    const labels=buttons.map(button=>r3String(
-      r3Attr(button,'aria-label')||r3Attr(button,'title')||
-        r3Text(button,30),30)).filter(Boolean).slice(0,5);
-    return {error:recognized.length?
-      'Multiple possible attack roll controls; no click performed.':
-      'Matched the attack row, but no verified roll control. '+
-      'Visible button labels: '+(labels.join(', ')||'(unlabeled)')+'.'};
+    return {button,label,valid:numericAttack||explicitlyLabeled||explicitAction};
+  }).filter(x=>x.valid);
+  if(roll.length!==1){
+    const labels=buttons.map(b=>r3String(
+      r3Attr(b,'aria-label')||r3Attr(b,'title')||r3Text(b,30),30)).filter(Boolean).slice(0,5);
+    return {error:roll.length?'Multiple attack-roll buttons; no click performed.':
+      'Matched the attack row but found no verified attack-roll button. Labels: '+
+      (labels.join(', ')||'(unlabeled)')+'.'};
   }
-  return {button:recognized[0].button,
-    label:recognized[0].label||'Native attack roll'};
+  const label=roll[0].label||'Native attack roll';
+  // Use the row's observed metrics to bind probe and later confirmation,
+  // preventing a same-name attack switching to a different roll mid-request.
+  const fingerprint=wanted+'|'+actual.bonus+'|'+actual.damage+'|'+label;
+  return {button:roll[0].button,label,fingerprint};
 }
 function r3NativeReaderHandle(peer,data){
   if(!['native-probe','native-invoke'].includes(data?.type)||
@@ -1291,6 +1317,8 @@ function r3NativeReaderHandle(peer,data){
   };
   const characterName=r3String(data.characterName,120);
   const attackName=r3String(data.attackName,125);
+  const attackKey=r3String(data.attackKey,240);
+  const attackText=r3String(data.attackText,550);
   // The character identity and attack name are intentionally separate.
   // Characters across games do not share a fixed name or fixed attack list.
   if(data.kind!=='attacks'||!characterName||!attackName||
@@ -1298,24 +1326,26 @@ function r3NativeReaderHandle(peer,data){
     respond('blocked','This action does not belong to the open character sheet.');return;
   }
   if(data.type==='native-probe'){
-    const found=r3NativeAttackControl(attackName);
+    const found=r3NativeAttackControl(attackName,{visible:attackText});
     if(!found.button){respond('blocked',found.error);return;}
     if(R3_NATIVE.tokens.size>=8)R3_NATIVE.tokens.clear();
     const token=(crypto.randomUUID?.()||('native-'+Date.now()+'-'+Math.random())).slice(0,100);
-    R3_NATIVE.tokens.set(token,{characterName,attackName,label:found.label,peer,
-      until:Date.now()+15000});
+    R3_NATIVE.tokens.set(token,{characterName,attackName,attackKey,attackText,
+      label:found.label,fingerprint:found.fingerprint,peer,until:Date.now()+15000});
     respond('ready','A single native roll control was found. Confirm to click it once.',
       {token,label:found.label});return;
   }
   const token=r3String(data.token,100),record=R3_NATIVE.tokens.get(token);
   if(!record||record.peer!==peer||record.until<Date.now()||
      record.characterName.toLowerCase()!==characterName.toLowerCase()||
-     record.attackName.toLowerCase()!==attackName.toLowerCase()){
+     record.attackName.toLowerCase()!==attackName.toLowerCase()||
+     record.attackKey!==attackKey||record.attackText!==attackText){
     respond('blocked','Native action confirmation expired. Inspect the roll again.');return;
   }
   R3_NATIVE.tokens.delete(token);
-  const found=r3NativeAttackControl(attackName);
-  if(!found.button||found.label!==record.label){
+  const found=r3NativeAttackControl(attackName,{visible:attackText});
+  if(!found.button||found.label!==record.label||
+     found.fingerprint!==record.fingerprint){
     respond('blocked','The native roll control changed. No click was performed.');return;
   }
   try{
@@ -1361,25 +1391,38 @@ function r3NativeResult(event,data){
   clearTimeout(request.timeout);R3_NATIVE.pending.delete(data.id);
   request.resolve(data);
 }
+// Resolve the exact imported attack card by its captured identity. Legacy
+// callers passing a name are accepted only when that name is unambiguous.
+function r3NativeSelectAttack(input,snapshot=R3_UI.snapshot){
+  const items=Array.isArray(snapshot?.attacks)?snapshot.attacks:[];
+  const key=items.filter(x=>x._key===input&&x._key);
+  if(key.length===1)return key[0];
+  const named=items.filter(x=>x.name===input);
+  return named.length===1?named[0]:null;
+}
 async function r3NativeProbe(name){
   if(R3_NATIVE.busy)return;
   R3_NATIVE.preview=null;
   const snap=R3_UI.snapshot;
-  const match=snap?.attacks?.filter(x=>x.name===name)||[];
-  if(match.length!==1||!snap?.name){
+  const chosen=r3NativeSelectAttack(name,snap);
+  if(!chosen||!snap?.name){
     r3NativeStatus('Choose a unique attack from the imported character.');return;
   }
+  const attackName=r3String(chosen.name,125);
+  const attackKey=r3String(chosen._key,240);
+  const attackText=r3String(chosen.visible,550);
   const characterName=r3String(snap.name,120);
   const candidate=r3NativeCandidate(characterName);
   if(!candidate){r3NativeStatus('Open the matching official 2024 character sheet, then try again.');return;}
   R3_NATIVE.busy=true;r3NativeStatus('Checking the native roll control…');
   try{
-    const result=await r3NativeRequest(candidate,'native-probe',{characterName,attackName:name});
+    const result=await r3NativeRequest(candidate,'native-probe',
+      {characterName,attackName,attackKey,attackText});
     if(result.status==='ready'&&typeof result.token==='string'){
-      R3_NATIVE.preview={characterName,attackName:name,token:result.token,
-        window:candidate.window,label:result.label};
+      R3_NATIVE.preview={characterName,attackName,attackKey,attackText,
+        token:result.token,window:candidate.window,label:result.label};
       r3NativeStatus('Roll20 shows a native '+r3String(result.label,65)+
-        ' control for '+name+'. Confirm to click once.');
+        ' control for '+attackName+'. Confirm to click once.');
     }else r3NativeStatus(result.message||'No verified native roll button was found.');
   }catch(e){r3NativeStatus(e.message||'Native action probe failed.');}
   finally{R3_NATIVE.busy=false;r3HudRender();}
@@ -1389,16 +1432,19 @@ async function r3NativeConfirm(){
   if(!preview||R3_NATIVE.busy)return;
   R3_NATIVE.preview=null; // one-time user confirmation, no double-click
   const characterName=r3String(R3_UI.snapshot?.name,120);
-  const stillPresent=R3_UI.snapshot?.attacks?.filter(x=>x.name===preview.attackName)||[];
+  const selected=r3NativeSelectAttack(preview.attackKey||preview.attackName);
   const candidate=r3NativeCandidate(characterName);
   if(characterName.toLowerCase()!==preview.characterName.toLowerCase()||
-     stillPresent.length!==1||!candidate||candidate.window!==preview.window){
+     !selected||selected.name!==preview.attackName||
+     r3String(selected.visible,550)!==preview.attackText||
+     !candidate||candidate.window!==preview.window){
     r3NativeStatus('The official sheet changed. Inspect the roll again.');return;
   }
   R3_NATIVE.busy=true;r3NativeStatus('Requesting one native Roll20 click…');
   try{
     const response=await r3NativeRequest(candidate,'native-invoke',
-      {characterName,attackName:preview.attackName,token:preview.token});
+      {characterName,attackName:preview.attackName,attackKey:preview.attackKey,
+        attackText:preview.attackText,token:preview.token});
     r3NativeStatus(response.message||'No native action result returned.');
   }catch(e){r3NativeStatus(e.message||'Native roll request failed.');}
   finally{R3_NATIVE.busy=false;r3HudRender();}
@@ -1547,7 +1593,7 @@ function r3HudCard(item,index){
     '<span class="hud-card-caret">⌄</span></summary>'+
     '<div class="hud-card-body">'+(tags.length?'<div class="hud-card-tags">'+tags.join('')+'</div>':'')+
     (details?'<p>'+r3Escape(details)+'</p>':'<p>No further labeled details were observed on the sheet.</p>')+
-    controls+(item._hudSource==='Attack'?'<button type="button" class="hud-native-probe" data-hud-probe="'+r3Escape(item.name)+'">Find native Roll20 attack</button>':'')+
+    controls+(item._hudSource==='Attack'?'<button type="button" class="hud-native-probe" data-hud-probe-key="'+r3Escape(item._key||item.name)+'">Find native Roll20 attack</button>':'')+
     '<div class="hud-card-note">Browsing a card does not perform an action. Native attacks require separate confirmation.</div></div></details>';
 }
 // Argon core has a portrait panel + side-stat stacks and segmented action
