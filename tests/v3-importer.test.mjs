@@ -854,14 +854,14 @@ test('a generic action label is never clicked without source-observed roll seman
   ]);
   const result=x.request('native-probe');
   assert.equal(result.status,'blocked');
-  assert.match(result.message,/Visible button labels: Attack/);
+  assert.match(result.message,/Labels: Attack/);
   assert.equal(x.clicks.length,0);
 });
 test('missing attack row explains visible candidates without leaking raw character HTML',()=>{
   const x=nativeAttackFixture('Scout',[{name:'Bow',label:'Roll Attack'}]);
   const result=x.request('native-probe',{attackName:'Unseen Rapier'});
   assert.equal(result.status,'blocked');
-  assert.match(result.message,/No matching visible attack row/);
+  assert.match(result.message,/No unique matching/);
   assert.equal(x.clicks.length,0);
 });
 
