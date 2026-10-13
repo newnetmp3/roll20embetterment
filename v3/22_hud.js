@@ -131,7 +131,7 @@ function r3HudCard(item,index){
     '<span class="hud-card-caret">⌄</span></summary>'+
     '<div class="hud-card-body">'+(tags.length?'<div class="hud-card-tags">'+tags.join('')+'</div>':'')+
     (details?'<p>'+r3Escape(details)+'</p>':'<p>No further labeled details were observed on the sheet.</p>')+
-    controls+(item._hudSource==='Attack'?'<button type="button" class="hud-native-probe" data-hud-probe="'+r3Escape(item.name)+'">Find native Roll20 attack</button>':'')+
+    controls+(item._hudSource==='Attack'?'<button type="button" class="hud-native-probe" data-hud-probe-key="'+r3Escape(item._key||item.name)+'">Find native Roll20 attack</button>':'')+
     '<div class="hud-card-note">Browsing a card does not perform an action. Native attacks require separate confirmation.</div></div></details>';
 }
 // Argon core has a portrait panel + side-stat stacks and segmented action
