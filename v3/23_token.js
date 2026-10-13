@@ -47,6 +47,13 @@ function r3TokenLinkedInfo(object){
     object?._element?.src);
   return {tokenId,characterId:charId,name,tokenImage};
 }
+function r3TokenUnambiguousName(name){
+  const collection=window.d20?.Campaign?.characters;
+  const all=Array.isArray(collection?.models)?collection.models:null;
+  if(!all)return true; // No exposed full collection; require linked token below.
+  return all.filter(model=>r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===
+    r3String(name,120).toLowerCase()).length<=1;
+}
 function r3TokenCacheKey(){return r3StorageKey()+':character-snapshots';}
 function r3TokenSettingsKey(){
   return r3StorageKey()+':hud'+(R3_TOKEN.active?
@@ -83,7 +90,8 @@ function r3TokenRecordSnapshot(snapshot){
   const active=R3_TOKEN.active;
   // Do not associate a new character's snapshot with an unrelated selected
   // token, even when it arrived after a manual import or stale async scan.
-  if(!active||active.name.toLowerCase()!==snapshot.name.toLowerCase())return;
+  if(!active||active.name.toLowerCase()!==snapshot.name.toLowerCase()||
+     !r3TokenUnambiguousName(snapshot.name))return;
   R3_TOKEN.snapshots.set(active.characterId,{name:active.name,
     snapshot:r3InventoryPrune(snapshot)});
   r3TokenSaveCache();
@@ -94,7 +102,8 @@ function r3TokenSnapshotFor(info){
     return r3InventoryPrune(saved.snapshot);
   // Migrate only a legacy snapshot explicitly naming the selected sheet.
   const legacy=R3_TOKEN.legacy;
-  if(legacy?.schema===3&&r3String(legacy.name,120).toLowerCase()===info.name.toLowerCase()){
+  if(legacy?.schema===3&&r3TokenUnambiguousName(info.name)&&
+     r3String(legacy.name,120).toLowerCase()===info.name.toLowerCase()){
     R3_TOKEN.snapshots.set(info.characterId,{name:info.name,snapshot:legacy});
     r3TokenSaveCache();
     return r3InventoryPrune(legacy);
