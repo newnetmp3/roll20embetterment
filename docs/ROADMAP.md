@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 13, 2026 (v3.3.0 character-agnostic native attack pilot under development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 13, 2026 (v3.3.0 character-agnostic native attack pilot merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -130,3 +130,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 **v3.2.4 live verified (2026-10-13):** User confirmed both stat rows display without clipping and an observed Nier Journal portrait remains visible when switching to Chat. These UX fixes may be marked user-verified; they do not imply any character-specific requirement.
 
 **v3.3.0 optional experimental native attack pilot:** Two-stage `native-probe` then explicit `native-invoke` through authenticated official sheet bridge. Compare **characterName** with sheet owner and **attackName** with unique visible Combat attack row separately; require an explicitly labeled Roll Attack control, then user confirmation and a single-use 15s token before one click. No arbitrary macros, no guessed dice, no implicit resource spend and no false success claims. Abort for no sheet, wrong identity, several matching rows/buttons, missing labeling, other tab, token replay or changed character. **CI verified:** PR #50 run 38467635644 passed **295 tests with zero failures** and a clean generated bundle, including generic players/attack names and cross-character action blocking. Native attack control selector is necessarily narrow until real Floorp live DOM proves a broader label safe. Spellcasting, targeting and action/turn tracking remain planned, not implemented.
+
+**v3.3.0 merged:** PR #50 (`521f442cceaf86e265f250b0ec4dbf04829b0f71`) to `main`, final Actions run 38467803354 green, **295 tests passed** and generated bundle consistent. Strict generic-player support and character/attack identity guards landed. This is an optional live test of a **one-click native attack only after explicit second confirmation**; actual official 2024 Roll Attack controls and chat outcome still need Floorp validation. Unsupported labels fail closed rather than assume a specific PC or sheet markup. Add future work: isolate HUD quick-slot assignments per-character within one game as well as per game; dynamic imported snapshots and source-matched action routing are already general.
