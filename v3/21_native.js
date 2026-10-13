@@ -160,7 +160,7 @@ async function r3NativeReaderHandle(peer,data){
 // request. An already-open player/GM sheet is never hidden, repositioned,
 // clicked through, reparented, closed or navigated by this helper.
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
-  original:null,overlay:null,overlayOriginal:null,opening:null};
+  original:null,overlay:null,overlayOriginal:null,opening:null,sessions:new Map()};
 function r3NativeBgCharacter(name){
   const wanted=r3String(name,120).toLowerCase();
   const chars=window.d20?.Campaign?.characters;
@@ -180,6 +180,19 @@ function r3NativeBgCharacter(name){
     .split(',').map(x=>x.trim());
   if(!controlled.includes('all')&&!controlled.includes(player))return null;
   return {model,id,name:r3String(r3TokenModelGet(model,'name'),120)};
+}
+function r3NativeBgRemember(){
+  const bg=R3_NATIVE_BG;
+  if(bg.dialog&&bg.characterId)
+    bg.sessions.set(bg.characterId,{characterId:bg.characterId,name:bg.name,
+      dialog:bg.dialog,moved:bg.moved,original:bg.original,
+      overlay:bg.overlay,overlayOriginal:bg.overlayOriginal});
+}
+function r3NativeBgActivate(record){Object.assign(R3_NATIVE_BG,record);}
+function r3NativeBgClearActive(){
+  const bg=R3_NATIVE_BG;
+  bg.dialog=null;bg.moved=null;bg.original=null;
+  bg.overlay=null;bg.overlayOriginal=null;bg.characterId='';bg.name='';
 }
 function r3NativeBgDialogId(dialog){
   return r3String(dialog?.getAttribute?.('data-characterid')||
@@ -202,8 +215,8 @@ function r3NativeBgRestore(){
     bg.overlay.style.opacity=bg.overlayOriginal.opacity;
     bg.overlay.style.pointerEvents=bg.overlayOriginal.pointerEvents;
   }
-  bg.dialog=null;bg.frame=null;bg.moved=null;bg.original=null;
-  bg.overlay=null;bg.overlayOriginal=null;bg.characterId='';bg.name='';
+  bg.sessions.delete(bg.characterId);
+  r3NativeBgClearActive();
 }
 function r3NativeBgClaim(before,beforeOverlays,identity){
   const added=Array.from(document.querySelectorAll('.characterdialog')||[])
@@ -229,6 +242,7 @@ function r3NativeBgClaim(before,beforeOverlays,identity){
       pointerEvents:overStyle.pointerEvents};
     overStyle.opacity='0';overStyle.pointerEvents='none';
   }
+  r3NativeBgRemember();
   return true;
 }
 function r3NativeBgJournal(identity){
@@ -253,7 +267,19 @@ async function r3NativeBgOpen(name){
   const existing=Array.from(document.querySelectorAll('.characterdialog')||[]);
   if(existing.some(el=>r3NativeBgDialogId(el)===identity.id&&el!==bg.dialog))
     throw new Error('That sheet is already open. Switch its Combat tab or close it before background mode.');
-  if(bg.dialog&&bg.characterId!==identity.id)r3NativeBgRestore();
+  if(bg.dialog&&bg.characterId!==identity.id){
+    r3NativeBgRemember();
+    r3NativeBgClearActive();
+  }
+  const prior=bg.sessions.get(identity.id);
+  if(prior?.dialog){
+    r3NativeBgActivate(prior);
+    const candidate=r3NativeBgCandidate();
+    if(candidate)return candidate;
+    bg.sessions.delete(identity.id);r3NativeBgClearActive();
+  }
+  if(bg.sessions.size>=6)
+    throw new Error('Too many HUD-owned background sheets. Reload Roll20 to clear old sessions.');
   const before=new Set(existing),overlays=new Set(
     document.querySelectorAll('.ui-widget-overlay')||[]);
   const open=identity.model?.view?.showDialog;
@@ -295,6 +321,14 @@ function r3NativeCandidate(name){
   // Auto-sync's pinned ID applies only to the same character. Never lock
   // someone else's imported character to a previous character's ID.
   const pinned=R3_AUTO.name.toLowerCase()===normalized?R3_AUTO.characterId:'';
+  const identity=r3NativeBgCharacter(name);
+  if(identity&&R3_NATIVE_BG.characterId!==identity.id){
+    const prior=R3_NATIVE_BG.sessions.get(identity.id);
+    if(prior?.dialog){
+      r3NativeBgRemember();
+      r3NativeBgActivate(prior);
+    }
+  }
   const owned=r3NativeBgCandidate();
   if(owned&&R3_NATIVE_BG.name.toLowerCase()===normalized)return owned;
   const eligible=r3Candidates().filter(c=>c.visible&&c.window&&
