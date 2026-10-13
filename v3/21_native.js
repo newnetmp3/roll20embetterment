@@ -265,7 +265,8 @@ async function r3NativeBgOpen(name){
   // Avoid launching a second sheet while Roll20 already has a dialog for
   // that character. showDialog() might focus a manual dialog instead.
   const existing=Array.from(document.querySelectorAll('.characterdialog')||[]);
-  if(existing.some(el=>r3NativeBgDialogId(el)===identity.id&&el!==bg.dialog))
+  if(existing.some(el=>r3NativeBgDialogId(el)===identity.id&&
+      el!==bg.dialog&&el!==bg.sessions.get(identity.id)?.dialog))
     throw new Error('That sheet is already open. Switch its Combat tab or close it before background mode.');
   if(bg.dialog&&bg.characterId!==identity.id){
     r3NativeBgRemember();
@@ -388,8 +389,9 @@ async function r3NativeProbe(name){
       r3NativeStatus('Opening a HUD-owned background sheet for '+characterName+'…');
       candidate=await r3NativeBgEnsure(characterName);
     }
-    if(r3String(R3_UI.snapshot?.name,120)!==characterName)
-      throw new Error('Selected character changed. No roll requested.');
+    if(r3String(R3_UI.snapshot?.name,120)!==characterName||
+       r3NativeSelectAttack(attackKey||attackName)?._key!==chosen._key)
+      throw new Error('Selected character or attack changed. No roll requested.');
     let background=r3NativeIsOwned(candidate);
     if(background&&R3_AUTO.running)
       throw new Error('Background import is using the character sheet. Retry the attack shortly.');
@@ -405,7 +407,9 @@ async function r3NativeProbe(name){
       result=await r3NativeRequest(candidate,'native-probe',
         {characterName,attackName,attackKey,attackText,background});
     }
-    if(result.status==='ready'&&typeof result.token==='string'){
+    if(result.status==='ready'&&typeof result.token==='string'&&
+       r3String(R3_UI.snapshot?.name,120)===characterName&&
+       r3NativeSelectAttack(attackKey||attackName)?._key===chosen._key){
       R3_NATIVE.preview={characterName,attackName,attackKey,attackText,
         token:result.token,window:candidate.window,label:result.label,background};
       r3NativeStatus('Roll20 shows '+r3String(result.label,65)+
