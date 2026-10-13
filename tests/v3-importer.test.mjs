@@ -48,7 +48,7 @@ function harness(fixture=docFixture()){
   };
   vm.createContext(context);
   const code=files.filter(f=>f!=='30_boot.js').map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n');
-  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3CurrentTabLabel,r3StartReader,r3Merge,r3InventoryZero,r3InventoryPrune,r3InventoryStepper,r3InventoryRowFor,r3AutoStoreSnapshot,R3_AUTO,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI,R3_NATIVE,r3NativeReaderHandle,r3NativeAttackControl,r3NativeCandidate};',context);
+  vm.runInContext(code+'\nglobalThis.testApi={r3Capture,r3CaptureHealth,r3ReaderScan,r3ReaderPeer,r3ReaderAnnounce,r3ReaderReceive,r3ReaderChanged,r3CurrentTabLabel,r3StartReader,r3Merge,r3InventoryZero,r3InventoryPrune,r3InventoryStepper,r3InventoryRowFor,r3AutoStoreSnapshot,R3_AUTO,r3Empty,r3Coverage,r3Field,r3String,r3Candidates,r3StartEditorBridge,r3SendScan,r3Listen,r3CollectAllTabs,r3Escape,R3_UI,R3_NATIVE,R3_POPOUTS,r3NativeReaderHandle,r3NativeAttackControl,r3NativeCandidate};',context);
   return {h:context.testApi,context,fixture};
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
@@ -828,7 +828,7 @@ test('stale auto-sync character pin does not prevent another imported character 
     visible:true,name:'Orla',characterId:'different-id'};
   x.h.R3_AUTO.name='Old Character';x.h.R3_AUTO.characterId='pinned-other-id';
   // Populate the same authenticated popout registry used by the real reader.
-  x.context.R3_POPOUTS.set('orla-session',a);
+  x.h.R3_POPOUTS.set('orla-session',a);
   assert.equal(x.h.r3NativeCandidate('Orla')?.name,'Orla');
   assert.equal(x.h.r3NativeCandidate('Old Character'),null);
 });
