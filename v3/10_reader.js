@@ -110,7 +110,12 @@ async function r3ReaderReceive(event){
   const data=event.data;if(data?.protocol!==R3_PROTOCOL)return;
   if(data.type==='hello'){r3ReaderAnnounce();return;}
   if(data.type==='native-probe'||data.type==='native-invoke'){
-    r3NativeReaderHandle(peer,data);return;
+    void r3NativeReaderHandle(peer,data).catch(error=>{
+      try{peer.postMessage(r3Msg('native-result',{
+        id:data.id,status:'blocked',session:R3_SESSION,
+        message:'Official sheet could not inspect that attack: '+
+          r3String(error?.message||error,145)}),R3_EDITOR);}catch{}
+    });return;
   }
   if(data.type!=='scan'||typeof data.id!=='string'||!/^r3-[\w.-]{4,100}$/.test(data.id))return;
   if(!['current','all','hp'].includes(data.mode))return;
