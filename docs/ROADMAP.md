@@ -167,5 +167,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Apply equivalent exact-identity, wrapper-aware shielding to Auto-sync's Journal opener; preserve manual dialogs and restore inline styles on disable.
 - [x] Retry source-verified missing Combat tab / +N Attack hit controls after bounded mount delays; remain fail-closed for wrong characters, ambiguous attacks and damage buttons.
 - [x] Add late-mount/overlay/restoration regression tests and generate v3.3.5 userscript.
-- [ ] Require green CI on the feature branch and update the handover accordingly.
+- [x] GitHub Actions run 38491180410 green: 334 tests passed, zero failures, generated userscript diff clean.
 - [ ] Validate live Floorp sheet concealment and exactly one resulting Roll20 chat hit roll after player confirmation.
