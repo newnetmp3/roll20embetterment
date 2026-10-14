@@ -3,8 +3,8 @@
 **Updated:** 2026-10-13  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `dcffa62d97cc81f63af3a9d9549c5a303517641b` (v3.3.4, PR #54 merged).  
-**Latest merged milestone:** v3.3.4 browser identity and selected-token background sheets (PR #54; 329 tests). **New milestone:** v3.3.5 script-owned hidden dialogs and post-mount hit-button rechecks; live Floorp QA pending.  
+**Current verified feature baseline:** `46708c310a2c298f670c1889156eadbea367eb84` (v3.3.5, PR #55 merged).  
+**Latest merged milestone:** v3.3.5 automatic character-sheet concealment and post-mount hit-button recheck (PR #55; 334 tests, zero failures). **Live Floorp confirmation remains pending.**  
 **Known unresolved issues:** v3.3.4 resolves the user-reproduced false "cannot verify unique controlled character" path in source and regression tests, but current Roll20 browser runtime still needs Floorp confirmation. Actual Roll20 `showDialog()` opening, authenticated native hit-roll click and chat result are not yet live verified. Multi-PC and spellcast workflows remain incomplete.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
@@ -484,3 +484,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Next:** Install/test with all sheets closed. Check no automatic foreground sheet or overlay appears; when +N Attack mounts, Verify/Confirm should reach the official control, and exactly one roll should appear in chat. Validate two different player-controlled characters and same-name attacks.
 
 **PR #55 verification checkpoint:** Source head `33c7866fedbd4b84f0e057ffe96418958ebfb204`, GitHub Actions [run 38491180410](https://github.com/newnetmp3/roll20embetterment/actions/runs/38491180410) passed **334 tests, 0 failures**, JavaScript syntax, generated bundle reproducibility and `npm run check`. This is automated test evidence only; live Floorp sheet concealment and an actual Roll20 chat roll are pending.
+
+**v3.3.5 merge checkpoint (2026-10-13):** PR #55 squash-merged into `main` as `46708c310a2c298f670c1889156eadbea367eb84`. Final PR-head GitHub Actions run [38491256815](https://github.com/newnetmp3/roll20embetterment/actions/runs/38491256815) completed successfully; 334 tests passed, no failures, generated userscript matched the v3 module sources and JavaScript syntax checks passed. This merged source fixes automatic HUD/Auto-sync sheet concealment and late native attack button rechecks. It has **not** been live-confirmed to keep every Roll20 dialog invisible or to emit a genuine chat hit roll. Next: obtain player Floorp feedback with sheets initially closed, plus exact matching hit roll / wrong sheet diagnostics if it still fails.

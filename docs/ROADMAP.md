@@ -169,3 +169,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Add late-mount/overlay/restoration regression tests and generate v3.3.5 userscript.
 - [x] GitHub Actions run 38491180410 green: 334 tests passed, zero failures, generated userscript diff clean.
 - [ ] Validate live Floorp sheet concealment and exactly one resulting Roll20 chat hit roll after player confirmation.
+
+**v3.3.5 merged verification (2026-10-13):** PR #55 merged at `46708c310a2c298f670c1889156eadbea367eb84`, final CI [38491256815](https://github.com/newnetmp3/roll20embetterment/actions/runs/38491256815) passed 334 tests and generated script checks. Remaining verification is live Floorp HUD-owned and Auto-sync sheet concealment plus real Roll20 chat roll proof.
