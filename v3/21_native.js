@@ -2,7 +2,7 @@
 // automatic spell casts, resource spends or token movement.
 // Source scan must find one real visible official-sheet "Roll Attack"
 // control before a user can explicitly confirm a single native click.
-const R3_NATIVE={pending:new Map(),tokens:new Map(),preview:null,busy:false,status:'',revision:0};
+const R3_NATIVE={pending:new Map(),tokens:new Map(),readers:new Map(),preview:null,busy:false,status:'',revision:0};
 function r3NativeStatus(message){
   R3_NATIVE.status=r3String(message,240);
   R3_NATIVE.revision++;
@@ -417,6 +417,32 @@ function r3NativeCandidate(name){
   if(popouts.length===1)return popouts[0];
   return eligible.length===1?eligible[0]:null;
 }
+// A new iframe exists before the official userscript starts listening.
+// Do not send the first attack until it has answered an authenticated hello.
+function r3NativeReaderAnnounce(event,data,candidate){
+  if(!candidate||typeof data.session!=='string'||
+      !/^[\\w.:-]{6,100}$/.test(data.session))return;
+  const name=r3String(data.name,120);
+  if(name)R3_NATIVE.readers.set(event.source,{name,session:data.session});
+}
+async function r3NativeWaitReader(candidate,characterName,isCurrent=()=>true){
+  if(!candidate?.window)throw new Error('No official character sheet reader exists.');
+  const wanted=r3String(characterName,120).toLowerCase();
+  for(let i=0;i<64;i++){
+    if(!isCurrent())throw new Error('Selected character or attack changed while the sheet loaded.');
+    if(r3NativeCandidate(characterName)?.window!==candidate.window)
+      throw new Error('The official sheet window changed while loading.');
+    const ready=R3_NATIVE.readers.get(candidate.window);
+    if(ready?.name.toLowerCase()===wanted)return;
+    if(ready?.name&&!/^(?:unnamed sheet|official sheet popout|2024 character sheet)/i.test(ready.name))
+      throw new Error('Official reader identity does not match the selected character.');
+    if(i%2===0){
+      try{candidate.window.postMessage(r3Msg('hello'),R3_ORIGIN);}catch{}
+    }
+    await r3Pause(250);
+  }
+  throw new Error('Official character sheet did not finish initializing. Check Tampermonkey permissions for its domain.');
+}
 function r3NativeRequest(candidate,type,params={}){
   return new Promise((resolve,reject)=>{
     if(!candidate?.window){reject(new Error('No unique matching official sheet is open.'));return;}
@@ -424,7 +450,7 @@ function r3NativeRequest(candidate,type,params={}){
     const timeout=setTimeout(()=>{
       R3_NATIVE.pending.delete(id);
       reject(new Error('The official sheet did not answer the native action request.'));
-    },4000);
+    },type==='native-probe'&&params.background?10000:4000);
     R3_NATIVE.pending.set(id,{window:candidate.window,resolve,reject,timeout});
     try{candidate.window.postMessage(r3Msg(type,{id,kind:'attacks',...params}),R3_ORIGIN);}
     catch(e){clearTimeout(timeout);R3_NATIVE.pending.delete(id);reject(e);}
@@ -463,15 +489,21 @@ async function r3NativeProbe(name){
   R3_NATIVE.busy=true;
   r3NativeStatus('Locating a private character-sheet reader…');
   try{
-    let candidate=r3NativeCandidate(characterName);
+    let candidate=r3NativeCandidate(characterName),openedNow=false;
     if(!candidate){
       r3NativeStatus('Opening a HUD-owned background sheet for '+characterName+'…');
       candidate=await r3NativeBgEnsure(characterName);
+      openedNow=true;
     }
-    if(r3String(R3_UI.snapshot?.name,120)!==characterName||
-       (characterId&&R3_TOKEN.active?.characterId!==characterId)||
-       r3NativeSelectAttack(attackKey||attackName)?._key!==chosen._key)
+    const stillCurrent=()=>r3String(R3_UI.snapshot?.name,120)===characterName&&
+      (!characterId||R3_TOKEN.active?.characterId===characterId)&&
+      r3NativeSelectAttack(attackKey||attackName)?._key===chosen._key;
+    if(!stillCurrent())
       throw new Error('Selected character or attack changed. No roll requested.');
+    if(openedNow){
+      r3NativeStatus('Waiting for '+characterName+' official sheet to initialize…');
+      await r3NativeWaitReader(candidate,characterName,stillCurrent);
+    }
     let background=r3NativeIsOwned(candidate);
     if(background&&R3_AUTO.running)
       throw new Error('Background import is using the character sheet. Retry the attack shortly.');
