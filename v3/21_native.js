@@ -161,25 +161,48 @@ async function r3NativeReaderHandle(peer,data){
 // clicked through, reparented, closed or navigated by this helper.
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
   original:null,overlay:null,overlayOriginal:null,opening:null,sessions:new Map()};
-function r3NativeBgCharacter(name){
-  const wanted=r3String(name,120).toLowerCase();
+function r3NativeBgResolve(name){
+  const wanted=r3String(name,120).trim().toLowerCase();
+  if(!wanted)return {reason:'No imported character name is available in the HUD.'};
   const chars=window.d20?.Campaign?.characters;
+  if(!chars)return {reason:'Roll20 character models are not ready. Wait for the editor to finish loading, then retry.'};
   const player=r3TokenPlayerId();
-  if(!wanted||!player||!chars)return null;
-  const named=Array.isArray(chars.models)?chars.models.filter(m=>
-    r3String(r3TokenModelGet(m,'name'),120).toLowerCase()===wanted):[];
-  // A selected linked token is the strongest available identity; do not
-  // choose by name alone if another campaign character shares that name.
-  const selected=R3_TOKEN.active;
-  const model=selected&&selected.name.toLowerCase()===wanted?
-    chars.get?.(selected.characterId):named.length===1?named[0]:null;
-  if(!model)return null;
+  if(!player)return {reason:'Roll20 did not expose the logged-in player identity. Reload the editor and retry.'};
+  const named=Array.isArray(chars.models)?chars.models.filter(model=>
+    r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===wanted):[];
+  const selectedIds=r3TokenSelected().map(object=>{
+    const model=object?.model||object;
+    return r3String(r3TokenModelGet(model,'represents')||
+      r3TokenModelGet(model,'_represents'),110);
+  }).filter(Boolean);
+  const selectedMatches=[...new Set(selectedIds)].map(id=>r3TokenCharacter(id))
+    .filter(model=>r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===wanted);
+  // Prefer an explicitly selected matching character when available. The
+  // HUD's previous active token is a fallback, never a permission bypass.
+  const active=R3_TOKEN.active;
+  const fromActive=active?.name.toLowerCase()===wanted?
+    r3TokenCharacter(active.characterId):null;
+  let model=null;
+  if(selectedMatches.length===1)model=selectedMatches[0];
+  else if(selectedMatches.length>1)
+    return {reason:'Several selected tokens represent same-named characters. Select one token to choose its sheet.'};
+  else if(fromActive&&r3String(r3TokenModelGet(fromActive,'name'),120).toLowerCase()===wanted)
+    model=fromActive;
+  else if(named.length===1)model=named[0];
+  else if(named.length>1)
+    return {reason:'Multiple Roll20 characters share this name. Select the linked token for the intended character.'};
+  if(!model)return {reason:selectedIds.length?
+    'The selected token is not linked to the imported HUD character. Select its matching linked token.':
+    'Roll20 has no unique matching character model. Select a token linked to your imported sheet.'};
   const id=r3String(model.id||r3TokenModelGet(model,'_id'),110);
-  if(!id||selected&&selected.name.toLowerCase()===wanted&&id!==selected.characterId)return null;
-  const controlled=r3String(r3TokenModelGet(model,'controlledby'),1000)
-    .split(',').map(x=>x.trim());
-  if(!controlled.includes('all')&&!controlled.includes(player))return null;
+  if(!id)return {reason:'Roll20 character model has no stable character ID. No background sheet was opened.'};
+  if(!r3TokenControls(model,player))
+    return {reason:'Roll20 does not show this character as controlled by the logged-in player. Check Character > Edit > Controlled By.'};
   return {model,id,name:r3String(r3TokenModelGet(model,'name'),120)};
+}
+function r3NativeBgCharacter(name){
+  const resolved=r3NativeBgResolve(name);
+  return resolved?.model?resolved:null;
 }
 function r3NativeBgRemember(){
   const bg=R3_NATIVE_BG;
@@ -256,8 +279,10 @@ function r3NativeBgJournal(identity){
 }
 async function r3NativeBgOpen(name){
   const bg=R3_NATIVE_BG;
-  const identity=r3NativeBgCharacter(name);
-  if(!identity)throw new Error('Cannot verify a unique character you control in Roll20. Select its token first.');
+  const resolution=r3NativeBgResolve(name);
+  if(!resolution.model)throw new Error(resolution.reason||
+    'Unable to verify a player-controlled character for the background sheet.');
+  const identity=resolution;
   if(bg.dialog&&bg.characterId===identity.id){
     const c=r3NativeBgCandidate();
     if(c)return c;

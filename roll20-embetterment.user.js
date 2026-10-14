@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.3.3
+// @version      3.3.4
 // @description  Player-first combat HUD backed by authenticated D&D 2024 sheet data.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -1379,25 +1379,48 @@ async function r3NativeReaderHandle(peer,data){
 // clicked through, reparented, closed or navigated by this helper.
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
   original:null,overlay:null,overlayOriginal:null,opening:null,sessions:new Map()};
-function r3NativeBgCharacter(name){
-  const wanted=r3String(name,120).toLowerCase();
+function r3NativeBgResolve(name){
+  const wanted=r3String(name,120).trim().toLowerCase();
+  if(!wanted)return {reason:'No imported character name is available in the HUD.'};
   const chars=window.d20?.Campaign?.characters;
+  if(!chars)return {reason:'Roll20 character models are not ready. Wait for the editor to finish loading, then retry.'};
   const player=r3TokenPlayerId();
-  if(!wanted||!player||!chars)return null;
-  const named=Array.isArray(chars.models)?chars.models.filter(m=>
-    r3String(r3TokenModelGet(m,'name'),120).toLowerCase()===wanted):[];
-  // A selected linked token is the strongest available identity; do not
-  // choose by name alone if another campaign character shares that name.
-  const selected=R3_TOKEN.active;
-  const model=selected&&selected.name.toLowerCase()===wanted?
-    chars.get?.(selected.characterId):named.length===1?named[0]:null;
-  if(!model)return null;
+  if(!player)return {reason:'Roll20 did not expose the logged-in player identity. Reload the editor and retry.'};
+  const named=Array.isArray(chars.models)?chars.models.filter(model=>
+    r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===wanted):[];
+  const selectedIds=r3TokenSelected().map(object=>{
+    const model=object?.model||object;
+    return r3String(r3TokenModelGet(model,'represents')||
+      r3TokenModelGet(model,'_represents'),110);
+  }).filter(Boolean);
+  const selectedMatches=[...new Set(selectedIds)].map(id=>r3TokenCharacter(id))
+    .filter(model=>r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===wanted);
+  // Prefer an explicitly selected matching character when available. The
+  // HUD's previous active token is a fallback, never a permission bypass.
+  const active=R3_TOKEN.active;
+  const fromActive=active?.name.toLowerCase()===wanted?
+    r3TokenCharacter(active.characterId):null;
+  let model=null;
+  if(selectedMatches.length===1)model=selectedMatches[0];
+  else if(selectedMatches.length>1)
+    return {reason:'Several selected tokens represent same-named characters. Select one token to choose its sheet.'};
+  else if(fromActive&&r3String(r3TokenModelGet(fromActive,'name'),120).toLowerCase()===wanted)
+    model=fromActive;
+  else if(named.length===1)model=named[0];
+  else if(named.length>1)
+    return {reason:'Multiple Roll20 characters share this name. Select the linked token for the intended character.'};
+  if(!model)return {reason:selectedIds.length?
+    'The selected token is not linked to the imported HUD character. Select its matching linked token.':
+    'Roll20 has no unique matching character model. Select a token linked to your imported sheet.'};
   const id=r3String(model.id||r3TokenModelGet(model,'_id'),110);
-  if(!id||selected&&selected.name.toLowerCase()===wanted&&id!==selected.characterId)return null;
-  const controlled=r3String(r3TokenModelGet(model,'controlledby'),1000)
-    .split(',').map(x=>x.trim());
-  if(!controlled.includes('all')&&!controlled.includes(player))return null;
+  if(!id)return {reason:'Roll20 character model has no stable character ID. No background sheet was opened.'};
+  if(!r3TokenControls(model,player))
+    return {reason:'Roll20 does not show this character as controlled by the logged-in player. Check Character > Edit > Controlled By.'};
   return {model,id,name:r3String(r3TokenModelGet(model,'name'),120)};
+}
+function r3NativeBgCharacter(name){
+  const resolved=r3NativeBgResolve(name);
+  return resolved?.model?resolved:null;
 }
 function r3NativeBgRemember(){
   const bg=R3_NATIVE_BG;
@@ -1474,8 +1497,10 @@ function r3NativeBgJournal(identity){
 }
 async function r3NativeBgOpen(name){
   const bg=R3_NATIVE_BG;
-  const identity=r3NativeBgCharacter(name);
-  if(!identity)throw new Error('Cannot verify a unique character you control in Roll20. Select its token first.');
+  const resolution=r3NativeBgResolve(name);
+  if(!resolution.model)throw new Error(resolution.reason||
+    'Unable to verify a player-controlled character for the background sheet.');
+  const identity=resolution;
   if(bg.dialog&&bg.characterId===identity.id){
     const c=r3NativeBgCandidate();
     if(c)return c;
@@ -2274,9 +2299,35 @@ function r3TokenModelGet(model,key){
   try{return model?.get?.(key)??model?.attributes?.[key];}catch{return undefined;}
 }
 function r3TokenPlayerId(){
+  // Roll20's actual browser editor exposes the current account as
+  // window.currentPlayer (Backbone model). d20.player is optional in
+  // several client versions; relying on it alone blocks valid PCs.
   const d=window.d20;
-  return r3String(d?.player?.id||r3TokenModelGet(d?.player,'_id')||
-    r3TokenModelGet(d?.player,'id')||d?.player_id,100);
+  const sources=[window.currentPlayer,d?.player];
+  for(const model of sources){
+    const id=r3String(model?.id||r3TokenModelGet(model,'_id')||
+      r3TokenModelGet(model,'id'),100);
+    if(id)return id;
+  }
+  return r3String(window.player_id||window.playerid||d?.player_id,100);
+}
+function r3TokenControls(character,playerId=r3TokenPlayerId()){
+  if(!character||!playerId)return false;
+  const raw=r3TokenModelGet(character,'controlledby');
+  const ids=(Array.isArray(raw)?raw:
+    r3String(raw,1200).split(',')).map(x=>r3String(x,110).trim()).filter(Boolean);
+  return ids.includes('all')||ids.includes(playerId);
+}
+function r3TokenCharacter(charId){
+  const characters=window.d20?.Campaign?.characters;
+  if(!characters||!charId)return null;
+  try{
+    const exact=characters.get?.(charId);
+    if(exact)return exact;
+  }catch{}
+  return Array.isArray(characters.models)?
+    characters.models.find(c=>r3String(c?.id||r3TokenModelGet(c,'_id'),110)===charId)||null:
+    null;
 }
 function r3TokenSelected(){
   try{
@@ -2297,16 +2348,14 @@ function r3TokenLinkedInfo(object){
     r3TokenModelGet(model,'_represents'),110);
   if(!tokenId||!charId)return null;
   const d=window.d20;
-  const character=d?.Campaign?.characters?.get?.(charId);
+  const character=r3TokenCharacter(charId);
   if(!character)return null;
   const name=r3String(r3TokenModelGet(character,'name'),120);
   const playerId=r3TokenPlayerId();
   if(!name||!playerId)return null;
   // Character permissions override token permissions for linked graphics.
   // An empty list cannot prove access. GM selection alone is not permission.
-  const controlling=r3String(r3TokenModelGet(character,'controlledby'),1000)
-    .split(',').map(x=>x.trim()).filter(Boolean);
-  if(!controlling.includes('all')&&!controlling.includes(playerId))return null;
+  if(!r3TokenControls(character,playerId))return null;
   const tokenImage=r3TokenSafeArt(r3TokenModelGet(model,'imgsrc')||
     object?._element?.src);
   return {tokenId,characterId:charId,name,tokenImage};
