@@ -65,7 +65,7 @@ function panelHarness(character='NIER'){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3TokenPlayerId,r3TokenControls};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1433,9 +1433,9 @@ test('background attack session refuses to move or reopen a manually opened same
 });
 test('no controller permission and duplicate names block creating background character sessions',async()=>{
   const x=backgroundNativeRig();
-  await assert.rejects(x.h.api.r3NativeBgEnsure('Secret NPC'),/Cannot verify/);
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Secret NPC'),/not show this character as controlled/);
   x.create('char-elf2','Elowen');
-  await assert.rejects(x.h.api.r3NativeBgEnsure('Elowen'),/Cannot verify/);
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Elowen'),/Multiple Roll20 characters share this name/);
   assert.equal(x.log.length,0);
 });
 test('two owned background readers are isolated and reusable when switching selected characters',async()=>{
@@ -1454,7 +1454,7 @@ test('two owned background readers are isolated and reusable when switching sele
 test('background sheets are not synthesized from existing iframes or unrelated character names',async()=>{
   const x=backgroundNativeRig();
   const manual=x.create('other','Different Player','player-one');
-  await assert.rejects(x.h.api.r3NativeBgEnsure('Nier'),/Cannot verify/);
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Nier'),/no unique matching character model/);
   assert.equal(x.log.length,0);
   assert.ok(manual);
 });
@@ -1527,4 +1527,89 @@ test('a native attack confirmation cannot cross to a different same-named select
   assert.equal(h.api.R3_NATIVE.preview,null);
   assert.match(h.api.R3_NATIVE.status,/sheet changed/);
   assert.equal(h.sent.length,0);
+});
+
+test('Roll20 browser currentPlayer.id is the authoritative control identity without d20.player',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  delete h.context.window.d20.player;
+  h.context.window.currentPlayer={id:'player-one',get(k){return k==='id'?this.id:null}};
+  assert.equal(h.api.r3TokenPlayerId(),'player-one');
+  const c=await h.api.r3NativeBgEnsure('Elowen');
+  assert.equal(c.name,'Elowen');
+  assert.equal(x.dialogs.length,1);
+  assert.equal(x.dialogs[0].style.left,'-20000px');
+});
+test('Roll20 Backbone currentPlayer.get("_id") and string permission are recognized for selected token',()=>{
+  const x=multiTokenRig(),h=x.h;
+  delete h.context.window.d20.player;
+  h.context.window.currentPlayer={
+    get(key){return key==='_id'?'player-one':null}
+  };
+  x.selections.push(x.a);
+  h.api.r3TokenPoll();
+  assert.equal(h.api.r3TokenPlayerId(),'player-one');
+  assert.equal(h.api.R3_TOKEN.active.characterId,'char-elf');
+});
+test('already selected linked character can open its own background sheet before token polling',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  delete h.context.window.d20.player;
+  h.context.window.currentPlayer={id:'player-one'};
+  const char=x.create('second-spear','Spear Carrier');
+  const token={model:{id:'token-spear',get(k){
+    return k==='represents'?'second-spear':null
+  }}};
+  h.context.window.d20.engine={selected(){return [token]}};
+  assert.equal(h.api.R3_TOKEN.active,null,'token watch has not populated active yet');
+  const info=h.api.r3NativeBgResolve('Spear Carrier');
+  assert.equal(info.id,'second-spear');
+  const c=await h.api.r3NativeBgEnsure('Spear Carrier');
+  assert.equal(c.name,'Spear Carrier');
+  assert.equal(h.api.R3_TOKEN.active,null,'background opener does not alter selected HUD state');
+  assert.ok(char);
+});
+test('a selected same-name linked token disambiguates two independently controlled characters',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const first=x.create('twina','Same Name');
+  x.create('twinb','Same Name');
+  delete h.context.window.d20.player;
+  h.context.window.currentPlayer={id:'player-one'};
+  const token={model:{id:'chosen-twin',get(key){
+    return key==='represents'?'twina':null;
+  }}};
+  h.context.window.d20.engine={selected(){return [token]}};
+  assert.equal(h.api.r3NativeBgResolve('Same Name').id,'twina');
+  const candidate=await h.api.r3NativeBgEnsure('Same Name');
+  assert.equal(candidate.frame.closest('.characterdialog').getAttribute('data-characterid'),'twina');
+  assert.ok(first);
+});
+test('selected token is not proof of control if actual character permission excludes player',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  delete h.context.window.d20.player;
+  h.context.window.currentPlayer={id:'player-one'};
+  const token={model:{id:'locked-token',get(key){
+    return key==='represents'?'char-locked':null;
+  }}};
+  h.context.window.d20.engine={selected(){return [token]}};
+  await assert.rejects(h.api.r3NativeBgEnsure('Secret NPC'),/Controlled By/i);
+  assert.equal(x.log.filter(item=>item.kind==='show').length,0);
+});
+test('missing editor identity provides actionable diagnostics, never opens a guessed sheet',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  delete h.context.window.d20.player;
+  delete h.context.window.currentPlayer;
+  await assert.rejects(h.api.r3NativeBgEnsure('Elowen'),/did not expose the logged-in player identity/);
+  assert.equal(x.dialogs.length,0);
+});
+test('Roll20 all-player and array-shaped controlledby grants work, but view-only does not',()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  h.context.window.currentPlayer={id:'player-one'};
+  const models=h.context.window.d20.Campaign.characters.models;
+  const char=models.find(m=>m.id==='char-elf');
+  char.attributes.controlledby=['other-player','player-one'];
+  assert.equal(h.api.r3TokenControls(char),true);
+  char.attributes.controlledby='all';
+  assert.equal(h.api.r3TokenControls(char),true);
+  char.attributes.controlledby='';
+  char.attributes.inplayerjournals='player-one';
+  assert.equal(h.api.r3TokenControls(char),false,'journal visibility is not sheet-control permission');
 });
