@@ -1553,9 +1553,19 @@ function r3NativeCandidate(name){
   }
   const owned=r3NativeBgCandidate();
   if(owned&&R3_NATIVE_BG.name.toLowerCase()===normalized)return owned;
-  const eligible=r3Candidates().filter(c=>c.visible&&c.window&&
-    r3String(c.name,120).toLowerCase()===normalized&&
-    (!pinned||!r3AutoId(c)||r3AutoId(c)===pinned));
+  const linked=R3_TOKEN.active?.name.toLowerCase()===normalized?R3_TOKEN.active:null;
+  const selectedId=linked?.characterId||'';
+  const ambiguous=!r3TokenUnambiguousName(name);
+  const eligible=r3Candidates().filter(c=>{
+    if(!c.visible||!c.window||
+       r3String(c.name,120).toLowerCase()!==normalized)return false;
+    const id=r3AutoId(c);
+    if(pinned&&id&&id!==pinned)return false;
+    if(selectedId&&id&&id!==selectedId)return false;
+    // Two identically named campaign PCs cannot share a nameless popout.
+    if(ambiguous&&(!selectedId||id!==selectedId))return false;
+    return true;
+  });
   const popouts=eligible.filter(c=>c.type==='popout');
   if(popouts.length>1)return null;
   if(popouts.length===1)return popouts[0];
@@ -1602,6 +1612,8 @@ async function r3NativeProbe(name){
   const attackKey=r3String(chosen._key,240);
   const attackText=r3String(chosen.visible,550);
   const characterName=r3String(snap.name,120);
+  const characterId=R3_TOKEN.active?.name.toLowerCase()===characterName.toLowerCase()?
+    R3_TOKEN.active.characterId:'';
   R3_NATIVE.busy=true;
   r3NativeStatus('Locating a private character-sheet reader…');
   try{
@@ -1611,6 +1623,7 @@ async function r3NativeProbe(name){
       candidate=await r3NativeBgEnsure(characterName);
     }
     if(r3String(R3_UI.snapshot?.name,120)!==characterName||
+       (characterId&&R3_TOKEN.active?.characterId!==characterId)||
        r3NativeSelectAttack(attackKey||attackName)?._key!==chosen._key)
       throw new Error('Selected character or attack changed. No roll requested.');
     let background=r3NativeIsOwned(candidate);
@@ -1630,8 +1643,9 @@ async function r3NativeProbe(name){
     }
     if(result.status==='ready'&&typeof result.token==='string'&&
        r3String(R3_UI.snapshot?.name,120)===characterName&&
+       (!characterId||R3_TOKEN.active?.characterId===characterId)&&
        r3NativeSelectAttack(attackKey||attackName)?._key===chosen._key){
-      R3_NATIVE.preview={characterName,attackName,attackKey,attackText,
+      R3_NATIVE.preview={characterName,characterId,attackName,attackKey,attackText,
         token:result.token,window:candidate.window,label:result.label,background};
       r3NativeStatus('Roll20 shows '+r3String(result.label,65)+
         ' for '+attackName+'. Confirm to click once.');
@@ -1647,6 +1661,7 @@ async function r3NativeConfirm(){
   const selected=r3NativeSelectAttack(preview.attackKey||preview.attackName);
   const candidate=r3NativeCandidate(characterName);
   if(characterName.toLowerCase()!==preview.characterName.toLowerCase()||
+     (preview.characterId&&R3_TOKEN.active?.characterId!==preview.characterId)||
      !selected||selected.name!==preview.attackName||
      r3String(selected.visible,550)!==preview.attackText||
      !candidate||candidate.window!==preview.window){
