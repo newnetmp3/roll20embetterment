@@ -3,7 +3,7 @@
 **Updated:** 2026-10-13  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `46708c310a2c298f670c1889156eadbea367eb84` (v3.3.5, PR #55 merged). **New v3.3.6 work pending CI and live Floorp QA.**  
+**Current verified feature baseline:** `06cdd3ab0beb1f3b106a3dae64ca1fc27eba60f3` (v3.3.6, PR #56 merged; 340 tests passed). **Floorp browser confirmation still pending.**  
 **Latest merged milestone:** v3.3.5 automatic character-sheet concealment and post-mount hit-button recheck (PR #55; 334 tests, zero failures). **Live Floorp confirmation remains pending.**  
 **Known unresolved issues:** v3.3.4 resolves the user-reproduced false "cannot verify unique controlled character" path in source and regression tests, but current Roll20 browser runtime still needs Floorp confirmation. Actual Roll20 `showDialog()` opening, authenticated native hit-roll click and chat result are not yet live verified. Multi-PC and spellcast workflows remain incomplete.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
@@ -501,3 +501,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Regression:** Delay reader hello until after iframe creation (single first Find succeeds), retry transient Combat-row failure, refuse mismatched reader identity, ensure manual dialogs aren't styled, expose recovery button and restored geometry, and assert scoped important stylesheet. Existing multi-PC and exact attack identity constraints unchanged.
 
 **Verification gate:** Run npm check, reproducible generated userscript, GitHub Actions, then user Floorp test with all sheets initially closed. CI does not prove whether official Roll20 produced a visible hit roll in chat. Next: test original manual close after Show original sheet, first-click Find, and verified +N Attack only after explicit Confirm.
+
+**v3.3.6 merge checkpoint (2026-10-13):** [PR #56](https://github.com/newnetmp3/roll20embetterment/pull/56) squash-merged to `main` as `06cdd3ab0beb1f3b106a3dae64ca1fc27eba60f3`. Final CI [run 38492651190](https://github.com/newnetmp3/roll20embetterment/actions/runs/38492651190) completed successfully: **340 passed, zero failed**, JavaScript syntax clean, generated Tampermonkey script reproducible. The first-Find handshake, owned-dialog opacity protection, late overlay hiding and manual reveal control are source/test-verified but still need actual Floorp validation; no claim of successful Roll20 chat roll yet. Next: with all player sheets closed, select a controlled token, click Find once, verify the sheet never appears; if something appears use **Show original sheet** to reclaim and close it. Confirm only after the actual attack button is found.

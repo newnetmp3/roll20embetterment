@@ -180,5 +180,7 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Use owned-only important CSS to suppress late Roll20 dialog recentering; avoid disabling the actual sheet's close interaction; conceal late owned overlays.
 - [x] Add Show original sheet recovery action restoring original styles and close behavior; match Auto-sync wrapper/overlay lifecycle.
 - [x] Add first-click, delayed reader, transient mount, wrong identity, CSS and recovery regression tests.
-- [ ] Confirm final CI and generated userscript consistency; merge PR when green.
+- [x] PR #56 merged; final CI 38492651190 green with 340 passing tests and reproducible userscript.
 - [ ] Confirm in live Floorp no foreground sheet and no second Find, plus exactly one actual Roll20 chat hit roll on explicit confirmation.
+
+**v3.3.6 merged:** [PR #56](https://github.com/newnetmp3/roll20embetterment/pull/56), commit `06cdd3ab0beb1f3b106a3dae64ca1fc27eba60f3`, [CI 38492651190](https://github.com/newnetmp3/roll20embetterment/actions/runs/38492651190): 340/340 tests passed. Next user Floorp check is the release gate for real automatic sheet concealment, first-click hit-control readiness, manual reveal and chat roll confirmation.
