@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 14, 2026 (v3.3.4 selected-token/currentPlayer identity compatibility under development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 14, 2026 (v3.3.4 currentPlayer selected-token identity correction merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -157,3 +157,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 
 
 **v3.3.4 — Live background opener failure while player token selected:** User confirms v3.3.3 emitted generic cannot-verify-character despite selected owned token. Browser identity bug: `d20.player` is not reliable, while `window.currentPlayer.id` / Backbone `.get('_id')` is used in Roll20 editor. Fix shared current-player detection and re-read current selected token's represented ID at attack time even before token polling. Reuse explicit character controlledby authorization, prevent viewing permission becoming control permission and bind duplicate-name characters by exact selected represented ID. Add distinct, safely actionable errors for missing player identity vs model/ownership vs opener, plus multi-character security regression tests. **CI verified:** PR #54 run 38488729549 passed **329 tests, zero failures**, userscript regenerated consistently. Live Floorp validation pending; remain cautious with Roll20's undocumented browser sheet opening API.
+
+**v3.3.4 merged:** PR #54 `dcffa62d97cc81f63af3a9d9549c5a303517641b`; final run 38488801556 green (**329 tests passed, 0 failures**, bundle check clean). Fixed Roll20 frontend currentPlayer vs d20.player identity mismatch; selected linked token read at native attack time, duplicate names resolved by exact source ID; no control bypass. Live Floorp verification pending for the real showDialog background reader and actual Roll20 chat hit roll. Continue source diagnostics rather than guess an accessible character or hidden iframe URL.
