@@ -1491,7 +1491,7 @@ test('an attack can probe and confirm through a HUD-owned sheet without opening 
   };
   // The authenticated ready handshake polls using short real-world delays.
   // Advance simulated timeout tasks through microtasks in this fake browser.
-  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  h.context.setTimeout=(fn,ms)=>{if(ms<4000)queueMicrotask(fn);return 1;};
   await h.api.r3NativeProbe('quarterstaff|attack');
   assert.equal(x.log.filter(l=>l.kind==='show').length,1);
   assert.equal(x.log.find(l=>l.type==='native-probe').background,true);
@@ -1636,7 +1636,7 @@ test('native HUD owner hides a newly identified sheet before iframe validation',
     dialog.getAttribute=k=>k==='data-characterid'&&known?'char-elf':null;
     queueMicrotask(()=>{known=true;notify();});
   };
-  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  h.context.setTimeout=(fn,ms)=>{if(ms<4000)queueMicrotask(fn);return 1;};
   const c=await h.api.r3NativeBgEnsure('Elowen');
   assert.equal(c.name,'Elowen');
   assert.equal(observed,true);assert.equal(disconnected,true);
@@ -1717,7 +1717,7 @@ test('first Find waits for an official reader that ignores early hello messages'
       }
     };
   };
-  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  h.context.setTimeout=(fn,ms)=>{if(ms<4000)queueMicrotask(fn);return 1;};
   h.api.r3StartEditorBridge();
   await h.api.r3NativeProbe('bow-one');
   assert.ok(helloCount>=2,'initial find retries authenticated initialization');
@@ -1776,7 +1776,7 @@ test('initial native Find retries transient Combat mounting errors on one HUD ac
       }));
     };
   };
-  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  h.context.setTimeout=(fn,ms)=>{if(ms<4000)queueMicrotask(fn);return 1;};
   await h.api.r3NativeProbe('rapier');
   assert.equal(probes,2);
   assert.equal(x.log.filter(item=>item.kind==='show').length,1);
@@ -1803,7 +1803,7 @@ test('wrong official sheet name fails closed before attempting attack even when 
       }));
     };
   };
-  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  h.context.setTimeout=(fn,ms)=>{if(ms<4000)queueMicrotask(fn);return 1;};
   await h.api.r3NativeProbe('dagger');
   assert.equal(nativeRequests,0);
   assert.equal(h.api.R3_NATIVE.preview,null);
