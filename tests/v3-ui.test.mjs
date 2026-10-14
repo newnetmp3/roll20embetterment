@@ -65,7 +65,7 @@ function panelHarness(character='NIER'){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3TokenPlayerId,r3TokenControls};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3NativeBgReveal,r3TokenPlayerId,r3TokenControls};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1479,10 +1479,13 @@ test('an attack can probe and confirm through a HUD-owned sheet without opening 
       x.log.push({kind:'post',type:data.type,background:data.background});
       queueMicrotask(()=>h.windowListeners.get('message')({
         origin:'https://advanced-sheets.production.roll20preflight.net',
-        source:w,data:{protocol:'r20eb:import:v3',type:'native-result',
-          id:data.id,status:data.type==='native-probe'?'ready':'clicked',
-          token:'reader-sample-token',label:'+4 Attack',
-          message:'Native control acknowledged'}
+        source:w,data:data.type==='hello'?
+          {protocol:'r20eb:import:v3',type:'ready',name:'Elowen',
+            session:'reader-session-elf',mode:'iframe'}:
+          {protocol:'r20eb:import:v3',type:'native-result',
+            id:data.id,status:data.type==='native-probe'?'ready':'clicked',
+            token:'reader-sample-token',label:'+4 Attack',
+            message:'Native control acknowledged'}
       }));
     };
   };
@@ -1679,4 +1682,69 @@ test('auto-sync Journal opener hides a new verified wrapper and modal, restores 
   h.context.closeAutoTest();
   assert.equal(wrap.style.left,'90px');
   assert.equal(modal.style.opacity,'0.6');
+});
+
+test('first Find waits for an official reader that ignores early hello messages',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const snapshot=h.api.r3Empty();snapshot.name='Elowen';
+  snapshot.attacks=[{name:'Longbow',_key:'bow-one',visible:'Longbow +5 Attack 1d8+3'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
+  let helloCount=0,nativeCount=0;
+  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const opening=model.view.showDialog;
+  model.view.showDialog=function(){
+    opening.call(this);
+    const win=x.frames.at(-1).contentWindow;
+    win.postMessage=msg=>{
+      if(msg.type==='hello'){
+        if(++helloCount<2)return; // First message was sent before the official reader mounted.
+        queueMicrotask(()=>h.windowListeners.get('message')({
+          origin:'https://advanced-sheets.production.roll20preflight.net',source:win,
+          data:{protocol:'r20eb:import:v3',type:'ready',
+            name:'Elowen',session:'hello-delayed-reader',mode:'iframe'}
+        }));
+      }else if(msg.type==='native-probe'){
+        nativeCount++;
+        queueMicrotask(()=>h.windowListeners.get('message')({
+          origin:'https://advanced-sheets.production.roll20preflight.net',source:win,
+          data:{protocol:'r20eb:import:v3',type:'native-result',
+            id:msg.id,status:'ready',token:'once-only',
+            label:'+5 Attack',message:'Found true native hit roll'}
+        }));
+      }
+    };
+  };
+  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  h.api.r3StartEditorBridge();
+  await h.api.r3NativeProbe('bow-one');
+  assert.ok(helloCount>=2,'initial find retries authenticated initialization');
+  assert.equal(nativeCount,1,'one player Find sends only one successful attack probe');
+  assert.equal(h.api.R3_NATIVE.preview?.attackName,'Longbow');
+  assert.equal(x.log.filter(item=>item.kind==='show').length,1,'no second dialog');
+});
+test('owned sheet can be revealed and manually closed without invisible pointer traps',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const a=await h.api.r3NativeBgEnsure('Elowen');
+  const sheet=x.dialogs[0];
+  assert.equal(sheet.style.opacity,'0');
+  assert.notEqual(sheet.style.pointerEvents,'none','do not make an accidentally visible sheet uncloseable');
+  h.api.r3NativeBgReveal();
+  assert.equal(sheet.style.left,'30px');
+  assert.equal(sheet.style.top,'40px');
+  assert.equal(sheet.style.opacity,undefined);
+  assert.equal(h.api.R3_NATIVE_BG.dialog,null,'revealed sheet is no longer privately owned');
+  assert.match(h.api.R3_NATIVE.status,/visible again/);
+  assert.ok(a.window);
+});
+test('manual sheets are not hidden by recovery styling or reveal operations',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const manual={style:{position:'absolute',left:'400px',top:'100px',opacity:'1'},
+    getAttribute(key){return key==='data-characterid'?'another-player':null}};
+  x.dialogs.push(manual);
+  await h.api.r3NativeBgEnsure('Elowen');
+  assert.equal(manual.style.opacity,'1');
+  h.api.r3NativeBgReveal();
+  assert.equal(manual.style.left,'400px');
+  assert.equal(manual.style.top,'100px');
+  assert.equal(manual.style.opacity,'1');
 });
