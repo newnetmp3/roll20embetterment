@@ -4,7 +4,8 @@ const R3_AUTO={
   enabled:false,name:'',characterId:'',running:false,active:false,opened:false,openedAt:0,
   lastScan:0,lastFull:0,lastOpenAttempt:0,lastError:'',timer:null,healthTimer:null,
   healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,dirtyTimer:null,
-  ownedDialog:null,originalPosition:null
+  ownedDialog:null,ownedContainer:null,originalPosition:null,preOpenOverlays:null,
+  ownedOverlay:null,originalOverlay:null,openObserver:null
 };
 function r3AutoKey(){return r3StorageKey()+':auto';}
 function r3AutoLoad(){
@@ -89,6 +90,8 @@ function r3AutoOpenFromJournal(now){
   if(R3_AUTO.opened&&now-R3_AUTO.openedAt<30000)return false;
   if(R3_AUTO.opened){
     R3_AUTO.opened=false;
+    R3_AUTO.openObserver?.disconnect();
+    R3_AUTO.openObserver=null;
     r3AutoDisplay('Roll20 did not expose the requested sheet; open its Journal entry manually if needed.');
   }
   if(now-R3_AUTO.lastOpenAttempt<60000)return false;
@@ -104,17 +107,53 @@ function r3AutoOpenFromJournal(now){
   try{
     // Only a dialog CREATED by this request may be moved offscreen.
     R3_AUTO.preOpenDialogs=new Set(document.querySelectorAll('.characterdialog')||[]);
+    R3_AUTO.preOpenOverlays=new Set(document.querySelectorAll('.ui-widget-overlay')||[]);
+    R3_AUTO.openObserver?.disconnect();
+    R3_AUTO.openObserver=typeof MutationObserver==='function'?
+      new MutationObserver(r3AutoShieldNewDialog):null;
+    R3_AUTO.openObserver?.observe(document.documentElement||document,{
+      childList:true,subtree:true,attributes:true,attributeFilter:['data-characterid']
+    });
     entry.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,view:window}));
     R3_AUTO.opened=true;R3_AUTO.openedAt=Date.now();
+    r3AutoShieldNewDialog(); // synchronous Journal events may create the dialog
     r3AutoDisplay('Requested character sheet from the Roll20 journal; waiting for it to load');
     return true;
   }catch(e){
+    R3_AUTO.openObserver?.disconnect();R3_AUTO.openObserver=null;
     r3AutoDisplay('Journal entry could not be opened automatically: '+r3String(e?.message||e,130));
     return false;
   }
 }
-function r3AutoMoveOffscreen(candidate){
-  const dialog=r3AutoDialogFor(candidate);
+function r3AutoShieldOverlay(){
+  if(!R3_AUTO.ownedDialog||R3_AUTO.ownedOverlay)return;
+  const added=Array.from(document.querySelectorAll('.ui-widget-overlay')||[])
+    .filter(el=>!R3_AUTO.preOpenOverlays?.has(el));
+  if(added.length!==1)return; // never affect existing player-owned overlays
+  const overlay=added[0],style=overlay.style||{};
+  R3_AUTO.ownedOverlay=overlay;
+  R3_AUTO.originalOverlay={opacity:style.opacity,pointerEvents:style.pointerEvents};
+  style.opacity='0';style.pointerEvents='none';
+}
+function r3AutoShieldNewDialog(){
+  if(!R3_AUTO.opened||!R3_AUTO.preOpenDialogs)return;
+  if(!R3_AUTO.ownedDialog){
+    const newlyCreated=Array.from(document.querySelectorAll('.characterdialog')||[])
+      .filter(el=>!R3_AUTO.preOpenDialogs.has(el));
+    const matching=newlyCreated.filter(dialog=>{
+      const id=r3NativeBgDialogId(dialog);
+      if(R3_AUTO.characterId)return id===R3_AUTO.characterId;
+      // Without a pinned ID, require an exact visible official sheet name
+      // from this uniquely chosen Journal entry (never a partial name).
+      const name=r3String(dialog.querySelector?.(
+        '[data-testid="character-name"],.asv__header__name')?.textContent,120);
+      return !!name&&name.toLowerCase()===R3_AUTO.name.toLowerCase();
+    });
+    if(matching.length===1)r3AutoMoveDialogOffscreen(matching[0]);
+  }
+  r3AutoShieldOverlay();
+}
+function r3AutoMoveDialogOffscreen(dialog){
   if(!dialog)return false;
   // The 30s check only applies to claiming a newly opened dialog.
   // A dialog already owned by auto-sync remains a background reader for
@@ -127,21 +166,35 @@ function r3AutoMoveOffscreen(candidate){
   // Preserve layout/rendering rather than display:none (which would prevent
   // Vue controls from mounting and being imported). Only move a dialog the
   // script itself asked the journal to open, never a player-opened dialog.
-  R3_AUTO.ownedDialog=dialog;
-  R3_AUTO.originalPosition={left:dialog.style.left,top:dialog.style.top,
-    position:dialog.style.position};
-  dialog.style.position='fixed';
-  dialog.style.left='-20000px';
-  dialog.style.top='-20000px';
+  const container=dialog.closest?.('.ui-dialog')||dialog;
+  R3_AUTO.ownedDialog=dialog;R3_AUTO.ownedContainer=container;
+  R3_AUTO.originalPosition={left:container.style.left,top:container.style.top,
+    position:container.style.position,pointerEvents:container.style.pointerEvents};
+  container.style.position='fixed';
+  container.style.left='-20000px';
+  container.style.top='-20000px';
+  container.style.pointerEvents='none';
+  r3AutoShieldOverlay();
   return true;
 }
+function r3AutoMoveOffscreen(candidate){
+  return r3AutoMoveDialogOffscreen(r3AutoDialogFor(candidate));
+}
 function r3AutoRestoreDialog(){
-  if(R3_AUTO.ownedDialog?.style&&R3_AUTO.originalPosition){
-    const d=R3_AUTO.ownedDialog.style,p=R3_AUTO.originalPosition;
+  R3_AUTO.openObserver?.disconnect();R3_AUTO.openObserver=null;
+  if(R3_AUTO.ownedContainer?.style&&R3_AUTO.originalPosition){
+    const d=R3_AUTO.ownedContainer.style,p=R3_AUTO.originalPosition;
     d.left=p.left;d.top=p.top;d.position=p.position;
+    d.pointerEvents=p.pointerEvents;
   }
-  R3_AUTO.ownedDialog=null;R3_AUTO.originalPosition=null;
-  R3_AUTO.opened=false;R3_AUTO.openedAt=0;R3_AUTO.preOpenDialogs=null;
+  if(R3_AUTO.ownedOverlay?.style&&R3_AUTO.originalOverlay){
+    R3_AUTO.ownedOverlay.style.opacity=R3_AUTO.originalOverlay.opacity;
+    R3_AUTO.ownedOverlay.style.pointerEvents=R3_AUTO.originalOverlay.pointerEvents;
+  }
+  R3_AUTO.ownedDialog=null;R3_AUTO.ownedContainer=null;R3_AUTO.originalPosition=null;
+  R3_AUTO.ownedOverlay=null;R3_AUTO.originalOverlay=null;
+  R3_AUTO.opened=false;R3_AUTO.openedAt=0;
+  R3_AUTO.preOpenDialogs=null;R3_AUTO.preOpenOverlays=null;
 }
 function r3AutoSignature(s){
   return JSON.stringify([s.name,s.stats,s.abilities,s.modifiers,s.saves,s.skills,s.slots,

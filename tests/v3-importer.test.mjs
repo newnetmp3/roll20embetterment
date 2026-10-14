@@ -53,7 +53,7 @@ function harness(fixture=docFixture()){
 }
 test('new production userscript bundles only v3 (not legacy profile reconciliation)',()=>{
   const compiled=readFileSync(join(root,'roll20-embetterment.user.js'),'utf8');
-  assert.match(compiled,/\/\/ @version\s+3\.3\.4/);
+  assert.match(compiled,/\/\/ @version\s+3\.3\.5/);
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
@@ -985,4 +985,36 @@ test('manual official sheet never changes tabs on native attack inspection',asyn
   assert.equal(clicks,0);
   assert.equal(x.sent.at(-1).message.status,'blocked');
   assert.match(x.sent.at(-1).message.message,/Open Combat/);
+});
+
+test('owned background reader rechecks a hit button that mounts after its attack row',async()=>{
+  const x=nativeAttackFixture('Liora Moonfall',[{name:'Moonblade',
+    visible:'Moonblade +6 Attack 1d8+3',controls:['+6 Attack','1d8+3']}]);
+  let attempts=0;
+  const row=x.rows[0],initial=row.querySelectorAll.bind(row);
+  row.querySelectorAll=sel=>{
+    if(sel.startsWith('button,[role="button"]')&&++attempts<3)return [];
+    return initial(sel);
+  };
+  x.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  await x.h.r3NativeReaderHandle(x.peer,{type:'native-probe',
+    id:'r3-late-button-1234',kind:'attacks',background:true,
+    characterName:'Liora Moonfall',attackName:'Moonblade',
+    attackKey:'moonblade',attackText:'Moonblade +6 Attack 1d8+3'});
+  assert.equal(x.sent.at(-1).message.status,'ready');
+  assert.ok(attempts>=3,'probe must recheck the same official attack');
+  assert.equal(x.clicks.length,0);
+});
+test('owned background reader retries but never uses damage as a hit-roll trigger',async()=>{
+  const x=nativeAttackFixture('Brom Stonebeard',[{name:'Hammer',
+    visible:'Hammer +5 Attack 1d6+2',controls:['1d6+2']}]);
+  let waits=0;
+  x.context.setTimeout=fn=>{waits++;queueMicrotask(fn);return 1;};
+  await x.h.r3NativeReaderHandle(x.peer,{type:'native-probe',
+    id:'r3-no-hitbutton-1234',kind:'attacks',background:true,
+    characterName:'Brom Stonebeard',attackName:'Hammer'});
+  assert.equal(x.sent.at(-1).message.status,'blocked');
+  assert.match(x.sent.at(-1).message.message,/no verified attack-roll button/i);
+  assert.ok(waits>=2);
+  assert.equal(x.clicks.length,0);
 });
