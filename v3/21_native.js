@@ -487,6 +487,33 @@ function r3NativeRequest(candidate,type,params={}){
     catch(e){clearTimeout(timeout);R3_NATIVE.pending.delete(id);reject(e);}
   });
 }
+// An authenticated Vue reader can answer before its Combat items have
+// finished mounting. Keep the same user's first Find action pending while
+// the specific official attack row/button becomes available. Never roll here.
+async function r3NativeProbeReady(candidate,params,stillCurrent=()=>true){
+  let latest;
+  for(let attempt=0;attempt<6;attempt++){
+    if(!stillCurrent())throw new Error('Selected character or attack changed while waiting for Roll20.');
+    try{
+      latest=await r3NativeRequest(candidate,'native-probe',params);
+    }catch(error){
+      // Bridge startup race: retry a missing reply only on a proven
+      // script-owned reader. Never silently retry a native-invoke click.
+      if(!params.background||attempt>=2||
+          !/did not answer the native action request/i.test(error?.message||''))throw error;
+      await r3Pause(650);
+      continue;
+    }
+    if(latest.status==='ready'||!params.background)return latest;
+    if(!/^(?:No unique matching |Matched the attack row but found no verified|Background sheet did not expose Combat|Background Combat tab did not activate)/.test(latest.message||''))
+      return latest;
+    if(attempt<5){
+      r3NativeStatus('Waiting for the official Combat attack button to mount…');
+      await r3Pause(650);
+    }
+  }
+  return latest||{status:'blocked',message:'The official attack control did not become available.'};
+}
 function r3NativeResult(event,data){
   const request=R3_NATIVE.pending.get(data?.id);
   if(!request||request.window!==event.source)return;
@@ -538,8 +565,8 @@ async function r3NativeProbe(name){
     let background=r3NativeIsOwned(candidate);
     if(background&&R3_AUTO.running)
       throw new Error('Background import is using the character sheet. Retry the attack shortly.');
-    let result=await r3NativeRequest(candidate,'native-probe',
-      {characterName,attackName,attackKey,attackText,background});
+    let result=await r3NativeProbeReady(candidate,
+      {characterName,attackName,attackKey,attackText,background},stillCurrent);
     // Never change a player-opened sheet's selected tab. If it is not on
     // Combat, try a separate script-created reader. Its tab may be changed.
     if(!background&&result.status==='blocked'&&
@@ -547,8 +574,8 @@ async function r3NativeProbe(name){
       r3NativeStatus('Opening a separate background Combat sheet…');
       candidate=await r3NativeBgEnsure(characterName);
       background=r3NativeIsOwned(candidate);
-      result=await r3NativeRequest(candidate,'native-probe',
-        {characterName,attackName,attackKey,attackText,background});
+      result=await r3NativeProbeReady(candidate,
+        {characterName,attackName,attackKey,attackText,background},stillCurrent);
     }
     if(result.status==='ready'&&typeof result.token==='string'&&
        r3String(R3_UI.snapshot?.name,120)===characterName&&
