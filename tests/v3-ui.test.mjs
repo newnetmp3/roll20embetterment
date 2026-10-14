@@ -1748,3 +1748,73 @@ test('manual sheets are not hidden by recovery styling or reveal operations',asy
   assert.equal(manual.style.top,'100px');
   assert.equal(manual.style.opacity,'1');
 });
+
+test('initial native Find retries transient Combat mounting errors on one HUD action',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const snapshot=h.api.r3Empty();snapshot.name='Elowen';
+  snapshot.attacks=[{name:'Rapier',_key:'rapier',visible:'Rapier +6 Attack 1d8+3'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
+  h.api.r3StartEditorBridge();
+  let probes=0;
+  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const open=model.view.showDialog;
+  model.view.showDialog=function(){
+    open.call(this);
+    const win=x.frames.at(-1).contentWindow;
+    win.postMessage=data=>{
+      const payload=data.type==='hello'?
+        {type:'ready',session:'combat-reader-elf',name:'Elowen',mode:'iframe'}:
+        {type:'native-result',id:data.id,status:++probes===1?'blocked':'ready',
+          message:probes===1?'Matched the attack row but found no verified attack-roll button. Labels: (unlabeled).':'Verified',
+          token:'single-use',label:'+6 Attack'};
+      queueMicrotask(()=>h.windowListeners.get('message')({
+        origin:'https://advanced-sheets.production.roll20preflight.net',
+        source:win,data:{protocol:'r20eb:import:v3',...payload}
+      }));
+    };
+  };
+  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  await h.api.r3NativeProbe('rapier');
+  assert.equal(probes,2);
+  assert.equal(x.log.filter(item=>item.kind==='show').length,1);
+  assert.equal(h.api.R3_NATIVE.preview?.attackName,'Rapier');
+});
+test('wrong official sheet name fails closed before attempting attack even when iframe exists',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const snapshot=h.api.r3Empty();snapshot.name='Elowen';
+  snapshot.attacks=[{name:'Dagger',_key:'dagger',visible:'Dagger +5 Attack 1d4+3'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
+  h.api.r3StartEditorBridge();
+  let nativeRequests=0;
+  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const open=model.view.showDialog;
+  model.view.showDialog=function(){
+    open.call(this);
+    const win=x.frames.at(-1).contentWindow;
+    win.postMessage=data=>{
+      if(data.type!=='hello'){nativeRequests++;return;}
+      queueMicrotask(()=>h.windowListeners.get('message')({
+        origin:'https://advanced-sheets.production.roll20preflight.net',
+        source:win,data:{protocol:'r20eb:import:v3',type:'ready',
+          session:'different-player-sheet',name:'Brom',mode:'iframe'}
+      }));
+    };
+  };
+  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  await h.api.r3NativeProbe('dagger');
+  assert.equal(nativeRequests,0);
+  assert.equal(h.api.R3_NATIVE.preview,null);
+  assert.match(h.api.R3_NATIVE.status,/identity does not match/);
+});
+test('private sheet styles persist as important rules and do not target player-opened windows',async()=>{
+  const x=backgroundNativeRig(),styles=[];
+  x.h.document.head={appendChild(element){styles.push(element);}};
+  const manual={style:{left:'400px',opacity:'1'},getAttribute(k){return k==='data-characterid'?'manual':null}};
+  x.dialogs.push(manual);
+  await x.h.api.r3NativeBgEnsure('Elowen');
+  assert.equal(styles.length,1);
+  assert.match(styles[0].textContent,/data-r3-private-reader/);
+  assert.match(styles[0].textContent,/opacity:0!important/);
+  assert.match(styles[0].textContent,/pointer-events:none!important/);
+  assert.equal(manual.style.opacity,'1');
+});

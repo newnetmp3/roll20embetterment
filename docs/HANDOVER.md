@@ -3,7 +3,7 @@
 **Updated:** 2026-10-13  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `46708c310a2c298f670c1889156eadbea367eb84` (v3.3.5, PR #55 merged).  
+**Current verified feature baseline:** `46708c310a2c298f670c1889156eadbea367eb84` (v3.3.5, PR #55 merged). **New v3.3.6 work pending CI and live Floorp QA.**  
 **Latest merged milestone:** v3.3.5 automatic character-sheet concealment and post-mount hit-button recheck (PR #55; 334 tests, zero failures). **Live Floorp confirmation remains pending.**  
 **Known unresolved issues:** v3.3.4 resolves the user-reproduced false "cannot verify unique controlled character" path in source and regression tests, but current Roll20 browser runtime still needs Floorp confirmation. Actual Roll20 `showDialog()` opening, authenticated native hit-roll click and chat result are not yet live verified. Multi-PC and spellcast workflows remain incomplete.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
@@ -486,3 +486,18 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **PR #55 verification checkpoint:** Source head `33c7866fedbd4b84f0e057ffe96418958ebfb204`, GitHub Actions [run 38491180410](https://github.com/newnetmp3/roll20embetterment/actions/runs/38491180410) passed **334 tests, 0 failures**, JavaScript syntax, generated bundle reproducibility and `npm run check`. This is automated test evidence only; live Floorp sheet concealment and an actual Roll20 chat roll are pending.
 
 **v3.3.5 merge checkpoint (2026-10-13):** PR #55 squash-merged into `main` as `46708c310a2c298f670c1889156eadbea367eb84`. Final PR-head GitHub Actions run [38491256815](https://github.com/newnetmp3/roll20embetterment/actions/runs/38491256815) completed successfully; 334 tests passed, no failures, generated userscript matched the v3 module sources and JavaScript syntax checks passed. This merged source fixes automatic HUD/Auto-sync sheet concealment and late native attack button rechecks. It has **not** been live-confirmed to keep every Roll20 dialog invisible or to emit a genuine chat hit roll. Next: obtain player Floorp feedback with sheets initially closed, plus exact matching hit roll / wrong sheet diagnostics if it still fails.
+
+
+## v3.3.6 — First-Find reader readiness and stuck-visible dialog recovery (2026-10-13)
+
+**Live Floorp regression from user:** v3.3.5 opens a sheet visibly, cannot be manually closed, and a native attack requires a second "Find" click. This overrides optimistic mock-based visibility claims; v3.3.5 was not successful in the user's browser.
+
+**Root cause in source:** Roll20 inserts an iframe before the cross-origin userscript listener is initialized. The old native probe immediately posts to that window and can silently lose the first request. Separately, previous offscreen styling only set ordinary `left/top` and `pointerEvents:none`; Roll20 can recenter the dialog after ownership and leave a visible, uncloseable sheet. A modal overlay may also be created after the first frame registration.
+
+**Fix:** When auto-opening a controlled character, send bounded hello requests until the exact candidate official window announces an authenticated matching sheet session and character name; verify selected character and unique attack remain unchanged. First Find then waits for that reader instead of reporting immediate failure; retry only source-observed transient missing Combat/roll button states, with no automatic click. Expand background probe response timeout to 10s to exceed official Vue tab-mount delays. Fail closed for wrong characters, ambiguous attack rows and damage-only controls.
+
+**Dialog:** Mark only a verified newly owned character dialog and its wrapper with an attribute-scoped `!important` offscreen + opacity rule so late jQuery layout does not re-center it. Keep the official DOM mounted. Do not disable pointer events on the actual dialog so manual close remains possible if host CSS collides. Mark only the new owned modal overlay and keep checking for late overlays; leave preexisting player-owned windows/overlays untouched. Add HUD "Show original sheet" escape hatch to restore inline styles and make the original Roll20 close button usable; this explicitly ends ownership. Apply equivalent style/restoration safety to Auto-sync's separate Journal opener.
+
+**Regression:** Delay reader hello until after iframe creation (single first Find succeeds), retry transient Combat-row failure, refuse mismatched reader identity, ensure manual dialogs aren't styled, expose recovery button and restored geometry, and assert scoped important stylesheet. Existing multi-PC and exact attack identity constraints unchanged.
+
+**Verification gate:** Run npm check, reproducible generated userscript, GitHub Actions, then user Floorp test with all sheets initially closed. CI does not prove whether official Roll20 produced a visible hit roll in chat. Next: test original manual close after Show original sheet, first-click Find, and verified +N Attack only after explicit Confirm.
