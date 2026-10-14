@@ -1,6 +1,6 @@
 # R20 Embetterment — v3 clean restart roadmap
 
-Updated: October 13, 2026 (v3.3.3 HUD-owned background official sheet merged; live browser QA pending). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
+Updated: October 14, 2026 (v3.3.4 selected-token/currentPlayer identity compatibility under development). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
 | --- | --- | --- | --- |
@@ -154,3 +154,6 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 **v3.3.3 CI:** PR #53 final source head `f108f3a1136d5d3bbfb7e8ba3baffa4bd4bbfacd` run 38487842277 green (**322 tests, 0 failures**, build reproducible). Safety covers previous manual dialogs unchanged, multiple owned PCs, same-name character ID mismatch blocked, full probe/confirm path and background-only Combat navigation. Live Floorp check pending before marking it reliable in Roll20.
 
 **v3.3.3 merged:** PR #53 commit `18c32f8cf1ee5eddff23a9848f28fd9e5ade1de1`. Final GitHub Actions run 38487936698 passed **322 tests, 0 failures** and generated-userscript diff check. Supports on-demand player-authorized Roll20 browser model sheet opening into addon-owned offscreen dialogs; never relocates or navigates manually opened sheets, and only navigates Combat in an authenticated owned frame. Same-name characters bound to selected token IDs. Real Floorp/official Vue mounting and actual chat roll still require user confirmation. Next: live QA of automatic background session with official sheet initially closed; then fix any specific opener/iframe diagnostics without weakening authentication.
+
+
+**v3.3.4 — Live background opener failure while player token selected:** User confirms v3.3.3 emitted generic cannot-verify-character despite selected owned token. Browser identity bug: `d20.player` is not reliable, while `window.currentPlayer.id` / Backbone `.get('_id')` is used in Roll20 editor. Fix shared current-player detection and re-read current selected token's represented ID at attack time even before token polling. Reuse explicit character controlledby authorization, prevent viewing permission becoming control permission and bind duplicate-name characters by exact selected represented ID. Add distinct, safely actionable errors for missing player identity vs model/ownership vs opener, plus multi-character security regression tests. Pending CI and live Floorp validation; remain cautious with Roll20's undocumented browser sheet opening API.
