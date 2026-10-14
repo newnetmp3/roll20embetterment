@@ -1458,3 +1458,41 @@ test('background sheets are not synthesized from existing iframes or unrelated c
   assert.equal(x.log.length,0);
   assert.ok(manual);
 });
+
+test('an attack can probe and confirm through a HUD-owned sheet without opening a manual sheet',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const snapshot=h.api.r3Empty();snapshot.name='Elowen';
+  snapshot.attacks=[{name:'Quarterstaff',_key:'quarterstaff|attack',
+    visible:'Quarterstaff Melee +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
+  h.api.r3HudRender();
+  // The fake official reader answers authenticated requests as a mounted
+  // reader would. No preexisting character iframe or manually opened sheet.
+  const original=x.create;
+  const models=h.context.window.d20.Campaign.characters.models;
+  const char=models.find(c=>c.id==='char-elf');
+  const originalShow=char.view.showDialog;
+  char.view.showDialog=function(){
+    originalShow.call(this);
+    const frame=x.frames.at(-1),w=frame.contentWindow;
+    w.postMessage=(data,origin)=>{
+      x.log.push({kind:'post',type:data.type,background:data.background});
+      queueMicrotask(()=>h.windowListeners.get('message')({
+        origin:'https://advanced-sheets.production.roll20preflight.net',
+        source:w,data:{protocol:'r20eb:import:v3',type:'native-result',
+          id:data.id,status:data.type==='native-probe'?'ready':'clicked',
+          token:'reader-sample-token',label:'+4 Attack',
+          message:'Native control acknowledged'}
+      }));
+    };
+  };
+  await h.api.r3NativeProbe('quarterstaff|attack');
+  assert.equal(x.log.filter(l=>l.kind==='show').length,1);
+  assert.equal(x.log.find(l=>l.type==='native-probe').background,true);
+  assert.equal(h.api.R3_NATIVE.preview.characterName,'Elowen');
+  await h.api.r3NativeConfirm();
+  assert.equal(x.log.find(l=>l.type==='native-invoke').background,true);
+  assert.equal(x.log.filter(l=>l.kind==='show').length,1,
+    'confirm reuses the owned dialog instead of opening a second sheet');
+  assert.equal(x.dialogs[0].style.left,'-20000px');
+});
