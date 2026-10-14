@@ -159,3 +159,13 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 **v3.3.4 — Live background opener failure while player token selected:** User confirms v3.3.3 emitted generic cannot-verify-character despite selected owned token. Browser identity bug: `d20.player` is not reliable, while `window.currentPlayer.id` / Backbone `.get('_id')` is used in Roll20 editor. Fix shared current-player detection and re-read current selected token's represented ID at attack time even before token polling. Reuse explicit character controlledby authorization, prevent viewing permission becoming control permission and bind duplicate-name characters by exact selected represented ID. Add distinct, safely actionable errors for missing player identity vs model/ownership vs opener, plus multi-character security regression tests. **CI verified:** PR #54 run 38488729549 passed **329 tests, zero failures**, userscript regenerated consistently. Live Floorp validation pending; remain cautious with Roll20's undocumented browser sheet opening API.
 
 **v3.3.4 merged:** PR #54 `dcffa62d97cc81f63af3a9d9549c5a303517641b`; final run 38488801556 green (**329 tests passed, 0 failures**, bundle check clean). Fixed Roll20 frontend currentPlayer vs d20.player identity mismatch; selected linked token read at native attack time, duplicate names resolved by exact source ID; no control bypass. Live Floorp verification pending for the real showDialog background reader and actual Roll20 chat hit roll. Continue source diagnostics rather than guess an accessible character or hidden iframe URL.
+
+
+## v3.3.5 — Background sheet privacy and native action readiness (2026-10-13)
+
+- [x] Observe a Roll20 dialog before opening; shield only the newly created, identity-verified, player-owned sheet and its newly created modal overlay.
+- [x] Apply equivalent exact-identity, wrapper-aware shielding to Auto-sync's Journal opener; preserve manual dialogs and restore inline styles on disable.
+- [x] Retry source-verified missing Combat tab / +N Attack hit controls after bounded mount delays; remain fail-closed for wrong characters, ambiguous attacks and damage buttons.
+- [x] Add late-mount/overlay/restoration regression tests and generate v3.3.5 userscript.
+- [ ] Require green CI on the feature branch and update the handover accordingly.
+- [ ] Validate live Floorp sheet concealment and exactly one resulting Roll20 chat hit roll after player confirmation.

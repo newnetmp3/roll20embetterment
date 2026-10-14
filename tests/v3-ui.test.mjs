@@ -1613,3 +1613,70 @@ test('Roll20 all-player and array-shaped controlledby grants work, but view-only
   char.attributes.inplayerjournals='player-one';
   assert.equal(h.api.r3TokenControls(char),false,'journal visibility is not sheet-control permission');
 });
+
+test('native HUD owner hides a newly identified sheet before iframe validation',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  let notify,observed=false,disconnected=false,known=false;
+  h.context.MutationObserver=class{
+    constructor(cb){notify=cb;}
+    observe(){observed=true;}
+    disconnect(){disconnected=true;}
+  };
+  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const show=model.view.showDialog;
+  model.view.showDialog=function(){
+    show.call(this);
+    const dialog=x.dialogs.at(-1);
+    dialog.getAttribute=k=>k==='data-characterid'&&known?'char-elf':null;
+    queueMicrotask(()=>{known=true;notify();});
+  };
+  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
+  const c=await h.api.r3NativeBgEnsure('Elowen');
+  assert.equal(c.name,'Elowen');
+  assert.equal(observed,true);assert.equal(disconnected,true);
+  assert.equal(x.dialogs.at(-1).style.left,'-20000px');
+});
+test('HUD owner shields only its new modal overlay',async()=>{
+  const x=backgroundNativeRig(),h=x.h,old={style:{opacity:'0.6',pointerEvents:'auto'}};
+  x.overlays.push(old);
+  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const show=model.view.showDialog;
+  model.view.showDialog=function(){show.call(this);x.overlays.push({style:{opacity:'0.6',pointerEvents:'auto'}});};
+  await h.api.r3NativeBgEnsure('Elowen');
+  assert.equal(x.overlays[1].style.opacity,'0');
+  assert.equal(x.overlays[1].style.pointerEvents,'none');
+  assert.equal(old.style.opacity,'0.6');
+});
+test('auto-sync Journal opener hides a new verified wrapper and modal, restores both on disable',()=>{
+  const h=panelHarness(),a=h.api.R3_AUTO;
+  a.enabled=true;a.name='Aria';a.characterId='char-aria';
+  let observing=false;
+  h.context.MutationObserver=class{
+    constructor(callback){this.callback=callback;}
+    observe(){observing=true;}
+    disconnect(){}
+  };
+  h.context.MouseEvent=function(type){this.type=type;};
+  const existing={style:{left:'300px'},getAttribute(k){return k==='data-characterid'?'other':null}};
+  const priorOverlay={style:{opacity:'0.6',pointerEvents:'auto'}};
+  const wrap={style:{position:'absolute',left:'90px',top:'75px',pointerEvents:'auto'}};
+  const created={style:{left:'30px'},getAttribute(k){return k==='data-characterid'?'char-aria':null},
+    closest(sel){return sel==='.ui-dialog'?wrap:null}};
+  const modal={style:{opacity:'0.6',pointerEvents:'auto'}};
+  const dialogs=[existing],overlays=[priorOverlay];
+  const row={getAttribute(k){return k==='data-characterid'?'char-aria':null},
+    dispatchEvent(event){assert.equal(event.type,'dblclick');dialogs.push(created);overlays.push(modal);}};
+  const query=h.document.querySelectorAll.bind(h.document);
+  h.document.querySelectorAll=sel=>sel==='.characterdialog'?dialogs:
+    sel==='.ui-widget-overlay'?overlays:sel.includes('#journal')?[row]:query(sel);
+  vm.runInContext('globalThis.openAutoTest=r3AutoOpenFromJournal;globalThis.closeAutoTest=r3AutoRestoreDialog;',h.context);
+  assert.equal(h.context.openAutoTest(Date.now()),true);
+  assert.equal(observing,true);
+  assert.equal(wrap.style.left,'-20000px');
+  assert.equal(modal.style.opacity,'0');
+  assert.equal(priorOverlay.style.opacity,'0.6');
+  assert.equal(existing.style.left,'300px');
+  h.context.closeAutoTest();
+  assert.equal(wrap.style.left,'90px');
+  assert.equal(modal.style.opacity,'0.6');
+});

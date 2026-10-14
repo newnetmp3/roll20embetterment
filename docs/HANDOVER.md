@@ -4,7 +4,7 @@
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
 **Current verified feature baseline:** `dcffa62d97cc81f63af3a9d9549c5a303517641b` (v3.3.4, PR #54 merged).  
-**Latest completed milestone:** v3.3.4 browser currentPlayer identity and selected-token-controlled background sheet resolution (PR #54, 329 tests passed).  
+**Latest merged milestone:** v3.3.4 browser identity and selected-token background sheets (PR #54; 329 tests). **New milestone:** v3.3.5 script-owned hidden dialogs and post-mount hit-button rechecks; live Floorp QA pending.  
 **Known unresolved issues:** v3.3.4 resolves the user-reproduced false "cannot verify unique controlled character" path in source and regression tests, but current Roll20 browser runtime still needs Floorp confirmation. Actual Roll20 `showDialog()` opening, authenticated native hit-roll click and chat result are not yet live verified. Multi-PC and spellcast workflows remain incomplete.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
@@ -467,3 +467,18 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **Next:** User updates to v3.3.4 with official sheet closed and a linked controllable token selected. On Find native Roll20 attack, the addon should progress beyond control-identity check. If Roll20's internal `showDialog()` does not open/instantiate a 2024 reader, use its distinct new diagnostic to investigate rather than relaxing identity checks.
 
 **v3.3.4 merged checkpoint (2026-10-14):** PR #54 squash-merged into `main` as `dcffa62d97cc81f63af3a9d9549c5a303517641b`. Final PR-head GitHub Actions run 38488801556 successful (**329 tests passed, 0 failures**, userscript regeneration clean). Live failure addressed: selected owned token still yielded generic cannot-verify, because original `r3TokenPlayerId()` ignored `window.currentPlayer.id`. Both token follower and native background opener now support this actual Roll20 browser ID and Backbone getter fallback. Native opener also reads current selected token directly before 400ms poll and reports distinct missing identity/model/control reasons. All permissions still must match current player ID or all, so GM view-only and unowned characters fail closed. User should update and test with their already-selected token and no manual sheet: click Find native Roll20 attack; if background session creation remains blocked, capture the new specific HUD message. Browser success and genuine chat roll not yet proven.
+
+
+## v3.3.5 — Hide automatic sheets and recheck native hit buttons (2026-10-13)
+
+**User-reported need:** Automatically opened character sheets should not become visible to the player. Before reporting missing native attack controls, recheck the Combat view after the official 2024 UI has had time to mount.
+
+**HUD native reader:** Install a MutationObserver before showDialog or the matched Journal opener. Newly inserted dialogs are moved offscreen as soon as their character ID matches the resolved, explicitly player-controlled Roll20 model, even if that ID arrives after the initial shell. No display:none, visibility:hidden, or modification of already opened manual sheets. Hide only a newly created overlay. Disconnect after a bounded reader acquisition; preserve existing fallback polling and strict character identity.
+
+**Auto-sync Journal reader:** Also preobserve the separate automatic Journal opening path, concealing only a uniquely created matching dialog (character ID when pinned, exact rendered name otherwise) and its modal wrapper/overlay. Keep the official iframe rendered. Restore pre-existing inline styles, overlays and observers when Auto-sync is disabled; do not move manual dialogs.
+
+**Trigger recovery:** On an addon-owned official sheet, wait for Combat to appear and become active; when the specifically named attack row or verified +N Attack button is missing, poll that official DOM seven further times at 250 ms intervals before failing. Recheck sheet identity on each poll. Never confuse hit dice with damage dice, click during probe, select the first of duplicate indistinguishable rows or navigate a manually opened sheet. Explicit one-use confirmation still governs the click.
+
+**Regression coverage:** Delayed character ID, preexisting manual overlay isolation, Auto-sync container visibility/restoration, delayed hit button, and damage-only retry failure. Regenerated Tampermonkey script version 3.3.5. GitHub Actions and real Floorp confirmation are separate gates; do not claim that the official Roll20 chat displayed a hit roll without the user's live proof.
+
+**Next:** Install/test with all sheets closed. Check no automatic foreground sheet or overlay appears; when +N Attack mounts, Verify/Confirm should reach the official control, and exactly one roll should appear in chat. Validate two different player-controlled characters and same-name attacks.
