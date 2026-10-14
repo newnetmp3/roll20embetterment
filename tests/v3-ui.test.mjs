@@ -65,7 +65,7 @@ function panelHarness(character='NIER'){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1371,4 +1371,160 @@ test('legacy name-only native probe refuses two identically named imported attac
   h.shadow.handlers.get('click')({target:{dataset:{hudProbe:'Dagger'}}});
   assert.equal(h.sent.length,before);
   assert.match(h.api.R3_NATIVE.status,/unique attack/);
+});
+
+
+function backgroundNativeRig(){
+  const h=panelHarness('Elowen'),dialogs=[],frames=[],overlays=[],log=[];
+  h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const original=h.document.querySelectorAll.bind(h.document);
+  h.document.querySelectorAll=selector=>
+    selector==='iframe'?frames:selector==='.characterdialog'?dialogs:
+      selector==='.ui-widget-overlay'?overlays:original(selector);
+  const characters=new Map(),models=[];
+  function create(id,name,controlledby='player-one'){
+    const model={id,attributes:{name,controlledby},get(k){return this.attributes[k]}};
+    model.view={showDialog(){
+      log.push({kind:'show',id});
+      const dialog={id:'new-'+id,isConnected:true,style:{position:'absolute',left:'30px',top:'40px'},
+        getAttribute(k){return k==='data-characterid'?id:null},
+        closest(){return null}};
+      const win={postMessage(message){log.push({kind:'post',id,type:message.type})}};
+      const frame={src:'https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/test',
+        contentWindow:win,getClientRects(){return [{}]},
+        getAttribute(k){return k==='title'?name:null},
+        closest(selector){return selector.includes('.characterdialog')?dialog:null}};
+      dialogs.push(dialog);frames.push(frame);
+      return dialog;
+    }};
+    characters.set(id,model);models.push(model);
+    return model;
+  }
+  create('char-elf','Elowen');create('char-dwarf','Brom');
+  create('char-locked','Secret NPC','other-player');
+  h.context.window.d20={player:{id:'player-one'},
+    Campaign:{characters:{models,get(id){return characters.get(id)}}}};
+  return {h,dialogs,frames,overlays,log,create};
+}
+test('background native reader opens only a new linked controllable player sheet and moves it offscreen',async()=>{
+  const x=backgroundNativeRig();
+  const manual={style:{left:'400px',top:'100px',position:'absolute'},
+    getAttribute(k){return k==='data-characterid'?'other-character':null}};
+  x.dialogs.push(manual);
+  const c=await x.h.api.r3NativeBgEnsure('Elowen');
+  assert.equal(c.name,'Elowen');
+  assert.equal(x.log.filter(y=>y.kind==='show').length,1);
+  assert.equal(x.dialogs.length,2);
+  assert.equal(x.dialogs[1].style.left,'-20000px');
+  assert.equal(x.dialogs[1].style.top,'-20000px');
+  assert.equal(manual.style.left,'400px','unrelated manually opened sheet was not moved');
+  assert.equal(manual.style.position,'absolute');
+  assert.equal(x.h.api.r3NativeBgCandidate().window,c.window);
+  assert.equal(x.h.api.r3NativeIsOwned(c),true);
+});
+test('background attack session refuses to move or reopen a manually opened same-character sheet',async()=>{
+  const x=backgroundNativeRig();
+  const manual={style:{left:'300px',top:'20px',position:'absolute'},
+    getAttribute(k){return k==='data-characterid'?'char-elf':null}};
+  x.dialogs.push(manual);
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Elowen'),/already open/);
+  assert.equal(x.log.length,0);
+  assert.equal(manual.style.left,'300px');
+});
+test('no controller permission and duplicate names block creating background character sessions',async()=>{
+  const x=backgroundNativeRig();
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Secret NPC'),/Cannot verify/);
+  x.create('char-elf2','Elowen');
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Elowen'),/Cannot verify/);
+  assert.equal(x.log.length,0);
+});
+test('two owned background readers are isolated and reusable when switching selected characters',async()=>{
+  const x=backgroundNativeRig();
+  const first=await x.h.api.r3NativeBgEnsure('Elowen');
+  const second=await x.h.api.r3NativeBgEnsure('Brom');
+  assert.notEqual(first.window,second.window);
+  assert.equal(x.dialogs.length,2);
+  assert.equal(x.dialogs[0].style.left,'-20000px');
+  assert.equal(x.dialogs[1].style.left,'-20000px');
+  const again=await x.h.api.r3NativeBgEnsure('Elowen');
+  assert.equal(again.window,first.window);
+  assert.equal(x.log.filter(x=>x.kind==='show').length,2);
+  assert.equal(x.h.api.r3NativeIsOwned(again),true);
+});
+test('background sheets are not synthesized from existing iframes or unrelated character names',async()=>{
+  const x=backgroundNativeRig();
+  const manual=x.create('other','Different Player','player-one');
+  await assert.rejects(x.h.api.r3NativeBgEnsure('Nier'),/Cannot verify/);
+  assert.equal(x.log.length,0);
+  assert.ok(manual);
+});
+
+test('an attack can probe and confirm through a HUD-owned sheet without opening a manual sheet',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const snapshot=h.api.r3Empty();snapshot.name='Elowen';
+  snapshot.attacks=[{name:'Quarterstaff',_key:'quarterstaff|attack',
+    visible:'Quarterstaff Melee +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
+  h.api.r3HudRender();
+  // The fake official reader answers authenticated requests as a mounted
+  // reader would. No preexisting character iframe or manually opened sheet.
+  const original=x.create;
+  const models=h.context.window.d20.Campaign.characters.models;
+  const char=models.find(c=>c.id==='char-elf');
+  const originalShow=char.view.showDialog;
+  char.view.showDialog=function(){
+    originalShow.call(this);
+    const frame=x.frames.at(-1),w=frame.contentWindow;
+    w.postMessage=(data,origin)=>{
+      x.log.push({kind:'post',type:data.type,background:data.background});
+      queueMicrotask(()=>h.windowListeners.get('message')({
+        origin:'https://advanced-sheets.production.roll20preflight.net',
+        source:w,data:{protocol:'r20eb:import:v3',type:'native-result',
+          id:data.id,status:data.type==='native-probe'?'ready':'clicked',
+          token:'reader-sample-token',label:'+4 Attack',
+          message:'Native control acknowledged'}
+      }));
+    };
+  };
+  await h.api.r3NativeProbe('quarterstaff|attack');
+  assert.equal(x.log.filter(l=>l.kind==='show').length,1);
+  assert.equal(x.log.find(l=>l.type==='native-probe').background,true);
+  assert.equal(h.api.R3_NATIVE.preview.characterName,'Elowen');
+  await h.api.r3NativeConfirm();
+  assert.equal(x.log.find(l=>l.type==='native-invoke').background,true);
+  assert.equal(x.log.filter(l=>l.kind==='show').length,1,
+    'confirm reuses the owned dialog instead of opening a second sheet');
+  assert.equal(x.dialogs[0].style.left,'-20000px');
+});
+
+test('background native requests cannot reuse an unrelated same-name character token reader',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  x.create('char-twin-one','Twin'),x.create('char-twin-two','Twin');
+  h.api.R3_TOKEN.active={characterId:'char-twin-one',name:'Twin'};
+  const otherDialog={style:{left:'40px'},
+    getAttribute(k){return k==='data-characterid'?'char-twin-two':null}};
+  x.dialogs.push(otherDialog);
+  x.frames.push({src:'https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/test',
+    contentWindow:{postMessage(){}},getClientRects(){return [{}]},
+    getAttribute(k){return k==='title'?'Twin':null},
+    closest(){return otherDialog}});
+  assert.equal(h.api.r3NativeCandidate('Twin'),null);
+  const selected=await h.api.r3NativeBgEnsure('Twin');
+  assert.equal(selected.name,'Twin');
+  assert.equal(selected.frame.closest('.characterdialog').getAttribute('data-characterid'),'char-twin-one');
+  assert.equal(otherDialog.style.left,'40px');
+});
+test('a native attack confirmation cannot cross to a different same-named selected token',async()=>{
+  const h=panelHarness('Twin');h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Twin';
+  snap.attacks=[{name:'Spear',_key:'spear|+5',visible:'Spear +5 Attack 1d6'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.api.R3_TOKEN.active={characterId:'char-second',name:'Twin'};
+  h.api.R3_NATIVE.preview={characterName:'Twin',characterId:'char-first',
+    attackName:'Spear',attackKey:'spear|+5',attackText:'Spear +5 Attack 1d6',
+    token:'one-use',window:{}};
+  await h.api.r3NativeConfirm();
+  assert.equal(h.api.R3_NATIVE.preview,null);
+  assert.match(h.api.R3_NATIVE.status,/sheet changed/);
+  assert.equal(h.sent.length,0);
 });

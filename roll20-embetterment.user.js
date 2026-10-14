@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
-// @version      3.3.2
+// @version      3.3.3
 // @description  Player-first combat HUD backed by authenticated D&D 2024 sheet data.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
@@ -735,7 +735,12 @@ async function r3ReaderReceive(event){
   const data=event.data;if(data?.protocol!==R3_PROTOCOL)return;
   if(data.type==='hello'){r3ReaderAnnounce();return;}
   if(data.type==='native-probe'||data.type==='native-invoke'){
-    r3NativeReaderHandle(peer,data);return;
+    void r3NativeReaderHandle(peer,data).catch(error=>{
+      try{peer.postMessage(r3Msg('native-result',{
+        id:data.id,status:'blocked',session:R3_SESSION,
+        message:'Official sheet could not inspect that attack: '+
+          r3String(error?.message||error,145)}),R3_EDITOR);}catch{}
+    });return;
   }
   if(data.type!=='scan'||typeof data.id!=='string'||!/^r3-[\w.-]{4,100}$/.test(data.id))return;
   if(!['current','all','hp'].includes(data.mode))return;
@@ -1308,7 +1313,7 @@ function r3NativeAttackControl(name,source={}){
   const fingerprint=wanted+'|'+actual.bonus+'|'+actual.damage+'|'+label;
   return {button:roll[0].button,label,fingerprint};
 }
-function r3NativeReaderHandle(peer,data){
+async function r3NativeReaderHandle(peer,data){
   if(!['native-probe','native-invoke'].includes(data?.type)||
       typeof data.id!=='string'||!/^r3-[\w.-]{4,100}$/.test(data.id))return;
   const respond=(status,message,extras={})=>{
@@ -1324,6 +1329,19 @@ function r3NativeReaderHandle(peer,data){
   if(data.kind!=='attacks'||!characterName||!attackName||
     characterName.toLowerCase()!==r3NameFromDocument(document).toLowerCase()){
     respond('blocked','This action does not belong to the open character sheet.');return;
+  }
+  // Only HUD-owned or Auto-sync-owned hidden sheets may have their tabs
+  // switched automatically. A player-opened sheet is never navigated.
+  if(data.background===true&&!/^combat$/i.test(r3CurrentTabLabel())){
+    const combat=r3Tabs().find(tab=>/^combat$/i.test(r3TabLabel(tab)));
+    if(!combat||!r3Shown(combat)){
+      respond('blocked','Background official sheet did not expose Combat.');return;
+    }
+    combat.click();
+    await r3Pause(320);
+    if(!/^combat$/i.test(r3CurrentTabLabel())){
+      respond('blocked','Background sheet Combat tab did not become active.');return;
+    }
   }
   if(data.type==='native-probe'){
     const found=r3NativeAttackControl(attackName,{visible:attackText});
@@ -1355,6 +1373,168 @@ function r3NativeReaderHandle(peer,data){
     respond('blocked','The official Roll20 roll control could not be clicked.');
   }
 }
+
+// Own a separate editor dialog only if it did not exist before our
+// request. An already-open player/GM sheet is never hidden, repositioned,
+// clicked through, reparented, closed or navigated by this helper.
+const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
+  original:null,overlay:null,overlayOriginal:null,opening:null,sessions:new Map()};
+function r3NativeBgCharacter(name){
+  const wanted=r3String(name,120).toLowerCase();
+  const chars=window.d20?.Campaign?.characters;
+  const player=r3TokenPlayerId();
+  if(!wanted||!player||!chars)return null;
+  const named=Array.isArray(chars.models)?chars.models.filter(m=>
+    r3String(r3TokenModelGet(m,'name'),120).toLowerCase()===wanted):[];
+  // A selected linked token is the strongest available identity; do not
+  // choose by name alone if another campaign character shares that name.
+  const selected=R3_TOKEN.active;
+  const model=selected&&selected.name.toLowerCase()===wanted?
+    chars.get?.(selected.characterId):named.length===1?named[0]:null;
+  if(!model)return null;
+  const id=r3String(model.id||r3TokenModelGet(model,'_id'),110);
+  if(!id||selected&&selected.name.toLowerCase()===wanted&&id!==selected.characterId)return null;
+  const controlled=r3String(r3TokenModelGet(model,'controlledby'),1000)
+    .split(',').map(x=>x.trim());
+  if(!controlled.includes('all')&&!controlled.includes(player))return null;
+  return {model,id,name:r3String(r3TokenModelGet(model,'name'),120)};
+}
+function r3NativeBgRemember(){
+  const bg=R3_NATIVE_BG;
+  if(bg.dialog&&bg.characterId)
+    bg.sessions.set(bg.characterId,{characterId:bg.characterId,name:bg.name,
+      dialog:bg.dialog,moved:bg.moved,original:bg.original,
+      overlay:bg.overlay,overlayOriginal:bg.overlayOriginal});
+}
+function r3NativeBgActivate(record){Object.assign(R3_NATIVE_BG,record);}
+function r3NativeBgClearActive(){
+  const bg=R3_NATIVE_BG;
+  bg.dialog=null;bg.moved=null;bg.original=null;
+  bg.overlay=null;bg.overlayOriginal=null;bg.characterId='';bg.name='';
+}
+function r3NativeBgDialogId(dialog){
+  return r3String(dialog?.getAttribute?.('data-characterid')||
+    dialog?.closest?.('[data-characterid]')?.getAttribute?.('data-characterid'),110);
+}
+function r3NativeBgCandidate(){
+  const owned=R3_NATIVE_BG.dialog;
+  if(!owned||!owned.isConnected&&owned.isConnected!==undefined)return null;
+  return r3Candidates().find(c=>c.type==='iframe'&&c.visible&&c.window&&
+    (c.frame?.closest?.('.characterdialog')===owned||
+      owned.contains?.(c.frame))&&r3AutoId(c)===R3_NATIVE_BG.characterId)||null;
+}
+function r3NativeBgRestore(){
+  const bg=R3_NATIVE_BG;
+  if(bg.moved?.style&&bg.original){
+    for(const key of ['position','left','top','pointerEvents'])
+      bg.moved.style[key]=bg.original[key];
+  }
+  if(bg.overlay?.style&&bg.overlayOriginal){
+    bg.overlay.style.opacity=bg.overlayOriginal.opacity;
+    bg.overlay.style.pointerEvents=bg.overlayOriginal.pointerEvents;
+  }
+  bg.sessions.delete(bg.characterId);
+  r3NativeBgClearActive();
+}
+function r3NativeBgClaim(before,beforeOverlays,identity){
+  const added=Array.from(document.querySelectorAll('.characterdialog')||[])
+    .filter(el=>!before.has(el)&&r3NativeBgDialogId(el)===identity.id);
+  if(added.length!==1)return false;
+  const dialog=added[0],container=dialog.closest?.('.ui-dialog')||dialog;
+  R3_NATIVE_BG.characterId=identity.id;
+  R3_NATIVE_BG.name=identity.name;
+  R3_NATIVE_BG.dialog=dialog;R3_NATIVE_BG.moved=container;
+  const style=container.style||{};
+  R3_NATIVE_BG.original={position:style.position,left:style.left,top:style.top,
+    pointerEvents:style.pointerEvents};
+  // Do NOT set display:none/visibility:hidden/inert: Vue and hit-roll
+  // controls must stay mounted; simply move the script-owned container away.
+  style.position='fixed';style.left='-20000px';style.top='-20000px';
+  style.pointerEvents='none';
+  const newOverlays=Array.from(document.querySelectorAll('.ui-widget-overlay')||[])
+    .filter(el=>!beforeOverlays.has(el));
+  if(newOverlays.length===1){
+    const overlay=newOverlays[0],overStyle=overlay.style||{};
+    R3_NATIVE_BG.overlay=overlay;
+    R3_NATIVE_BG.overlayOriginal={opacity:overStyle.opacity,
+      pointerEvents:overStyle.pointerEvents};
+    overStyle.opacity='0';overStyle.pointerEvents='none';
+  }
+  r3NativeBgRemember();
+  return true;
+}
+function r3NativeBgJournal(identity){
+  const entries=Array.from(document.querySelectorAll(
+    '#journal [data-characterid],#journal [data-itemid],'+
+    '.journalitem[data-characterid],.journalitem[data-itemid]')||[]).slice(0,500);
+  const exact=entries.filter(el=>[
+    el.getAttribute?.('data-characterid'),el.getAttribute?.('data-itemid')
+  ].includes(identity.id));
+  return exact.length===1?exact[0]:null;
+}
+async function r3NativeBgOpen(name){
+  const bg=R3_NATIVE_BG;
+  const identity=r3NativeBgCharacter(name);
+  if(!identity)throw new Error('Cannot verify a unique character you control in Roll20. Select its token first.');
+  if(bg.dialog&&bg.characterId===identity.id){
+    const c=r3NativeBgCandidate();
+    if(c)return c;
+  }
+  // Avoid launching a second sheet while Roll20 already has a dialog for
+  // that character. showDialog() might focus a manual dialog instead.
+  const existing=Array.from(document.querySelectorAll('.characterdialog')||[]);
+  if(existing.some(el=>r3NativeBgDialogId(el)===identity.id&&
+      el!==bg.dialog&&el!==bg.sessions.get(identity.id)?.dialog))
+    throw new Error('That sheet is already open. Switch its Combat tab or close it before background mode.');
+  if(bg.dialog&&bg.characterId!==identity.id){
+    r3NativeBgRemember();
+    r3NativeBgClearActive();
+  }
+  const prior=bg.sessions.get(identity.id);
+  if(prior?.dialog){
+    r3NativeBgActivate(prior);
+    const candidate=r3NativeBgCandidate();
+    if(candidate)return candidate;
+    bg.sessions.delete(identity.id);r3NativeBgClearActive();
+  }
+  if(bg.sessions.size>=6)
+    throw new Error('Too many HUD-owned background sheets. Reload Roll20 to clear old sessions.');
+  const before=new Set(existing),overlays=new Set(
+    document.querySelectorAll('.ui-widget-overlay')||[]);
+  const open=identity.model?.view?.showDialog;
+  if(typeof open==='function')open.call(identity.model.view);
+  else{
+    const row=r3NativeBgJournal(identity);
+    if(!row)throw new Error('Roll20 did not expose a background sheet opener. Open the Journal once to load the character.');
+    row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true,view:window}));
+  }
+  for(let i=0;i<36;i++){
+    if(!bg.dialog)r3NativeBgClaim(before,overlays,identity);
+    if(bg.dialog){
+      const candidate=r3NativeBgCandidate();
+      if(candidate)return candidate;
+    }
+    await r3Pause(150);
+  }
+  throw new Error('Roll20 did not create an authenticated sheet frame. No existing character sheet was changed.');
+}
+async function r3NativeBgEnsure(name){
+  if(R3_NATIVE_BG.opening)return R3_NATIVE_BG.opening;
+  const task=r3NativeBgOpen(name);
+  R3_NATIVE_BG.opening=task;
+  try{return await task;}
+  finally{if(R3_NATIVE_BG.opening===task)R3_NATIVE_BG.opening=null;}
+}
+
+function r3NativeIsOwned(candidate){
+  const owned=r3NativeBgCandidate();
+  // Candidate descriptors are rebuilt on every DOM scan. Compare the
+  // authenticated window reference rather than ephemeral object identity.
+  return !!candidate&&!!(
+    (owned&&candidate.window===owned.window)||
+    (R3_AUTO.ownedDialog&&r3AutoDialogFor(candidate)===R3_AUTO.ownedDialog)
+  );
+}
 function r3NativeCandidate(name){
   // Select exactly one authenticated official sheet with the same character
   // identity; prefer a unique popout. Disallow conflicting IDs.
@@ -1363,9 +1543,29 @@ function r3NativeCandidate(name){
   // Auto-sync's pinned ID applies only to the same character. Never lock
   // someone else's imported character to a previous character's ID.
   const pinned=R3_AUTO.name.toLowerCase()===normalized?R3_AUTO.characterId:'';
-  const eligible=r3Candidates().filter(c=>c.visible&&c.window&&
-    r3String(c.name,120).toLowerCase()===normalized&&
-    (!pinned||!r3AutoId(c)||r3AutoId(c)===pinned));
+  const identity=r3NativeBgCharacter(name);
+  if(identity&&R3_NATIVE_BG.characterId!==identity.id){
+    const prior=R3_NATIVE_BG.sessions.get(identity.id);
+    if(prior?.dialog){
+      r3NativeBgRemember();
+      r3NativeBgActivate(prior);
+    }
+  }
+  const owned=r3NativeBgCandidate();
+  if(owned&&R3_NATIVE_BG.name.toLowerCase()===normalized)return owned;
+  const linked=R3_TOKEN.active?.name.toLowerCase()===normalized?R3_TOKEN.active:null;
+  const selectedId=linked?.characterId||'';
+  const ambiguous=!r3TokenUnambiguousName(name);
+  const eligible=r3Candidates().filter(c=>{
+    if(!c.visible||!c.window||
+       r3String(c.name,120).toLowerCase()!==normalized)return false;
+    const id=r3AutoId(c);
+    if(pinned&&id&&id!==pinned)return false;
+    if(selectedId&&id&&id!==selectedId)return false;
+    // Two identically named campaign PCs cannot share a nameless popout.
+    if(ambiguous&&(!selectedId||id!==selectedId))return false;
+    return true;
+  });
   const popouts=eligible.filter(c=>c.type==='popout');
   if(popouts.length>1)return null;
   if(popouts.length===1)return popouts[0];
@@ -1412,19 +1612,45 @@ async function r3NativeProbe(name){
   const attackKey=r3String(chosen._key,240);
   const attackText=r3String(chosen.visible,550);
   const characterName=r3String(snap.name,120);
-  const candidate=r3NativeCandidate(characterName);
-  if(!candidate){r3NativeStatus('Open the matching official 2024 character sheet, then try again.');return;}
-  R3_NATIVE.busy=true;r3NativeStatus('Checking the native roll control…');
+  const characterId=R3_TOKEN.active?.name.toLowerCase()===characterName.toLowerCase()?
+    R3_TOKEN.active.characterId:'';
+  R3_NATIVE.busy=true;
+  r3NativeStatus('Locating a private character-sheet reader…');
   try{
-    const result=await r3NativeRequest(candidate,'native-probe',
-      {characterName,attackName,attackKey,attackText});
-    if(result.status==='ready'&&typeof result.token==='string'){
-      R3_NATIVE.preview={characterName,attackName,attackKey,attackText,
-        token:result.token,window:candidate.window,label:result.label};
-      r3NativeStatus('Roll20 shows a native '+r3String(result.label,65)+
-        ' control for '+attackName+'. Confirm to click once.');
+    let candidate=r3NativeCandidate(characterName);
+    if(!candidate){
+      r3NativeStatus('Opening a HUD-owned background sheet for '+characterName+'…');
+      candidate=await r3NativeBgEnsure(characterName);
+    }
+    if(r3String(R3_UI.snapshot?.name,120)!==characterName||
+       (characterId&&R3_TOKEN.active?.characterId!==characterId)||
+       r3NativeSelectAttack(attackKey||attackName)?._key!==chosen._key)
+      throw new Error('Selected character or attack changed. No roll requested.');
+    let background=r3NativeIsOwned(candidate);
+    if(background&&R3_AUTO.running)
+      throw new Error('Background import is using the character sheet. Retry the attack shortly.');
+    let result=await r3NativeRequest(candidate,'native-probe',
+      {characterName,attackName,attackKey,attackText,background});
+    // Never change a player-opened sheet's selected tab. If it is not on
+    // Combat, try a separate script-created reader. Its tab may be changed.
+    if(!background&&result.status==='blocked'&&
+        /^Open Combat on the official sheet/i.test(result.message||'')){
+      r3NativeStatus('Opening a separate background Combat sheet…');
+      candidate=await r3NativeBgEnsure(characterName);
+      background=r3NativeIsOwned(candidate);
+      result=await r3NativeRequest(candidate,'native-probe',
+        {characterName,attackName,attackKey,attackText,background});
+    }
+    if(result.status==='ready'&&typeof result.token==='string'&&
+       r3String(R3_UI.snapshot?.name,120)===characterName&&
+       (!characterId||R3_TOKEN.active?.characterId===characterId)&&
+       r3NativeSelectAttack(attackKey||attackName)?._key===chosen._key){
+      R3_NATIVE.preview={characterName,characterId,attackName,attackKey,attackText,
+        token:result.token,window:candidate.window,label:result.label,background};
+      r3NativeStatus('Roll20 shows '+r3String(result.label,65)+
+        ' for '+attackName+'. Confirm to click once.');
     }else r3NativeStatus(result.message||'No verified native roll button was found.');
-  }catch(e){r3NativeStatus(e.message||'Native action probe failed.');}
+  }catch(e){r3NativeStatus(e.message||'Background roll preparation failed.');}
   finally{R3_NATIVE.busy=false;r3HudRender();}
 }
 async function r3NativeConfirm(){
@@ -1435,6 +1661,7 @@ async function r3NativeConfirm(){
   const selected=r3NativeSelectAttack(preview.attackKey||preview.attackName);
   const candidate=r3NativeCandidate(characterName);
   if(characterName.toLowerCase()!==preview.characterName.toLowerCase()||
+     (preview.characterId&&R3_TOKEN.active?.characterId!==preview.characterId)||
      !selected||selected.name!==preview.attackName||
      r3String(selected.visible,550)!==preview.attackText||
      !candidate||candidate.window!==preview.window){
@@ -1444,7 +1671,7 @@ async function r3NativeConfirm(){
   try{
     const response=await r3NativeRequest(candidate,'native-invoke',
       {characterName,attackName:preview.attackName,attackKey:preview.attackKey,
-        attackText:preview.attackText,token:preview.token});
+        attackText:preview.attackText,token:preview.token,background:!!preview.background});
     r3NativeStatus(response.message||'No native action result returned.');
   }catch(e){r3NativeStatus(e.message||'Native roll request failed.');}
   finally{R3_NATIVE.busy=false;r3HudRender();}
