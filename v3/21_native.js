@@ -456,7 +456,7 @@ function r3NativeCandidate(name){
 // Do not send the first attack until it has answered an authenticated hello.
 function r3NativeReaderAnnounce(event,data,candidate){
   if(!candidate||typeof data.session!=='string'||
-      !/^[\\w.:-]{6,100}$/.test(data.session))return;
+      !/^[\w.:-]{6,100}$/.test(data.session))return;
   const name=r3String(data.name,120);
   if(name)R3_NATIVE.readers.set(event.source,{name,session:data.session});
 }
