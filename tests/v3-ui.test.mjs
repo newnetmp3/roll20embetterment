@@ -1496,3 +1496,35 @@ test('an attack can probe and confirm through a HUD-owned sheet without opening 
     'confirm reuses the owned dialog instead of opening a second sheet');
   assert.equal(x.dialogs[0].style.left,'-20000px');
 });
+
+test('background native requests cannot reuse an unrelated same-name character token reader',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  x.create('char-twin-one','Twin'),x.create('char-twin-two','Twin');
+  h.api.R3_TOKEN.active={characterId:'char-twin-one',name:'Twin'};
+  const otherDialog={style:{left:'40px'},
+    getAttribute(k){return k==='data-characterid'?'char-twin-two':null}};
+  x.dialogs.push(otherDialog);
+  x.frames.push({src:'https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/test',
+    contentWindow:{postMessage(){}},getClientRects(){return [{}]},
+    getAttribute(k){return k==='title'?'Twin':null},
+    closest(){return otherDialog}});
+  assert.equal(h.api.r3NativeCandidate('Twin'),null);
+  const selected=await h.api.r3NativeBgEnsure('Twin');
+  assert.equal(selected.name,'Twin');
+  assert.equal(selected.frame.closest('.characterdialog').getAttribute('data-characterid'),'char-twin-one');
+  assert.equal(otherDialog.style.left,'40px');
+});
+test('a native attack confirmation cannot cross to a different same-named selected token',async()=>{
+  const h=panelHarness('Twin');h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Twin';
+  snap.attacks=[{name:'Spear',_key:'spear|+5',visible:'Spear +5 Attack 1d6'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.api.R3_TOKEN.active={characterId:'char-second',name:'Twin'};
+  h.api.R3_NATIVE.preview={characterName:'Twin',characterId:'char-first',
+    attackName:'Spear',attackKey:'spear|+5',attackText:'Spear +5 Attack 1d6',
+    token:'one-use',window:{}};
+  await h.api.r3NativeConfirm();
+  assert.equal(h.api.R3_NATIVE.preview,null);
+  assert.match(h.api.R3_NATIVE.status,/sheet changed/);
+  assert.equal(h.sent.length,0);
+});
