@@ -10,9 +10,35 @@ function r3TokenModelGet(model,key){
   try{return model?.get?.(key)??model?.attributes?.[key];}catch{return undefined;}
 }
 function r3TokenPlayerId(){
+  // Roll20's actual browser editor exposes the current account as
+  // window.currentPlayer (Backbone model). d20.player is optional in
+  // several client versions; relying on it alone blocks valid PCs.
   const d=window.d20;
-  return r3String(d?.player?.id||r3TokenModelGet(d?.player,'_id')||
-    r3TokenModelGet(d?.player,'id')||d?.player_id,100);
+  const sources=[window.currentPlayer,d?.player];
+  for(const model of sources){
+    const id=r3String(model?.id||r3TokenModelGet(model,'_id')||
+      r3TokenModelGet(model,'id'),100);
+    if(id)return id;
+  }
+  return r3String(window.player_id||window.playerid||d?.player_id,100);
+}
+function r3TokenControls(character,playerId=r3TokenPlayerId()){
+  if(!character||!playerId)return false;
+  const raw=r3TokenModelGet(character,'controlledby');
+  const ids=(Array.isArray(raw)?raw:
+    r3String(raw,1200).split(',')).map(x=>r3String(x,110).trim()).filter(Boolean);
+  return ids.includes('all')||ids.includes(playerId);
+}
+function r3TokenCharacter(charId){
+  const characters=window.d20?.Campaign?.characters;
+  if(!characters||!charId)return null;
+  try{
+    const exact=characters.get?.(charId);
+    if(exact)return exact;
+  }catch{}
+  return Array.isArray(characters.models)?
+    characters.models.find(c=>r3String(c?.id||r3TokenModelGet(c,'_id'),110)===charId)||null:
+    null;
 }
 function r3TokenSelected(){
   try{
@@ -33,16 +59,14 @@ function r3TokenLinkedInfo(object){
     r3TokenModelGet(model,'_represents'),110);
   if(!tokenId||!charId)return null;
   const d=window.d20;
-  const character=d?.Campaign?.characters?.get?.(charId);
+  const character=r3TokenCharacter(charId);
   if(!character)return null;
   const name=r3String(r3TokenModelGet(character,'name'),120);
   const playerId=r3TokenPlayerId();
   if(!name||!playerId)return null;
   // Character permissions override token permissions for linked graphics.
   // An empty list cannot prove access. GM selection alone is not permission.
-  const controlling=r3String(r3TokenModelGet(character,'controlledby'),1000)
-    .split(',').map(x=>x.trim()).filter(Boolean);
-  if(!controlling.includes('all')&&!controlling.includes(playerId))return null;
+  if(!r3TokenControls(character,playerId))return null;
   const tokenImage=r3TokenSafeArt(r3TokenModelGet(model,'imgsrc')||
     object?._element?.src);
   return {tokenId,characterId:charId,name,tokenImage};
