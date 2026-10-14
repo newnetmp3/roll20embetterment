@@ -178,7 +178,7 @@ async function r3NativeReaderHandle(peer,data){
 // request. An already-open player/GM sheet is never hidden, repositioned,
 // clicked through, reparented, closed or navigated by this helper.
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
-  original:null,overlay:null,overlayOriginal:null,opening:null,sessions:new Map()};
+  original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,opening:null,sessions:new Map()};
 function r3NativeBgResolve(name){
   const wanted=r3String(name,120).trim().toLowerCase();
   if(!wanted)return {reason:'No imported character name is available in the HUD.'};
@@ -226,13 +226,13 @@ function r3NativeBgRemember(){
   const bg=R3_NATIVE_BG;
   if(bg.dialog&&bg.characterId)
     bg.sessions.set(bg.characterId,{characterId:bg.characterId,name:bg.name,
-      dialog:bg.dialog,moved:bg.moved,original:bg.original,
+      dialog:bg.dialog,moved:bg.moved,original:bg.original,dialogOriginal:bg.dialogOriginal,
       overlay:bg.overlay,overlayOriginal:bg.overlayOriginal});
 }
 function r3NativeBgActivate(record){Object.assign(R3_NATIVE_BG,record);}
 function r3NativeBgClearActive(){
   const bg=R3_NATIVE_BG;
-  bg.dialog=null;bg.moved=null;bg.original=null;
+  bg.dialog=null;bg.moved=null;bg.original=null;bg.dialogOriginal=null;
   bg.overlay=null;bg.overlayOriginal=null;bg.characterId='';bg.name='';
 }
 function r3NativeBgDialogId(dialog){
@@ -249,10 +249,16 @@ function r3NativeBgCandidate(){
 function r3NativeBgRestore(){
   const bg=R3_NATIVE_BG;
   if(bg.moved?.style&&bg.original){
-    for(const key of ['position','left','top','pointerEvents'])
+    r3PrivateUnmark(bg.moved,'data-r3-private-reader');
+    if(bg.dialog!==bg.moved)r3PrivateUnmark(bg.dialog,'data-r3-private-reader');
+    for(const key of ['position','left','top','opacity','pointerEvents'])
       bg.moved.style[key]=bg.original[key];
+    if(bg.dialog!==bg.moved&&bg.dialog?.style&&bg.dialogOriginal)
+      for(const key of ['position','left','top','opacity'])
+        bg.dialog.style[key]=bg.dialogOriginal[key];
   }
   if(bg.overlay?.style&&bg.overlayOriginal){
+    r3PrivateUnmark(bg.overlay,'data-r3-private-overlay');
     bg.overlay.style.opacity=bg.overlayOriginal.opacity;
     bg.overlay.style.pointerEvents=bg.overlayOriginal.pointerEvents;
   }
@@ -269,9 +275,31 @@ function r3NativeBgShieldOverlay(beforeOverlays){
   const overlay=added[0],style=overlay.style||{};
   bg.overlay=overlay;
   bg.overlayOriginal={opacity:style.opacity,pointerEvents:style.pointerEvents};
-  style.opacity='0';style.pointerEvents='none';
+  r3PrivateMark(overlay,'data-r3-private-overlay');
   r3NativeBgRemember();
 }
+// Persistent, identity-scoped CSS resists Roll20 jQuery dialog recentering.
+// Opacity preserves the official Vue DOM, unlike display:none.
+function r3PrivateStyle(){
+  if(!document.head?.appendChild||document.getElementById?.('r3-private-sheet-style'))return;
+  const el=document.createElement('style');el.id='r3-private-sheet-style';
+  el.textContent='[data-r3-private-reader]{position:fixed!important;left:-20000px!important;top:-20000px!important;transform:translate(-20000px,-20000px)!important;opacity:0!important;}'+
+    '[data-r3-private-overlay]{opacity:0!important;pointer-events:none!important;}';
+  document.head.appendChild(el);
+}
+function r3PrivateMark(el,attr){
+  if(!el)return;
+  r3PrivateStyle();
+  el.setAttribute?.(attr,'');
+  if(attr==='data-r3-private-reader'&&el.style){
+    el.style.position='fixed';el.style.left='-20000px';
+    el.style.top='-20000px';el.style.opacity='0';
+  }
+  if(attr==='data-r3-private-overlay'&&el.style){
+    el.style.opacity='0';el.style.pointerEvents='none';
+  }
+}
+function r3PrivateUnmark(el,attr){el?.removeAttribute?.(attr);}
 function r3NativeBgClaim(before,beforeOverlays,identity){
   const added=Array.from(document.querySelectorAll('.characterdialog')||[])
     .filter(el=>!before.has(el)&&r3NativeBgDialogId(el)===identity.id);
@@ -282,11 +310,14 @@ function r3NativeBgClaim(before,beforeOverlays,identity){
   R3_NATIVE_BG.dialog=dialog;R3_NATIVE_BG.moved=container;
   const style=container.style||{};
   R3_NATIVE_BG.original={position:style.position,left:style.left,top:style.top,
-    pointerEvents:style.pointerEvents};
-  // Do NOT set display:none/visibility:hidden/inert: Vue and hit-roll
-  // controls must stay mounted; simply move the script-owned container away.
-  style.position='fixed';style.left='-20000px';style.top='-20000px';
-  style.pointerEvents='none';
+    opacity:style.opacity,pointerEvents:style.pointerEvents};
+  R3_NATIVE_BG.dialogOriginal=dialog!==container?{
+    position:dialog.style?.position,left:dialog.style?.left,
+    top:dialog.style?.top,opacity:dialog.style?.opacity}:null;
+  // Shield wrapper and inner dialog in case Roll20 reparents its modal.
+  // Do not disable pointer events on the sheet: fallback close must work.
+  r3PrivateMark(container,'data-r3-private-reader');
+  if(dialog!==container)r3PrivateMark(dialog,'data-r3-private-reader');
   r3NativeBgShieldOverlay(beforeOverlays);
   r3NativeBgRemember();
   return true;
@@ -555,11 +586,18 @@ async function r3NativeConfirm(){
   finally{R3_NATIVE.busy=false;r3HudRender();}
 }
 function r3NativeCancel(){R3_NATIVE.preview=null;r3NativeStatus('Native roll cancelled; nothing was clicked.');}
+function r3NativeBgReveal(){
+  if(!R3_NATIVE_BG.dialog)return;
+  R3_NATIVE.preview=null;
+  r3NativeBgRestore();
+  r3NativeStatus('The original Roll20 sheet is visible again and can be closed normally.');
+}
 function r3NativeMarkup(){
-  if(!R3_NATIVE.status&&!R3_NATIVE.preview)return '';
+  if(!R3_NATIVE.status&&!R3_NATIVE.preview&&!R3_NATIVE_BG.dialog)return '';
   return '<section class="hud-native-status" role="status">'+
     '<span>'+r3Escape(R3_NATIVE.status)+'</span>'+
     (R3_NATIVE.preview?'<button type="button" id="r3-hud-native-confirm">Confirm native roll</button>'+
       '<button type="button" id="r3-hud-native-cancel">Cancel</button>':'')+
+    (R3_NATIVE_BG.dialog?'<button type="button" id="r3-hud-native-reveal">Show original sheet</button>':'')+
     '</section>';
 }
