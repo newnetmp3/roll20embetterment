@@ -206,6 +206,7 @@ function r3UIEvent(event){
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
   else if(target?.id==='r3-hud-native-confirm')return r3NativeConfirm();
   else if(target?.id==='r3-hud-native-cancel')return r3NativeCancel();
+  else if(target?.id==='r3-hud-native-reveal')return r3NativeBgReveal();
   else if(typeof nativeProbe==='string'&&nativeProbe.length<=240){
     return r3NativeProbe(nativeProbe);
   }

@@ -171,3 +171,14 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Validate live Floorp sheet concealment and exactly one resulting Roll20 chat hit roll after player confirmation.
 
 **v3.3.5 merged verification (2026-10-13):** PR #55 merged at `46708c310a2c298f670c1889156eadbea367eb84`, final CI [38491256815](https://github.com/newnetmp3/roll20embetterment/actions/runs/38491256815) passed 334 tests and generated script checks. Remaining verification is live Floorp HUD-owned and Auto-sync sheet concealment plus real Roll20 chat roll proof.
+
+
+## v3.3.6 — One-click readiness and recoverable native sheet hiding (2026-10-13)
+
+- [x] Replace iframe-exists = reader-ready assumption with authenticated, exact-character hello handshake before first native probe.
+- [x] Retry transient owned Combat control mounting within a single Find action; never retry native-invoke / real attack clicks automatically.
+- [x] Use owned-only important CSS to suppress late Roll20 dialog recentering; avoid disabling the actual sheet's close interaction; conceal late owned overlays.
+- [x] Add Show original sheet recovery action restoring original styles and close behavior; match Auto-sync wrapper/overlay lifecycle.
+- [x] Add first-click, delayed reader, transient mount, wrong identity, CSS and recovery regression tests.
+- [ ] Confirm final CI and generated userscript consistency; merge PR when green.
+- [ ] Confirm in live Floorp no foreground sheet and no second Find, plus exactly one actual Roll20 chat hit roll on explicit confirmation.

@@ -201,6 +201,9 @@ function r3Listen(event){
   if(event.origin!==R3_ORIGIN||event.data?.protocol!==R3_PROTOCOL||!event.source)return;
   const data=event.data,candidate=r3Candidates().find(c=>c.window===event.source);
   if(data.type==='ready'){
+    // Only a known frame or already registered popout can signal readiness.
+    // A source name is checked again against the chosen HUD character.
+    r3NativeReaderAnnounce(event,data,candidate);
     // Cross-origin official popouts announce their opener with the same
     // authenticated bridge as embedded official sheets. Roll20 often sends
     // an initial "ready" before Vue has populated the character's name.
