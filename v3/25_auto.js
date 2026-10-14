@@ -133,7 +133,7 @@ function r3AutoShieldOverlay(){
   const overlay=added[0],style=overlay.style||{};
   R3_AUTO.ownedOverlay=overlay;
   R3_AUTO.originalOverlay={opacity:style.opacity,pointerEvents:style.pointerEvents};
-  style.opacity='0';style.pointerEvents='none';
+  r3PrivateMark(overlay,'data-r3-private-overlay');
 }
 function r3AutoShieldNewDialog(){
   if(!R3_AUTO.opened||!R3_AUTO.preOpenDialogs)return;
@@ -169,11 +169,13 @@ function r3AutoMoveDialogOffscreen(dialog){
   const container=dialog.closest?.('.ui-dialog')||dialog;
   R3_AUTO.ownedDialog=dialog;R3_AUTO.ownedContainer=container;
   R3_AUTO.originalPosition={left:container.style.left,top:container.style.top,
-    position:container.style.position,pointerEvents:container.style.pointerEvents};
-  container.style.position='fixed';
-  container.style.left='-20000px';
-  container.style.top='-20000px';
-  container.style.pointerEvents='none';
+    position:container.style.position,opacity:container.style.opacity,
+    pointerEvents:container.style.pointerEvents};
+  R3_AUTO.dialogOriginal=dialog!==container?{
+    left:dialog.style?.left,top:dialog.style?.top,
+    position:dialog.style?.position,opacity:dialog.style?.opacity}:null;
+  r3PrivateMark(container,'data-r3-private-reader');
+  if(dialog!==container)r3PrivateMark(dialog,'data-r3-private-reader');
   r3AutoShieldOverlay();
   return true;
 }
@@ -183,15 +185,23 @@ function r3AutoMoveOffscreen(candidate){
 function r3AutoRestoreDialog(){
   R3_AUTO.openObserver?.disconnect();R3_AUTO.openObserver=null;
   if(R3_AUTO.ownedContainer?.style&&R3_AUTO.originalPosition){
+    r3PrivateUnmark(R3_AUTO.ownedContainer,'data-r3-private-reader');
+    if(R3_AUTO.ownedDialog!==R3_AUTO.ownedContainer)
+      r3PrivateUnmark(R3_AUTO.ownedDialog,'data-r3-private-reader');
     const d=R3_AUTO.ownedContainer.style,p=R3_AUTO.originalPosition;
-    d.left=p.left;d.top=p.top;d.position=p.position;
+    d.left=p.left;d.top=p.top;d.position=p.position;d.opacity=p.opacity;
     d.pointerEvents=p.pointerEvents;
+    if(R3_AUTO.ownedDialog!==R3_AUTO.ownedContainer&&R3_AUTO.ownedDialog?.style&&R3_AUTO.dialogOriginal)
+      for(const key of ['left','top','position','opacity'])
+        R3_AUTO.ownedDialog.style[key]=R3_AUTO.dialogOriginal[key];
   }
   if(R3_AUTO.ownedOverlay?.style&&R3_AUTO.originalOverlay){
+    r3PrivateUnmark(R3_AUTO.ownedOverlay,'data-r3-private-overlay');
     R3_AUTO.ownedOverlay.style.opacity=R3_AUTO.originalOverlay.opacity;
     R3_AUTO.ownedOverlay.style.pointerEvents=R3_AUTO.originalOverlay.pointerEvents;
   }
   R3_AUTO.ownedDialog=null;R3_AUTO.ownedContainer=null;R3_AUTO.originalPosition=null;
+  R3_AUTO.dialogOriginal=null;
   R3_AUTO.ownedOverlay=null;R3_AUTO.originalOverlay=null;
   R3_AUTO.opened=false;R3_AUTO.openedAt=0;
   R3_AUTO.preOpenDialogs=null;R3_AUTO.preOpenOverlays=null;
