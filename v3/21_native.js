@@ -178,7 +178,7 @@ async function r3NativeReaderHandle(peer,data){
 // request. An already-open player/GM sheet is never hidden, repositioned,
 // clicked through, reparented, closed or navigated by this helper.
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
-  original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,opening:null,sessions:new Map()};
+  original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,preOverlays:null,opening:null,sessions:new Map()};
 function r3NativeBgResolve(name){
   const wanted=r3String(name,120).trim().toLowerCase();
   if(!wanted)return {reason:'No imported character name is available in the HUD.'};
@@ -227,13 +227,13 @@ function r3NativeBgRemember(){
   if(bg.dialog&&bg.characterId)
     bg.sessions.set(bg.characterId,{characterId:bg.characterId,name:bg.name,
       dialog:bg.dialog,moved:bg.moved,original:bg.original,dialogOriginal:bg.dialogOriginal,
-      overlay:bg.overlay,overlayOriginal:bg.overlayOriginal});
+      overlay:bg.overlay,overlayOriginal:bg.overlayOriginal,preOverlays:bg.preOverlays});
 }
 function r3NativeBgActivate(record){Object.assign(R3_NATIVE_BG,record);}
 function r3NativeBgClearActive(){
   const bg=R3_NATIVE_BG;
   bg.dialog=null;bg.moved=null;bg.original=null;bg.dialogOriginal=null;
-  bg.overlay=null;bg.overlayOriginal=null;bg.characterId='';bg.name='';
+  bg.overlay=null;bg.overlayOriginal=null;bg.preOverlays=null;bg.characterId='';bg.name='';
 }
 function r3NativeBgDialogId(dialog){
   return r3String(dialog?.getAttribute?.('data-characterid')||
@@ -242,6 +242,9 @@ function r3NativeBgDialogId(dialog){
 function r3NativeBgCandidate(){
   const owned=R3_NATIVE_BG.dialog;
   if(!owned||!owned.isConnected&&owned.isConnected!==undefined)return null;
+  // Roll20 can append a modal overlay after the iframe mounts. Keep the
+  // owned session's exclusive overlay shield current during reader polling.
+  if(R3_NATIVE_BG.preOverlays)r3NativeBgShieldOverlay(R3_NATIVE_BG.preOverlays);
   return r3Candidates().find(c=>c.type==='iframe'&&c.visible&&c.window&&
     (c.frame?.closest?.('.characterdialog')===owned||
       owned.contains?.(c.frame))&&r3AutoId(c)===R3_NATIVE_BG.characterId)||null;
@@ -362,6 +365,7 @@ async function r3NativeBgOpen(name){
     throw new Error('Too many HUD-owned background sheets. Reload Roll20 to clear old sessions.');
   const before=new Set(existing),overlays=new Set(
     document.querySelectorAll('.ui-widget-overlay')||[]);
+  bg.preOverlays=overlays;
   // Start observing BEFORE showDialog. Mutations are processed before paint,
   // including the common case where the character ID arrives after the shell.
   // Only a newly created dialog with this authorized character ID can be moved.
