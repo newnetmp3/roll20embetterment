@@ -1489,6 +1489,9 @@ test('an attack can probe and confirm through a HUD-owned sheet without opening 
       }));
     };
   };
+  // The authenticated ready handshake polls using short real-world delays.
+  // Advance simulated timeout tasks through microtasks in this fake browser.
+  h.context.setTimeout=fn=>{queueMicrotask(fn);return 1;};
   await h.api.r3NativeProbe('quarterstaff|attack');
   assert.equal(x.log.filter(l=>l.kind==='show').length,1);
   assert.equal(x.log.find(l=>l.type==='native-probe').background,true);
