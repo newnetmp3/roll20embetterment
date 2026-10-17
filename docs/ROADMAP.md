@@ -195,3 +195,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Require passing CI before merging and record final verified run/commit in handover.
 - [ ] Live Firefox/Floorp and Chrome testing with Tampermonkey disabled: HUD, importer, cross-origin bridge, first native Find, own hidden sheet and actual one-time chat roll.
 - [ ] Future: Mozilla Add-ons signing for permanent Firefox XPI and Chrome Web Store publishing (separate accounts/review).
+
+**v3.4.0 merged (2026-10-17):** [PR #57](https://github.com/newnetmp3/roll20embetterment/pull/57) merged at `1e752f23c6ee1f58bf9cc7075acf81aa64bbd95a`. [CI 39080887581](https://github.com/newnetmp3/roll20embetterment/actions/runs/39080887581) green, 343/343 tests and extension archives attached. Live browser QA and signing/store release remain open.

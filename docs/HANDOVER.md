@@ -3,8 +3,8 @@
 **Updated:** 2026-10-13  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
-**Current verified feature baseline:** `06cdd3ab0beb1f3b106a3dae64ca1fc27eba60f3` (v3.3.6, PR #56 merged; 340 tests passed). **Floorp browser confirmation still pending.**  
-**Latest merged milestone:** v3.3.5 automatic character-sheet concealment and post-mount hit-button recheck (PR #55; 334 tests, zero failures). **Live Floorp confirmation remains pending.**  
+**Current verified feature baseline:** `1e752f23c6ee1f58bf9cc7075acf81aa64bbd95a` (v3.4.0, PR #57 merged; 343 automated tests passed). **Live Firefox/Chrome browser confirmation still pending.**  
+**Latest merged milestone:** v3.4.0 standalone Firefox/Floorp and Chrome/Chromium Manifest V3 extension packaging (PR #57; 343 tests, zero failures). **Live browser validation and Mozilla signing remain pending.**  
 **Known unresolved issues:** v3.3.4 resolves the user-reproduced false "cannot verify unique controlled character" path in source and regression tests, but current Roll20 browser runtime still needs Floorp confirmation. Actual Roll20 `showDialog()` opening, authenticated native hit-roll click and chat result are not yet live verified. Multi-PC and spellcast workflows remain incomplete.  
 **Pending:** Confirm live approximately one-second HP detection with mounted controls, background opening from Journal, and authoritative AC/speed values.  
 
@@ -516,3 +516,5 @@ Unlabeled 17/55 fields have changing UUIDs between exports; do not hardcode IDs 
 **QA:** Version 3.4.0 shared with optional userscript. npm run check compiles both formats and tests manifest source order, correct page-world handling and ZIP package layout, plus prior v3 tests. Existing Roll20-origin localStorage remains in the same browser profile. Require green CI before merging, then update baseline.
 
 **Open:** This is a packaging change, not independent evidence that the hidden background sheet or first Find now works in Floorp/Chrome. Test with old Tampermonkey injector disabled, new extension installed, reload game, use authorized linked token, import sheet, test native Find and Confirm, observe actual chat result. Store signing/distribution not yet performed.
+
+**v3.4.0 merge checkpoint (2026-10-17):** PR #57 squash-merged into main at `1e752f23c6ee1f58bf9cc7075acf81aa64bbd95a`. Latest PR-head GitHub Actions [run 39080887581](https://github.com/newnetmp3/roll20embetterment/actions/runs/39080887581) passed **343 tests, zero failures**, JavaScript syntax and generated userscript comparison, and uploaded two Firefox/Chrome ZIP extension archives. Unpacked build directories and ZIPs can be recreated with npm run build:extension. Mozilla-signed persistent Firefox .xpi was not created; the provided Firefox ZIP is an unsigned temporary developer add-on. Disable prior Tampermonkey script when switching. Next: live Firefox/Chrome install test, official 2024 frame, HUD token selection and authenticated native roll (plus previous hidden dialog issue), and only then consider AMO/Chrome Web Store releases.
