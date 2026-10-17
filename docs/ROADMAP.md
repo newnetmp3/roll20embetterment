@@ -184,3 +184,14 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Confirm in live Floorp no foreground sheet and no second Find, plus exactly one actual Roll20 chat hit roll on explicit confirmation.
 
 **v3.3.6 merged:** [PR #56](https://github.com/newnetmp3/roll20embetterment/pull/56), commit `06cdd3ab0beb1f3b106a3dae64ca1fc27eba60f3`, [CI 38492651190](https://github.com/newnetmp3/roll20embetterment/actions/runs/38492651190): 340/340 tests passed. Next user Floorp check is the release gate for real automatic sheet concealment, first-click hit-control readiness, manual reveal and chat roll confirmation.
+
+
+## v3.4.0 — Firefox and Chrome extension packaging (2026-10-17)
+
+- [x] Generate separate Firefox 128+ and Chrome 120+ Manifest V3 packages from the same eight v3 modules as the optional userscript.
+- [x] Static MAIN-world injection on Roll20 editor and official sheet route, matching frames and popouts; no userscript manager, privileged extension permissions or background process.
+- [x] Add browser action popup, deterministic ZIP packaging and install instructions (temporary Firefox vs unpacked Chrome).
+- [x] Version synchronized to 3.4.0; add browser manifest and archive tests, GitHub Actions artifact upload and rolling docs.
+- [ ] Require passing CI before merging and record final verified run/commit in handover.
+- [ ] Live Firefox/Floorp and Chrome testing with Tampermonkey disabled: HUD, importer, cross-origin bridge, first native Find, own hidden sheet and actual one-time chat roll.
+- [ ] Future: Mozilla Add-ons signing for permanent Firefox XPI and Chrome Web Store publishing (separate accounts/review).
