@@ -1,4 +1,22 @@
-# roll20 Embetterment 3.3.4 — Independent D&D 2024 sheet importer
+# Roll20 Embetterment — player-focused combat HUD
+
+## Standalone Firefox / Chrome extension (v3.4.0)
+
+**Tampermonkey is no longer required.** Both Firefox/Floorp and Chrome/Chromium extensions run the existing v3 HUD, importer, token watcher and official sheet bridge on Roll20. Both are built from the same source modules as the optional userscript.
+
+Download both extension packages from a passing [GitHub Actions build](https://github.com/newnetmp3/roll20embetterment/actions), or build them with npm run build:extension.
+
+Firefox/Floorp: open about:debugging#/runtime/this-firefox and choose **Load Temporary Add-on**, then select the generated Firefox manifest (or unsigned ZIP). Standard Firefox requires Mozilla signing for permanent installation.
+
+Chrome: unzip the Chrome package, open chrome://extensions, turn on Developer mode and choose **Load unpacked** for its extracted directory.
+
+**Disable the previous R20eb Tampermonkey script first**, then reload Roll20. Using both injectors can create duplicate HUDs. [Full installation instructions](extension/README.md).
+
+Packaging does not yet establish live verification of Roll20's private native attack and hidden-sheet behavior.
+
+---
+
+## Earlier v3 development and usage notes
 
 **v3.0.6:** Improves Import all tabs: reacquires Vue-replaced tab elements, prioritizes the primary Inventory and Features & Traits tabs over long nested filter lists, reads named inventory item rows and embedded resource/charge trackers, and exposes observed checkbox counts without guessing available/used status. Diagnostics now distinguish an unvisited Inventory tab from a visited tab with no recognized rows. Automated DOM fixtures cover all three cases. **These are conservative DOM adapters; live Floorp confirmation and an inside-iframe fixture are still needed.**
 
