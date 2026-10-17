@@ -33,6 +33,7 @@ test('Firefox and Chrome MV3 use MAIN world and match only Roll20 editor/officia
     assert.equal(m.content_scripts[0].run_at,'document_start');
     assert.deepEqual(m.content_scripts[0].js,['content.js']);
     assert.equal(m.action.default_popup,'popup.html');
+    assert.equal(m.icons[128],'icons/icon-128.png');
     assert.ok(popup.includes('extension v'+version));
     assert.ok(popup.includes('Disable the original R20eb Tampermonkey userscript'));
   }
@@ -58,7 +59,7 @@ test('both ZIP files are valid root-manifest packages',()=>{
     const {zip}=pack(browser);
     assert.equal(zip.readUInt32LE(zip.length-22),0x06054b50);
     const count=zip.readUInt16LE(zip.length-14);
-    assert.equal(count,3);
+    assert.equal(count,7);
     let offset=zip.readUInt32LE(zip.length-6);
     const names=[];
     for(let i=0;i<count;i++){
@@ -68,6 +69,13 @@ test('both ZIP files are valid root-manifest packages',()=>{
       names.push(zip.subarray(offset+46,offset+46+n).toString());
       offset+=46+n+extra+comment;
     }
-    assert.deepEqual(names,['manifest.json','content.js','popup.html']);
+    assert.deepEqual(names,['manifest.json','content.js','popup.html',
+      'icons/icon-16.png','icons/icon-32.png','icons/icon-48.png','icons/icon-128.png']);
+    for(const size of [16,32,48,128]){
+      const png=readFileSync(join(root,'dist','extension',browser,'icons','icon-'+size+'.png'));
+      assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+      assert.equal(png.readUInt32BE(16),size);
+      assert.equal(png.readUInt32BE(20),size);
+    }
   }
 });

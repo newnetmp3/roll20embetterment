@@ -2,6 +2,7 @@
 // No userscript APIs, dynamic injection, npm dependencies or external scripts.
 import {readFileSync,readdirSync,writeFileSync,mkdirSync,rmSync} from 'node:fs';
 import {join,resolve,dirname} from 'node:path';
+import {deflateSync} from 'node:zlib';
 
 const root=resolve(import.meta.dirname,'..');
 const {version}=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
@@ -17,7 +18,10 @@ const popup=readFileSync(join(root,'extension','popup.html'),'utf8').replaceAll(
 const base={
   manifest_version:3,name:'Roll20 Embetterment',version,
   description:'Player-focused D&D 5e Roll20 combat HUD and official D&D 2024 sheet integration.',
-  action:{default_title:'Roll20 Embetterment',default_popup:'popup.html'},
+  action:{default_title:'Roll20 Embetterment',default_popup:'popup.html',
+    default_icon:{16:'icons/icon-16.png',32:'icons/icon-32.png'}},
+  icons:{16:'icons/icon-16.png',32:'icons/icon-32.png',
+    48:'icons/icon-48.png',128:'icons/icon-128.png'},
   content_scripts:[{matches:patterns,js:['content.js'],run_at:'document_start',
     all_frames:true,world:'MAIN'}]
 };
@@ -26,6 +30,48 @@ function crc32(buf){
   for(const b of buf){c^=b;for(let i=0;i<8;i++)c=(c>>>1)^((c&1)?0xedb88320:0);}
   return (c^0xffffffff)>>>0;
 }
+
+function chunk(type,bytes){
+  const label=Buffer.from(type,'ascii'),size=Buffer.alloc(4),end=Buffer.alloc(4);
+  size.writeUInt32BE(bytes.length);
+  end.writeUInt32BE(crc32(Buffer.concat([label,bytes])));
+  return Buffer.concat([size,label,bytes,end]);
+}
+// Simple original dark-blue/gold pixel logo. Pure Node PNG encoder.
+function iconPng(size){
+  const stride=size*4+1,raster=Buffer.alloc(stride*size);
+  const color=(x,y,rgba)=>{
+    if(x<0||y<0||x>=size||y>=size)return;
+    const i=y*stride+1+x*4;
+    for(let j=0;j<4;j++)raster[i+j]=rgba[j];
+  };
+  const navy=[19,35,57,255],blue=[48,90,132,255],gold=[244,194,83,255];
+  const inset=Math.max(1,Math.round(size/12));
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++)
+    color(x,y,x<inset||y<inset||x>=size-inset||y>=size-inset?blue:navy);
+  const glyph={
+    R:['11110','10001','10001','11110','10100','10010','10001'],
+    2:['11111','00001','00001','11111','10000','10000','11111'],
+    0:['01110','10001','10011','10101','11001','10001','01110']
+  };
+  const word=size<24?'R':'R20';
+  const units=word.length*5+word.length-1;
+  const scale=Math.max(1,Math.floor((size-3)/Math.max(units,7)));
+  const startX=Math.floor((size-units*scale)/2),startY=Math.floor((size-7*scale)/2);
+  for(let k=0;k<word.length;k++)for(let y=0;y<7;y++)for(let x=0;x<5;x++){
+    if(glyph[word[k]][y][x]!=='1')continue;
+    for(let yy=0;yy<scale;yy++)for(let xx=0;xx<scale;xx++)
+      color(startX+(k*6+x)*scale+xx,startY+y*scale+yy,gold);
+  }
+  const header=Buffer.alloc(13);
+  header.writeUInt32BE(size,0);header.writeUInt32BE(size,4);
+  header[8]=8;header[9]=6;
+  return Buffer.concat([
+    Buffer.from('89504e470d0a1a0a','hex'),chunk('IHDR',header),
+    chunk('IDAT',deflateSync(raster)),chunk('IEND',Buffer.alloc(0))
+  ]);
+}
+
 // Portable standards-compliant ZIP files, using STORE and a deterministic
 // 1980-01-01 timestamp. The manifest lives at the root of each archive.
 function zip(files){
@@ -62,7 +108,8 @@ for(const browser of ['firefox','chrome']){
   const files=[
     ['manifest.json',Buffer.from(JSON.stringify(manifest,null,2)+'\n')],
     ['content.js',Buffer.from(code)],
-    ['popup.html',Buffer.from(popup)]
+    ['popup.html',Buffer.from(popup)],
+    ...[16,32,48,128].map(size=>['icons/icon-'+size+'.png',iconPng(size)])
   ];
   const dir=join(out,'extension',browser);
   rmSync(dir,{recursive:true,force:true});mkdirSync(dir,{recursive:true});
