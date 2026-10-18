@@ -37,6 +37,8 @@ function r3DebugMovementRows(){
     ['Turn',state.turn],['Controlled token',state.selectedToken?'Linked':'Not linked'],
     ['Renderer',state.selectionRenderer],['Selection source',state.selectionSource],
     ['Selected candidates',state.selectionCount],['Selection diagnosis',state.selectionReason],
+    ['Jumpgate getter',state.selectionGetter],
+    ['Selection result shape',state.selectionReturnShape],
     ['Selection API types',state.selectionApiTypes],
     ['Selected object fields',state.selectionCandidateKeys],
     ['Editor selection fields',state.selectionEngineKeys],
