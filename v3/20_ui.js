@@ -303,6 +303,7 @@ function r3StartUI(){
   });
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
   if(typeof r3BattlefieldEnableDragging==='function')r3BattlefieldEnableDragging(root);
+  if(typeof r3SheetVisibilityInstall==='function')r3SheetVisibilityInstall();
   root.addEventListener('input',event=>{
     if(typeof r3BattlefieldInput==='function')r3BattlefieldInput(event.target);
   });

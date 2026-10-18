@@ -10,7 +10,7 @@ const root=resolve(import.meta.dirname,'../..');
 const {version}=JSON.parse(readFileSync(join(root,'extension',browser,'package.json'),'utf8'));
 const names=readdirSync(join(root,'v3')).filter(s=>/^\d{2}_.*\.js$/.test(s)).sort();
 if(names.length!==8)throw Error('Expected all eight v3 modules');
-const files=browser==='firefox'?names.flatMap(n=>n==='30_boot.js'?['firefox-turn','firefox-battlefield','firefox-drag',n]:[n]):names;
+const files=browser==='firefox'?names.flatMap(n=>n==='30_boot.js'?['firefox-turn','firefox-battlefield','firefox-drag','firefox-sheet-visibility',n]:[n]):names;
 const code='// R20 Embetterment '+version+' page-world runtime\n(()=>{\n'+
   files.map(n=>n==='firefox-turn'?
     '// ===== extension/firefox/turn-economy.js =====\n'+
@@ -21,6 +21,9 @@ const code='// R20 Embetterment '+version+' page-world runtime\n(()=>{\n'+
     n==='firefox-drag'?
     '// ===== extension/firefox/panel-drag.js =====\n'+
     readFileSync(join(root,'extension/firefox/panel-drag.js'),'utf8').trim():
+    n==='firefox-sheet-visibility'?
+    '// ===== extension/firefox/sheet-visibility.js =====\n'+
+    readFileSync(join(root,'extension/firefox/sheet-visibility.js'),'utf8').trim():
     '// ===== v3/'+n+' =====\n'+readFileSync(join(root,'v3',n),'utf8').trim()).join('\n\n')+'\n})();\n';
 const patterns=[
   'https://app.roll20.net/editor*',
