@@ -1,6 +1,6 @@
 # Roll20 Embetterment — player-focused combat HUD
 
-## Firefox-first browser extensions (v3.6.0 Firefox, v3.4.0 Chrome)
+## Firefox-first browser extensions (v3.7.0 Firefox, v3.4.0 Chrome)
 
 R20eb Firefox and Chrome are now **separate add-ons**, not a synchronized two-browser package. Firefox is the primary target: `npm run build:firefox` and `npm run check:firefox` build and test only Firefox. Chrome stays on v3.4.0 and uses the independent `npm run build:chrome` / `npm run check:chrome` workflow. Both share only the core Roll20 logic under `v3/`.
 
