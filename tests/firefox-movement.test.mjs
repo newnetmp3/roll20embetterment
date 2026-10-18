@@ -202,7 +202,7 @@ test('token watcher discovers a Fabric getActiveObjects selection when engine.se
   const h=rig();
   const watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   // Evaluate the real reader implementation, not a test-only approximation.
-  vm.runInContext(watch+'\\nglobalThis.readSelected=r3TokenSelected;',h.ctx);
+  vm.runInContext(watch,h.ctx);h.ctx.readSelected=vm.runInContext('r3TokenSelected',h.ctx);
   h.ctx.window.d20.engine.canvas.getActiveObjects=()=>[h.elf.object];
   assert.equal(h.ctx.readSelected().length,1);
   assert.equal(h.ctx.readSelected()[0],h.elf.object);
@@ -210,7 +210,7 @@ test('token watcher discovers a Fabric getActiveObjects selection when engine.se
 test('token watcher supports single Fabric active object and collection-like selection',()=>{
   const h=rig();
   const watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  vm.runInContext(watch+'\\nglobalThis.readSelected=r3TokenSelected;',h.ctx);
+  vm.runInContext(watch,h.ctx);h.ctx.readSelected=vm.runInContext('r3TokenSelected',h.ctx);
   const engine=h.ctx.window.d20.engine;
   engine.canvas.getActiveObjects=undefined;
   engine.canvas.getActiveObject=()=>h.elf.object;
@@ -221,6 +221,6 @@ test('token watcher supports single Fabric active object and collection-like sel
 test('token watcher never mistakes an unselected map graphic for an active selection',()=>{
   const h=rig();
   const watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  vm.runInContext(watch+'\\nglobalThis.readSelected=r3TokenSelected;',h.ctx);
+  vm.runInContext(watch,h.ctx);h.ctx.readSelected=vm.runInContext('r3TokenSelected',h.ctx);
   assert.equal(h.ctx.readSelected().length,0);
 });
