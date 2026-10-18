@@ -344,3 +344,64 @@ test('missing graphic position never silently becomes (0,0)',()=>{
   h.api.r3TurnStart();
   assert.match(h.api.R3_MOVE.status,/Token coordinates unavailable/);
 });
+
+test('verified Jumpgate tabletopSelected getter returns a controlled selected token',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  const engine=h.ctx.window.d20.engine;
+  h.ctx._BabylonConversion_VTTEngine__WEBPACK_IMPORTED_MODULE_17__={
+    VTTEngine:{instance:{tabletop:{getSelection(){return [h.elf.object];}}}}
+  };
+  engine.tabletopSelected=vm.runInContext(
+    '()=>_BabylonConversion_VTTEngine__WEBPACK_IMPORTED_MODULE_17__.VTTEngine.instance.tabletop.getSelection()',h.ctx);
+  h.ctx.window.currentPlayer={id:'player-elf'};
+  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+    id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
+  }:null;}};
+  vm.runInContext(watch,h.ctx);
+  const probe=vm.runInContext('r3TokenSelectionProbe',h.ctx)();
+  assert.match(probe.sources,/engine.tabletopSelected \(1\)/);
+  assert.equal(probe.selectionGetter,'confirmed getter read');
+  assert.equal(probe.selectionReturnShape,'array 1');
+  assert.equal(probe.items[0],h.elf.object);
+  assert.equal(vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)().eligible,true);
+});
+test('verified Jumpgate getter resolves a selected ID against exact page graphics',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  const engine=h.ctx.window.d20.engine;
+  h.page.thegraphics=new Map([['token-elf',h.elf.model]]);
+  h.ctx.VTTEngine={instance:{tabletop:{getSelection(){return new Set(['token-elf']);}}}};
+  engine.tabletopSelected=vm.runInContext(
+    '()=>VTTEngine.instance.tabletop.getSelection()',h.ctx);
+  h.ctx.window.currentPlayer={id:'player-elf'};
+  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+    id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
+  }:null;}};
+  vm.runInContext(watch,h.ctx);
+  const probe=vm.runInContext('r3TokenSelectionProbe',h.ctx)();
+  assert.equal(probe.items[0],'token-elf');
+  assert.match(probe.selectionReturnShape,/Set 1/);
+  assert.equal(vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)().eligible,true);
+  h.ctx.VTTEngine.instance.tabletop.getSelection=()=>new Set(['enemy-id']);
+  assert.equal(vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)().eligible,false);
+});
+test('unverified zero-argument Jumpgate method is not invoked',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  let sideEffects=0;
+  h.ctx.window.d20.engine.tabletopSelected=()=>{sideEffects++;return [h.elf.object];};
+  vm.runInContext(watch,h.ctx);
+  const probe=vm.runInContext('r3TokenSelectionProbe',h.ctx)();
+  assert.equal(sideEffects,0);
+  assert.equal(probe.items.length,0);
+  assert.equal(probe.selectionGetter,'unverified function not invoked');
+});
+test('Jumpgate confirmed getter failure is captured without affecting game',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.VTTEngine={instance:{tabletop:{getSelection(){throw Error('not loaded');}}}};
+  h.ctx.window.d20.engine.tabletopSelected=vm.runInContext(
+    '()=>VTTEngine.instance.tabletop.getSelection()',h.ctx);
+  vm.runInContext(watch,h.ctx);
+  const probe=vm.runInContext('r3TokenSelectionProbe',h.ctx)();
+  assert.equal(probe.selectionGetter,'confirmed getter read failed');
+  assert.equal(probe.items.length,0);
+  assert.equal(h.api.R3_TURN.movementUsed,0);
+});
