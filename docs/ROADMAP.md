@@ -331,3 +331,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 
 
 **2026-10-18 Babylon selection recovery (pending verification):** User-reported v3.9.1 selection failure persists. Prior editor HTML identifies a Babylon.js v8.56.2 canvas, not Fabric. The v3 token watcher now probes explicit engine selection sets/objects and guarded Babylon mesh metadata references; it retries selection when character info loads after first poll. Movement Debug presents the renderer, source count, and rejection reason without exposing raw IDs or treating random graphics as selected. Tests and PR CI must pass, followed by a separate signed release and actual Floorp selection/movement QA. **Do not mark auto-movement fixed on CI alone.**
+
+**Firefox v3.9.2 signing request (2026-10-18):** Release PR to package the merged PR #69 Babylon renderer diagnostics and best-effort token selection adapters. Require successful Firefox CI and actual Mozilla-signed XPI/update feed, then ask user to share Debug → Copy log for their selected PC if detection still fails. Movement live QA remains open.
