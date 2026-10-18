@@ -205,7 +205,9 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Add Firefox 3.4.1 HTTPS update URL with stable Gecko ID and intentionally empty initial update manifest.
 - [x] Implement manual GitHub Actions unlisted Mozilla signing and only-after-signature GitHub Release/update JSON publication (SHA-256).
 - [x] Add separate Firefox vs Chrome package regression tests plus signed-update metadata tests.
-- [ ] Verify both independent CI pipelines green, merge PR, and record final baseline.
+- [x] Both PR-head pipelines green (Firefox 39082472615, Chrome 39082472659); PR #58 merged at `436a73402ed003a95a643f4e8f5f9056e3bf0814`.
 - [ ] Configure GitHub environment `firefox-signing` with AMO JWT credentials (user action) before attempting genuine Mozilla signature.
 - [ ] Live Firefox/Floorp QA of HUD, selected token, official sheet bridge, first-click Find and hidden reader; confirm one genuine Roll20 chat hit roll.
 - [ ] Publish first signed Firefox XPI to GitHub only after Mozilla signs it; verify permanent install and Firefox self-update. Chrome browser-specific development resumes later.
+
+**Independent build merged:** PR #58 `436a73402ed003a95a643f4e8f5f9056e3bf0814`, Firefox test gate 347 passing, Chrome independently passing; signed Firefox release and live QA are still open.
