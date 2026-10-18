@@ -11,7 +11,7 @@
     "build:extension": "npm run build:firefox",
     "build:firefox": "node scripts/build-firefox.mjs",
     "build:chrome": "node scripts/build-chrome.mjs",
-    "check:firefox": "npm run build && npm run build:firefox && npm test && node --check dist/firefox/extension/content.js && node --check roll20-embetterment.user.js",
+    "check:firefox": "npm run build && npm run build:firefox && npm test && node --check dist/firefox/extension/content.js && node --check roll20-embetterment.user.js && node --check scripts/publish-firefox-update.mjs && node --check scripts/lib/extension-builder.mjs",
     "check:chrome": "npm run build:chrome && node --test tests/chrome-extension.spec.mjs && node --check dist/chrome/extension/content.js"
   },
   "engines": {

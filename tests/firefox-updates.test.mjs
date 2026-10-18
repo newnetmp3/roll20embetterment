@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
 import {join,resolve} from 'node:path';
 import {createFirefoxUpdates,FIREFOX_ADDON_ID,FIREFOX_UPDATE_URL} from '../scripts/lib/firefox-updates.mjs';
 const root=resolve(import.meta.dirname,'..');
@@ -30,4 +31,16 @@ test('Firefox update feed stays empty until signed releases are available',()=>{
     assert.match(entry.update_link,/\.xpi$/);
     assert.match(entry.update_hash,/^sha256:[a-f0-9]{64}$/);
   }
+});
+
+test('an unsigned Firefox development ZIP is rejected by the signed-update publisher',()=>{
+  const pkg=JSON.parse(readFileSync(join(root,'extension/firefox/package.json'),'utf8'));
+  const archive=join(root,'dist/firefox/roll20-embetterment-firefox-'+pkg.version+'-unsigned.zip');
+  assert.throws(
+    ()=>execFileSync(process.execPath,[join(root,'scripts/publish-firefox-update.mjs'),archive],
+      {cwd:root,stdio:'pipe'}),
+    /Command failed|status 1/
+  );
+  const feed=JSON.parse(readFileSync(join(root,'extension/firefox/updates.json'),'utf8'));
+  assert.ok(Array.isArray(feed.addons[FIREFOX_ADDON_ID].updates));
 });
