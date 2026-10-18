@@ -266,3 +266,14 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Add drag, chat-inset, persistence, keyboard, boundary, reset and storage validation regression tests.
 - [ ] Firefox/Chrome CI green, PR merged, Mozilla-signed Firefox v3.7.0 XPI published and update feed verified.
 - [ ] Live Floorp Roll20 chat open: confirm default panels do not cover the chat, grips work and can be reset, no auto-sync input focus regression, native roll still works.
+
+## Firefox v3.7.1 — Restore player-owned character sheets (2026-10-18)
+
+- [x] Implement full cleanup of all HUD native hidden-reader sessions and Auto-sync-owned dialogs and exclusive overlays, not only the currently selected character.
+- [x] Make real Journal player-open events release private readers before Roll20 reopens a reused dialog.
+- [x] Add always-available **Show Sheet** recovery button in the movable Firefox HUD; no question popups.
+- [x] Persist per-game player-managed-sheet priority and block new hidden readers in that mode; allow explicit re-enable.
+- [x] Continue authenticated import/native Find through player-opened official sheets/popouts without changing manual sheet tabs or positions.
+- [x] Regression tests for multi-session restoration, original sheet visibility, trusted-vs-synthetic Journal requests, persisted preference and re-hide prevention.
+- [ ] Green Firefox/Chrome CI, PR merge, verify Mozilla-signed v3.7.1 XPI and signed update feed.
+- [ ] Live Floorp with Auto-sync and native attack: verify original Roll20 sheet opens visibly, Close button works, R20eb does not move it, and first native roll still behaves safely.

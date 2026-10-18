@@ -1,6 +1,6 @@
 {
-  "version": "3.7.0",
+  "version": "3.7.1",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Firefox-only individually draggable persistent panels and chat-safe defaults, after CI"
+  "reason": "Restore player-opened Roll20 character sheets and release hidden readers across Auto-sync and native sessions"
 }

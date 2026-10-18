@@ -34,6 +34,12 @@ function r3BattlefieldClick(target){
       R3_BF.sidebar=!R3_BF.sidebar;r3BattlefieldSave();break;
     case 'options':
       R3_BF.options=!R3_BF.options;break;
+    case 'show-roll20-sheet':
+      if(typeof r3SheetRevealAll==='function')r3SheetRevealAll();
+      return true;
+    case 'allow-background':
+      if(typeof r3SheetAllowPrivateReaders==='function')r3SheetAllowPrivateReaders();
+      return true;
     case 'reset-layout':
       if(typeof r3BattlefieldResetPositions==='function')r3BattlefieldResetPositions();
       return true;
@@ -183,6 +189,9 @@ function r3BattlefieldMarkup(snapshot){
     '<button type="button" data-bf-action="options" title="Manual turn corrections and detailed counters">'+
     (R3_BF.options?'Hide options':'More options')+'</button>'+
     '<button type="button" id="r3-hud-debug" title="Toggle sheet importer">⚙</button>'+
+    '<button type="button" data-bf-action="show-roll20-sheet" title="Restore all original character sheets and stop hiding them while you play">Show Sheet</button>'+
+    (typeof R3_SHEET_VIS==='object'&&R3_SHEET_VIS.manualPriority?
+      '<button type="button" data-bf-action="allow-background" title="Allow optional background readers again">Allow private reader</button>':'')+
     '<button type="button" data-bf-action="reset-layout" title="Reset all panel positions for this game">Reset layout</button>'+ 
     '<button type="button" id="r3-hud-collapse" title="Hide HUD (Shift+A)">−</button></div>'+
     (R3_HUD.flyout||R3_HUD.chooser!==null?

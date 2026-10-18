@@ -87,6 +87,7 @@ function r3AutoJournalEntry(){
   return matches.length===1?matches[0]:null;
 }
 function r3AutoOpenFromJournal(now){
+  if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return false;
   if(R3_AUTO.opened&&now-R3_AUTO.openedAt<30000)return false;
   if(R3_AUTO.opened){
     R3_AUTO.opened=false;
@@ -136,6 +137,7 @@ function r3AutoShieldOverlay(){
   r3PrivateMark(overlay,'data-r3-private-overlay');
 }
 function r3AutoShieldNewDialog(){
+  if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return;
   if(!R3_AUTO.opened||!R3_AUTO.preOpenDialogs)return;
   if(!R3_AUTO.ownedDialog){
     const newlyCreated=Array.from(document.querySelectorAll('.characterdialog')||[])
@@ -154,6 +156,7 @@ function r3AutoShieldNewDialog(){
   r3AutoShieldOverlay();
 }
 function r3AutoMoveDialogOffscreen(dialog){
+  if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return false;
   if(!dialog)return false;
   // The 30s check only applies to claiming a newly opened dialog.
   // A dialog already owned by auto-sync remains a background reader for

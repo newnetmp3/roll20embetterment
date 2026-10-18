@@ -1202,6 +1202,7 @@ function r3StartUI(){
   });
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
   if(typeof r3BattlefieldEnableDragging==='function')r3BattlefieldEnableDragging(root);
+  if(typeof r3SheetVisibilityInstall==='function')r3SheetVisibilityInstall();
   root.addEventListener('input',event=>{
     if(typeof r3BattlefieldInput==='function')r3BattlefieldInput(event.target);
   });
@@ -1498,6 +1499,24 @@ function r3NativeBgRestore(){
   bg.sessions.delete(bg.characterId);
   r3NativeBgClearActive();
 }
+// A user can reopen any original sheet, not only the most recently selected
+// HUD reader. Release all of our saved sessions and their modal shields.
+function r3NativeBgRestoreAll(){
+  const bg=R3_NATIVE_BG;
+  const records=[...bg.sessions.values()];
+  if(bg.dialog&&!records.some(record=>record.dialog===bg.dialog))
+    records.push({characterId:bg.characterId,name:bg.name,dialog:bg.dialog,
+      moved:bg.moved,original:bg.original,dialogOriginal:bg.dialogOriginal,
+      overlay:bg.overlay,overlayOriginal:bg.overlayOriginal,
+      preOverlays:bg.preOverlays});
+  for(const record of records){
+    r3NativeBgActivate(record);
+    r3NativeBgRestore();
+  }
+  bg.sessions.clear();
+  r3NativeBgClearActive();
+  R3_NATIVE.preview=null;
+}
 function r3NativeBgShieldOverlay(beforeOverlays){
   const bg=R3_NATIVE_BG;
   if(!bg.dialog||bg.overlay)return;
@@ -1566,6 +1585,8 @@ function r3NativeBgJournal(identity){
 }
 async function r3NativeBgOpen(name){
   const bg=R3_NATIVE_BG;
+  if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())
+    throw new Error('Your original Roll20 character sheet takes priority. Open it from the Journal or use its popout; R20eb will read it without hiding it.');
   const resolution=r3NativeBgResolve(name);
   if(!resolution.model)throw new Error(resolution.reason||
     'Unable to verify a player-controlled character for the background sheet.');
@@ -1600,6 +1621,7 @@ async function r3NativeBgOpen(name){
   // including the common case where the character ID arrives after the shell.
   // Only a newly created dialog with this authorized character ID can be moved.
   const shield=()=>{
+    if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return;
     if(!bg.dialog)r3NativeBgClaim(before,overlays,identity);
     if(bg.dialog&&bg.characterId===identity.id)r3NativeBgShieldOverlay(overlays);
   };
@@ -1617,6 +1639,8 @@ async function r3NativeBgOpen(name){
     }
     shield(); // synchronous opening can create the dialog immediately
     for(let i=0;i<36;i++){
+      if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())
+        throw new Error('Player requested the original character sheet. The hidden reader was released.');
       shield(); // fallback for browsers without MutationObserver
       if(bg.dialog){
         const candidate=r3NativeBgCandidate();
@@ -1850,10 +1874,10 @@ async function r3NativeConfirm(){
 }
 function r3NativeCancel(){R3_NATIVE.preview=null;r3NativeStatus('Native roll cancelled; nothing was clicked.');}
 function r3NativeBgReveal(){
-  if(!R3_NATIVE_BG.dialog)return;
-  R3_NATIVE.preview=null;
-  r3NativeBgRestore();
-  r3NativeStatus('The original Roll20 sheet is visible again and can be closed normally.');
+  if(typeof r3SheetRevealAll==='function')return r3SheetRevealAll();
+  r3NativeBgRestoreAll();
+  r3AutoRestoreDialog();
+  r3NativeStatus('Your Roll20 character sheets are visible again and can be closed normally.');
 }
 function r3NativeMarkup(){
   if(!R3_NATIVE.status&&!R3_NATIVE.preview&&!R3_NATIVE_BG.dialog)return '';
@@ -2764,6 +2788,7 @@ function r3AutoJournalEntry(){
   return matches.length===1?matches[0]:null;
 }
 function r3AutoOpenFromJournal(now){
+  if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return false;
   if(R3_AUTO.opened&&now-R3_AUTO.openedAt<30000)return false;
   if(R3_AUTO.opened){
     R3_AUTO.opened=false;
@@ -2813,6 +2838,7 @@ function r3AutoShieldOverlay(){
   r3PrivateMark(overlay,'data-r3-private-overlay');
 }
 function r3AutoShieldNewDialog(){
+  if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return;
   if(!R3_AUTO.opened||!R3_AUTO.preOpenDialogs)return;
   if(!R3_AUTO.ownedDialog){
     const newlyCreated=Array.from(document.querySelectorAll('.characterdialog')||[])
@@ -2831,6 +2857,7 @@ function r3AutoShieldNewDialog(){
   r3AutoShieldOverlay();
 }
 function r3AutoMoveDialogOffscreen(dialog){
+  if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return false;
   if(!dialog)return false;
   // The 30s check only applies to claiming a newly opened dialog.
   // A dialog already owned by auto-sync remains a background reader for
