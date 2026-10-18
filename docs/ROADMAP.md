@@ -221,3 +221,18 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Install signed Firefox XPI and verify hidden sheets, first Find and real native chat roll in live Floorp.
 
 **Firefox v3.4.1 signed release (2026-10-17):** [Download signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.4.1/r20eb-firefox-v3.4.1.xpi). [Actions 39085562302](https://github.com/newnetmp3/roll20embetterment/actions/runs/39085562302) passed the Mozilla unlisted signing, release publication and Firefox update feed steps. Next: real Firefox/Floorp install and Roll20 functionality QA. Chrome unchanged.
+
+## Firefox v3.5.0 — Action-economy and turn-flow dashboard (2026-10-17)
+
+- [x] Firefox-only Turn Flow module bundled before boot; Chrome and optional legacy userscript keep their existing HUD behavior.
+- [x] Four visible action-economy indicators with accessible spent/ready state, manual corrections and muted spent sections.
+- [x] Per-controlled-character turn state, per-game persistence and explicit new/end turn markers without touching Roll20 turn order.
+- [x] Reaction persists through end of turn until next start; live initiative tracking resets only on a verified token-order transition.
+- [x] Manual movement-used progress and remaining amount from observed official speed; Action/conditional Bonus Dash increases allowance, with undo.
+- [x] Multiple attack counts and extra actions adjustable separately; exact-name Extra Attack is a hint, not a guessed count.
+- [x] Explicit sheet-observed spell/feature action costs; free-interaction reminder and manual concentration state persisting across turns.
+- [x] Existing official spell-slot/resource values remain read-only; native button clicked ACK never wrongly auto-consumes action.
+- [x] No question/tutorial dialogs; inline feedback, hover explanations and regression tests for cross-character isolation and rules safety.
+- [ ] Green GitHub PR checks, merge, Mozilla-sign Firefox v3.5.0 and confirm update manifest points to signed XPI only.
+- [ ] Live Floorp HUD sizing, per-character action economy, native first Find, hidden sheet and actual chat-roll QA.
+- [ ] Future optional: auto-measure token movement only after browser-verified Roll20 grid scale, coordinate and path APIs; attach verified chat events to action spending; account for more class-specific economy overrides.

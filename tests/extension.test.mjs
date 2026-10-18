@@ -49,7 +49,13 @@ test('the real v3 source is bundled in order, without legacy or Tampermonkey dep
     readFileSync(join(root,'v3',n),'utf8').trim()).join('\n\n');
   for(const browser of ['firefox']){
     const {source}=pack(browser);
-    assert.ok(source.includes(text));
+    const ordered=modules.map(n=>source.indexOf('// ===== v3/'+n+' ====='));
+    assert.ok(ordered.every(x=>x>=0)&&ordered.every((x,i)=>i===0||x>ordered[i-1]));
+    for(const n of modules)assert.ok(source.includes(readFileSync(join(root,'v3',n),'utf8').trim()));
+    assert.match(source,/extension\/firefox\/turn-economy\.js/);
+    assert.match(source,/function r3TurnStart\(/);
+    assert.ok(source.indexOf('extension/firefox/turn-economy.js')<source.indexOf('// ===== v3/30_boot.js ====='),
+      'Firefox state must initialize before boot on already loaded documents');
     assert.match(source,/function r3Boot\(/);
     assert.match(source,/function r3NativeWaitReader\(/);
     assert.doesNotMatch(source,/\/\/ ==UserScript==/);

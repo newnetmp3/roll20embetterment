@@ -1088,6 +1088,7 @@ function r3UIEvent(event){
   const spent=field('hudUsed','[data-hud-used]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
+  if(typeof r3TurnClick==='function'&&r3TurnClick(target))return;
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-refresh')r3UIRefresh();
   else if(target?.id==='r3-scan')return r3StartImport('current');
@@ -1099,7 +1100,7 @@ function r3UIEvent(event){
     R3_HUD.collapsed=!R3_HUD.collapsed;
     if(R3_HUD.collapsed){
       R3_HUD.flyout='';R3_HUD.chooser=null;
-    }else R3_HUD.used={action:false,bonus:false,reaction:false};
+    }else if(typeof r3TurnLoad!=='function')R3_HUD.used={action:false,bonus:false,reaction:false};
     r3HudSave();r3HudRender();
   }
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
@@ -1110,7 +1111,8 @@ function r3UIEvent(event){
     return r3NativeProbe(nativeProbe);
   }
   else if(target?.id==='r3-hud-reset-turn'){
-    R3_HUD.used={action:false,bonus:false,reaction:false};r3HudRender();
+    if(typeof r3TurnStart==='function')r3TurnStart('manual');
+    else{R3_HUD.used={action:false,bonus:false,reaction:false};r3HudRender();}
   }
   else if(target?.id==='r3-hud-drawer-close'||target?.id==='r3-hud-flyout-close'){
     R3_HUD.drawerOpen=false;R3_HUD.flyout='';R3_HUD.chooser=null;
@@ -1133,7 +1135,8 @@ function r3UIEvent(event){
     R3_HUD.spellLevel=String(spellLevel);r3HudRender();
   }
   else if(spent&&['action','bonus','reaction'].includes(spent)){
-    R3_HUD.used[spent]=!R3_HUD.used[spent];r3HudRender();
+    if(typeof r3TurnLegacyToggle==='function')r3TurnLegacyToggle(spent);
+    else{R3_HUD.used[spent]=!R3_HUD.used[spent];r3HudRender();}
   }
   else if(flyout&&['spells','skills','actions','bonus','reactions','inventory',
     'features','resources'].includes(flyout)){
@@ -1835,6 +1838,8 @@ async function r3NativeConfirm(){
       {characterName,attackName:preview.attackName,attackKey:preview.attackKey,
         attackText:preview.attackText,token:preview.token,background:!!preview.background});
     r3NativeStatus(response.message||'No native action result returned.');
+    if(response.status==='clicked'&&typeof r3TurnHint==='function')
+      r3TurnHint('Roll20 attack button clicked; chat roll unverified. Mark action spent only when confirmed.');
   }catch(e){r3NativeStatus(e.message||'Native roll request failed.');}
   finally{R3_NATIVE.busy=false;r3HudRender();}
 }
@@ -1876,6 +1881,7 @@ function r3HudLoad(){
   R3_HUD.weaponSet=0;R3_HUD.weaponSets=[null,null,null,null,null,null];
   R3_HUD.portraitCache=null;R3_HUD.renderedSnapshot=null;
   R3_HUD.renderedLoadouts=null;
+  if(typeof r3TurnLoad==='function')r3TurnLoad();
   try{
     const stored=JSON.parse(localStorage.getItem(r3TokenSettingsKey())||'null');
     if(stored&&R3_HUD_TABS.some(t=>t.key===stored.category))
@@ -1981,6 +1987,10 @@ function r3HudCard(item,index){
   const controls=(item.controls||[]).slice(0,18).map(c=>
     '<div class="hud-card-field">'+r3Escape(c.label||c.kind)+': '+
       r3Escape(c.value===true?'On':c.value===false?'Off':c.value)+'</div>').join('');
+  if(typeof r3TurnCost==='function'){
+    const cost=r3TurnCost(item);
+    if(cost)tags.unshift('<span class="hud-economy-cost" title="Action cost observed in official sheet">'+r3Escape(cost)+'</span>');
+  }
   return '<details class="hud-card" data-hud-card="'+key+'"><summary>'+
     '<span class="hud-card-mark">'+r3Escape((item._hudSource||'Item').slice(0,1))+'</span>'+
     '<span class="hud-card-title">'+r3Escape(item.name||'Unnamed entry')+
@@ -2199,7 +2209,7 @@ function r3HudFlyoutMarkup(snapshot){
 function r3HudSegment(label,kind,buttons){
   const tracks=kind==='action'||kind==='bonus'||kind==='reaction';
   const used=!!R3_HUD.used[kind];
-  return '<section class="hud-segment hud-segment-'+kind+'" aria-label="'+r3Escape(label)+'">'+
+  return '<section class="hud-segment hud-segment-'+kind+(used?' hud-segment-spent':'')+'" aria-label="'+r3Escape(label)+'">'+
     '<div class="hud-segment-buttons">'+buttons+'</div>'+
     '<div class="hud-segment-caption"><span>'+r3Escape(label)+'</span>'+
     (tracks?'<button type="button" data-hud-used="'+kind+'" aria-pressed="'+used+
@@ -2235,7 +2245,8 @@ function r3HudMarkup(snapshot){
       'shield','reactions','hud-color-reaction')
   ].join('');
   const passButtons='<button type="button" class="hud-bar-button hud-color-pass" '+
-    'title="End turn is not wired to Roll20 yet" disabled>'+
+    (typeof r3TurnClick==='function'?'data-turn-action="end" title="Mark your turn ended locally; does not advance Roll20"':
+    'title="End turn is not wired to Roll20 yet" disabled')+'>'+
     '<span class="hud-bar-art">'+r3HudIcon('exit')+'</span>'+
     '<span class="hud-bar-label">END TURN</span></button>';
   const statRow='<div class="hud-portrait-stats">'+
@@ -2259,8 +2270,9 @@ function r3HudMarkup(snapshot){
     '<button type="button" id="r3-hud-auto">'+(R3_AUTO.enabled?'● Sync On':'○ Sync Off')+'</button>'+
     '<button type="button" id="r3-hud-debug">Debug</button>'+
     '<button type="button" id="r3-hud-collapse">'+(collapsed?'Show HUD':'Hide')+'</button></div></div>'+
+    (typeof r3TurnMarkup==='function'?r3TurnMarkup(snapshot):
     '<div class="hud-action-track"><span>Action tracking (local)</span>'+
-    '<button type="button" id="r3-hud-reset-turn">Reset tracking</button></div>'+
+    '<button type="button" id="r3-hud-reset-turn">Reset tracking</button></div>')+
     '<div class="hud-main-segments">'+
     r3HudSegment('MAIN ACTION','action',mainButtons)+
     r3HudSegment('BONUS','bonus',bonusButtons)+
@@ -2290,6 +2302,7 @@ function r3HudRender(){
     R3_HUD.renderedChooser===R3_HUD.chooser&&
     R3_HUD.renderedNative===R3_NATIVE.revision&&
     R3_HUD.renderedUsed===JSON.stringify(R3_HUD.used)&&
+    R3_HUD.renderedTurn===(typeof R3_TURN==='object'?R3_TURN.revision:-1)&&
     R3_HUD.renderedDebug===R3_UI.shown&&
     R3_HUD.renderedSync===R3_AUTO.enabled)return;
   const oldBody=el.querySelector?.('.hud-body');
@@ -2311,6 +2324,7 @@ function r3HudRender(){
   R3_HUD.renderedChooser=R3_HUD.chooser;
   R3_HUD.renderedNative=R3_NATIVE.revision;
   R3_HUD.renderedUsed=JSON.stringify(R3_HUD.used);
+  R3_HUD.renderedTurn=typeof R3_TURN==='object'?R3_TURN.revision:-1;
   R3_HUD.renderedDebug=R3_UI.shown;
   R3_HUD.renderedSync=R3_AUTO.enabled;
   const body=el.querySelector?.('.hud-body');
@@ -2425,7 +2439,8 @@ function r3HudStyles(){
     ".hud-native-status{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px;background:#354c5d;border-top:1px solid #8cacc0;color:#f3f8ff;font-size:11px}",
     ".hud-native-status span{flex:1 1 280px}",
     ".hud-native-status button,.hud-native-probe{padding:5px 9px!important;border:1px solid #aec5d4!important;background:#263f51!important;color:#fff!important;font-size:11px!important;border-radius:3px!important}",
-    ".hud-native-probe{margin-top:7px!important;cursor:pointer}"
+    ".hud-native-probe{margin-top:7px!important;cursor:pointer}",
+    typeof r3TurnStyles==='function'?r3TurnStyles():''
 
   ].join('');
 }
@@ -2608,6 +2623,7 @@ function r3TokenSwitch(info){
   r3UIRefresh();
 }
 function r3TokenPoll(){
+  if(typeof r3TurnObserveInitiative==='function')r3TurnObserveInitiative();
   const picked=r3TokenSelected();
   const tokens=picked.map(item=>{
     const model=item?.model||item;
