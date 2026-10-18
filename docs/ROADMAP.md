@@ -238,3 +238,17 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Future optional: auto-measure token movement only after browser-verified Roll20 grid scale, coordinate and path APIs; attach verified chat events to action spending; account for more class-specific economy overrides.
 
 **v3.5.0 shipped:** [signed Firefox download](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.5.0/r20eb-firefox-v3.5.0.xpi), [signing CI 39090704856](https://github.com/newnetmp3/roll20embetterment/actions/runs/39090704856) green; 359/359 test suite passed. Only Firefox version advanced. Next: real Floorp HUD/layout, manual reaction/movement, initiative turn transition, native attack confirmation and chat result verification.
+
+## Firefox v3.6.0 — Reference-matched battlefield-first HUD (2026-10-18)
+
+- [x] Codify approved final screenshot as a non-regressing visual/layout baseline in `docs/FIREFOX_UI_REFERENCE.md`.
+- [x] Implement actual Firefox-only low-occlusion, map-click-through corner-dock overlay (not another illustration).
+- [x] Bottom-left four colored economy indicators and three compact common-action controls; bottom-right five labeled category flyouts opening upward only as needed.
+- [x] Small top-right observed character portrait/stats, concentration, resources and private per-character turn notes; slim turn pill near top center.
+- [x] Preserve all imported cards, spell-level navigation, native attack probe/confirmation, token switching, and correction controls.
+- [x] Separate Firefox 3.6.0 release and signing request; Chrome 3.4.0 and optional userscript remain unchanged in layout.
+- [x] Responsive narrow layouts, internal sidebar scrolling, notes persistence and focus protection.
+- [x] Add static/source-backed layout regression tests for click-through map, corner alignment and character isolation.
+- [ ] Green Firefox CI, merge PR and verify Mozilla-signed Firefox v3.6.0 XPI/update feed.
+- [ ] Compare real Floorp screenshot side-by-side against the approved concept image, especially 530px left dock vs 470px right dock, anchored bottom corners and battlefield visibility.
+- [ ] Live Roll20 verification of native attack finding, hidden HUD-owned sheet, and one real chat roll; no code-only tests substitute for this.

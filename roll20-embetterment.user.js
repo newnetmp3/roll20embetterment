@@ -2318,7 +2318,21 @@ function r3HudRender(){
     R3_HUD.openKeys=[...(el.querySelectorAll?.('details.hud-card[open]')||[])]
       .map(card=>card.getAttribute('data-hud-card')).filter(Boolean).slice(0,80);
   }
+  // Firefox battlefield notes live in a textarea. Auto-sync may repaint
+  // while the player types; preserve focus/caret rather than kicking them out.
+  const active=R3_UI.root?.activeElement;
+  const noteFocused=active?.id==='r3-bf-notes';
+  const noteStart=noteFocused?active.selectionStart:null;
+  const noteEnd=noteFocused?active.selectionEnd:null;
   el.innerHTML=r3HudMarkup(R3_UI.snapshot);
+  if(noteFocused){
+    const next=el.querySelector?.('#r3-bf-notes');
+    if(next){
+      next.focus?.({preventScroll:true});
+      if(Number.isInteger(noteStart)&&Number.isInteger(noteEnd))
+        try{next.setSelectionRange(noteStart,noteEnd);}catch{}
+    }
+  }
   R3_HUD.renderedSnapshot=R3_UI.snapshot;
   R3_HUD.renderedPortrait=portrait;
   R3_HUD.renderedCategory=R3_HUD.category;
