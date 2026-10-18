@@ -293,3 +293,15 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Test real Roll20 movement with current game page settings and chat open in Floorp, especially paths with waypoints, deselect/reselect, turn transition and visible status controls.
 
 **v3.8.0 signed release (2026-10-18):** [signed Firefox XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.8.0/r20eb-firefox-v3.8.0.xpi), [PR #64](https://github.com/newnetmp3/roll20embetterment/pull/64), [Mozilla CI 39153585095](https://github.com/newnetmp3/roll20embetterment/actions/runs/39153585095) green; 392 Firefox tests passing. **Next:** live Floorp check of Roll20 scale, automatic segment/path movement, negative remaining, and ability controls no longer obscured by status notices.
+
+## Firefox v3.8.1 — Panel drag without handles (2026-10-18)
+
+- [x] Remove every visible ⠿ grab handle/tab, including the importer and native confirmation panel.
+- [x] Allow mouse/pointer dragging directly on each existing independently positioned panel, even from dense button layouts.
+- [x] Require a drag movement threshold; preserve ordinary button clicks, text fields, keyboard-triggered actions and browser accessibility.
+- [x] Prevent a drag-generated post-release click from unintentionally launching an attack, spell, or another HUD action.
+- [x] Keep saved per-game panel layouts, viewport bounds, default chat clearance, and Reset layout.
+- [x] Replace former grip keyboard arrows with focusable panels and Alt+Arrow / Alt+Shift+Arrow.
+- [x] Add regression tests for direct panel movement, threshold, click suppression, text-edit exclusion and saved positions.
+- [ ] Run final Firefox and separate Chrome CI, merge and publish signed Firefox v3.8.1 update.
+- [ ] Verify actual Floorp Roll20 click-versus-drag behavior with Attacks/Spells, notes typing and chat visible.
