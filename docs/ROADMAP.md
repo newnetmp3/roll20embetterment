@@ -289,5 +289,7 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Let remaining movement be negative after exceeding speed; spent distance and meter remain readable and do not restrict legal DM overrides.
 - [x] Replace routine debug/status overlays with compact Status indicator; show draggable details only on request, except for actionable native roll confirmation.
 - [x] Add movement and HUD-notification regression cases; preserve separate Chrome and userscript layout.
-- [ ] Verify full Firefox and separate Chrome CI; merge PR; Mozilla sign v3.8.0 and publish signed-only update.
+- [x] PR #64 merged at `29cb42000055119d47eea2b38a8ead386c05fd5e`, 392 Firefox tests passed and separate Chrome CI passed; Mozilla-signed v3.8.0 published with verified SHA-256 feed.
 - [ ] Test real Roll20 movement with current game page settings and chat open in Floorp, especially paths with waypoints, deselect/reselect, turn transition and visible status controls.
+
+**v3.8.0 signed release (2026-10-18):** [signed Firefox XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.8.0/r20eb-firefox-v3.8.0.xpi), [PR #64](https://github.com/newnetmp3/roll20embetterment/pull/64), [Mozilla CI 39153585095](https://github.com/newnetmp3/roll20embetterment/actions/runs/39153585095) green; 392 Firefox tests passing. **Next:** live Floorp check of Roll20 scale, automatic segment/path movement, negative remaining, and ability controls no longer obscured by status notices.
