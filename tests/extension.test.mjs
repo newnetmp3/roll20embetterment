@@ -54,6 +54,9 @@ test('the real v3 source is bundled in order, without legacy or Tampermonkey dep
     for(const n of modules)assert.ok(source.includes(readFileSync(join(root,'v3',n),'utf8').trim()));
     assert.match(source,/extension\/firefox\/turn-economy\.js/);
     assert.match(source,/function r3TurnStart\(/);
+    assert.match(source,/extension\/firefox\/battlefield-layout\.js/);
+    assert.match(source,/function r3BattlefieldMarkup\(/);
+    assert.ok(source.indexOf('extension/firefox/battlefield-layout.js')<source.indexOf('// ===== v3/30_boot.js ====='));
     assert.ok(source.indexOf('extension/firefox/turn-economy.js')<source.indexOf('// ===== v3/30_boot.js ====='),
       'Firefox state must initialize before boot on already loaded documents');
     assert.match(source,/function r3Boot\(/);
