@@ -199,19 +199,23 @@ function r3BattlefieldDragStyles(){
   return [
     // Remove the old all-in-one sidebar layout; children become independent.
     '.r3-bf-sidebar{display:contents!important;pointer-events:none!important}',
-    '.r3-bf-sidebar>.r3-bf-section{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);width:258px;pointer-events:auto;max-height:40vh;overflow-y:auto}',
-    '.r3-bf-sidebar>.r3-bf-profile{top:32px}',
-    '.r3-bf-sidebar>.r3-bf-concentration{top:235px}',
-    '.r3-bf-sidebar>.r3-bf-resource-panel{top:304px;max-height:27vh}',
-    '.r3-bf-sidebar>.r3-bf-notes{top:435px}',
-    '.r3-bf-sidebar>.r3-bf-advanced{top:548px;max-height:35vh}',
+    '.r3-bf-sidebar>.r3-bf-section{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);width:258px;pointer-events:auto;max-height:40vh;overflow-y:auto;padding-top:19px}',
+    '.r3-bf-sidebar>.r3-bf-section>.r3-bf-drag-grip{top:2px!important;left:9px!important;height:14px!important;border-radius:4px!important}',
+    '.r3-bf-sidebar>.r3-bf-profile{top:60px}',
+    '.r3-bf-sidebar>.r3-bf-concentration{top:272px}',
+    '.r3-bf-sidebar>.r3-bf-resource-panel{top:345px;max-height:27vh}',
+    '.r3-bf-sidebar>.r3-bf-notes{top:481px}',
+    '.r3-bf-sidebar>.r3-bf-advanced{top:604px;max-height:35vh}',
     // All right-hand panels initially avoid the chat/sidebar area.
     '.r3-bf-category-dock{right:calc(var(--r3-bf-chat-inset,330px) + 14px)}',
     '.r3-bf-mini-tools{right:calc(var(--r3-bf-chat-inset,330px) + 16px)}',
     '.r3-bf-show-profile-wrap{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);top:20px;pointer-events:auto}',
     '.r3-bf-show-profile-wrap>.r3-bf-show-profile{position:static!important;right:auto!important;top:auto!important}',
     '.r3-bf-shell>.hud-flyout{right:calc(var(--r3-bf-chat-inset,330px) + 14px)!important}',
+    '.r3-bf-shell>.hud-flyout{padding-top:21px!important}',
+    '.r3-bf-shell>.hud-flyout>.r3-bf-drag-grip{top:2px!important;border-radius:5px!important}',
     '.r3-bf-shell>.r3-bf-native{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);bottom:118px;width:min(480px,calc(100vw - 32px));max-height:36vh;pointer-events:auto;overflow:auto}',
+    '.r3-bf-native{padding-top:19px}.r3-bf-native>.r3-bf-drag-grip{top:2px!important}',
     '.r3-bf-native>.hud-native-status{position:static!important;max-height:none!important}',
     '#r3-wrap{right:calc(var(--r3-bf-chat-inset,330px) + 14px)!important}',
     // Drag grips are separate controls, not the action buttons or text boxes.
@@ -221,7 +225,8 @@ function r3BattlefieldDragStyles(){
     // The importer has its own tab and retains its existing usable toggle.
     '#r3-wrap[data-bf-panel]{overflow:visible!important}',
     '.r3-bf-category-dock,.r3-bf-actions,.r3-bf-turnstrip,.r3-bf-mini-tools,.r3-bf-shell>.hud-flyout,.r3-bf-native{isolation:isolate}',
+    '@media(max-width:1380px){.r3-bf-category-dock{bottom:125px!important}.r3-bf-mini-tools{bottom:224px!important}}',
     '@media(max-width:1150px){.r3-bf-sidebar>.r3-bf-section{width:216px}}',
-    '@media(max-width:760px){.r3-bf-sidebar>.r3-bf-section{width:196px}.r3-bf-sidebar>.r3-bf-profile{top:12px}.r3-bf-sidebar>.r3-bf-concentration{top:185px}.r3-bf-sidebar>.r3-bf-resource-panel{top:239px}.r3-bf-sidebar>.r3-bf-notes{top:350px}.r3-bf-sidebar>.r3-bf-advanced{top:460px}}'
+    '@media(max-width:760px){.r3-bf-category-dock{bottom:92px!important}.r3-bf-mini-tools{bottom:178px!important}.r3-bf-sidebar>.r3-bf-section{width:196px}.r3-bf-sidebar>.r3-bf-profile{top:58px}.r3-bf-sidebar>.r3-bf-concentration{top:241px}.r3-bf-sidebar>.r3-bf-resource-panel{top:300px}.r3-bf-sidebar>.r3-bf-notes{top:408px}.r3-bf-sidebar>.r3-bf-advanced{top:510px}}'
   ].join('');
 }
