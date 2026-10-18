@@ -30,7 +30,7 @@ function harness(opts={}){
     localStorage:{getItem(k){return data.get(k)||null;},setItem(k,v){data.set(k,v);},
       removeItem(k){data.delete(k);}}};
   vm.createContext(ctx);
-  vm.runInContext(src+'\nglobalThis.api={R3_BF_DRAG,r3BattlefieldGrip,r3BattlefieldChatInset,r3BattlefieldLayoutLoad,r3BattlefieldLayoutSave,r3BattlefieldPlacePanels,r3BattlefieldPanel,r3BattlefieldSetPosition,r3BattlefieldEnableDragging,r3BattlefieldDragStart,r3BattlefieldDragMove,r3BattlefieldDragEnd,r3BattlefieldPreventDragClick,r3BattlefieldDragKeyboard,r3BattlefieldResetPositions,r3BattlefieldDraggableFlyout,r3BattlefieldDragStyles};',ctx);
+  vm.runInContext(src+'\nglobalThis.api={R3_BF_DRAG,r3BattlefieldChatInset,r3BattlefieldLayoutLoad,r3BattlefieldLayoutSave,r3BattlefieldPlacePanels,r3BattlefieldPanel,r3BattlefieldSetPosition,r3BattlefieldEnableDragging,r3BattlefieldDragStart,r3BattlefieldDragMove,r3BattlefieldDragEnd,r3BattlefieldPreventDragClick,r3BattlefieldDragKeyboard,r3BattlefieldResetPositions,r3BattlefieldDraggableFlyout,r3BattlefieldDragStyles};',ctx);
   const api=ctx.api;api.r3BattlefieldEnableDragging(root);
   const hit=(name,editor=false)=>({
     closest(q){
