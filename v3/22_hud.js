@@ -19,6 +19,7 @@ function r3HudLoad(){
   R3_HUD.portraitCache=null;R3_HUD.renderedSnapshot=null;
   R3_HUD.renderedLoadouts=null;
   if(typeof r3TurnLoad==='function')r3TurnLoad();
+  if(typeof r3BattlefieldLoad==='function')r3BattlefieldLoad();
   try{
     const stored=JSON.parse(localStorage.getItem(r3TokenSettingsKey())||'null');
     if(stored&&R3_HUD_TABS.some(t=>t.key===stored.category))
@@ -354,6 +355,7 @@ function r3HudSegment(label,kind,buttons){
       (used?'●':'○')+'</button>':'')+'</div></section>';
 }
 function r3HudMarkup(snapshot){
+  if(typeof r3BattlefieldMarkup==='function')return r3BattlefieldMarkup(snapshot);
   const name=r3String(snapshot?.name,80)||'No character imported';
   const hp=snapshot?.stats||{};
   const collapsed=R3_HUD.collapsed;
@@ -440,6 +442,7 @@ function r3HudRender(){
     R3_HUD.renderedNative===R3_NATIVE.revision&&
     R3_HUD.renderedUsed===JSON.stringify(R3_HUD.used)&&
     R3_HUD.renderedTurn===(typeof R3_TURN==='object'?R3_TURN.revision:-1)&&
+    R3_HUD.renderedBattlefield===(typeof R3_BF==='object'?R3_BF.revision:-1)&&
     R3_HUD.renderedDebug===R3_UI.shown&&
     R3_HUD.renderedSync===R3_AUTO.enabled)return;
   const oldBody=el.querySelector?.('.hud-body');
@@ -462,6 +465,7 @@ function r3HudRender(){
   R3_HUD.renderedNative=R3_NATIVE.revision;
   R3_HUD.renderedUsed=JSON.stringify(R3_HUD.used);
   R3_HUD.renderedTurn=typeof R3_TURN==='object'?R3_TURN.revision:-1;
+  R3_HUD.renderedBattlefield=typeof R3_BF==='object'?R3_BF.revision:-1;
   R3_HUD.renderedDebug=R3_UI.shown;
   R3_HUD.renderedSync=R3_AUTO.enabled;
   const body=el.querySelector?.('.hud-body');
@@ -577,7 +581,8 @@ function r3HudStyles(){
     ".hud-native-status span{flex:1 1 280px}",
     ".hud-native-status button,.hud-native-probe{padding:5px 9px!important;border:1px solid #aec5d4!important;background:#263f51!important;color:#fff!important;font-size:11px!important;border-radius:3px!important}",
     ".hud-native-probe{margin-top:7px!important;cursor:pointer}",
-    typeof r3TurnStyles==='function'?r3TurnStyles():''
+    typeof r3TurnStyles==='function'?r3TurnStyles():'',
+    typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():''
 
   ].join('');
 }

@@ -1,6 +1,6 @@
 {
-  "version": "3.5.0",
+  "version": "3.6.0",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Firefox-only HUD action economy, movement, reaction, concentration and initiative-aware turn tracker, after CI"
+  "reason": "Firefox-only battlefield-first layout based on accepted compact HUD reference, after CI"
 }
