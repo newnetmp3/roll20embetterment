@@ -149,7 +149,10 @@ function r3MoveMeasure(){
   const active=R3_TOKEN.active;
   if(!active?.tokenId||!active.characterId){
     r3MoveDisconnect();R3_MOVE.last=null;
-    r3MoveReport('Waiting for a controlled token','Select your character token on the map');
+    const selection=typeof r3TokenSelectionDiagnostics==='function'?
+      r3TokenSelectionDiagnostics():null;
+    r3MoveReport('Waiting for a controlled token',
+      selection?.reason||'Select your character token on the map');
     return;
   }
   const info=r3MoveFind(),tracker=R3_MOVE;
@@ -227,11 +230,20 @@ function r3MoveMeasure(){
 function r3MovePoll(){r3MoveMeasure();}
 function r3MoveDiagnostics(){
   const page=r3MovePage(),token=R3_TOKEN.active;
+  const selection=typeof r3TokenSelectionDiagnostics==='function'?
+    r3TokenSelectionDiagnostics():null;
   return {
     status:R3_MOVE.status,
     details:R3_MOVE.details,
     turn:typeof R3_TURN==='object'?R3_TURN.phase:'unknown',
     selectedToken:!!token?.tokenId,
+    selectionRenderer:selection?.renderer||'unknown',
+    selectionSource:selection?.selectionSource||'unavailable',
+    selectionCount:selection?.selectionCount??0,
+    selectionReason:selection?.reason||'unavailable',
+    selectionApiTypes:selection?.selectionTypes||'none',
+    selectionCandidateKeys:selection?.selectionShape||'none',
+    selectionEngineKeys:selection?.engineKeys||'none',
     positionSource:R3_MOVE.source||'unavailable',
     pageResolved:!!page,
     pageId:r3MovePageId(page)||'unavailable',

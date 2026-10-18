@@ -40,6 +40,9 @@ function r3TokenCharacter(charId){
     characters.models.find(c=>r3String(c?.id||r3TokenModelGet(c,'_id'),110)===charId)||null:
     null;
 }
+// The new Jumpgate/Babylon map is not necessarily a Fabric canvas.
+// Never derive a selected character from every visible graphic; inspect
+// explicitly selected candidates and report why each was rejected.
 function r3TokenSelectionArray(value){
   if(!value)return [];
   if(Array.isArray(value))return value.slice(0,80);
@@ -47,29 +50,127 @@ function r3TokenSelectionArray(value){
   if(typeof value.toArray==='function'){
     try{const items=value.toArray();if(Array.isArray(items))return items.slice(0,80);}catch{}
   }
-  // Fabric's single selected graphic is an object, not a collection.
-  if(value.model||value.get||value.attributes||value.id)return [value];
+  if(typeof value==='object'&&typeof value.values==='function'){
+    try{
+      const result=[];
+      for(const item of value.values()){
+        result.push(item);if(result.length>=80)break;
+      }
+      return result;
+    }catch{}
+  }
+  // Some Roll20 selection adapters wrap objects in a selected collection.
+  if(value.selected&&value.selected!==value)return r3TokenSelectionArray(value.selected);
+  if(value.model||value.get||value.attributes||value.id||value.metadata)
+    return [value];
   return [];
 }
-function r3TokenSelected(){
-  const engine=window.d20?.engine;
-  const canvas=engine?.canvas;
-  // Only explicitly selected graphics are eligible. Never guess the player's
-  // token from all visible graphics, a matching name, or a cached HUD profile.
+function r3TokenSelectionProbe(){
+  const engine=window.d20?.engine,canvas=engine?.canvas;
   const sources=[
-    ()=>typeof engine?.selected==='function'?engine.selected():engine?.selected,
-    ()=>canvas?.getActiveObjects?.(),
-    ()=>canvas?.getActiveObject?.(),
-    ()=>canvas?._activeObjects,
-    ()=>canvas?._activeObject
+    ['engine.selected',()=>typeof engine?.selected==='function'?engine.selected():engine?.selected],
+    ['engine.selectedTokens',()=>typeof engine?.selectedTokens==='function'?engine.selectedTokens():engine?.selectedTokens],
+    ['engine.selectedObjects',()=>typeof engine?.selectedObjects==='function'?engine.selectedObjects():engine?.selectedObjects],
+    ['engine.selection',()=>engine?.selection],
+    ['canvas.getActiveObjects',()=>canvas?.getActiveObjects?.()],
+    ['canvas.getActiveObject',()=>canvas?.getActiveObject?.()],
+    ['canvas._activeObjects',()=>canvas?._activeObjects],
+    ['canvas._activeObject',()=>canvas?._activeObject]
   ];
-  for(const read of sources){
+  const items=[],names=[],types=[],seen=new Set();
+  for(const [name,read] of sources){
     try{
-      const items=r3TokenSelectionArray(read());
-      if(items.length)return items;
-    }catch{/* Keep checking other known selection sources. */}
+      const value=read(),batch=r3TokenSelectionArray(value);
+      if(value!==undefined&&value!==null)
+        types.push(name+':'+(Array.isArray(value)?'array':typeof value));
+      if(!batch.length)continue;
+      names.push(name+' ('+batch.length+')');
+      for(const item of batch){
+        if(!item||seen.has(item)||items.length>=80)continue;
+        seen.add(item);items.push(item);
+      }
+    }catch{/* One old or incompatible API is not evidence of no selection. */}
   }
-  return [];
+  let renderer='unknown';
+  try{
+    renderer=document?.querySelector?.('canvas[data-engine^="Babylon.js"],#babylonCanvas')?
+      'Babylon.js':document?.querySelector?.('canvas.lower-canvas')?'Fabric':'unknown';
+  }catch{}
+  const shape=(item)=>item&&typeof item==='object'?
+    Object.keys(item).slice(0,16).join(', ')||'(no enumerable keys)':'none';
+  const keys=(source)=>source&&typeof source==='object'?
+    Object.keys(source).filter(k=>/select|token|graphic|scene/i.test(k)).slice(0,20).join(', '):'';
+  return {items,sources:names.join(', ')||'none',renderer,
+    selectionTypes:types.join(', ')||'none',
+    selectionShape:items.length?shape(items[0]):'none',
+    engineKeys:keys(engine)||'none'};
+}
+function r3TokenSelected(){
+  return r3TokenSelectionProbe().items;
+}
+function r3TokenCandidateModel(item){
+  const variants=[item?.model,item?.graphic?.model,item?.graphic,
+    item?.token?.model,item?.token,item?.metadata?.model,
+    item?.metadata?.graphic?.model,item?.metadata?.graphic,
+    item?.metadata?.token?.model,item?.metadata?.token,item];
+  const direct=variants.find(v=>v&&r3TokenModelGet(v,'represents'));
+  if(direct)return direct;
+  // Babylon may surface a selected mesh with an explicit graphic ID rather
+  // than a Backbone model. Resolve exactly that ID in exposed game collections.
+  const id=r3String(item?.metadata?.tokenId||item?.metadata?.token_id||
+    item?.metadata?.graphicId||item?.graphicId||item?.tokenId||'',110);
+  if(id){
+    const c=window.d20?.Campaign,engine=window.d20?.engine;
+    let page=null;
+    try{page=typeof c?.activePage==='function'?c.activePage():c?.activePage;}catch{}
+    for(const source of [page?.thegraphics,page?.graphics,engine?.thegraphics]){
+      try{
+        const model=source?.get?.(id)||
+          (Array.isArray(source?.models)?source.models.find(v=>
+            r3String(v?.id||r3TokenModelGet(v,'_id'),110)===id):null);
+        if(model)return model;
+      }catch{}
+    }
+  }
+  return variants.find(Boolean)||null;
+}
+function r3TokenInspectLinked(item){
+  const model=r3TokenCandidateModel(item);
+  const tokenId=r3String(model?.id||r3TokenModelGet(model,'_id'),110);
+  if(!tokenId)return {reason:'Selected graphic has no readable token ID'};
+  const charId=r3String(r3TokenModelGet(model,'represents')||
+    r3TokenModelGet(model,'_represents'),110);
+  if(!charId)return {reason:'Selected graphic has no readable character link (represents)'};
+  const character=r3TokenCharacter(charId);
+  if(!character)return {reason:'Character linked to selected token is not loaded in Roll20'};
+  const name=r3String(r3TokenModelGet(character,'name'),120);
+  if(!name)return {reason:'Linked character name unavailable'};
+  const playerId=r3TokenPlayerId();
+  if(!playerId)return {reason:'Roll20 current player ID unavailable'};
+  if(!r3TokenControls(character,playerId))
+    return {reason:'Selected character Controlled By does not confirm this player'};
+  const tokenImage=r3TokenSafeArt(r3TokenModelGet(model,'imgsrc')||
+    item?._element?.src);
+  return {reason:'Selected token and character control verified',
+    info:{tokenId,characterId:charId,name,tokenImage}};
+}
+function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
+  const reasons=[];
+  for(const item of probe.items){
+    const result=r3TokenInspectLinked(item);
+    if(result.info)return {renderer:probe.renderer,selectionSource:probe.sources,
+      selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
+      selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
+      reason:result.reason,eligible:true};
+    if(!reasons.includes(result.reason))reasons.push(result.reason);
+  }
+  return {renderer:probe.renderer,selectionSource:probe.sources,
+    selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
+    selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,eligible:false,
+    reason:reasons.join(' | ')||
+      (probe.renderer==='Babylon.js'?
+        'Babylon selection not exposed by inspected editor APIs':
+        'Roll20 selection not exposed by inspected editor APIs')};
 }
 function r3TokenSafeArt(raw){
   try{
@@ -78,23 +179,7 @@ function r3TokenSafeArt(raw){
   }catch{return '';}
 }
 function r3TokenLinkedInfo(object){
-  const model=object?.model||object;
-  const tokenId=r3String(model?.id||r3TokenModelGet(model,'_id'),110);
-  const charId=r3String(r3TokenModelGet(model,'represents')||
-    r3TokenModelGet(model,'_represents'),110);
-  if(!tokenId||!charId)return null;
-  const d=window.d20;
-  const character=r3TokenCharacter(charId);
-  if(!character)return null;
-  const name=r3String(r3TokenModelGet(character,'name'),120);
-  const playerId=r3TokenPlayerId();
-  if(!name||!playerId)return null;
-  // Character permissions override token permissions for linked graphics.
-  // An empty list cannot prove access. GM selection alone is not permission.
-  if(!r3TokenControls(character,playerId))return null;
-  const tokenImage=r3TokenSafeArt(r3TokenModelGet(model,'imgsrc')||
-    object?._element?.src);
-  return {tokenId,characterId:charId,name,tokenImage};
+  return r3TokenInspectLinked(object).info||null;
 }
 function r3TokenUnambiguousName(name){
   const collection=window.d20?.Campaign?.characters;
@@ -209,10 +294,13 @@ function r3TokenPoll(){
   }).filter(Boolean);
   const fresh=tokens.filter(id=>!R3_TOKEN.selectionIds.includes(id));
   R3_TOKEN.selectionIds=tokens;
-  if(!fresh.length){if(typeof r3MovePoll==='function')r3MovePoll();return;}
-  // For group selection, choose the last newly selected eligible linked
-  // token. A later click on a token in the group becomes the current focus.
-  for(const id of fresh.slice().reverse()){
+  // A selection can arrive before Roll20 loads the represented character,
+  // its name, or permissions. Retry unresolved selections on the next poll
+  // instead of permanently discarding the token ID until user deselects it.
+  // Successful selections retain the old newest-token behavior.
+  const candidates=fresh.length?fresh:(!R3_TOKEN.active?tokens:[]);
+  if(!candidates.length){if(typeof r3MovePoll==='function')r3MovePoll();return;}
+  for(const id of candidates.slice().reverse()){
     const index=tokens.lastIndexOf(id);
     const info=r3TokenLinkedInfo(picked[index]);
     if(info){r3TokenSwitch(info);break;}
