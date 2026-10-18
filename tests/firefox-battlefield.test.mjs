@@ -163,3 +163,33 @@ test('fully collapsed mode leaves only a small restore control',()=>{
   assert.doesNotMatch(html,/class="r3-bf-actions"/);
   assert.doesNotMatch(html,/class="r3-bf-sidebar"/);
 });
+
+test('routine native/debug messages are accessible but never cover action docks',()=>{
+  const h=harness();
+  h.ctx.R3_NATIVE.status='Original Roll20 sheets restored. Use the original sheet.';
+  let html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
+  assert.match(html,/data-bf-action="status"/);
+  assert.match(html,/aria-label="Toggle native-roll status"/);
+  assert.doesNotMatch(html,/class="r3-bf-native"/,
+    'routine notices must not create a floating box over attacks or spells');
+  assert.match(html,/data-bf-panel="categories"/,'buttons remain visible');
+  h.api.r3BattlefieldClick({dataset:{bfAction:'status'}});
+  html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
+  assert.match(html,/class="r3-bf-native"/,'details show only after explicit click');
+  assert.match(html,/data-bf-action="status"/,'notification can be dismissed');
+  h.api.r3BattlefieldClick({dataset:{bfAction:'status'}});
+  assert.doesNotMatch(h.api.r3BattlefieldMarkup(h.ui.snapshot),/class="r3-bf-native"/);
+  h.ctx.R3_NATIVE.preview={status:'ready'};
+  assert.match(h.api.r3BattlefieldMarkup(h.ui.snapshot),/class="r3-bf-native"/,
+    'explicit roll confirmations must remain reachable');
+});
+test('battlefield ring shows negative remaining movement instead of clipping at zero',()=>{
+  const h=harness();
+  h.api.r3TurnStart();
+  h.api.R3_TURN.movementUsed=45;
+  const html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
+  assert.match(html,/-15 \/ 30 ft/);
+  assert.match(html,/Used 45 ft/);
+  h.api.r3TurnApply('dash-action');
+  assert.match(h.api.r3BattlefieldMarkup(h.ui.snapshot),/15 \/ 60 ft/);
+});
