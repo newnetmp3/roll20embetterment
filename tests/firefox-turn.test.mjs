@@ -154,3 +154,37 @@ test('native click acknowledgement is not enough to spend action automatically',
   assert.equal(h.context.R3_HUD.used.action,true);
   assert.equal(h.api.r3TurnClick({dataset:{turnAction:'fake-action'}}),false);
 });
+
+test('non-popup advanced options remain tucked away until requested',()=>{
+  const h=rig(),t=h.api.R3_TURN;
+  let markup=h.api.r3TurnMarkup(h.context.R3_UI.snapshot);
+  assert.match(markup,/More options/);
+  assert.doesNotMatch(markup,/Mark bonus attack/);
+  h.api.r3TurnApply('advanced');
+  assert.equal(t.advanced,true);
+  markup=h.api.r3TurnMarkup(h.context.R3_UI.snapshot);
+  assert.match(markup,/Mark bonus attack/);
+  assert.match(markup,/Attack allowance/);
+  h.api.r3TurnApply('bonus-attack');
+  assert.equal(t.bonusSpent,true);
+  assert.equal(t.bonusAttackUsed,1);
+  assert.equal(t.actionSpent,0,'offhand/bonus attack never spends main action');
+  assert.equal(t.attackUsed,0,'bonus attack is separate from main Attack action allowance');
+  h.api.r3TurnApply('bonus-attack-undo');
+  assert.equal(t.bonusAttackUsed,0);
+  // A count correction must not automatically restore a potentially spent
+  // bonus action; user can manually re-enable it as a separate state.
+  assert.equal(t.bonusSpent,true);
+  h.api.r3TurnApply('advanced');
+  assert.equal(t.advanced,false);
+  assert.doesNotMatch(h.api.r3TurnMarkup(h.context.R3_UI.snapshot),/Mark bonus attack/);
+});
+test('undoing attack count preserves action spending pending explicit correction',()=>{
+  const h=rig(),t=h.api.R3_TURN;
+  h.api.r3TurnApply('attack-used');
+  h.api.r3TurnApply('attack-undo');
+  assert.equal(t.attackUsed,0);
+  assert.equal(t.actionSpent,1,'could have been used on another action');
+  h.api.r3TurnApply('action');
+  assert.equal(t.actionSpent,0,'main action can still be restored manually');
+});
