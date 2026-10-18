@@ -1,6 +1,6 @@
 {
-  "version": "3.9.3",
+  "version": "3.9.4",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Read Jumpgate engine.tabletopSelected and exact selected graphics for token and movement tracking"
+  "reason": "Use source-verified Jumpgate tabletopSelected getter to discover selected controlled tokens and expose selection return shape"
 }
