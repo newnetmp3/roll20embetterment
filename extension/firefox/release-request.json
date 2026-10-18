@@ -1,6 +1,6 @@
 {
-  "version": "3.9.0",
+  "version": "3.9.1",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Repair live Roll20 movement detection with visible diagnostic reasons and move development notices/tooltips into dedicated Debug window"
+  "reason": "Fix Roll20/Fabric active-token selection detection so Movement Debug recognizes the selected, controlled character token"
 }

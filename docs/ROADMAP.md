@@ -324,3 +324,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 
 
 **2026-10-18 selection-debug follow-up:** In response to a live report that selected graphics show as not selected in Movement Debug, extend the shared token watcher to inspect both Roll20 editor selection and Fabric active selections. Do not bypass character ownership or use arbitrary on-map graphics. Verify under Floorp with the selected token, then test movement counting, source diagnostics, and release/signing separately.
+
+**Firefox v3.9.1 release request (2026-10-18):** PR #67 merged the alternate Roll20/Fabric selected-token API fallback with regression tests; Firefox test and generated userscript consistency CI passed. Bump only Firefox extension metadata from 3.9.0 to 3.9.1 and request unlisted Mozilla signing via main workflow. Chrome/user-script version numbers stay 3.4.0. After signing, verify XPI + update manifest, then live Floorp selection recognition, token movement/distance including reversals, and native character control checks. Release request is not evidence of live browser behavior.
