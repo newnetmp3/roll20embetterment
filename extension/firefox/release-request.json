@@ -1,6 +1,6 @@
 {
-  "version": "3.8.0",
+  "version": "3.8.1",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Automatically track controlled token movement by page scale, allow negative remaining speed, and make debug status nonblocking"
+  "reason": "Make all Firefox battlefield HUD panels draggable directly without visible grab handles, retain click and text-edit safety"
 }
