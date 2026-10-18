@@ -189,6 +189,7 @@ function r3UIEvent(event){
   const spent=field('hudUsed','[data-hud-used]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
+  if(typeof r3BattlefieldClick==='function'&&r3BattlefieldClick(target))return;
   if(typeof r3TurnClick==='function'&&r3TurnClick(target))return;
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-refresh')r3UIRefresh();
@@ -301,6 +302,9 @@ function r3StartUI(){
     }
   });
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
+  root.addEventListener('input',event=>{
+    if(typeof r3BattlefieldInput==='function')r3BattlefieldInput(event.target);
+  });
   root.addEventListener('keydown',event=>{event.stopPropagation();},true);
   root.addEventListener('keyup',event=>event.stopPropagation(),true);
   root.addEventListener('keypress',event=>event.stopPropagation(),true);
@@ -317,7 +321,7 @@ function r3StartUI(){
     event.preventDefault?.();event.stopPropagation?.();
     R3_HUD.collapsed=!R3_HUD.collapsed;
     if(R3_HUD.collapsed){R3_HUD.flyout='';R3_HUD.chooser=null;}
-    else R3_HUD.used={action:false,bonus:false,reaction:false};
+    else if(typeof r3TurnLoad!=='function')R3_HUD.used={action:false,bonus:false,reaction:false};
     r3HudSave();r3HudRender();
   },true);
   window.addEventListener('focus',()=>{if(!R3_UI.busy)r3UIRefresh();});

@@ -1088,6 +1088,7 @@ function r3UIEvent(event){
   const spent=field('hudUsed','[data-hud-used]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
+  if(typeof r3BattlefieldClick==='function'&&r3BattlefieldClick(target))return;
   if(typeof r3TurnClick==='function'&&r3TurnClick(target))return;
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-refresh')r3UIRefresh();
@@ -1200,6 +1201,9 @@ function r3StartUI(){
     }
   });
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
+  root.addEventListener('input',event=>{
+    if(typeof r3BattlefieldInput==='function')r3BattlefieldInput(event.target);
+  });
   root.addEventListener('keydown',event=>{event.stopPropagation();},true);
   root.addEventListener('keyup',event=>event.stopPropagation(),true);
   root.addEventListener('keypress',event=>event.stopPropagation(),true);
@@ -1216,7 +1220,7 @@ function r3StartUI(){
     event.preventDefault?.();event.stopPropagation?.();
     R3_HUD.collapsed=!R3_HUD.collapsed;
     if(R3_HUD.collapsed){R3_HUD.flyout='';R3_HUD.chooser=null;}
-    else R3_HUD.used={action:false,bonus:false,reaction:false};
+    else if(typeof r3TurnLoad!=='function')R3_HUD.used={action:false,bonus:false,reaction:false};
     r3HudSave();r3HudRender();
   },true);
   window.addEventListener('focus',()=>{if(!R3_UI.busy)r3UIRefresh();});
@@ -1882,6 +1886,7 @@ function r3HudLoad(){
   R3_HUD.portraitCache=null;R3_HUD.renderedSnapshot=null;
   R3_HUD.renderedLoadouts=null;
   if(typeof r3TurnLoad==='function')r3TurnLoad();
+  if(typeof r3BattlefieldLoad==='function')r3BattlefieldLoad();
   try{
     const stored=JSON.parse(localStorage.getItem(r3TokenSettingsKey())||'null');
     if(stored&&R3_HUD_TABS.some(t=>t.key===stored.category))
@@ -2217,6 +2222,7 @@ function r3HudSegment(label,kind,buttons){
       (used?'●':'○')+'</button>':'')+'</div></section>';
 }
 function r3HudMarkup(snapshot){
+  if(typeof r3BattlefieldMarkup==='function')return r3BattlefieldMarkup(snapshot);
   const name=r3String(snapshot?.name,80)||'No character imported';
   const hp=snapshot?.stats||{};
   const collapsed=R3_HUD.collapsed;
@@ -2303,6 +2309,7 @@ function r3HudRender(){
     R3_HUD.renderedNative===R3_NATIVE.revision&&
     R3_HUD.renderedUsed===JSON.stringify(R3_HUD.used)&&
     R3_HUD.renderedTurn===(typeof R3_TURN==='object'?R3_TURN.revision:-1)&&
+    R3_HUD.renderedBattlefield===(typeof R3_BF==='object'?R3_BF.revision:-1)&&
     R3_HUD.renderedDebug===R3_UI.shown&&
     R3_HUD.renderedSync===R3_AUTO.enabled)return;
   const oldBody=el.querySelector?.('.hud-body');
@@ -2311,7 +2318,21 @@ function r3HudRender(){
     R3_HUD.openKeys=[...(el.querySelectorAll?.('details.hud-card[open]')||[])]
       .map(card=>card.getAttribute('data-hud-card')).filter(Boolean).slice(0,80);
   }
+  // Firefox battlefield notes live in a textarea. Auto-sync may repaint
+  // while the player types; preserve focus/caret rather than kicking them out.
+  const active=R3_UI.root?.activeElement;
+  const noteFocused=active?.id==='r3-bf-notes';
+  const noteStart=noteFocused?active.selectionStart:null;
+  const noteEnd=noteFocused?active.selectionEnd:null;
   el.innerHTML=r3HudMarkup(R3_UI.snapshot);
+  if(noteFocused){
+    const next=el.querySelector?.('#r3-bf-notes');
+    if(next){
+      next.focus?.({preventScroll:true});
+      if(Number.isInteger(noteStart)&&Number.isInteger(noteEnd))
+        try{next.setSelectionRange(noteStart,noteEnd);}catch{}
+    }
+  }
   R3_HUD.renderedSnapshot=R3_UI.snapshot;
   R3_HUD.renderedPortrait=portrait;
   R3_HUD.renderedCategory=R3_HUD.category;
@@ -2325,6 +2346,7 @@ function r3HudRender(){
   R3_HUD.renderedNative=R3_NATIVE.revision;
   R3_HUD.renderedUsed=JSON.stringify(R3_HUD.used);
   R3_HUD.renderedTurn=typeof R3_TURN==='object'?R3_TURN.revision:-1;
+  R3_HUD.renderedBattlefield=typeof R3_BF==='object'?R3_BF.revision:-1;
   R3_HUD.renderedDebug=R3_UI.shown;
   R3_HUD.renderedSync=R3_AUTO.enabled;
   const body=el.querySelector?.('.hud-body');
@@ -2440,7 +2462,8 @@ function r3HudStyles(){
     ".hud-native-status span{flex:1 1 280px}",
     ".hud-native-status button,.hud-native-probe{padding:5px 9px!important;border:1px solid #aec5d4!important;background:#263f51!important;color:#fff!important;font-size:11px!important;border-radius:3px!important}",
     ".hud-native-probe{margin-top:7px!important;cursor:pointer}",
-    typeof r3TurnStyles==='function'?r3TurnStyles():''
+    typeof r3TurnStyles==='function'?r3TurnStyles():'',
+    typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():''
 
   ].join('');
 }
