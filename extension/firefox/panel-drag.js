@@ -2,7 +2,7 @@
 // Panel locations belong to the game, not the selected character.
 const R3_BF_PANELS=new Set([
   'actions','categories','turn','profile','concentration','resources',
-  'notes','advanced','tools','flyout','native','importer','show-profile'
+  'notes','advanced','tools','flyout','native','importer','show-profile','debug'
 ]);
 const R3_BF_DRAG={scope:'',positions:{},active:null,suppressClick:null,enabled:false,root:null};
 function r3BattlefieldLayoutKey(){

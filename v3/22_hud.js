@@ -443,6 +443,7 @@ function r3HudRender(){
     R3_HUD.renderedUsed===JSON.stringify(R3_HUD.used)&&
     R3_HUD.renderedTurn===(typeof R3_TURN==='object'?R3_TURN.revision:-1)&&
     R3_HUD.renderedBattlefield===(typeof R3_BF==='object'?R3_BF.revision:-1)&&
+    R3_HUD.renderedDebugWindow===(typeof R3_DEBUG==='object'?R3_DEBUG.open:false)&&
     R3_HUD.renderedDebug===R3_UI.shown&&
     R3_HUD.renderedSync===R3_AUTO.enabled)return;
   const oldBody=el.querySelector?.('.hud-body');
@@ -457,8 +458,13 @@ function r3HudRender(){
   const noteFocused=active?.id==='r3-bf-notes';
   const noteStart=noteFocused?active.selectionStart:null;
   const noteEnd=noteFocused?active.selectionEnd:null;
+  const debugScroll=el.querySelector?.('#r3-debug-entries')?.scrollTop;
   el.innerHTML=r3HudMarkup(R3_UI.snapshot);
   if(typeof r3BattlefieldPlacePanels==='function')r3BattlefieldPlacePanels();
+  if(Number.isFinite(debugScroll)){
+    const debugEntries=el.querySelector?.('#r3-debug-entries');
+    if(debugEntries)debugEntries.scrollTop=debugScroll;
+  }
   if(noteFocused){
     const next=el.querySelector?.('#r3-bf-notes');
     if(next){
@@ -481,6 +487,7 @@ function r3HudRender(){
   R3_HUD.renderedUsed=JSON.stringify(R3_HUD.used);
   R3_HUD.renderedTurn=typeof R3_TURN==='object'?R3_TURN.revision:-1;
   R3_HUD.renderedBattlefield=typeof R3_BF==='object'?R3_BF.revision:-1;
+  R3_HUD.renderedDebugWindow=typeof R3_DEBUG==='object'?R3_DEBUG.open:false;
   R3_HUD.renderedDebug=R3_UI.shown;
   R3_HUD.renderedSync=R3_AUTO.enabled;
   const body=el.querySelector?.('.hud-body');
@@ -598,7 +605,8 @@ function r3HudStyles(){
     ".hud-native-probe{margin-top:7px!important;cursor:pointer}",
     typeof r3TurnStyles==='function'?r3TurnStyles():'',
     typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():'',
-    typeof r3BattlefieldDragStyles==='function'?r3BattlefieldDragStyles():''
+    typeof r3BattlefieldDragStyles==='function'?r3BattlefieldDragStyles():'',
+    typeof r3DebugStyles==='function'?r3DebugStyles():''
 
   ].join('');
 }

@@ -89,6 +89,7 @@ function r3TurnSave(){
   }));}catch{}
 }
 function r3TurnChange(note,source='manual'){
+  if(typeof r3DebugLog==='function')r3DebugLog('System','Turn: '+note);
   R3_TURN.note=note;R3_TURN.noteSource=source;
   r3TurnSync();R3_TURN.revision++;r3TurnSave();r3HudRender();
 }

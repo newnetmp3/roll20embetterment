@@ -986,6 +986,8 @@ function r3Results(){
     '<div class="metrics">'+r3ReportCounts(snap)+'</div>'+nav+'<div class="results">'+content+'</div>';
 }
 function r3UIStatus(message,coverage){
+  if(typeof r3DebugLog==='function'&&message!==R3_UI.status)
+    r3DebugLog('Importer',message);
   R3_UI.status=message;
   const el=R3_UI.root?.getElementById('r3-status');
   if(el)el.textContent=message+(coverage?' · '+Object.entries(coverage).filter(([k])=>['spells','attacks','inventory','features','resources'].includes(k)).map(([k,v])=>k+' '+v).join(', '):'');
@@ -1088,6 +1090,7 @@ function r3UIEvent(event){
   const spent=field('hudUsed','[data-hud-used]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
+  if(typeof r3DebugAction==='function'&&r3DebugAction(target))return;
   if(typeof r3BattlefieldClick==='function'&&r3BattlefieldClick(target))return;
   if(typeof r3TurnClick==='function'&&r3TurnClick(target))return;
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
@@ -1096,7 +1099,10 @@ function r3UIEvent(event){
   else if(target?.id==='r3-all')return r3StartImport('all');
   else if(target?.id==='r3-export')r3Export();
   else if(target?.id==='r3-auto'){r3ToggleAuto();r3HudRender();}
-  else if(target?.id==='r3-hud-debug'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
+  else if(target?.id==='r3-hud-debug'){
+    if(typeof r3DebugToggle==='function')r3DebugToggle();
+    else{R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
+  }
   else if(target?.id==='r3-hud-collapse'){
     R3_HUD.collapsed=!R3_HUD.collapsed;
     if(R3_HUD.collapsed){
@@ -1203,6 +1209,7 @@ function r3StartUI(){
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
   if(typeof r3BattlefieldEnableDragging==='function')r3BattlefieldEnableDragging(root);
   if(typeof r3SheetVisibilityInstall==='function')r3SheetVisibilityInstall();
+  if(typeof r3DebugInstall==='function')r3DebugInstall(root);
   root.addEventListener('input',event=>{
     if(typeof r3BattlefieldInput==='function')r3BattlefieldInput(event.target);
   });
@@ -1235,6 +1242,8 @@ function r3StartUI(){
 // control before a user can explicitly confirm a single native click.
 const R3_NATIVE={pending:new Map(),tokens:new Map(),readers:new Map(),preview:null,busy:false,status:'',revision:0};
 function r3NativeStatus(message){
+  if(typeof r3DebugLog==='function'&&message!==R3_NATIVE.status)
+    r3DebugLog('Native',message);
   R3_NATIVE.status=r3String(message,240);
   R3_NATIVE.revision++;
   r3HudRender?.();
@@ -2335,6 +2344,7 @@ function r3HudRender(){
     R3_HUD.renderedUsed===JSON.stringify(R3_HUD.used)&&
     R3_HUD.renderedTurn===(typeof R3_TURN==='object'?R3_TURN.revision:-1)&&
     R3_HUD.renderedBattlefield===(typeof R3_BF==='object'?R3_BF.revision:-1)&&
+    R3_HUD.renderedDebugWindow===(typeof R3_DEBUG==='object'?R3_DEBUG.open:false)&&
     R3_HUD.renderedDebug===R3_UI.shown&&
     R3_HUD.renderedSync===R3_AUTO.enabled)return;
   const oldBody=el.querySelector?.('.hud-body');
@@ -2349,8 +2359,13 @@ function r3HudRender(){
   const noteFocused=active?.id==='r3-bf-notes';
   const noteStart=noteFocused?active.selectionStart:null;
   const noteEnd=noteFocused?active.selectionEnd:null;
+  const debugScroll=el.querySelector?.('#r3-debug-entries')?.scrollTop;
   el.innerHTML=r3HudMarkup(R3_UI.snapshot);
   if(typeof r3BattlefieldPlacePanels==='function')r3BattlefieldPlacePanels();
+  if(Number.isFinite(debugScroll)){
+    const debugEntries=el.querySelector?.('#r3-debug-entries');
+    if(debugEntries)debugEntries.scrollTop=debugScroll;
+  }
   if(noteFocused){
     const next=el.querySelector?.('#r3-bf-notes');
     if(next){
@@ -2373,6 +2388,7 @@ function r3HudRender(){
   R3_HUD.renderedUsed=JSON.stringify(R3_HUD.used);
   R3_HUD.renderedTurn=typeof R3_TURN==='object'?R3_TURN.revision:-1;
   R3_HUD.renderedBattlefield=typeof R3_BF==='object'?R3_BF.revision:-1;
+  R3_HUD.renderedDebugWindow=typeof R3_DEBUG==='object'?R3_DEBUG.open:false;
   R3_HUD.renderedDebug=R3_UI.shown;
   R3_HUD.renderedSync=R3_AUTO.enabled;
   const body=el.querySelector?.('.hud-body');
@@ -2490,7 +2506,8 @@ function r3HudStyles(){
     ".hud-native-probe{margin-top:7px!important;cursor:pointer}",
     typeof r3TurnStyles==='function'?r3TurnStyles():'',
     typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():'',
-    typeof r3BattlefieldDragStyles==='function'?r3BattlefieldDragStyles():''
+    typeof r3BattlefieldDragStyles==='function'?r3BattlefieldDragStyles():'',
+    typeof r3DebugStyles==='function'?r3DebugStyles():''
 
   ].join('');
 }
@@ -2727,7 +2744,11 @@ function r3AutoSave(){
 }
 function r3AutoDisplay(message){
   // Routine UI refreshes must not erase a useful "journal not loaded" status.
-  if(message!==undefined)R3_AUTO.lastError=message||'';
+  if(message!==undefined){
+    if(typeof r3DebugLog==='function'&&message!==R3_AUTO.lastError)
+      r3DebugLog('Importer','Auto-sync: '+message);
+    R3_AUTO.lastError=message||'';
+  }
   const status=R3_UI.root?.getElementById('r3-auto-status');
   if(status)status.textContent=R3_AUTO.enabled?
     ('Auto-sync: '+(R3_AUTO.lastError||'watching for your character sheet')):'Auto-sync is off';

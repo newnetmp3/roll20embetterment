@@ -87,6 +87,8 @@ function r3Results(){
     '<div class="metrics">'+r3ReportCounts(snap)+'</div>'+nav+'<div class="results">'+content+'</div>';
 }
 function r3UIStatus(message,coverage){
+  if(typeof r3DebugLog==='function'&&message!==R3_UI.status)
+    r3DebugLog('Importer',message);
   R3_UI.status=message;
   const el=R3_UI.root?.getElementById('r3-status');
   if(el)el.textContent=message+(coverage?' · '+Object.entries(coverage).filter(([k])=>['spells','attacks','inventory','features','resources'].includes(k)).map(([k,v])=>k+' '+v).join(', '):'');
@@ -189,6 +191,7 @@ function r3UIEvent(event){
   const spent=field('hudUsed','[data-hud-used]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
+  if(typeof r3DebugAction==='function'&&r3DebugAction(target))return;
   if(typeof r3BattlefieldClick==='function'&&r3BattlefieldClick(target))return;
   if(typeof r3TurnClick==='function'&&r3TurnClick(target))return;
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
@@ -197,7 +200,10 @@ function r3UIEvent(event){
   else if(target?.id==='r3-all')return r3StartImport('all');
   else if(target?.id==='r3-export')r3Export();
   else if(target?.id==='r3-auto'){r3ToggleAuto();r3HudRender();}
-  else if(target?.id==='r3-hud-debug'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
+  else if(target?.id==='r3-hud-debug'){
+    if(typeof r3DebugToggle==='function')r3DebugToggle();
+    else{R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
+  }
   else if(target?.id==='r3-hud-collapse'){
     R3_HUD.collapsed=!R3_HUD.collapsed;
     if(R3_HUD.collapsed){
@@ -304,6 +310,7 @@ function r3StartUI(){
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
   if(typeof r3BattlefieldEnableDragging==='function')r3BattlefieldEnableDragging(root);
   if(typeof r3SheetVisibilityInstall==='function')r3SheetVisibilityInstall();
+  if(typeof r3DebugInstall==='function')r3DebugInstall(root);
   root.addEventListener('input',event=>{
     if(typeof r3BattlefieldInput==='function')r3BattlefieldInput(event.target);
   });

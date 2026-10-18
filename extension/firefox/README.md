@@ -74,3 +74,9 @@ Routine debug and original-sheet recovery notices now live behind a small **ⓘ 
 ## Firefox 3.8.1 — Direct panel dragging, no grab tabs
 
 The draggable area is now the panel itself; the old ⠿ tabs have been removed. Drag any panel from a spare background area or by moving a button more than 8px while holding the pointer. A stationary click still activates the ordinary control. Release to save. Text inputs remain editable; panels still respect viewport boundaries and the chat-safe default positions. Use **Reset layout** in the HUD tools to return all panels to their default locations. Existing layouts saved in Firefox 3.7.0 and 3.8.0 carry forward unchanged.
+
+## Firefox v3.9.0 — Debug and movement diagnostics
+
+Click **⚙ Debug** in the compact HUD to open a dedicated, draggable developer window. It contains live movement tracking health (including token source, map page and units, and last observed position), timestamped native/Auto-sync/importer and turn activity, and collected help/tooltips. Filter by category, **Clear**, or **Copy log** when filing a bug report. The original sheet Importer is accessible through a separate button inside Debug. Ordinary status notifications no longer cover the HUD or battlefield; you will still see native Confirm/Cancel when a genuine roll needs your approval. Debug data stays in memory and is not uploaded automatically.
+
+You do **not** have to open a character sheet to track movement. Select a token you control, start your turn, move it on the battlefield, then check the Debug window's Movement section. It now searches multiple Roll20 Fabric/model/page paths and states explicitly whether position, page scale, or another source is unavailable. It does not invent grid distance on a map with unknown units; manual corrections and negative remaining movement are preserved. If it still does not count, use **Copy log** and share the diagnostic text so the live Roll20 variant can be supported precisely.
