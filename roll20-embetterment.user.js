@@ -2745,9 +2745,14 @@ function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
     selectionGetter:probe.selectionGetter,selectionReturnShape:probe.selectionReturnShape,
     eligible:false,
     reason:reasons.join(' | ')||
-      (probe.renderer==='Babylon.js'?
-        'Babylon selection not exposed by inspected editor APIs':
-        'Roll20 selection not exposed by inspected editor APIs')};
+      (probe.selectionGetter==='confirmed getter read failed'?
+        'Jumpgate selection getter failed':
+        probe.selectionGetter==='confirmed getter read'?
+          'Jumpgate getter returned no supported selected tokens ('+
+          probe.selectionReturnShape+')':
+          probe.renderer==='Babylon.js'?
+            'Babylon selection not exposed by inspected editor APIs':
+            'Roll20 selection not exposed by inspected editor APIs')};
 }
 function r3TokenSafeArt(raw){
   try{
