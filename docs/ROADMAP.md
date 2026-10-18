@@ -303,5 +303,7 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Keep saved per-game panel layouts, viewport bounds, default chat clearance, and Reset layout.
 - [x] Replace former grip keyboard arrows with focusable panels and Alt+Arrow / Alt+Shift+Arrow.
 - [x] Add regression tests for direct panel movement, threshold, click suppression, text-edit exclusion and saved positions.
-- [ ] Run final Firefox and separate Chrome CI, merge and publish signed Firefox v3.8.1 update.
+- [x] Final Firefox CI green (394 tests), PR #65 merged, Mozilla-signed Firefox v3.8.1 XPI and SHA-256 automatic-update feed published. Chrome v3.4.0 unchanged; no Chrome-specific build was required.
 - [ ] Verify actual Floorp Roll20 click-versus-drag behavior with Attacks/Spells, notes typing and chat visible.
+
+**Firefox v3.8.1 release verified (2026-10-18):** [PR #65](https://github.com/newnetmp3/roll20embetterment/pull/65) merged, [394-test PR CI](https://github.com/newnetmp3/roll20embetterment/actions/runs/39157525423) green and [Mozilla signing 39157589515](https://github.com/newnetmp3/roll20embetterment/actions/runs/39157589515) successful. [Signed XPI download](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.8.1/r20eb-firefox-v3.8.1.xpi). Live Floorp direct-drag and button click safety still open.
