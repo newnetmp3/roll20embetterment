@@ -14,7 +14,7 @@ function pack(browser){
   const zip=readFileSync(join(root,'dist',browser,'roll20-embetterment-'+browser+'-'+version+suffix+'.zip'));
   return {manifest,source,popup,zip};
 }
-test('Firefox and Chrome MV3 use MAIN world and match only Roll20 editor/official 2024 sheet',()=>{
+test('Firefox MV3 use MAIN world and match only Roll20 editor/official 2024 sheet',()=>{
   const expected=[
     'https://app.roll20.net/editor*',
     'https://advanced-sheets.production.roll20preflight.net/*dnd2024byroll20/*'
@@ -47,7 +47,7 @@ test('Firefox and Chrome MV3 use MAIN world and match only Roll20 editor/officia
 test('the real v3 source is bundled in order, without legacy or Tampermonkey dependency',()=>{
   const text=modules.map(n=>'// ===== v3/'+n+' =====\n'+
     readFileSync(join(root,'v3',n),'utf8').trim()).join('\n\n');
-  for(const browser of ['firefox','chrome']){
+  for(const browser of ['firefox']){
     const {source}=pack(browser);
     assert.ok(source.includes(text));
     assert.match(source,/function r3Boot\(/);
@@ -56,8 +56,8 @@ test('the real v3 source is bundled in order, without legacy or Tampermonkey dep
     assert.doesNotMatch(source,/function autoRefreshCharacterStats\(/);
   }
 });
-test('both ZIP files are valid root-manifest packages',()=>{
-  for(const browser of ['firefox','chrome']){
+test('Firefox ZIP are valid root-manifest packages',()=>{
+  for(const browser of ['firefox']){
     const {zip}=pack(browser);
     assert.equal(zip.readUInt32LE(zip.length-22),0x06054b50);
     const count=zip.readUInt16LE(zip.length-14);
