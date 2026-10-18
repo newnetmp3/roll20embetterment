@@ -1,6 +1,6 @@
 {
-  "version": "3.9.1",
+  "version": "3.9.2",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Fix Roll20/Fabric active-token selection detection so Movement Debug recognizes the selected, controlled character token"
+  "reason": "Investigate Babylon.js selected-token detection in live Roll20; add explicit engine selection lookup, deferred character retry and debug source diagnostics"
 }
