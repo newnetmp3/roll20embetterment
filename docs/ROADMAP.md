@@ -216,6 +216,8 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 
 - [x] AMO signing credentials configured by user (their confirmation; inaccessible/opaque to assistant).
 - [x] Add main-only, version-locked release-request trigger to start the authorized first Firefox signing without manual workflow dispatch.
-- [ ] Verify PR CI and signing run after merging the request; troubleshoot Mozilla submission if needed.
-- [ ] Confirm signed XPI GitHub Release and nonempty signed-only update feed (do not substitute unsigned ZIP).
+- [x] PR #59 merged and Firefox signing run 39085562302 successfully completed.
+- [x] Mozilla-signed Firefox v3.4.1 XPI published via GitHub Release and HTTPS update feed activated with SHA-256 hash.
 - [ ] Install signed Firefox XPI and verify hidden sheets, first Find and real native chat roll in live Floorp.
+
+**Firefox v3.4.1 signed release (2026-10-17):** [Download signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.4.1/r20eb-firefox-v3.4.1.xpi). [Actions 39085562302](https://github.com/newnetmp3/roll20embetterment/actions/runs/39085562302) passed the Mozilla unlisted signing, release publication and Firefox update feed steps. Next: real Firefox/Floorp install and Roll20 functionality QA. Chrome unchanged.
