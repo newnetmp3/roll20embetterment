@@ -2,7 +2,7 @@
 // silently spends Roll20 actions or clicks gameplay controls.
 const R3_TURN={
   phase:'unknown',actionSpent:0,extraActions:0,bonusSpent:false,reactionSpent:false,
-  movementUsed:0,dashes:0,attackUsed:0,attackAllowance:1,
+  movementUsed:0,dashes:0,attackUsed:0,bonusAttackUsed:0,attackAllowance:1,advanced:false,
   freeSpent:false,concentration:null,revision:0,lastTop:null,
   note:'Tracking locally. Select Start turn when ready.',noteSource:'manual'
 };
@@ -22,7 +22,7 @@ function r3TurnState(){
     phase:R3_TURN.phase,actionSpent:R3_TURN.actionSpent,
     extraActions:R3_TURN.extraActions,bonusSpent:R3_TURN.bonusSpent,
     reactionSpent:R3_TURN.reactionSpent,movementUsed:R3_TURN.movementUsed,
-    dashes:R3_TURN.dashes,attackUsed:R3_TURN.attackUsed,
+    dashes:R3_TURN.dashes,attackUsed:R3_TURN.attackUsed,bonusAttackUsed:R3_TURN.bonusAttackUsed,
     attackAllowance:R3_TURN.attackAllowance,freeSpent:R3_TURN.freeSpent,
     concentration:R3_TURN.concentration
   };
@@ -50,7 +50,7 @@ function r3TurnLoad(){
   Object.assign(R3_TURN,{
     phase:'unknown',actionSpent:0,extraActions:0,bonusSpent:false,
     reactionSpent:false,movementUsed:0,dashes:0,attackUsed:0,
-    attackAllowance:1,freeSpent:false,concentration:null,
+    bonusAttackUsed:0,attackAllowance:1,advanced:false,freeSpent:false,concentration:null,
     note:'Tracking locally. Select Start turn when ready.',noteSource:'manual'
   });
   try{
@@ -65,6 +65,7 @@ function r3TurnLoad(){
       R3_TURN.movementUsed=r3TurnInt(state.movementUsed,0,3000,0);
       R3_TURN.dashes=r3TurnInt(state.dashes,0,4,0);
       R3_TURN.attackUsed=r3TurnInt(state.attackUsed,0,12,0);
+      R3_TURN.bonusAttackUsed=r3TurnInt(state.bonusAttackUsed,0,12,0);
       R3_TURN.attackAllowance=r3TurnInt(state.attackAllowance,1,12,1);
       R3_TURN.freeSpent=state.freeSpent===true;
       if(state.concentration===true||state.concentration===false)
@@ -89,7 +90,7 @@ function r3TurnStart(source='manual'){
   Object.assign(R3_TURN,{
     phase:'active',actionSpent:0,extraActions:0,bonusSpent:false,
     reactionSpent:false,movementUsed:0,dashes:0,attackUsed:0,
-    freeSpent:false
+    bonusAttackUsed:0,freeSpent:false
   });
   // Concentration can persist between turns; do not reset it.
   r3TurnChange(source==='observed'?
@@ -149,8 +150,17 @@ function r3TurnApply(action){
       break;
     case 'attack-undo':
       t.attackUsed=Math.max(0,t.attackUsed-1);
-      if(t.attackUsed===0&&t.actionSpent===1)t.actionSpent=0;
+      // A manual attack marker cannot prove whether this action was also
+      // spent on something else. Correct its Action card separately.
       break;
+    case 'bonus-attack':
+      t.bonusAttackUsed=Math.min(12,t.bonusAttackUsed+1);
+      t.bonusSpent=true;break;
+    case 'bonus-attack-undo':
+      t.bonusAttackUsed=Math.max(0,t.bonusAttackUsed-1);
+      break;
+    case 'advanced':
+      t.advanced=!t.advanced;break;
     case 'free':t.freeSpent=!t.freeSpent;break;
     case 'focus':
       t.concentration=t.concentration===null?true:t.concentration===true?false:null;
@@ -222,14 +232,21 @@ function r3TurnMarkup(snapshot){
     r3TurnBtn('Undo Dash','dash-undo')+'</div>'+
     '<div class="hud-turn-details"><span>Attacks '+t.attackUsed+' / '+t.attackAllowance+
     (extraAttack?' · Extra Attack on sheet':'')+'</span>'+
-    r3TurnBtn('Mark attack','attack-used')+r3TurnBtn('Undo','attack-undo')+
-    r3TurnBtn('− allowance','attacks-minus')+r3TurnBtn('+ allowance','attacks-plus')+
-    '<span>Extra actions +'+t.extraActions+'</span>'+
-    r3TurnBtn('−','extra-minus')+r3TurnBtn('+','extra-plus')+
+    r3TurnBtn('Mark main attack','attack-used')+r3TurnBtn('Undo count','attack-undo')+
     '<span>Free interaction '+(t.freeSpent?'noted':'open')+'</span>'+
     r3TurnBtn(t.freeSpent?'Undo':'Mark','free')+
     '<span>Concentration: '+concentration+'</span>'+r3TurnBtn('Toggle','focus')+
-    '</div><div class="hud-turn-note" role="status">'+r3Escape(t.note)+
+    r3TurnBtn(t.advanced?'Hide options':'More options','advanced')+
+    '</div>'+
+    (t.advanced?'<div class="hud-turn-details hud-turn-overrides">'+
+    '<span>Attack allowance '+t.attackAllowance+'</span>'+
+    r3TurnBtn('−','attacks-minus')+r3TurnBtn('+','attacks-plus')+
+    '<span>Extra actions +'+t.extraActions+'</span>'+
+    r3TurnBtn('−','extra-minus')+r3TurnBtn('+','extra-plus')+
+    '<span>Bonus attacks '+t.bonusAttackUsed+'</span>'+
+    r3TurnBtn('Mark bonus attack','bonus-attack')+
+    r3TurnBtn('Undo count','bonus-attack-undo')+'</div>':'')+
+    '<div class="hud-turn-note" role="status">'+r3Escape(t.note)+
     ' <small>Local markers · bonus Dash needs an eligible feature · sheet values are authoritative</small></div>'+
     '</section>';
 }
@@ -248,6 +265,7 @@ function r3TurnStyles(){
     '.hud-turn-meter{height:8px;background:#14222e;border:1px solid #60798b;border-radius:5px;min-width:60px;flex:1;overflow:hidden}',
     '.hud-turn-meter>div{height:100%;background:#7fc5da;transition:width .2s}',
     '.hud-turn-details{border-top:1px solid #465a6b;padding-top:3px}',
+    '.hud-turn-overrides{background:#203342;padding:4px;border-radius:3px}',
     '.hud-turn-note{font-size:10px;color:#f3dcae}.hud-turn-note small{color:#b0bdc9;margin-left:4px}',
     '.hud-segment-spent{filter:saturate(.6);opacity:.72}',
     '.hud-economy-cost{background:#315b65!important;border:1px solid #6d9fac}',
