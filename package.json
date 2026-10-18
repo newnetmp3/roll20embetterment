@@ -3,12 +3,16 @@
   "version": "3.4.0",
   "private": true,
   "type": "module",
-  "description": "Player-first Roll20 combat HUD for Firefox/Chrome extensions and optional userscript",
+  "description": "Firefox-first Roll20 combat HUD, separate Chrome extension, optional legacy userscript",
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "npm run build && npm run build:extension && npm test && node --check roll20-embetterment.user.js && node --check dist/extension/chrome/content.js && node --check dist/extension/firefox/content.js",
-    "build:extension": "node scripts/build-extension.mjs"
+    "check": "npm run check:firefox",
+    "build:extension": "npm run build:firefox",
+    "build:firefox": "node scripts/build-firefox.mjs",
+    "build:chrome": "node scripts/build-chrome.mjs",
+    "check:firefox": "npm run build && npm run build:firefox && npm test && node --check dist/firefox/extension/content.js && node --check roll20-embetterment.user.js",
+    "check:chrome": "npm run build:chrome && node --test tests/chrome-extension.spec.mjs && node --check dist/chrome/extension/content.js"
   },
   "engines": {
     "node": ">=20"
