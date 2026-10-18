@@ -76,8 +76,23 @@ function r3TokenSelectionProbe(){
   const engine=window.d20?.engine,canvas=engine?.canvas;
   // tabletopSelected is present in the user's live Jumpgate editor. Do not
   // call a function-valued member: it might be a mutating event handler.
+  // Verified against a real Jumpgate session (2026-10-18):
+  // () => VTTEngine.instance.tabletop.getSelection()
+  // Only invoke this proven zero-argument *getter*. Unknown functions must
+  // never be called because they may be selection/event mutators.
+  let tabletop=engine?.tabletopSelected,getterState='not present';
+  if(typeof tabletop==='function'){
+    try{
+      const source=Function.prototype.toString.call(tabletop);
+      if(tabletop.length===0&&/\\.tabletop\\.getSelection\\s*\\(/.test(source)){
+        tabletop=tabletop.call(engine);getterState='confirmed getter read';
+      }else getterState='unverified function not invoked';
+    }catch{
+      tabletop=null;getterState='confirmed getter read failed';
+    }
+  }else if(tabletop!==undefined)getterState='selection property';
   const sources=[
-    ['engine.tabletopSelected',()=>engine?.tabletopSelected],
+    ['engine.tabletopSelected',()=>tabletop],
     ['engine.selected',()=>typeof engine?.selected==='function'?engine.selected():engine?.selected],
     ['engine.selectedTokens',()=>typeof engine?.selectedTokens==='function'?engine.selectedTokens():engine?.selectedTokens],
     ['engine.selectedObjects',()=>typeof engine?.selectedObjects==='function'?engine.selectedObjects():engine?.selectedObjects],
@@ -88,9 +103,21 @@ function r3TokenSelectionProbe(){
     ['canvas._activeObject',()=>canvas?._activeObject]
   ];
   const items=[],names=[],types=[],seen=new Set();
+  let getterShape='none';
+  const shapeOf=value=>{
+    if(value===undefined||value===null)return 'none';
+    if(Array.isArray(value))return 'array '+value.length;
+    if(typeof value==='object'){
+      const className=r3String(value?.constructor?.name||'object',50);
+      const count=Number(value?.size??value?.length);
+      return className+(Number.isInteger(count)&&count>=0?' '+count:'');
+    }
+    return typeof value;
+  };
   for(const [name,read] of sources){
     try{
       const value=read(),batch=r3TokenSelectionArray(value);
+      if(name==='engine.tabletopSelected')getterShape=shapeOf(value);
       if(value!==undefined&&value!==null)
         types.push(name+':'+(Array.isArray(value)?'array':typeof value));
       if(!batch.length)continue;
@@ -112,6 +139,7 @@ function r3TokenSelectionProbe(){
     Object.keys(source).filter(k=>/select|token|graphic|scene/i.test(k)).slice(0,20).join(', '):'';
   return {items,sources:names.join(', ')||'none',renderer,
     selectionTypes:types.join(', ')||'none',
+    selectionGetter:getterState,selectionReturnShape:getterShape,
     selectionShape:items.length?shape(items[0]):'none',
     engineKeys:keys(engine)||'none'};
 }
@@ -193,12 +221,15 @@ function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
     if(result.info)return {renderer:probe.renderer,selectionSource:probe.sources,
       selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
       selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
+      selectionGetter:probe.selectionGetter,selectionReturnShape:probe.selectionReturnShape,
       reason:result.reason,eligible:true};
     if(!reasons.includes(result.reason))reasons.push(result.reason);
   }
   return {renderer:probe.renderer,selectionSource:probe.sources,
     selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
-    selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,eligible:false,
+    selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
+    selectionGetter:probe.selectionGetter,selectionReturnShape:probe.selectionReturnShape,
+    eligible:false,
     reason:reasons.join(' | ')||
       (probe.renderer==='Babylon.js'?
         'Babylon selection not exposed by inspected editor APIs':
