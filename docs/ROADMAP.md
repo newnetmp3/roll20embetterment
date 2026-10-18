@@ -233,6 +233,8 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Explicit sheet-observed spell/feature action costs; free-interaction reminder and manual concentration state persisting across turns.
 - [x] Existing official spell-slot/resource values remain read-only; native button clicked ACK never wrongly auto-consumes action.
 - [x] No question/tutorial dialogs; inline feedback, hover explanations and regression tests for cross-character isolation and rules safety.
-- [ ] Green GitHub PR checks, merge, Mozilla-sign Firefox v3.5.0 and confirm update manifest points to signed XPI only.
+- [x] PR #60 merged, 359 Firefox tests passed, Chrome checks green; Mozilla-signed Firefox v3.5.0 XPI released with verified signed-only update manifest.
 - [ ] Live Floorp HUD sizing, per-character action economy, native first Find, hidden sheet and actual chat-roll QA.
 - [ ] Future optional: auto-measure token movement only after browser-verified Roll20 grid scale, coordinate and path APIs; attach verified chat events to action spending; account for more class-specific economy overrides.
+
+**v3.5.0 shipped:** [signed Firefox download](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.5.0/r20eb-firefox-v3.5.0.xpi), [signing CI 39090704856](https://github.com/newnetmp3/roll20embetterment/actions/runs/39090704856) green; 359/359 test suite passed. Only Firefox version advanced. Next: real Floorp HUD/layout, manual reaction/movement, initiative turn transition, native attack confirmation and chat result verification.
