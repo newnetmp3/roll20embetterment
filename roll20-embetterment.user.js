@@ -2565,10 +2565,14 @@ function r3TokenSelectionArray(value){
   if(typeof value.toArray==='function'){
     try{const items=value.toArray();if(Array.isArray(items))return items.slice(0,80);}catch{}
   }
-  if(value instanceof Set||value instanceof Map)
-    return Array.from(value.values()).slice(0,80);
   if(typeof value==='object'&&typeof value.values==='function'){
-    try{return Array.from(value.values()).slice(0,80);}catch{}
+    try{
+      const result=[];
+      for(const item of value.values()){
+        result.push(item);if(result.length>=80)break;
+      }
+      return result;
+    }catch{}
   }
   // Some Roll20 selection adapters wrap objects in a selected collection.
   if(value.selected&&value.selected!==value)return r3TokenSelectionArray(value.selected);
@@ -2588,10 +2592,12 @@ function r3TokenSelectionProbe(){
     ['canvas._activeObjects',()=>canvas?._activeObjects],
     ['canvas._activeObject',()=>canvas?._activeObject]
   ];
-  const items=[],names=[],seen=new Set();
+  const items=[],names=[],types=[],seen=new Set();
   for(const [name,read] of sources){
     try{
-      const batch=r3TokenSelectionArray(read());
+      const value=read(),batch=r3TokenSelectionArray(value);
+      if(value!==undefined&&value!==null)
+        types.push(name+':'+(Array.isArray(value)?'array':typeof value));
       if(!batch.length)continue;
       names.push(name+' ('+batch.length+')');
       for(const item of batch){
@@ -2605,7 +2611,14 @@ function r3TokenSelectionProbe(){
     renderer=document?.querySelector?.('canvas[data-engine^="Babylon.js"],#babylonCanvas')?
       'Babylon.js':document?.querySelector?.('canvas.lower-canvas')?'Fabric':'unknown';
   }catch{}
-  return {items,sources:names.join(', ')||'none',renderer};
+  const shape=(item)=>item&&typeof item==='object'?
+    Object.keys(item).slice(0,16).join(', ')||'(no enumerable keys)':'none';
+  const keys=(source)=>source&&typeof source==='object'?
+    Object.keys(source).filter(k=>/select|token|graphic|scene/i.test(k)).slice(0,20).join(', '):'';
+  return {items,sources:names.join(', ')||'none',renderer,
+    selectionTypes:types.join(', ')||'none',
+    selectionShape:items.length?shape(items[0]):'none',
+    engineKeys:keys(engine)||'none'};
 }
 function r3TokenSelected(){
   return r3TokenSelectionProbe().items;
@@ -2661,11 +2674,14 @@ function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
   for(const item of probe.items){
     const result=r3TokenInspectLinked(item);
     if(result.info)return {renderer:probe.renderer,selectionSource:probe.sources,
-      selectionCount:probe.items.length,reason:result.reason,eligible:true};
+      selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
+      selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
+      reason:result.reason,eligible:true};
     if(!reasons.includes(result.reason))reasons.push(result.reason);
   }
   return {renderer:probe.renderer,selectionSource:probe.sources,
-    selectionCount:probe.items.length,eligible:false,
+    selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
+    selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,eligible:false,
     reason:reasons.join(' | ')||
       (probe.renderer==='Babylon.js'?
         'Babylon selection not exposed by inspected editor APIs':
