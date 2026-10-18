@@ -167,11 +167,14 @@ test('invalid persisted keys and positions never enter selectors',()=>{
 });
 
 test('keyboard arrows without Alt do not move, protecting normal UI shortcuts',()=>{
-  const h=harness(),ev={target:h.hit('profile'),key:'ArrowUp',altKey:false,
-    preventDefault(){throw Error('should not intercept');}};
+  const h=harness();let prevented=0;
+  const ev={target:h.hit('profile'),key:'ArrowUp',altKey:false,
+    preventDefault(){prevented++;}};
   h.api.r3BattlefieldDragKeyboard(ev);
   assert.equal(h.panels.get('profile').getBoundingClientRect().top,32);
+  assert.equal(prevented,0);
   ev.altKey=true;
   h.api.r3BattlefieldDragKeyboard(ev);
   assert.equal(h.panels.get('profile').getBoundingClientRect().top,20);
+  assert.equal(prevented,1);
 });

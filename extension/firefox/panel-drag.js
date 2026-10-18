@@ -151,7 +151,7 @@ function r3BattlefieldDragEnd(event){
   if(!drag||event.pointerId!==drag.id)return;
   R3_BF_DRAG.active=null;
   if(!drag.moved)return;
-  R3_BF_DRAG.suppressClick={name:drag.name,until:Date.now()+900};
+  R3_BF_DRAG.suppressClick={name:drag.name,until:Date.now()+180};
   r3BattlefieldLayoutSave();
   event.preventDefault?.();
 }
@@ -209,6 +209,11 @@ function r3BattlefieldEnableDragging(root){
   root.addEventListener('pointercancel',r3BattlefieldDragEnd,true);
   root.addEventListener('click',r3BattlefieldPreventDragClick,true);
   root.addEventListener('keydown',r3BattlefieldDragKeyboard,true);
+  // Capture outside the HUD if a player finishes a panel drag over the map.
+  // Without window listeners that pointer could leave a stale active drag.
+  window.addEventListener('pointermove',r3BattlefieldDragMove,true);
+  window.addEventListener('pointerup',r3BattlefieldDragEnd,true);
+  window.addEventListener('pointercancel',r3BattlefieldDragEnd,true);
   window.addEventListener('resize',r3BattlefieldPlacePanels);
 }
 function r3BattlefieldDragStyles(){
