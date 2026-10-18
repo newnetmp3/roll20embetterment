@@ -249,6 +249,8 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Separate Firefox 3.6.0 release and signing request; Chrome 3.4.0 and optional userscript remain unchanged in layout.
 - [x] Responsive narrow layouts, internal sidebar scrolling, notes persistence and focus protection.
 - [x] Add static/source-backed layout regression tests for click-through map, corner alignment and character isolation.
-- [ ] Green Firefox CI, merge PR and verify Mozilla-signed Firefox v3.6.0 XPI/update feed.
+- [x] PR #61 merged; 368/368 Firefox tests passed; Mozilla unlisted signed v3.6.0 XPI and hash-verified update feed published.
 - [ ] Compare real Floorp screenshot side-by-side against the approved concept image, especially 530px left dock vs 470px right dock, anchored bottom corners and battlefield visibility.
 - [ ] Live Roll20 verification of native attack finding, hidden HUD-owned sheet, and one real chat roll; no code-only tests substitute for this.
+
+**Firefox v3.6.0 shipped (2026-10-18):** [signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.6.0/r20eb-firefox-v3.6.0.xpi), [PR #61](https://github.com/newnetmp3/roll20embetterment/pull/61), [CI 39096112335](https://github.com/newnetmp3/roll20embetterment/actions/runs/39096112335) (368 tests), [Mozilla signing 39096150187](https://github.com/newnetmp3/roll20embetterment/actions/runs/39096150187). Keep approved screenshot/spec the baseline; next gate is an actual Floorp screenshot and Roll20 native action check. Chrome is unchanged.
