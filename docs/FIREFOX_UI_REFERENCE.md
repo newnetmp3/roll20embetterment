@@ -41,3 +41,10 @@ The screenshot remains the **starting appearance reference**; the user must be a
 - On resize or restored small screens, saved positions clamp inside the visible browser viewport. Default layout must leave the Roll20 battlefield click-through and the right chat usable. Panel grips have `pointer-events:auto` but the full-screen HUD root retains `pointer-events:none`.
 - Content is unchanged: no prompts or extra confirmation popups, native Roll20 attack confirmation still handled by existing bridge, no auto-spending from an unverified chat roll, and Chrome remains separate.
 - Run `npm run check:firefox`, especially `tests/firefox-panel-drag.test.mjs`. Compare real Floorp UI against the reference and verify manual docking beside the current chat sidebar at different window sizes.
+
+
+## Firefox v3.8.0 — Live movement and status safety
+
+Automatic movement appears within the existing blue Movement ring and turn-correction panel; do not grow either dock or cover the battlefield to display more values. Use Roll20's verified page scale and accumulated controlled-token path, **not** the net distance from the starting cell. The remaining movement amount is allowed to be **negative** (e.g. -10 / 30 ft), so overspeed is visible without blocking play. Manual 5-ft corrections remain accessible, and movement observation is active only within the currently started turn.
+
+Routine debug, native reader and sheet-recovery notices must never produce a floating overlay obstructing the five ability controls. Small movable Status control with an accessible tooltip contains passive messages; show larger movable details only when explicitly requested, or when the player genuinely needs native-roll Confirm/Cancel controls. All prior dock and chat-safe draggable placement invariants remain binding.

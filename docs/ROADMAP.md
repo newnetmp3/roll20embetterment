@@ -279,3 +279,15 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Live Floorp with Auto-sync and native attack: verify original Roll20 sheet opens visibly, Close button works, R20eb does not move it, and first native roll still behaves safely.
 
 **v3.7.1 signed release:** [download Firefox XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.7.1/r20eb-firefox-v3.7.1.xpi), [PR #63](https://github.com/newnetmp3/roll20embetterment/pull/63), [Mozilla signing 39151570823](https://github.com/newnetmp3/roll20embetterment/actions/runs/39151570823) successful. Next: user verify Roll20's original sheet is visible and closable with Auto-sync, including manually reopening a sheet that had been HUD-owned. Chrome remains unchanged.
+
+## Firefox v3.8.0 — Automatic turn movement and nonblocking debug notices (2026-10-18)
+
+- [x] Follow exact authorized controlled token and observe position on Roll20's engine canvas; preserve read-only player permissions.
+- [x] Accumulate segments and anchored official lastmove waypoints, including doubling back; subscribe to Backbone changes and poll as fallback.
+- [x] Translate movement using known active page units and scale; never invent a missing page scale or track another character/camera.
+- [x] Start/rebase observation immediately at turn start, stop counting when ended, reset per new turn and keep manual +/- 5-foot correction.
+- [x] Let remaining movement be negative after exceeding speed; spent distance and meter remain readable and do not restrict legal DM overrides.
+- [x] Replace routine debug/status overlays with compact Status indicator; show draggable details only on request, except for actionable native roll confirmation.
+- [x] Add movement and HUD-notification regression cases; preserve separate Chrome and userscript layout.
+- [ ] Verify full Firefox and separate Chrome CI; merge PR; Mozilla sign v3.8.0 and publish signed-only update.
+- [ ] Test real Roll20 movement with current game page settings and chat open in Floorp, especially paths with waypoints, deselect/reselect, turn transition and visible status controls.
