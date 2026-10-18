@@ -1821,3 +1821,74 @@ test('private sheet styles persist as important rules and do not target player-o
   assert.match(styles[0].textContent,/pointer-events:none!important/);
   assert.equal(manual.style.opacity,'1');
 });
+
+
+test('Firefox Show Sheet rescues every native background session, not just the active one',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const first=await h.api.r3NativeBgEnsure('Elowen');
+  const second=await h.api.r3NativeBgEnsure('Brom');
+  assert.notEqual(first.window,second.window);
+  assert.equal(x.dialogs[0].style.left,'-20000px');
+  assert.equal(x.dialogs[1].style.left,'-20000px');
+  vm.runInContext(readFileSync(join(root,'extension/firefox/sheet-visibility.js'),'utf8')+
+    '\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,r3SheetOnPlayerJournal,r3SheetAllowPrivateReaders,R3_SHEET_VIS};',h.context);
+  const api=h.context.sheetApi;
+  api.r3SheetRevealAll(true);
+  assert.equal(x.dialogs[0].style.left,'30px');
+  assert.equal(x.dialogs[1].style.left,'30px');
+  assert.equal(h.api.R3_NATIVE_BG.sessions.size,0);
+  assert.equal(h.api.R3_NATIVE_BG.dialog,null);
+  assert.equal(api.r3SheetAllowsBackground(),false);
+  await assert.rejects(h.api.r3NativeBgEnsure('Elowen'),/original Roll20 character sheet takes priority/);
+  assert.equal(x.log.filter(a=>a.kind==='show').length,2,'rescue must not open another invisible sheet');
+  api.r3SheetAllowPrivateReaders();
+  assert.equal(api.r3SheetAllowsBackground(),true,'explicit user choice can reenable private readers');
+});
+test('Firefox manual Journal open restores hidden Auto-sync-owned sheet before Roll20 handles click',()=>{
+  const h=panelHarness('Aria'),auto=h.api.R3_AUTO;
+  const wrap={style:{position:'absolute',left:'120px',top:'45px',pointerEvents:'auto'}};
+  const dialog={style:{left:'12px',top:'20px'},closest(sel){return sel==='.ui-dialog'?wrap:null}};
+  auto.enabled=true;auto.opened=true;auto.openedAt=Date.now();
+  auto.preOpenDialogs=new Set();
+  vm.runInContext('globalThis.claimAuto=r3AutoMoveDialogOffscreen;',h.context);
+  assert.equal(h.context.claimAuto(dialog),true);
+  assert.equal(wrap.style.left,'-20000px');
+  const gen=auto.generation;
+  let registered=null;
+  h.document.addEventListener=(type,fn)=>{if(type==='pointerdown')registered=fn;};
+  vm.runInContext(readFileSync(join(root,'extension/firefox/sheet-visibility.js'),'utf8')+
+    '\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,r3SheetOnPlayerJournal,R3_SHEET_VIS};',h.context);
+  h.context.sheetApi.r3SheetVisibilityInstall();
+  assert.equal(typeof registered,'function');
+  registered({type:'pointerdown',isTrusted:true,target:{
+    closest(sel){return sel.startsWith('#journal')?{}:null;}
+  }});
+  assert.equal(wrap.style.left,'120px');
+  assert.equal(wrap.style.top,'45px');
+  assert.equal(auto.ownedDialog,null);
+  assert.ok(auto.generation>gen,'in-flight background scans are invalidated');
+  assert.equal(h.context.sheetApi.r3SheetAllowsBackground(),false);
+  assert.equal(h.context.claimAuto(dialog),false,'Auto-sync cannot recapture manual sheet');
+  registered({type:'pointerdown',isTrusted:false,target:{
+    closest(sel){return sel.startsWith('#journal')?{}:null;}
+  }});
+  assert.equal(h.context.sheetApi.R3_SHEET_VIS.manualPriority,true,
+    'synthetic R20eb Journal opener never overrides manual priority');
+});
+test('Firefox manual sheet priority persists across extension startup and blocks new hidden openers',()=>{
+  const h=panelHarness('Aria');
+  let installed=[];
+  h.document.addEventListener=(type,fn)=>installed.push(type);
+  vm.runInContext(readFileSync(join(root,'extension/firefox/sheet-visibility.js'),'utf8')+
+    '\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,R3_SHEET_VIS,r3SheetVisibilityKey};',h.context);
+  h.context.sheetApi.r3SheetRevealAll(true);
+  const key=h.context.sheetApi.r3SheetVisibilityKey();
+  assert.equal(h.store.get(key),'true');
+  h.context.sheetApi.R3_SHEET_VIS.manualPriority=false;
+  h.context.sheetApi.r3SheetVisibilityInstall();
+  assert.equal(h.context.sheetApi.r3SheetAllowsBackground(),false);
+  assert.deepEqual(installed,['pointerdown','dblclick','keydown']);
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='Aria';
+  vm.runInContext('globalThis.tryAutoOpen=r3AutoOpenFromJournal;',h.context);
+  assert.equal(h.context.tryAutoOpen(Date.now()),false);
+});
