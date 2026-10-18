@@ -74,8 +74,7 @@ function r3TokenSelectionArray(value,depth=0){
 }
 function r3TokenSelectionProbe(){
   const engine=window.d20?.engine,canvas=engine?.canvas;
-  // tabletopSelected is present in the user's live Jumpgate editor. Do not
-  // call a function-valued member: it might be a mutating event handler.
+  // A verified Jumpgate build exposes tabletopSelected as a getter wrapper.
   // Verified against a real Jumpgate session (2026-10-18):
   // () => VTTEngine.instance.tabletop.getSelection()
   // Only invoke this proven zero-argument *getter*. Unknown functions must
@@ -84,7 +83,7 @@ function r3TokenSelectionProbe(){
   if(typeof tabletop==='function'){
     try{
       const source=Function.prototype.toString.call(tabletop);
-      if(tabletop.length===0&&/\\.tabletop\\.getSelection\\s*\\(/.test(source)){
+      if(tabletop.length===0&&/\.tabletop\.getSelection\s*\(/.test(source)){
         tabletop=tabletop.call(engine);getterState='confirmed getter read';
       }else getterState='unverified function not invoked';
     }catch{
