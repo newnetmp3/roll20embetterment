@@ -275,5 +275,7 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Persist per-game player-managed-sheet priority and block new hidden readers in that mode; allow explicit re-enable.
 - [x] Continue authenticated import/native Find through player-opened official sheets/popouts without changing manual sheet tabs or positions.
 - [x] Regression tests for multi-session restoration, original sheet visibility, trusted-vs-synthetic Journal requests, persisted preference and re-hide prevention.
-- [ ] Green Firefox/Chrome CI, PR merge, verify Mozilla-signed v3.7.1 XPI and signed update feed.
+- [x] Firefox/Chrome PR CI green; PR #63 merged; 380 Firefox tests passed; Mozilla unlisted signing run 39151570823 published v3.7.1 XPI and SHA-256 update feed.
 - [ ] Live Floorp with Auto-sync and native attack: verify original Roll20 sheet opens visibly, Close button works, R20eb does not move it, and first native roll still behaves safely.
+
+**v3.7.1 signed release:** [download Firefox XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.7.1/r20eb-firefox-v3.7.1.xpi), [PR #63](https://github.com/newnetmp3/roll20embetterment/pull/63), [Mozilla signing 39151570823](https://github.com/newnetmp3/roll20embetterment/actions/runs/39151570823) successful. Next: user verify Roll20's original sheet is visible and closable with Auto-sync, including manually reopening a sheet that had been HUD-owned. Chrome remains unchanged.
