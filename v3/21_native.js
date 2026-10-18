@@ -613,6 +613,8 @@ async function r3NativeConfirm(){
       {characterName,attackName:preview.attackName,attackKey:preview.attackKey,
         attackText:preview.attackText,token:preview.token,background:!!preview.background});
     r3NativeStatus(response.message||'No native action result returned.');
+    if(response.status==='clicked'&&typeof r3TurnHint==='function')
+      r3TurnHint('Roll20 attack button clicked; chat roll unverified. Mark action spent only when confirmed.');
   }catch(e){r3NativeStatus(e.message||'Native roll request failed.');}
   finally{R3_NATIVE.busy=false;r3HudRender();}
 }
