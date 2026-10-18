@@ -307,3 +307,15 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Verify actual Floorp Roll20 click-versus-drag behavior with Attacks/Spells, notes typing and chat visible.
 
 **Firefox v3.8.1 release verified (2026-10-18):** [PR #65](https://github.com/newnetmp3/roll20embetterment/pull/65) merged, [394-test PR CI](https://github.com/newnetmp3/roll20embetterment/actions/runs/39157525423) green and [Mozilla signing 39157589515](https://github.com/newnetmp3/roll20embetterment/actions/runs/39157589515) successful. [Signed XPI download](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.8.1/r20eb-firefox-v3.8.1.xpi). Live Floorp direct-drag and button click safety still open.
+
+## Firefox v3.9.0 — Dedicated Debug window and live movement troubleshooting (2026-10-18)
+
+- [x] Replace passive HUD status button with an opt-in, draggable Debug window; leave the battlefield, chat and ability dock unobstructed during ordinary play.
+- [x] Collect and filter movement, native-roll, importer/Auto-sync, local turn and control tooltip messages with timestamps; bound, escape and keep logs local to this browser tab.
+- [x] Add Copy log, Clear, Importer shortcut and close controls; automatically show only actionable Confirm/Cancel native roll controls in the gameplay HUD.
+- [x] Expose concrete movement diagnostics: whether controlled token is found, map/page resolution, scale units/grid, coordinate source, turn state, total used.
+- [x] Expand token and page detection across commonly exposed Roll20 Fabric/Backbone/browser collections, preserving exact player-controlled token ID matching.
+- [x] Prefer live Fabric coordinates, subscribe to movement events, keep polling fallback, negative remaining movement and existing per-character persistence.
+- [x] Add Debug and fallback lookup/scale regression tests.
+- [ ] Final Firefox CI green, separate Chrome compatibility check, PR merge and Mozilla-signed Firefox v3.9.0 release/update feed.
+- [ ] Live Floorp Roll20 QA: move controlled token during Your Turn, confirm feet increase and Debug status/source/page scale match actual map; test tooltip history and log copy.
