@@ -208,13 +208,14 @@ function r3BattlefieldDragStyles(){
     // All right-hand panels initially avoid the chat/sidebar area.
     '.r3-bf-category-dock{right:calc(var(--r3-bf-chat-inset,330px) + 14px)}',
     '.r3-bf-mini-tools{right:calc(var(--r3-bf-chat-inset,330px) + 16px)}',
-    '.r3-bf-show-profile{right:calc(var(--r3-bf-chat-inset,330px) + 14px)}',
+    '.r3-bf-show-profile-wrap{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);top:20px;pointer-events:auto}',
+    '.r3-bf-show-profile-wrap>.r3-bf-show-profile{position:static!important;right:auto!important;top:auto!important}',
     '.r3-bf-shell>.hud-flyout{right:calc(var(--r3-bf-chat-inset,330px) + 14px)!important}',
     '.r3-bf-shell>.r3-bf-native{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);bottom:118px;width:min(480px,calc(100vw - 32px));max-height:36vh;pointer-events:auto;overflow:auto}',
     '.r3-bf-native>.hud-native-status{position:static!important;max-height:none!important}',
     '#r3-wrap{right:calc(var(--r3-bf-chat-inset,330px) + 14px)!important}',
     // Drag grips are separate controls, not the action buttons or text boxes.
-    '.r3-bf-shell [data-bf-panel],#r3-wrap[data-bf-panel]{overflow:visible}',
+    '.r3-bf-actions,.r3-bf-category-dock,.r3-bf-turnstrip,.r3-bf-mini-tools,#r3-wrap[data-bf-panel]{overflow:visible}',
     '.r3-bf-drag-grip{position:absolute!important;left:9px!important;top:-15px!important;z-index:10!important;display:grid!important;place-items:center!important;width:38px!important;height:17px!important;min-height:17px!important;padding:0!important;border:1px solid #6284a6!important;border-radius:6px 6px 0 0!important;background:#1b324adf!important;color:#d2ecff!important;font-size:14px!important;line-height:1!important;cursor:grab!important;touch-action:none!important;user-select:none!important;pointer-events:auto!important}',
     '.r3-bf-drag-grip:active{cursor:grabbing!important}.r3-bf-drag-grip:focus-visible{outline:2px solid #ffe19a!important;outline-offset:2px!important}',
     // The importer has its own tab and retains its existing usable toggle.

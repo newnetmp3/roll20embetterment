@@ -156,8 +156,10 @@ function r3BattlefieldMarkup(snapshot){
     '<button type="button" data-turn-action="end" title="Mark end of turn locally; does not advance Roll20">⏭</button>'+
     '</div>'+
     (R3_BF.sidebar&&!R3_UI.shown?r3BattlefieldSidebar(snapshot):
-      '<button type="button" class="r3-bf-show-profile" data-bf-action="sidebar" '+
-        'title="Show character overview">☷ '+r3Escape(name)+'</button>')+
+      '<div class="r3-bf-show-profile-wrap" data-bf-panel="show-profile">'+
+        r3BattlefieldGrip('show-profile')+
+        '<button type="button" class="r3-bf-show-profile" data-bf-action="sidebar" '+
+        'title="Show character overview">☷ '+r3Escape(name)+'</button></div>')+
     '<nav class="r3-bf-actions" data-bf-panel="actions" aria-label="Action economy quick dock">'+
     r3BattlefieldGrip('actions')+
     '<div class="r3-bf-rings">'+ring+'</div>'+

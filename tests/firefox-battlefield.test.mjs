@@ -7,6 +7,7 @@ import {join,resolve} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const economy=readFileSync(join(root,'extension/firefox/turn-economy.js'),'utf8');
 const battlefield=readFileSync(join(root,'extension/firefox/battlefield-layout.js'),'utf8');
+const drag=readFileSync(join(root,'extension/firefox/panel-drag.js'),'utf8');
 
 function harness(){
   const store=new Map(),rendered={count:0};
@@ -42,7 +43,7 @@ function harness(){
       setItem(k,v){store.set(k,v);}}
   };
   vm.createContext(ctx);
-  vm.runInContext(economy+'\n'+battlefield+'\n'+
+  vm.runInContext(economy+'\n'+battlefield+'\n'+drag+'\n'+
     'globalThis.api={R3_TURN,R3_BF,r3TurnStart,r3TurnApply,r3TurnLoad,'+
     'r3BattlefieldMarkup,r3BattlefieldStyles,r3BattlefieldLoad,'+
     'r3BattlefieldClick,r3BattlefieldInput};',ctx);
