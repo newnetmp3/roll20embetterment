@@ -260,6 +260,8 @@ function r3MoveDiagnostics(){
     selectionSource:selection?.selectionSource||'unavailable',
     selectionCount:selection?.selectionCount??0,
     selectionReason:selection?.reason||'unavailable',
+    selectionGetter:selection?.selectionGetter||'none',
+    selectionReturnShape:selection?.selectionReturnShape||'none',
     selectionApiTypes:selection?.selectionTypes||'none',
     selectionCandidateKeys:selection?.selectionShape||'none',
     selectionEngineKeys:selection?.engineKeys||'none',
