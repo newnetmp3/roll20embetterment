@@ -317,5 +317,7 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Expand token and page detection across commonly exposed Roll20 Fabric/Backbone/browser collections, preserving exact player-controlled token ID matching.
 - [x] Prefer live Fabric coordinates, subscribe to movement events, keep polling fallback, negative remaining movement and existing per-character persistence.
 - [x] Add Debug and fallback lookup/scale regression tests.
-- [ ] Final Firefox CI green, separate Chrome compatibility check, PR merge and Mozilla-signed Firefox v3.9.0 release/update feed.
+- [x] Firefox PR + main CI green (406 tests), separate Chrome CI green; PR #66 merged; Mozilla signed v3.9.0 XPI released with SHA-256 update feed.
 - [ ] Live Floorp Roll20 QA: move controlled token during Your Turn, confirm feet increase and Debug status/source/page scale match actual map; test tooltip history and log copy.
+
+**Firefox v3.9.0 signed release checkpoint:** [PR #66](https://github.com/newnetmp3/roll20embetterment/pull/66), [signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.9.0/r20eb-firefox-v3.9.0.xpi), [Mozilla signing 39164290728](https://github.com/newnetmp3/roll20embetterment/actions/runs/39164290728) successful. Next: confirm real Roll20 token movement and collect Debug movement log if source is still unavailable; Debug panel is closed by default and movable. Chrome 3.4.0 unchanged.
