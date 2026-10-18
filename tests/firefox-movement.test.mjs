@@ -224,3 +224,61 @@ test('token watcher never mistakes an unselected map graphic for an active selec
   vm.runInContext(watch,h.ctx);h.ctx.readSelected=vm.runInContext('r3TokenSelected',h.ctx);
   assert.equal(h.ctx.readSelected().length,0);
 });
+
+test('Babylon renderer probe finds Set selection and reports missing link reason',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.document={querySelector(sel){return sel.includes('babylonCanvas')?{}:null;}};
+  vm.runInContext(watch,h.ctx);
+  const selection=vm.runInContext('r3TokenSelectionProbe',h.ctx);
+  const diagnose=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
+  h.ctx.window.d20.engine.selectedTokens=new Set([h.elf.object]);
+  const result=selection(),details=diagnose(result);
+  assert.equal(result.renderer,'Babylon.js');
+  assert.equal(result.items.length,1);
+  assert.match(details.selectionSource,/engine.selectedTokens/);
+  assert.match(details.reason,/not loaded in Roll20/);
+});
+test('selected token is retried when linked character loads after initial selection',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.d20.engine.selectedTokens=new Set([h.elf.object]);
+  h.ctx.window.currentPlayer={id:'player-elf'};
+  let ready=false;
+  h.ctx.window.d20.Campaign.characters={get(id){return ready&&id==='char-elf'?{
+    id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
+  }:null;}};
+  vm.runInContext(watch,h.ctx);
+  h.ctx.seenSwitches=[];
+  vm.runInContext('r3TokenSwitch=function(info){globalThis.seenSwitches.push(info);R3_TOKEN.active=info;};',h.ctx);
+  const poll=vm.runInContext('r3TokenPoll',h.ctx);
+  poll();
+  assert.equal(h.ctx.seenSwitches.length,0);
+  ready=true;poll();
+  assert.equal(h.ctx.seenSwitches.length,1);
+  assert.equal(h.ctx.seenSwitches[0].characterId,'char-elf');
+});
+test('candidate token with wrong Controlled By permission is never accepted',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.currentPlayer={id:'player-elf'};
+  h.ctx.window.d20.Campaign.characters={get(){return {
+    id:'char-elf',get(key){return {name:'Elf',controlledby:'somebody-else'}[key];}
+  };}};
+  vm.runInContext(watch,h.ctx);
+  const check=vm.runInContext('r3TokenInspectLinked',h.ctx);
+  const result=check(h.elf.object);
+  assert.equal(result.info,undefined);
+  assert.match(result.reason,/Controlled By/);
+});
+test('Babylon selected mesh resolves only explicit graphic metadata ID',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.currentPlayer={id:'player-elf'};
+  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+    id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
+  }:null;}};
+  h.page.thegraphics={get(id){return id==='token-elf'?h.elf.model:null;}};
+  h.ctx.window.d20.engine.selectedTokens=[{metadata:{tokenId:'token-elf'}}];
+  vm.runInContext(watch,h.ctx);
+  const diagnose=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
+  assert.equal(diagnose().eligible,true);
+  h.ctx.window.d20.engine.selectedTokens=[{metadata:{tokenId:'enemy'}}];
+  assert.equal(diagnose().eligible,false);
+});
