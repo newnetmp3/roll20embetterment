@@ -41,7 +41,7 @@ function rig(options={}){
       setItem(k,v){store.set(k,v);}}
   };
   vm.createContext(ctx);
-  vm.runInContext(economy+'\n'+tracker+'\nglobalThis.api={R3_MOVE,R3_TURN,r3MovePoll,r3MoveRebase,r3MoveScale,r3MoveWaypointLength,r3MoveFind,r3TurnLoad,r3TurnStart,r3TurnApply,r3TurnMarkup,r3TurnDistance};',ctx);
+  vm.runInContext(economy+'\n'+tracker+'\nglobalThis.api={R3_MOVE,R3_TURN,r3MovePoll,r3MoveRebase,r3MoveScale,r3MoveWaypointLength,r3MoveFind,r3MoveDiagnostics,r3TurnLoad,r3TurnStart,r3TurnApply,r3TurnMarkup,r3TurnDistance};',ctx);
   const api=ctx.api;api.r3TurnLoad();
   return {api,ctx,elf,make,store,renders,pageAttrs,page,listeners};
 }
@@ -136,4 +136,64 @@ test('sub-square token movements preserve fractional feet and load safely',()=>{
   assert.equal(h.api.R3_TURN.movementUsed,0.5);
   h.api.r3TurnLoad();
   assert.equal(h.api.R3_TURN.movementUsed,0.5);
+});
+
+test('fallback canvas._objects discovers token when getObjects is unavailable',()=>{
+  const h=rig();
+  h.ctx.window.d20.engine.canvas={_objects:[h.elf.object]};
+  h.api.r3TurnStart();h.api.r3MovePoll();
+  h.elf.move(210,210);
+  assert.equal(h.api.R3_TURN.movementUsed,5);
+  assert.equal(h.api.R3_MOVE.source,'canvas._objects');
+});
+test('selected token is resolved when no canvas exposes a graphics collection',()=>{
+  const h=rig();
+  h.ctx.window.d20.engine.canvas={};
+  h.ctx.r3TokenSelected=()=>[h.elf.object];
+  h.api.r3TurnStart();
+  h.elf.move(210,210);
+  assert.equal(h.api.R3_TURN.movementUsed,5);
+  assert.equal(h.api.R3_MOVE.source,'selected');
+});
+test('page lookup resolves playerpageid and missing optional snapping_increment',()=>{
+  const h=rig();
+  h.ctx.window.d20.Campaign.activePage=()=>null;
+  h.ctx.window.d20.Campaign.pages={get(id){return id==='page-one'?h.page:null;}};
+  h.ctx.window.d20.Campaign.get=key=>key==='playerpageid'?'page-one':'[]';
+  delete h.pageAttrs.snapping_increment;
+  h.api.r3TurnStart();
+  h.elf.move(210,210);
+  assert.equal(h.api.R3_TURN.movementUsed,5);
+  assert.equal(h.api.r3MoveScale(h.page).feetPerPixel,5/70);
+});
+test('live Fabric object coordinates can update before stale model coordinates',()=>{
+  const h=rig();
+  h.elf.object.left=140;h.elf.object.top=210;
+  h.api.r3TurnStart();
+  h.elf.object.left=210;
+  h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,5);
+});
+test('movement diagnostics report missing graphics and scale, rather than silently staying zero',()=>{
+  const h=rig(),a=h.api;
+  a.r3TurnStart();
+  h.ctx.window.d20.engine.canvas={};
+  a.r3MovePoll();
+  assert.match(a.R3_MOVE.status,/Token position unavailable/);
+  assert.match(a.r3MoveDiagnostics().details,/graphics collections/);
+  h.ctx.window.d20.engine.canvas={getObjects(){return [h.elf.object];}};
+  a.r3MovePoll();
+  h.pageAttrs.scale_units='km';
+  a.r3MovePoll();
+  assert.match(a.R3_MOVE.status,/Map scale unavailable/);
+  const snapshot=a.r3MoveDiagnostics();
+  assert.equal(snapshot.pageUnit,'km');
+  assert.equal(snapshot.turn,'active');
+});
+test('unrelated character data is never a movement fallback',()=>{
+  const h=rig();
+  h.ctx.window.d20.engine.canvas={_objects:[h.make('enemy','other',100,200).object]};
+  h.api.r3TurnStart();
+  assert.equal(h.api.R3_TURN.movementUsed,0);
+  assert.match(h.api.R3_MOVE.status,/Token position unavailable/);
 });
