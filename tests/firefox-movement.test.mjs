@@ -282,3 +282,65 @@ test('Babylon selected mesh resolves only explicit graphic metadata ID',()=>{
   h.ctx.window.d20.engine.selectedTokens=[{metadata:{tokenId:'enemy'}}];
   assert.equal(diagnose().eligible,false);
 });
+
+test('Jumpgate tabletopSelected Set is preferred as explicit selection and linked via controlled character',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.d20.engine.tabletopSelected=new Set([h.elf.object]);
+  h.ctx.window.currentPlayer={id:'player-elf'};
+  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+    id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
+  }:null;}};
+  vm.runInContext(watch,h.ctx);
+  const probe=vm.runInContext('r3TokenSelectionProbe',h.ctx)();
+  assert.equal(probe.items.length,1);
+  assert.match(probe.sources,/engine.tabletopSelected/);
+  assert.match(probe.selectionTypes,/engine.tabletopSelected:object/);
+  const info=vm.runInContext('r3TokenLinkedInfo',h.ctx)(probe.items[0]);
+  assert.equal(info.characterId,'char-elf');
+});
+test('Jumpgate selected graphic ID resolves only a matching page graphics model',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.page.thegraphics=new Map([['token-elf',h.elf.model]]);
+  h.ctx.window.currentPlayer={id:'player-elf'};
+  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+    id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
+  }:null;}};
+  h.ctx.window.d20.engine.tabletopSelected={selected:['token-elf']};
+  vm.runInContext(watch,h.ctx);
+  const read=vm.runInContext('r3TokenSelected',h.ctx);
+  const inspect=vm.runInContext('r3TokenLinkedInfo',h.ctx);
+  assert.equal(read()[0],'token-elf');
+  assert.equal(inspect(read()[0]).characterId,'char-elf');
+  h.ctx.window.d20.engine.tabletopSelected={selected:['fake']};
+  assert.equal(inspect(read()[0]),null,'Unrelated graphic IDs must not resolve');
+});
+test('function-valued or boolean tabletopSelected is observed but not invoked or selected',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  let calls=0;
+  h.ctx.window.d20.engine.tabletopSelected=()=>{calls++;return [h.elf.object];};
+  vm.runInContext(watch,h.ctx);
+  const probe=vm.runInContext('r3TokenSelectionProbe',h.ctx);
+  assert.equal(probe().items.length,0);
+  assert.match(probe().selectionTypes,/engine.tabletopSelected:function/);
+  assert.equal(calls,0);
+  h.ctx.window.d20.engine.tabletopSelected=true;
+  assert.equal(probe().items.length,0);
+  assert.match(probe().selectionTypes,/engine.tabletopSelected:boolean/);
+});
+test('Jumpgate model-only movement uses exact linked graphic rather than a canvas',()=>{
+  const h=rig();
+  h.ctx.window.d20.engine.canvas={};
+  h.page.thegraphics=new Map([['token-elf',h.elf.model]]);
+  h.ctx.r3TokenFindGraphic=id=>h.page.thegraphics.get(id)||null;
+  h.api.r3TurnStart();
+  h.elf.move(210,210);
+  assert.equal(h.api.R3_TURN.movementUsed,5);
+  assert.equal(h.api.R3_MOVE.source,'selected.graphicId');
+});
+test('missing graphic position never silently becomes (0,0)',()=>{
+  const h=rig();
+  h.ctx.window.d20.engine.canvas={getObjects(){return [h.elf.object];}};
+  h.elf.attrs.left=null;h.elf.attrs.top=null;
+  h.api.r3TurnStart();
+  assert.match(h.api.R3_MOVE.status,/Token coordinates unavailable/);
+});

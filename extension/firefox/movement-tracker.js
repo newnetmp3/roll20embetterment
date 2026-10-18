@@ -19,8 +19,10 @@ function r3MovePosition(model,object){
   // Fabric's live center can update before the Backbone graphic model. Use
   // Fabric position when available; otherwise use stored model coordinates.
   function pair(source){
-    const x=Number(r3MoveGet(source,'left'));
-    const y=Number(r3MoveGet(source,'top'));
+    const rx=r3MoveGet(source,'left'),ry=r3MoveGet(source,'top');
+    if(rx===null||rx===undefined||rx===''||
+       ry===null||ry===undefined||ry==='')return null;
+    const x=Number(rx),y=Number(ry);
     if(!Number.isFinite(x)||!Number.isFinite(y)||
       Math.abs(x)>10000000||Math.abs(y)>10000000)return null;
     return {x,y};
@@ -32,6 +34,13 @@ function r3MoveCollection(collection){
   if(Array.isArray(collection))return collection;
   if(Array.isArray(collection.models))return collection.models;
   if(typeof collection.toArray==='function')try{return collection.toArray();}catch{}
+  if(typeof collection.values==='function')try{
+    const result=[];
+    for(const item of collection.values()){
+      result.push(item);if(result.length>=2000)break;
+    }
+    return result;
+  }catch{}
   return [];
 }
 function r3MovePage(candidate){
@@ -94,8 +103,18 @@ function r3MoveFind(){
   const engine=window.d20?.engine;
   const page=r3MovePage();
   let candidate=null,source='';
+  // Babylon exposes some selected graphics as IDs only. Once the shared
+  // selection reader has verified that ID belongs to the controlled PC,
+  // resolve its exact Backbone graphic before measuring coordinates.
+  if(typeof r3TokenFindGraphic==='function'){
+    try{
+      candidate=r3TokenFindGraphic(active.tokenId);
+      if(candidate)source='selected.graphicId';
+    }catch{}
+  }
   try{
     for(const [name,group] of r3MoveGraphicSources(engine,page)){
+      if(candidate)break;
       for(const item of r3MoveCollection(group)){
         const model=item?.model||item;
         if(r3MoveId(model)===active.tokenId||r3MoveId(item)===active.tokenId){

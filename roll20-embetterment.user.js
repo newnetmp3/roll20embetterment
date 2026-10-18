@@ -2558,31 +2558,41 @@ function r3TokenCharacter(charId){
 // The new Jumpgate/Babylon map is not necessarily a Fabric canvas.
 // Never derive a selected character from every visible graphic; inspect
 // explicitly selected candidates and report why each was rejected.
-function r3TokenSelectionArray(value){
-  if(!value)return [];
+function r3TokenSelectionArray(value,depth=0){
+  if(value===null||value===undefined||depth>3)return [];
+  if(typeof value==='string'&&value.length>0&&value.length<=110)return [value];
   if(Array.isArray(value))return value.slice(0,80);
+  if(typeof value!=='object')return [];
   if(Array.isArray(value.models))return value.models.slice(0,80);
   if(typeof value.toArray==='function'){
     try{const items=value.toArray();if(Array.isArray(items))return items.slice(0,80);}catch{}
   }
-  if(typeof value==='object'&&typeof value.values==='function'){
+  if(typeof value.values==='function'){
     try{
       const result=[];
       for(const item of value.values()){
         result.push(item);if(result.length>=80)break;
       }
-      return result;
+      if(result.length)return result;
     }catch{}
   }
-  // Some Roll20 selection adapters wrap objects in a selected collection.
-  if(value.selected&&value.selected!==value)return r3TokenSelectionArray(value.selected);
-  if(value.model||value.get||value.attributes||value.id||value.metadata)
-    return [value];
+  // Jumpgate selection state can be a collection wrapper. Read only known
+  // explicit selection member names; do not scan arbitrary scene objects.
+  for(const key of ['selected','selectedTokens','selectedObjects','tokens','graphics','objects','ids']){
+    if(!Object.prototype.hasOwnProperty.call(value,key)||value[key]===value)continue;
+    const nested=r3TokenSelectionArray(value[key],depth+1);
+    if(nested.length)return nested;
+  }
+  if(value.model||value.get||value.attributes||value.id||value.metadata||
+     value.tokenId||value.graphicId)return [value];
   return [];
 }
 function r3TokenSelectionProbe(){
   const engine=window.d20?.engine,canvas=engine?.canvas;
+  // tabletopSelected is present in the user's live Jumpgate editor. Do not
+  // call a function-valued member: it might be a mutating event handler.
   const sources=[
+    ['engine.tabletopSelected',()=>engine?.tabletopSelected],
     ['engine.selected',()=>typeof engine?.selected==='function'?engine.selected():engine?.selected],
     ['engine.selectedTokens',()=>typeof engine?.selectedTokens==='function'?engine.selectedTokens():engine?.selectedTokens],
     ['engine.selectedObjects',()=>typeof engine?.selectedObjects==='function'?engine.selectedObjects():engine?.selectedObjects],
@@ -2601,10 +2611,10 @@ function r3TokenSelectionProbe(){
       if(!batch.length)continue;
       names.push(name+' ('+batch.length+')');
       for(const item of batch){
-        if(!item||seen.has(item)||items.length>=80)continue;
+        if(item===null||item===undefined||seen.has(item)||items.length>=80)continue;
         seen.add(item);items.push(item);
       }
-    }catch{/* One old or incompatible API is not evidence of no selection. */}
+    }catch{/* An unavailable Roll20 API must not interrupt the game. */}
   }
   let renderer='unknown';
   try{
@@ -2612,7 +2622,7 @@ function r3TokenSelectionProbe(){
       'Babylon.js':document?.querySelector?.('canvas.lower-canvas')?'Fabric':'unknown';
   }catch{}
   const shape=(item)=>item&&typeof item==='object'?
-    Object.keys(item).slice(0,16).join(', ')||'(no enumerable keys)':'none';
+    Object.keys(item).slice(0,16).join(', ')||'(no enumerable keys)':typeof item;
   const keys=(source)=>source&&typeof source==='object'?
     Object.keys(source).filter(k=>/select|token|graphic|scene/i.test(k)).slice(0,20).join(', '):'';
   return {items,sources:names.join(', ')||'none',renderer,
@@ -2623,6 +2633,44 @@ function r3TokenSelectionProbe(){
 function r3TokenSelected(){
   return r3TokenSelectionProbe().items;
 }
+function r3TokenGraphicId(value){
+  if(typeof value==='string')return r3String(value,110);
+  return r3String(value?.metadata?.tokenId||value?.metadata?.token_id||
+    value?.metadata?.graphicId||value?.metadata?.graphic_id||
+    value?.tokenId||value?.graphicId||value?.token?.id||
+    value?.graphic?.id||value?.id||'',110);
+}
+function r3TokenFindGraphic(id){
+  if(!id)return null;
+  const c=window.d20?.Campaign,engine=window.d20?.engine;
+  let page=null;
+  try{page=typeof c?.activePage==='function'?c.activePage():c?.activePage;}catch{}
+  // Exact graphic ID lookup only; arbitrary displayed tokens never become
+  // eligible merely because their image/name matches the current profile.
+  for(const source of [page?.thegraphics,page?.graphics,engine?.thegraphics]){
+    if(!source)continue;
+    try{
+      const direct=source?.get?.(id);
+      if(direct)return direct;
+      const collection=Array.isArray(source)?source:
+        Array.isArray(source?.models)?source.models:null;
+      if(collection){
+        const model=collection.find(v=>
+          r3String(v?.id||r3TokenModelGet(v,'_id'),110)===id);
+        if(model)return model;
+      }
+      if(typeof source.values==='function'){
+        let count=0;
+        for(const item of source.values()){
+          if(++count>2000)break;
+          if(r3String(item?.id||r3TokenModelGet(item,'_id'),110)===id)
+            return item;
+        }
+      }
+    }catch{}
+  }
+  return null;
+}
 function r3TokenCandidateModel(item){
   const variants=[item?.model,item?.graphic?.model,item?.graphic,
     item?.token?.model,item?.token,item?.metadata?.model,
@@ -2630,24 +2678,8 @@ function r3TokenCandidateModel(item){
     item?.metadata?.token?.model,item?.metadata?.token,item];
   const direct=variants.find(v=>v&&r3TokenModelGet(v,'represents'));
   if(direct)return direct;
-  // Babylon may surface a selected mesh with an explicit graphic ID rather
-  // than a Backbone model. Resolve exactly that ID in exposed game collections.
-  const id=r3String(item?.metadata?.tokenId||item?.metadata?.token_id||
-    item?.metadata?.graphicId||item?.graphicId||item?.tokenId||'',110);
-  if(id){
-    const c=window.d20?.Campaign,engine=window.d20?.engine;
-    let page=null;
-    try{page=typeof c?.activePage==='function'?c.activePage():c?.activePage;}catch{}
-    for(const source of [page?.thegraphics,page?.graphics,engine?.thegraphics]){
-      try{
-        const model=source?.get?.(id)||
-          (Array.isArray(source?.models)?source.models.find(v=>
-            r3String(v?.id||r3TokenModelGet(v,'_id'),110)===id):null);
-        if(model)return model;
-      }catch{}
-    }
-  }
-  return variants.find(Boolean)||null;
+  const id=r3TokenGraphicId(item);
+  return r3TokenFindGraphic(id)||variants.find(v=>v&&typeof v==='object')||null;
 }
 function r3TokenInspectLinked(item){
   const model=r3TokenCandidateModel(item);
@@ -2804,8 +2836,9 @@ function r3TokenPoll(){
   if(typeof r3TurnObserveInitiative==='function')r3TurnObserveInitiative();
   const picked=r3TokenSelected();
   const tokens=picked.map(item=>{
-    const model=item?.model||item;
-    return r3String(model?.id||r3TokenModelGet(model,'_id'),110);
+    const model=r3TokenCandidateModel(item);
+    return r3String(model?.id||r3TokenModelGet(model,'_id')||
+      r3TokenGraphicId(item),110);
   }).filter(Boolean);
   const fresh=tokens.filter(id=>!R3_TOKEN.selectionIds.includes(id));
   R3_TOKEN.selectionIds=tokens;
