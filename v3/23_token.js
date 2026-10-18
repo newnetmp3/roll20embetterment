@@ -40,11 +40,36 @@ function r3TokenCharacter(charId){
     characters.models.find(c=>r3String(c?.id||r3TokenModelGet(c,'_id'),110)===charId)||null:
     null;
 }
+function r3TokenSelectionArray(value){
+  if(!value)return [];
+  if(Array.isArray(value))return value.slice(0,80);
+  if(Array.isArray(value.models))return value.models.slice(0,80);
+  if(typeof value.toArray==='function'){
+    try{const items=value.toArray();if(Array.isArray(items))return items.slice(0,80);}catch{}
+  }
+  // Fabric's single selected graphic is an object, not a collection.
+  if(value.model||value.get||value.attributes||value.id)return [value];
+  return [];
+}
 function r3TokenSelected(){
-  try{
-    const selected=window.d20?.engine?.selected?.();
-    return Array.isArray(selected)?selected.slice(0,80):[];
-  }catch{return [];}
+  const engine=window.d20?.engine;
+  const canvas=engine?.canvas;
+  // Only explicitly selected graphics are eligible. Never guess the player's
+  // token from all visible graphics, a matching name, or a cached HUD profile.
+  const sources=[
+    ()=>typeof engine?.selected==='function'?engine.selected():engine?.selected,
+    ()=>canvas?.getActiveObjects?.(),
+    ()=>canvas?.getActiveObject?.(),
+    ()=>canvas?._activeObjects,
+    ()=>canvas?._activeObject
+  ];
+  for(const read of sources){
+    try{
+      const items=r3TokenSelectionArray(read());
+      if(items.length)return items;
+    }catch{/* Keep checking other known selection sources. */}
+  }
+  return [];
 }
 function r3TokenSafeArt(raw){
   try{
