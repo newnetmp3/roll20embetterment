@@ -646,7 +646,7 @@ function r3NativeBgReveal(){
   if(typeof r3SheetRevealAll==='function')return r3SheetRevealAll();
   r3NativeBgRestoreAll();
   r3AutoRestoreDialog();
-  r3NativeStatus('Your Roll20 character sheets are visible and can be closed normally.');
+  r3NativeStatus('Your Roll20 character sheets are visible again and can be closed normally.');
 }
 function r3NativeMarkup(){
   if(!R3_NATIVE.status&&!R3_NATIVE.preview&&!R3_NATIVE_BG.dialog)return '';
