@@ -254,3 +254,15 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Live Roll20 verification of native attack finding, hidden HUD-owned sheet, and one real chat roll; no code-only tests substitute for this.
 
 **Firefox v3.6.0 shipped (2026-10-18):** [signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.6.0/r20eb-firefox-v3.6.0.xpi), [PR #61](https://github.com/newnetmp3/roll20embetterment/pull/61), [CI 39096112335](https://github.com/newnetmp3/roll20embetterment/actions/runs/39096112335) (368 tests), [Mozilla signing 39096150187](https://github.com/newnetmp3/roll20embetterment/actions/runs/39096150187). Keep approved screenshot/spec the baseline; next gate is an actual Floorp screenshot and Roll20 native action check. Chrome is unchanged.
+
+## Firefox v3.7.0 — Movable HUD, protect chat (2026-10-18)
+
+- [x] Make the action dock, five-category dock, turn pill, profile, concentration, resources, notes, options, mini-tools, flyouts, native status, profile-restore and importer independently movable.
+- [x] Preserve each panel's placement per game in local storage, independently of the active character and sheet data; restore after page reload and HP refresh.
+- [x] Reposition right-side defaults to avoid visible Roll20 chat/sidebar (with conservative fallback), and prevent dock overlap at reduced widths.
+- [x] Make grips pointer and keyboard accessible (Arrow=12px, Shift+Arrow=1px); never turn ordinary ability buttons into drag surfaces.
+- [x] Clamp panels within the browser viewport, accommodate resize, and add a non-dialog Reset layout control.
+- [x] Keep the approved compact reference, central map click-through, native roll confirmation, per-character notes and Firefox-only isolation.
+- [x] Add drag, chat-inset, persistence, keyboard, boundary, reset and storage validation regression tests.
+- [ ] Firefox/Chrome CI green, PR merged, Mozilla-signed Firefox v3.7.0 XPI published and update feed verified.
+- [ ] Live Floorp Roll20 chat open: confirm default panels do not cover the chat, grips work and can be reset, no auto-sync input focus regression, native roll still works.

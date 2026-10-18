@@ -34,6 +34,9 @@ function r3BattlefieldClick(target){
       R3_BF.sidebar=!R3_BF.sidebar;r3BattlefieldSave();break;
     case 'options':
       R3_BF.options=!R3_BF.options;break;
+    case 'reset-layout':
+      if(typeof r3BattlefieldResetPositions==='function')r3BattlefieldResetPositions();
+      return true;
     case 'disengage':
     case 'hide':
       // A local action-economy mark only. Do not claim Roll20 executed it.
@@ -66,7 +69,8 @@ function r3BattlefieldRing(kind,icon,label,value,sub,tip){
     '<span class="r3-bf-ring-sub">'+r3Escape(sub)+'</span></button>';
 }
 function r3BattlefieldNotes(){
-  return '<section class="r3-bf-section r3-bf-notes" aria-label="Personal turn notes">'+
+  return '<section class="r3-bf-section r3-bf-notes" data-bf-panel="notes" aria-label="Personal turn notes">'+
+    r3BattlefieldGrip('notes')+
     '<header><strong>Turn Notes</strong><span>Private to this browser</span></header>'+
     '<textarea id="r3-bf-notes" rows="2" maxlength="320" '+
     'aria-label="Notes for the selected character" placeholder="Notes for this turn…">'+
@@ -81,7 +85,8 @@ function r3BattlefieldSidebar(snapshot){
     R3_TURN.concentration===false?'None (manual)':'Not tracked';
   const resources=r3HudResourceBar(snapshot);
   return '<aside class="r3-bf-sidebar" aria-label="Character quick overview">'+
-    '<section class="r3-bf-profile r3-bf-section">'+
+    '<section class="r3-bf-profile r3-bf-section" data-bf-panel="profile">'+
+    r3BattlefieldGrip('profile')+
     '<div class="r3-bf-character">'+
     '<div class="r3-bf-avatar">'+
     (portrait?'<img src="'+r3Escape(portrait)+'" alt="">':
@@ -97,17 +102,20 @@ function r3BattlefieldSidebar(snapshot){
     r3HudStat('Init',stats.initiative)+
     '<div title="'+r3Escape(passive.source)+'">'+r3HudStat(passive.label,passive.value)+'</div>'+
     '</div></section>'+
-    '<section class="r3-bf-section r3-bf-concentration">'+
+    '<section class="r3-bf-section r3-bf-concentration" data-bf-panel="concentration">'+
+    r3BattlefieldGrip('concentration')+
     '<span>'+r3HudIcon('target')+'</span><div><strong>Concentration</strong>'+
     '<small>'+r3Escape(focus)+'</small></div>'+
     '<button type="button" data-turn-action="focus" '+
     'title="Cycle manual concentration state; the sheet is authoritative">±</button></section>'+
-    '<section class="r3-bf-section r3-bf-resource-panel" aria-label="Observed character resources">'+
+    '<section class="r3-bf-section r3-bf-resource-panel" data-bf-panel="resources" aria-label="Observed character resources">'+
+    r3BattlefieldGrip('resources')+
     '<header><strong>Resources</strong>'+
     '<button type="button" data-hud-flyout="resources" title="Browse imported resources">⌃</button></header>'+
     (resources||'<small>No official slots or resources imported yet.</small>')+
     '</section>'+r3BattlefieldNotes()+
-    (R3_BF.options?'<section class="r3-bf-section r3-bf-advanced">'+
+    (R3_BF.options?'<section class="r3-bf-section r3-bf-advanced" data-bf-panel="advanced">'+
+      r3BattlefieldGrip('advanced')+
       '<header><strong>Turn corrections</strong>'+
       '<button type="button" data-bf-action="options">×</button></header>'+
       r3TurnMarkup(snapshot)+'</section>':'')+
@@ -140,16 +148,20 @@ function r3BattlefieldMarkup(snapshot){
       '<span style="width:'+fill+'%"></span></span></div>'
   ].join('');
   return '<section class="r3-bf-shell" aria-label="R20eb battlefield HUD">'+
-    '<div class="r3-bf-turnstrip" aria-label="Turn state">'+
+    '<div class="r3-bf-turnstrip" data-bf-panel="turn" aria-label="Turn state">'+
+    r3BattlefieldGrip('turn')+
     '<span class="r3-bf-turn-icon">'+r3HudIcon('clock')+'</span>'+
     '<span><strong>'+r3Escape(phase)+'</strong><small>'+r3Escape(status)+'</small></span>'+
     '<button type="button" data-turn-action="start" title="Reset local turn counters; keep concentration">↻</button>'+
     '<button type="button" data-turn-action="end" title="Mark end of turn locally; does not advance Roll20">⏭</button>'+
     '</div>'+
     (R3_BF.sidebar&&!R3_UI.shown?r3BattlefieldSidebar(snapshot):
-      '<button type="button" class="r3-bf-show-profile" data-bf-action="sidebar" '+
-        'title="Show character overview">☷ '+r3Escape(name)+'</button>')+
-    '<nav class="r3-bf-actions" aria-label="Action economy quick dock">'+
+      '<div class="r3-bf-show-profile-wrap" data-bf-panel="show-profile">'+
+        r3BattlefieldGrip('show-profile')+
+        '<button type="button" class="r3-bf-show-profile" data-bf-action="sidebar" '+
+        'title="Show character overview">☷ '+r3Escape(name)+'</button></div>')+
+    '<nav class="r3-bf-actions" data-bf-panel="actions" aria-label="Action economy quick dock">'+
+    r3BattlefieldGrip('actions')+
     '<div class="r3-bf-rings">'+ring+'</div>'+
     '<div class="r3-bf-quick">'+
     '<button type="button" data-turn-action="dash-action" title="Mark Action Dash locally and add one speed allowance">'+
@@ -158,20 +170,26 @@ function r3BattlefieldMarkup(snapshot){
     r3HudIcon('shield')+'<span>Disengage</span></button>'+
     '<button type="button" data-bf-action="hide" title="Mark Hide as a local action; no Roll20 execution">'+
     r3HudIcon('eye')+'<span>Hide</span></button></div></nav>'+
-    '<nav class="r3-bf-category-dock" aria-label="Character ability menus">'+
+    '<nav class="r3-bf-category-dock" data-bf-panel="categories" aria-label="Character ability menus">'+
+    r3BattlefieldGrip('categories')+
     r3BattlefieldControl('blade','Attacks','actions')+
     r3BattlefieldControl('star','Features','features')+
     r3BattlefieldControl('flame','Spells','spells')+
     r3BattlefieldControl('bag','Inventory','inventory')+
     r3BattlefieldControl('book','Skills','skills')+
     '</nav>'+
-    '<div class="r3-bf-mini-tools">'+
+    '<div class="r3-bf-mini-tools" data-bf-panel="tools">'+
+    r3BattlefieldGrip('tools')+
     '<button type="button" data-bf-action="options" title="Manual turn corrections and detailed counters">'+
     (R3_BF.options?'Hide options':'More options')+'</button>'+
     '<button type="button" id="r3-hud-debug" title="Toggle sheet importer">⚙</button>'+
+    '<button type="button" data-bf-action="reset-layout" title="Reset all panel positions for this game">Reset layout</button>'+ 
     '<button type="button" id="r3-hud-collapse" title="Hide HUD (Shift+A)">−</button></div>'+
-    (R3_HUD.flyout||R3_HUD.chooser!==null?r3HudFlyoutMarkup(snapshot):
-      (R3_NATIVE.status||R3_NATIVE.preview?r3NativeMarkup():''))+
+    (R3_HUD.flyout||R3_HUD.chooser!==null?
+      r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):
+      (R3_NATIVE.status||R3_NATIVE.preview?
+        '<div class="r3-bf-native" data-bf-panel="native">'+
+        r3BattlefieldGrip('native')+r3NativeMarkup()+'</div>':''))+
     '</section>';
 }
 function r3BattlefieldStyles(){

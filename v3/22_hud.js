@@ -458,6 +458,7 @@ function r3HudRender(){
   const noteStart=noteFocused?active.selectionStart:null;
   const noteEnd=noteFocused?active.selectionEnd:null;
   el.innerHTML=r3HudMarkup(R3_UI.snapshot);
+  if(typeof r3BattlefieldPlacePanels==='function')r3BattlefieldPlacePanels();
   if(noteFocused){
     const next=el.querySelector?.('#r3-bf-notes');
     if(next){
@@ -596,7 +597,8 @@ function r3HudStyles(){
     ".hud-native-status button,.hud-native-probe{padding:5px 9px!important;border:1px solid #aec5d4!important;background:#263f51!important;color:#fff!important;font-size:11px!important;border-radius:3px!important}",
     ".hud-native-probe{margin-top:7px!important;cursor:pointer}",
     typeof r3TurnStyles==='function'?r3TurnStyles():'',
-    typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():''
+    typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():'',
+    typeof r3BattlefieldDragStyles==='function'?r3BattlefieldDragStyles():''
 
   ].join('');
 }

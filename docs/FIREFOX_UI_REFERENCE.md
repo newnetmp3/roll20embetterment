@@ -28,3 +28,16 @@
 The **Firefox-specific visual implementation** lives at \`extension/firefox/battlefield-layout.js\`; the existing Firefox turn-state engine is \`extension/firefox/turn-economy.js\`. Shared \`v3/20_ui.js\` and \`v3/22_hud.js\` use feature-detected hooks to activate this presentation only when bundled in Firefox. Chrome and the optional legacy userscript must not adopt it inadvertently.
 
 Run \`npm run check:firefox\` and inspect \`tests/firefox-battlefield.test.mjs\`. Tests enforce corner anchoring, click-through central map, selected-token state isolation, source-backed data, notes persistence, flyouts on demand and compact mode. **A real Floorp/Roll20 screenshot comparison is still required** before claiming pixel-perfect matching to the approved concept, because Chrome-less CI does not render the actual browser or Roll20 page.
+
+
+## Firefox v3.7.0 — User-positionable HUD panels
+
+The screenshot remains the **starting appearance reference**; the user must be able to move every actual visible HUD panel independently when a battlefield or Roll20 chat layout requires another arrangement.
+
+- Independent drag grips on Action Economy, the five-category Dock, Turn status pill, Profile, Concentration, Resources, Turn Notes, More Options, menu flyouts, native status, mini-tools, profile show button, and the original importer panel. Grips are visually small `⠿` tabs and do not replace ordinary action/roll controls.
+- Use pointer/mouse/touch dragging on a panel's grip. For keyboard access, focus the grip and press arrow keys (12px nudge, Shift+arrow for 1px).
+- **Default right-side panels and category dock reserve the actual chat width when its page element is visible**; otherwise reserve approximately 330px on larger desktops. Layout prevents overlap of the bottom docks in narrower browsers. Users can override all defaults by dragging panels wherever desired; reset from **Reset layout** in the mini-tools.
+- Positions persist in per-game, browser-local storage independently of character-specific resource data and notes. The same positions apply when switching a controllable character; re-importing HP or rerendering must not reset them.
+- On resize or restored small screens, saved positions clamp inside the visible browser viewport. Default layout must leave the Roll20 battlefield click-through and the right chat usable. Panel grips have `pointer-events:auto` but the full-screen HUD root retains `pointer-events:none`.
+- Content is unchanged: no prompts or extra confirmation popups, native Roll20 attack confirmation still handled by existing bridge, no auto-spending from an unverified chat roll, and Chrome remains separate.
+- Run `npm run check:firefox`, especially `tests/firefox-panel-drag.test.mjs`. Compare real Floorp UI against the reference and verify manual docking beside the current chat sidebar at different window sizes.
