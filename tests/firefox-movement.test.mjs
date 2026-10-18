@@ -118,7 +118,7 @@ test('other character cannot inflate the selected character movement',()=>{
 });
 test('Roll20 lastmove waypoints, when anchored to prior token center, contribute path length',()=>{
   const h=rig();h.api.r3TurnStart();h.api.r3MovePoll();
-  h.elf.move(280,210,'140,210,210,210,210,280'); // 140px right + 70px up + 70px down
+  h.elf.move(280,280,'140,210,210,210,210,280'); // 70px right, 70px down, 70px right
   assert.equal(h.api.R3_TURN.movementUsed,15);
 });
 test('no map token and scrolling/zooming alone never changes total distance',()=>{

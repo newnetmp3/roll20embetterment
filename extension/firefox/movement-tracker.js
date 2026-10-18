@@ -78,6 +78,9 @@ function r3MoveRebase(){
   r3MoveDisconnect();
   Object.assign(R3_MOVE,{tokenId:'',characterId:'',pageId:'',
     last:null,scale:null,lastMove:'',source:''});
+  // Immediately bind at turn start so the first model change is counted,
+  // even if the player moves faster than the 400ms fallback polling cadence.
+  r3MovePoll();
 }
 function r3MoveWaypointLength(start,end,model,units){
   const raw=r3TokenModelGet(model,'lastmove');
