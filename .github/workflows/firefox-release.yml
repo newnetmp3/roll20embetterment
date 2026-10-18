@@ -1,6 +1,11 @@
 name: Firefox unlisted signed release
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - extension/firefox/release-request.json
 permissions:
   contents: write
 concurrency:
@@ -18,6 +23,24 @@ jobs:
           node-version: '22'
       - name: Validate Firefox
         run: npm run check:firefox
+      - name: Verify Firefox release request and avoid duplicate release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import {readFileSync} from "node:fs";
+            const request=JSON.parse(readFileSync("extension/firefox/release-request.json","utf8"));
+            const config=JSON.parse(readFileSync("extension/firefox/package.json","utf8"));
+            if(request.version!==config.version||request.channel!=="unlisted")
+              throw Error("Release request must match Firefox version and unlisted channel");
+            console.log("Validated requested Firefox version "+request.version);
+          '
+          version=$(node -p "JSON.parse(require('fs').readFileSync('extension/firefox/package.json')).version")
+          if gh release view "firefox-v$version" >/dev/null 2>&1; then
+            echo "::error::Firefox version $version is already released; bump the Firefox version."
+            exit 1
+          fi
       - name: Verify AMO credentials
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}

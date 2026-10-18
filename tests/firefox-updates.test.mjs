@@ -44,3 +44,11 @@ test('an unsigned Firefox development ZIP is rejected by the signed-update publi
   const feed=JSON.parse(readFileSync(join(root,'extension/firefox/updates.json'),'utf8'));
   assert.ok(Array.isArray(feed.addons[FIREFOX_ADDON_ID].updates));
 });
+
+test('GitHub Firefox release request matches exactly the Firefox package version',()=>{
+  const request=JSON.parse(readFileSync(join(root,'extension/firefox/release-request.json'),'utf8'));
+  const config=JSON.parse(readFileSync(join(root,'extension/firefox/package.json'),'utf8'));
+  assert.equal(request.version,config.version);
+  assert.equal(request.channel,'unlisted');
+  assert.equal(request.distribution,'github-release');
+});

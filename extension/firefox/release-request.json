@@ -1,0 +1,6 @@
+{
+  "version": "3.4.1",
+  "channel": "unlisted",
+  "distribution": "github-release",
+  "reason": "First Mozilla-signed Firefox self-hosted release; user confirms AMO JWT credentials are configured."
+}
