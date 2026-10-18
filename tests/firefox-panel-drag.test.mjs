@@ -12,7 +12,8 @@ function harness(opts={}){
       setProperty(k,v){props.set(k,v);if(k==='left')r.x=Number.parseInt(v);if(k==='top')r.y=Number.parseInt(v);},
       removeProperty(k){props.delete(k);},get(k){return props.get(k);}
     },getAttribute(k){return k==='data-bf-panel'?name:null;},
-      getBoundingClientRect(){return {left:r.x,top:r.y,width:r.w,height:r.h,right:r.x+r.w,bottom:r.y+r.h};}};
+      getBoundingClientRect(){return {left:r.x,top:r.y,width:r.w,height:r.h,right:r.x+r.w,bottom:r.y+r.h};},
+      setPointerCapture(){},setAttribute(k,v){props.set(k,v);}};
     panels.set(name,el);
   };
   make('actions',14,660,440);make('categories',510,672,440,88);
@@ -29,22 +30,25 @@ function harness(opts={}){
     localStorage:{getItem(k){return data.get(k)||null;},setItem(k,v){data.set(k,v);},
       removeItem(k){data.delete(k);}}};
   vm.createContext(ctx);
-  vm.runInContext(src+'\nglobalThis.api={R3_BF_DRAG,r3BattlefieldGrip,r3BattlefieldChatInset,r3BattlefieldLayoutLoad,r3BattlefieldLayoutSave,r3BattlefieldPlacePanels,r3BattlefieldPanel,r3BattlefieldSetPosition,r3BattlefieldEnableDragging,r3BattlefieldDragStart,r3BattlefieldDragMove,r3BattlefieldDragEnd,r3BattlefieldDragKeyboard,r3BattlefieldResetPositions,r3BattlefieldDraggableFlyout,r3BattlefieldDragStyles};',ctx);
+  vm.runInContext(src+'\nglobalThis.api={R3_BF_DRAG,r3BattlefieldGrip,r3BattlefieldChatInset,r3BattlefieldLayoutLoad,r3BattlefieldLayoutSave,r3BattlefieldPlacePanels,r3BattlefieldPanel,r3BattlefieldSetPosition,r3BattlefieldEnableDragging,r3BattlefieldDragStart,r3BattlefieldDragMove,r3BattlefieldDragEnd,r3BattlefieldPreventDragClick,r3BattlefieldDragKeyboard,r3BattlefieldResetPositions,r3BattlefieldDraggableFlyout,r3BattlefieldDragStyles};',ctx);
   const api=ctx.api;api.r3BattlefieldEnableDragging(root);
-  const grip=name=>({getAttribute(k){return k==='data-bf-grip'?name:null;},
-    closest(q){return q==='[data-bf-grip]'?this:q==='[data-bf-panel]'?panels.get(name):null;},
-    setPointerCapture(){}});
-  return {api,data,panels,root,host,render,grip};
+  const hit=(name,editor=false)=>({
+    closest(q){
+      if(editor&&q.includes('textarea'))return this;
+      if(q==='[data-bf-panel]')return panels.get(name);
+      return null;
+    }
+  });
+  return {api,data,panels,root,host,render,hit};
 }
-test('each panel has independent accessible drag handle',()=>{
+test('all panels drag directly and no visible grab handles are generated',()=>{
   const h=harness();
-  for(const n of ['actions','categories','turn','profile','concentration','resources','notes',
-    'advanced','tools','flyout','native','importer','show-profile']){
-    assert.match(h.api.r3BattlefieldGrip(n),new RegExp('data-bf-grip="'+n+'"'));
-    assert.match(h.api.r3BattlefieldGrip(n),/aria-label="Move /);
-  }
-  assert.equal(h.api.r3BattlefieldGrip('unknown'),'');
-  assert.match(h.api.r3BattlefieldDragStyles(),/touch-action:none/);
+  const css=h.api.r3BattlefieldDragStyles();
+  assert.doesNotMatch(src,/data-bf-grip|r3-bf-drag-grip/);
+  assert.doesNotMatch(css,/drag-grip/);
+  assert.match(css,/cursor:grab/);
+  h.api.r3BattlefieldPlacePanels();
+  for(const panel of h.panels.values())assert.equal(panel.style.get('tabindex'),'0');
 });
 test('chat panel geometry is respected; sensible fallback exists',()=>{
   const h=harness({width:1200});
@@ -55,7 +59,7 @@ test('chat panel geometry is respected; sensible fallback exists',()=>{
   assert.equal(harness({width:750,chat:false}).api.r3BattlefieldChatInset(),0);
 });
 test('pointer move changes only dragged dock and saves per-game coordinates',()=>{
-  const h=harness({width:1200}),target=h.grip('categories');
+  const h=harness({width:1200}),target=h.hit('categories');
   h.api.r3BattlefieldDragStart({target,pointerType:'mouse',button:0,pointerId:4,
     clientX:520,clientY:684,preventDefault(){},stopPropagation(){}});
   assert.equal(h.api.R3_BF_DRAG.active.name,'categories');
@@ -70,21 +74,49 @@ test('pointer move changes only dragged dock and saves per-game coordinates',()=
   h.api.r3BattlefieldLayoutLoad();
   assert.equal(h.api.R3_BF_DRAG.positions.categories.y,488);
 });
-test('ordinary controls and right-click are not drag targets; different pointer IDs ignored',()=>{
-  const h=harness();
-  h.api.r3BattlefieldDragStart({target:{closest(){return null;}},pointerId:1,button:0,pointerType:'mouse'});
-  assert.equal(h.api.R3_BF_DRAG.active,null);
-  const target=h.grip('actions');
-  h.api.r3BattlefieldDragStart({target,pointerId:2,button:2,pointerType:'mouse'});
-  assert.equal(h.api.R3_BF_DRAG.active,null);
-  h.api.r3BattlefieldDragStart({target,pointerId:2,button:0,pointerType:'mouse',clientX:20,clientY:670,
-    preventDefault(){},stopPropagation(){}});
-  h.api.r3BattlefieldDragMove({pointerId:3,clientX:300,clientY:400,preventDefault(){}});
+test('normal clicks do not drag; inputs are ignored, right click and stray pointers are safe',()=>{
+  const h=harness(),target=h.hit('actions');
+  h.api.r3BattlefieldDragStart({target,pointerId:1,button:0,pointerType:'mouse',
+    clientX:20,clientY:670});
+  h.api.r3BattlefieldDragMove({pointerId:1,clientX:25,clientY:673});
   assert.equal(h.panels.get('actions').getBoundingClientRect().left,14);
-  h.api.r3BattlefieldDragEnd({pointerId:3,preventDefault(){}});
+  h.api.r3BattlefieldDragEnd({pointerId:1});
+  assert.equal(h.api.R3_BF_DRAG.suppressClick,null);
+  assert.equal(h.data.has('game:shared:firefox-panel-layout:v1'),false);
+  h.api.r3BattlefieldDragStart({target:h.hit('notes',true),pointerId:2,
+    button:0,pointerType:'mouse',clientX:695,clientY:440});
+  assert.equal(h.api.R3_BF_DRAG.active,null,'typing area must not be draggable');
+  h.api.r3BattlefieldDragStart({target,pointerId:3,button:2,pointerType:'mouse',
+    clientX:20,clientY:670});
+  assert.equal(h.api.R3_BF_DRAG.active,null,'right-click cannot reposition');
+  h.api.r3BattlefieldDragStart({target,pointerId:4,button:0,pointerType:'mouse',
+    clientX:20,clientY:670});
+  h.api.r3BattlefieldDragMove({pointerId:5,clientX:300,clientY:400});
+  assert.equal(h.panels.get('actions').getBoundingClientRect().left,14);
+  h.api.r3BattlefieldDragEnd({pointerId:5});
   assert.equal(h.api.R3_BF_DRAG.active.name,'actions');
-  h.api.r3BattlefieldDragEnd({pointerId:2,preventDefault(){}});
-  assert.equal(h.api.R3_BF_DRAG.active,null);
+  h.api.r3BattlefieldDragEnd({pointerId:4});
+});
+test('completed drag suppresses an accidental button click, never future keyboard clicks',()=>{
+  const h=harness(),target=h.hit('categories');
+  h.api.r3BattlefieldDragStart({target,pointerId:7,button:0,pointerType:'mouse',
+    clientX:520,clientY:684});
+  h.api.r3BattlefieldDragMove({pointerId:7,clientX:542,clientY:685,preventDefault(){}});
+  h.api.r3BattlefieldDragEnd({pointerId:7,preventDefault(){}});
+  let canceled=0;
+  h.api.r3BattlefieldPreventDragClick({target,detail:1,
+    preventDefault(){canceled++;},stopPropagation(){},stopImmediatePropagation(){}});
+  assert.equal(canceled,1);
+  h.api.r3BattlefieldPreventDragClick({target,detail:1,
+    preventDefault(){canceled++;},stopPropagation(){},stopImmediatePropagation(){}});
+  assert.equal(canceled,1,'a later button click must work');
+  h.api.r3BattlefieldDragStart({target,pointerId:8,button:0,pointerType:'mouse',
+    clientX:542,clientY:685});
+  h.api.r3BattlefieldDragMove({pointerId:8,clientX:560,clientY:685,preventDefault(){}});
+  h.api.r3BattlefieldDragEnd({pointerId:8,preventDefault(){}});
+  h.api.r3BattlefieldPreventDragClick({target,detail:0,
+    preventDefault(){canceled++;}});
+  assert.equal(canceled,1,'keyboard click must not be swallowed');
 });
 test('layout is clamped into available window bounds',()=>{
   const h=harness({width:900,height:540,chat:false});
@@ -97,8 +129,8 @@ test('layout is clamped into available window bounds',()=>{
   assert.ok(r.left<=646&&r.left>=4&&r.top<=436&&r.top>=4);
 });
 test('arrow keys nudge selected grip and persist its position',()=>{
-  const h=harness(),target=h.grip('profile');
-  const ev={target,key:'ArrowLeft',shiftKey:false,preventDefault(){},stopPropagation(){}};
+  const h=harness(),target=h.hit('profile');
+  const ev={target,key:'ArrowLeft',shiftKey:false,altKey:true,preventDefault(){},stopPropagation(){}};
   h.api.r3BattlefieldDragKeyboard(ev);
   assert.equal(h.panels.get('profile').getBoundingClientRect().left,678);
   ev.key='ArrowDown';ev.shiftKey=true;h.api.r3BattlefieldDragKeyboard(ev);
@@ -119,7 +151,7 @@ test('existing flyout and native card remain intact with movable grip',()=>{
   const h=harness(),html=h.api.r3BattlefieldDraggableFlyout(
     '<section class="hud-flyout" aria-label="Roll20 attack"><header>Attack</header></section>');
   assert.match(html,/data-bf-panel="flyout"/);
-  assert.match(html,/data-bf-grip="flyout"/);
+  assert.doesNotMatch(html,/data-bf-grip|r3-bf-drag-grip/);
   assert.match(html,/<header>Attack<\/header>/);
   assert.equal(h.api.r3BattlefieldDraggableFlyout(''),'');
 });
@@ -132,4 +164,14 @@ test('invalid persisted keys and positions never enter selectors',()=>{
   h.api.r3BattlefieldLayoutLoad();
   assert.deepEqual(Object.keys(h.api.R3_BF_DRAG.positions),['actions']);
   assert.equal(h.api.r3BattlefieldPanel(h.root,'evil][data-secret'),null);
+});
+
+test('keyboard arrows without Alt do not move, protecting normal UI shortcuts',()=>{
+  const h=harness(),ev={target:h.hit('profile'),key:'ArrowUp',altKey:false,
+    preventDefault(){throw Error('should not intercept');}};
+  h.api.r3BattlefieldDragKeyboard(ev);
+  assert.equal(h.panels.get('profile').getBoundingClientRect().top,32);
+  ev.altKey=true;
+  h.api.r3BattlefieldDragKeyboard(ev);
+  assert.equal(h.panels.get('profile').getBoundingClientRect().top,20);
 });
