@@ -175,6 +175,7 @@ function r3TokenSwitch(info){
   r3UIRefresh();
 }
 function r3TokenPoll(){
+  if(typeof r3TurnObserveInitiative==='function')r3TurnObserveInitiative();
   const picked=r3TokenSelected();
   const tokens=picked.map(item=>{
     const model=item?.model||item;

@@ -50,6 +50,8 @@ test('the real v3 source is bundled in order, without legacy or Tampermonkey dep
   for(const browser of ['firefox']){
     const {source}=pack(browser);
     assert.ok(source.includes(text));
+    assert.match(source,/extension\/firefox\/turn-economy\.js/);
+    assert.match(source,/function r3TurnStart\(/);
     assert.match(source,/function r3Boot\(/);
     assert.match(source,/function r3NativeWaitReader\(/);
     assert.doesNotMatch(source,/\/\/ ==UserScript==/);

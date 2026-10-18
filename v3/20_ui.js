@@ -189,6 +189,7 @@ function r3UIEvent(event){
   const spent=field('hudUsed','[data-hud-used]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
+  if(typeof r3TurnClick==='function'&&r3TurnClick(target))return;
   if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
   else if(target?.id==='r3-refresh')r3UIRefresh();
   else if(target?.id==='r3-scan')return r3StartImport('current');
@@ -200,7 +201,7 @@ function r3UIEvent(event){
     R3_HUD.collapsed=!R3_HUD.collapsed;
     if(R3_HUD.collapsed){
       R3_HUD.flyout='';R3_HUD.chooser=null;
-    }else R3_HUD.used={action:false,bonus:false,reaction:false};
+    }else if(typeof r3TurnLoad!=='function')R3_HUD.used={action:false,bonus:false,reaction:false};
     r3HudSave();r3HudRender();
   }
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
@@ -211,7 +212,8 @@ function r3UIEvent(event){
     return r3NativeProbe(nativeProbe);
   }
   else if(target?.id==='r3-hud-reset-turn'){
-    R3_HUD.used={action:false,bonus:false,reaction:false};r3HudRender();
+    if(typeof r3TurnStart==='function')r3TurnStart('manual');
+    else{R3_HUD.used={action:false,bonus:false,reaction:false};r3HudRender();}
   }
   else if(target?.id==='r3-hud-drawer-close'||target?.id==='r3-hud-flyout-close'){
     R3_HUD.drawerOpen=false;R3_HUD.flyout='';R3_HUD.chooser=null;
@@ -234,7 +236,8 @@ function r3UIEvent(event){
     R3_HUD.spellLevel=String(spellLevel);r3HudRender();
   }
   else if(spent&&['action','bonus','reaction'].includes(spent)){
-    R3_HUD.used[spent]=!R3_HUD.used[spent];r3HudRender();
+    if(typeof r3TurnLegacyToggle==='function')r3TurnLegacyToggle(spent);
+    else{R3_HUD.used[spent]=!R3_HUD.used[spent];r3HudRender();}
   }
   else if(flyout&&['spells','skills','actions','bonus','reactions','inventory',
     'features','resources'].includes(flyout)){
