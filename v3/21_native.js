@@ -4,6 +4,8 @@
 // control before a user can explicitly confirm a single native click.
 const R3_NATIVE={pending:new Map(),tokens:new Map(),readers:new Map(),preview:null,busy:false,status:'',revision:0};
 function r3NativeStatus(message){
+  if(typeof r3DebugLog==='function'&&message!==R3_NATIVE.status)
+    r3DebugLog('Native',message);
   R3_NATIVE.status=r3String(message,240);
   R3_NATIVE.revision++;
   r3HudRender?.();

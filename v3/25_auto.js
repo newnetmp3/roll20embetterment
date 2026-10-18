@@ -24,7 +24,11 @@ function r3AutoSave(){
 }
 function r3AutoDisplay(message){
   // Routine UI refreshes must not erase a useful "journal not loaded" status.
-  if(message!==undefined)R3_AUTO.lastError=message||'';
+  if(message!==undefined){
+    if(typeof r3DebugLog==='function'&&message!==R3_AUTO.lastError)
+      r3DebugLog('Importer','Auto-sync: '+message);
+    R3_AUTO.lastError=message||'';
+  }
   const status=R3_UI.root?.getElementById('r3-auto-status');
   if(status)status.textContent=R3_AUTO.enabled?
     ('Auto-sync: '+(R3_AUTO.lastError||'watching for your character sheet')):'Auto-sync is off';

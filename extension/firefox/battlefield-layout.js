@@ -190,7 +190,7 @@ function r3BattlefieldMarkup(snapshot){
     ''+
     '<button type="button" data-bf-action="options" title="Manual turn corrections and detailed counters">'+
     (R3_BF.options?'Hide options':'More options')+'</button>'+
-    '<button type="button" id="r3-hud-debug" title="Toggle sheet importer">⚙</button>'+
+    '<button type="button" id="r3-hud-debug" title="Open developer diagnostics and tooltip history">⚙ Debug</button>'+
     (R3_NATIVE.status?'<button type="button" data-bf-action="status" ' +
       'title="'+r3Escape(R3_NATIVE.status)+'" aria-label="Toggle native-roll status">'+
       (R3_BF.statusOpen?'Hide status':'ⓘ Status')+'</button>':'')+
@@ -207,6 +207,7 @@ function r3BattlefieldMarkup(snapshot){
         ''+
         '<button type="button" class="r3-bf-dismiss-status" data-bf-action="status" '+
         'title="Hide status information">×</button>'+r3NativeMarkup()+'</div>':'')+
+    (typeof r3DebugMarkup==='function'?r3DebugMarkup():'')+
     '</section>';
 }
 function r3BattlefieldStyles(){
