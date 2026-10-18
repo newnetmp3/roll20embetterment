@@ -34,7 +34,9 @@ function r3DebugRows(){
 function r3DebugMovementRows(){
   const state=r3DebugMovement();
   return [['Status',state.status],['Reason',state.details],
-    ['Turn',state.turn],['Controlled token',state.selectedToken?'Selected':'Not selected'],
+    ['Turn',state.turn],['Controlled token',state.selectedToken?'Linked':'Not linked'],
+    ['Renderer',state.selectionRenderer],['Selection source',state.selectionSource],
+    ['Selected candidates',state.selectionCount],['Selection diagnosis',state.selectionReason],
     ['Token source',state.positionSource],['Page identified',state.pageResolved?'Yes':'No'],
     ['Page ID',state.pageId],['Page scale',state.pageScale],
     ['Scale units',state.pageUnit],['Grid increment',state.gridIncrement],
