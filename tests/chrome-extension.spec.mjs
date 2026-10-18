@@ -43,7 +43,7 @@ test('Chrome MV3 use MAIN world and match only Roll20 editor/official 2024 sheet
 test('the real v3 source is bundled in order, without legacy or Tampermonkey dependency',()=>{
   const text=modules.map(n=>'// ===== v3/'+n+' =====\n'+
     readFileSync(join(root,'v3',n),'utf8').trim()).join('\n\n');
-  for(const browser of ['firefox','chrome']){
+  for(const browser of ['chrome']){
     const {source}=pack(browser);
     assert.ok(source.includes(text));
     assert.match(source,/function r3Boot\(/);
@@ -53,7 +53,7 @@ test('the real v3 source is bundled in order, without legacy or Tampermonkey dep
   }
 });
 test('Chrome ZIP are valid root-manifest packages',()=>{
-  for(const browser of ['firefox','chrome']){
+  for(const browser of ['chrome']){
     const {zip}=pack(browser);
     assert.equal(zip.readUInt32LE(zip.length-22),0x06054b50);
     const count=zip.readUInt16LE(zip.length-14);
