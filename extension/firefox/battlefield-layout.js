@@ -191,9 +191,6 @@ function r3BattlefieldMarkup(snapshot){
     '<button type="button" data-bf-action="options" title="Manual turn corrections and detailed counters">'+
     (R3_BF.options?'Hide options':'More options')+'</button>'+
     '<button type="button" id="r3-hud-debug" title="Open developer diagnostics and tooltip history">⚙ Debug</button>'+
-    (R3_NATIVE.status?'<button type="button" data-bf-action="status" ' +
-      'title="'+r3Escape(R3_NATIVE.status)+'" aria-label="Toggle native-roll status">'+
-      (R3_BF.statusOpen?'Hide status':'ⓘ Status')+'</button>':'')+
     '<button type="button" data-bf-action="show-roll20-sheet" title="Restore all original character sheets and stop hiding them while you play">Show Sheet</button>'+
     (typeof R3_SHEET_VIS==='object'&&R3_SHEET_VIS.manualPriority?
       '<button type="button" data-bf-action="allow-background" title="Allow optional background readers again">Allow private reader</button>':'')+
@@ -201,12 +198,11 @@ function r3BattlefieldMarkup(snapshot){
     '<button type="button" id="r3-hud-collapse" title="Hide HUD (Shift+A)">−</button></div>'+
     (R3_HUD.flyout||R3_HUD.chooser!==null?
       r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):'')+
-    ((R3_NATIVE.preview||R3_BF.statusOpen)&&
-      (R3_NATIVE.status||R3_NATIVE.preview)?
+    (R3_NATIVE.preview?
         '<div class="r3-bf-native" data-bf-panel="native">'+
         ''+
         '<button type="button" class="r3-bf-dismiss-status" data-bf-action="status" '+
-        'title="Hide status information">×</button>'+r3NativeMarkup()+'</div>':'')+
+        'title="Dismiss roll confirmation details">×</button>'+r3NativeMarkup()+'</div>':'')+
     (typeof r3DebugMarkup==='function'?r3DebugMarkup():'')+
     '</section>';
 }

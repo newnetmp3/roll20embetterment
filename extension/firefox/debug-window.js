@@ -31,16 +31,20 @@ function r3DebugRows(){
     '<span>'+r3Escape(x.text)+'</span></div>').join(''):
     '<div class="r3-debug-empty">No messages in this category yet.</div>');
 }
-function r3DebugMarkup(){
-  if(!R3_DEBUG.open)return '';
+function r3DebugMovementRows(){
   const state=r3DebugMovement();
-  const fields=[['Status',state.status],['Reason',state.details],
+  return [['Status',state.status],['Reason',state.details],
     ['Turn',state.turn],['Controlled token',state.selectedToken?'Selected':'Not selected'],
     ['Token source',state.positionSource],['Page identified',state.pageResolved?'Yes':'No'],
     ['Page ID',state.pageId],['Page scale',state.pageScale],
     ['Scale units',state.pageUnit],['Grid increment',state.gridIncrement],
     ['Feet per pixel',state.mapFeetPerPixel],
-    ['Token position',state.tokenCoordinate],['Used this turn (ft)',state.movementUsed]];
+    ['Token position',state.tokenCoordinate],['Used this turn (ft)',state.movementUsed]]
+    .map(([key,value])=>'<div><dt>'+r3Escape(key)+'</dt><dd>'+
+      r3Escape(value??'—')+'</dd></div>').join('');
+}
+function r3DebugMarkup(){
+  if(!R3_DEBUG.open)return '';
   return '<aside class="r3-debug-window" data-bf-panel="debug" role="complementary" '+
     'aria-label="R20eb developer Debug window">'+
     '<header class="r3-debug-header"><strong>R20eb Debug</strong>'+
@@ -48,9 +52,7 @@ function r3DebugMarkup(){
     '<button type="button" data-r3-debug="close" aria-label="Close Debug window">×</button></header>'+
     '<div class="r3-debug-body">'+
     '<details class="r3-debug-movement" open><summary>Movement tracking diagnostics</summary>'+
-    '<dl>'+fields.map(([key,value])=>
-      '<div><dt>'+r3Escape(key)+'</dt><dd>'+r3Escape(value??'—')+'</dd></div>').join('')+
-    '</dl><small>Move your token while Your Turn is active. If the source, scale or position is unavailable, its reason appears above.</small></details>'+
+    '<dl id="r3-debug-movement-values">'+r3DebugMovementRows()+'</dl><small>Move your token while Your Turn is active. If the source, scale or position is unavailable, its reason appears above.</small></details>'+
     '<div class="r3-debug-toolbar"><label for="r3-debug-filter">Messages</label>'+
     '<select id="r3-debug-filter" aria-label="Filter Debug messages">'+
       ['All','Movement','Native','Importer','Help','System'].map(k=>
@@ -66,6 +68,8 @@ function r3DebugMarkup(){
 }
 function r3DebugRefresh(){
   if(!R3_DEBUG.open)return;
+  const summary=R3_UI.root?.getElementById?.('r3-debug-movement-values');
+  if(summary)summary.innerHTML=r3DebugMovementRows();
   const el=R3_UI.root?.getElementById?.('r3-debug-entries');
   if(!el)return;
   const stick=Math.abs(el.scrollHeight-el.scrollTop-el.clientHeight)<30;

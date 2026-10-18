@@ -75,9 +75,11 @@ function r3MovePageId(page){
 }
 function r3MoveGraphicSources(engine,page){
   const canvas=engine?.canvas;
+  let observed=null;
+  try{observed=typeof canvas?.getObjects==='function'?canvas.getObjects():null;}catch{}
   const groups=[
     ['selected',r3TokenSelected()],
-    ['canvas.getObjects',typeof canvas?.getObjects==='function'?canvas.getObjects():null],
+    ['canvas.getObjects',observed],
     ['canvas._objects',canvas?._objects],
     ['canvas._activeObjects',canvas?._activeObjects],
     ['page.thegraphics',page?.thegraphics],
