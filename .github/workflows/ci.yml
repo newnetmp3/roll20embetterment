@@ -1,4 +1,4 @@
-name: R20eb CI
+name: R20eb Firefox CI
 on:
   push:
   pull_request:
@@ -10,11 +10,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm run check
+      - run: npm run check:firefox
       - run: git diff --exit-code -- roll20-embetterment.user.js
       - uses: actions/upload-artifact@v4
         with:
-          name: roll20-embetterment-firefox-chrome
-          path: dist/roll20-embetterment-*.zip
+          name: r20eb-firefox-unsigned
+          path: dist/firefox/roll20-embetterment-firefox-*.zip
           if-no-files-found: error
           retention-days: 30

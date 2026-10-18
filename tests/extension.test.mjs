@@ -3,26 +3,28 @@ import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
-const {version}=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
+const {version}=JSON.parse(readFileSync(join(root,'extension','firefox','package.json'),'utf8'));
 const modules=readdirSync(join(root,'v3')).filter(s=>/^\d{2}_.*\.js$/.test(s)).sort();
 function pack(browser){
-  const dir=join(root,'dist','extension',browser);
+  const dir=join(root,'dist',browser,'extension');
   const manifest=JSON.parse(readFileSync(join(dir,'manifest.json'),'utf8'));
   const source=readFileSync(join(dir,'content.js'),'utf8');
   const popup=readFileSync(join(dir,'popup.html'),'utf8');
   const suffix=browser==='firefox'?'-unsigned':'';
-  const zip=readFileSync(join(root,'dist','roll20-embetterment-'+browser+'-'+version+suffix+'.zip'));
+  const zip=readFileSync(join(root,'dist',browser,'roll20-embetterment-'+browser+'-'+version+suffix+'.zip'));
   return {manifest,source,popup,zip};
 }
-test('Firefox and Chrome MV3 use MAIN world and match only Roll20 editor/official 2024 sheet',()=>{
+test('Firefox MV3 use MAIN world and match only Roll20 editor/official 2024 sheet',()=>{
   const expected=[
     'https://app.roll20.net/editor*',
     'https://advanced-sheets.production.roll20preflight.net/*dnd2024byroll20/*'
   ];
-  for(const browser of ['firefox','chrome']){
+  for(const browser of ['firefox']){
     const {manifest:m,popup}=pack(browser);
     assert.equal(m.manifest_version,3);
     assert.equal(m.version,version);
+    assert.equal(m.browser_specific_settings.gecko.update_url,
+      'https://raw.githubusercontent.com/newnetmp3/roll20embetterment/main/extension/firefox/updates.json');
     assert.equal(m.background,undefined);
     assert.equal(m.permissions,undefined);
     assert.equal(m.host_permissions,undefined);
@@ -37,7 +39,7 @@ test('Firefox and Chrome MV3 use MAIN world and match only Roll20 editor/officia
     assert.ok(popup.includes('extension v'+version));
     assert.ok(popup.includes('Disable the original R20eb Tampermonkey userscript'));
   }
-  assert.equal(pack('chrome').manifest.browser_specific_settings,undefined);
+  // Chrome is deliberately excluded from Firefox's default test gate.
   const gecko=pack('firefox').manifest.browser_specific_settings.gecko;
   assert.equal(gecko.strict_min_version,'128.0');
   assert.deepEqual(gecko.data_collection_permissions.required,['none']);
@@ -45,7 +47,7 @@ test('Firefox and Chrome MV3 use MAIN world and match only Roll20 editor/officia
 test('the real v3 source is bundled in order, without legacy or Tampermonkey dependency',()=>{
   const text=modules.map(n=>'// ===== v3/'+n+' =====\n'+
     readFileSync(join(root,'v3',n),'utf8').trim()).join('\n\n');
-  for(const browser of ['firefox','chrome']){
+  for(const browser of ['firefox']){
     const {source}=pack(browser);
     assert.ok(source.includes(text));
     assert.match(source,/function r3Boot\(/);
@@ -54,8 +56,8 @@ test('the real v3 source is bundled in order, without legacy or Tampermonkey dep
     assert.doesNotMatch(source,/function autoRefreshCharacterStats\(/);
   }
 });
-test('both ZIP files are valid root-manifest packages',()=>{
-  for(const browser of ['firefox','chrome']){
+test('Firefox ZIP are valid root-manifest packages',()=>{
+  for(const browser of ['firefox']){
     const {zip}=pack(browser);
     assert.equal(zip.readUInt32LE(zip.length-22),0x06054b50);
     const count=zip.readUInt16LE(zip.length-14);
@@ -72,7 +74,7 @@ test('both ZIP files are valid root-manifest packages',()=>{
     assert.deepEqual(names,['manifest.json','content.js','popup.html',
       'icons/icon-16.png','icons/icon-32.png','icons/icon-48.png','icons/icon-128.png']);
     for(const size of [16,32,48,128]){
-      const png=readFileSync(join(root,'dist','extension',browser,'icons','icon-'+size+'.png'));
+      const png=readFileSync(join(root,'dist',browser,'extension','icons','icon-'+size+'.png'));
       assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
       assert.equal(png.readUInt32BE(16),size);
       assert.equal(png.readUInt32BE(20),size);

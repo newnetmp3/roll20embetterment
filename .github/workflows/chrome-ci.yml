@@ -1,0 +1,30 @@
+name: R20eb Chrome CI (optional)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'extension/chrome/**'
+      - 'scripts/build-chrome.mjs'
+      - 'scripts/lib/extension-builder.mjs'
+      - 'tests/chrome-extension.spec.mjs'
+  pull_request:
+    paths:
+      - 'extension/chrome/**'
+      - 'scripts/build-chrome.mjs'
+      - 'scripts/lib/extension-builder.mjs'
+      - 'tests/chrome-extension.spec.mjs'
+jobs:
+  validate-chrome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run check:chrome
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r20eb-chrome-unsigned
+          path: dist/chrome/roll20-embetterment-chrome-*.zip
+          if-no-files-found: error
+          retention-days: 30

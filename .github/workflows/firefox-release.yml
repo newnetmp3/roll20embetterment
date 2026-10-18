@@ -1,0 +1,80 @@
+name: Firefox unlisted signed release
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: firefox-unlisted-release
+  cancel-in-progress: false
+jobs:
+  sign-and-publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: firefox-signing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Firefox
+        run: npm run check:firefox
+      - name: Verify AMO credentials
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::error::Configure AMO_JWT_ISSUER and AMO_JWT_SECRET in the firefox-signing environment."
+            exit 1
+          fi
+      - name: Request unlisted Mozilla signature
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          mkdir -p dist/firefox/signed
+          npm exec --yes --package=web-ext -- web-ext sign \
+            --source-dir dist/firefox/extension \
+            --artifacts-dir dist/firefox/signed \
+            --channel unlisted \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET" \
+            --no-input
+      - name: Verify signed XPI and prepare update
+        id: prepare
+        shell: bash
+        run: |
+          count=$(find dist/firefox/signed -maxdepth 1 -name '*.xpi' -type f | wc -l)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly one Mozilla-signed XPI."
+            exit 1
+          fi
+          signed=$(find dist/firefox/signed -maxdepth 1 -name '*.xpi' -type f | head -n 1)
+          node scripts/publish-firefox-update.mjs "$signed"
+          version=$(node -p "JSON.parse(require('fs').readFileSync('extension/firefox/package.json')).version")
+          cp "$signed" "dist/firefox/r20eb-firefox-v$version.xpi"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "file=dist/firefox/r20eb-firefox-v$version.xpi" >> "$GITHUB_OUTPUT"
+      - name: Publish signed Firefox GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.prepare.outputs.version }}
+          FILE: ${{ steps.prepare.outputs.file }}
+        run: |
+          tag="firefox-v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Release exists; bump the Firefox version."
+            exit 1
+          fi
+          gh release create "$tag" "$FILE" --target "$GITHUB_SHA" \
+            --title "R20eb Firefox v$VERSION (Mozilla signed)" \
+            --notes "Mozilla-signed unlisted Firefox extension. Chrome is released separately."
+      - name: Publish Firefox update manifest after signed release
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add extension/firefox/updates.json
+          git commit -m "release(firefox): signed v$VERSION update feed"
+          git push origin HEAD:main
