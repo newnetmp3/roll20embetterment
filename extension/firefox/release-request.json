@@ -1,6 +1,6 @@
 {
-  "version": "3.9.2",
+  "version": "3.9.3",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Investigate Babylon.js selected-token detection in live Roll20; add explicit engine selection lookup, deferred character retry and debug source diagnostics"
+  "reason": "Read Jumpgate engine.tabletopSelected and exact selected graphics for token and movement tracking"
 }
