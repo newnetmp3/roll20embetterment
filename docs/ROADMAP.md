@@ -197,3 +197,15 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Future: Mozilla Add-ons signing for permanent Firefox XPI and Chrome Web Store publishing (separate accounts/review).
 
 **v3.4.0 merged (2026-10-17):** [PR #57](https://github.com/newnetmp3/roll20embetterment/pull/57) merged at `1e752f23c6ee1f58bf9cc7075acf81aa64bbd95a`. [CI 39080887581](https://github.com/newnetmp3/roll20embetterment/actions/runs/39080887581) green, 343/343 tests and extension archives attached. Live browser QA and signing/store release remain open.
+
+## Firefox-first independent extension tracks (2026-10-17)
+
+- [x] Split Firefox/Chrome configuration, popup, versions, output folders, entrypoints, and CI packages while retaining the common v3 runtime.
+- [x] Make Firefox development default; Chrome build/tests run independently and never gate Firefox.
+- [x] Add Firefox 3.4.1 HTTPS update URL with stable Gecko ID and intentionally empty initial update manifest.
+- [x] Implement manual GitHub Actions unlisted Mozilla signing and only-after-signature GitHub Release/update JSON publication (SHA-256).
+- [x] Add separate Firefox vs Chrome package regression tests plus signed-update metadata tests.
+- [ ] Verify both independent CI pipelines green, merge PR, and record final baseline.
+- [ ] Configure GitHub environment `firefox-signing` with AMO JWT credentials (user action) before attempting genuine Mozilla signature.
+- [ ] Live Firefox/Floorp QA of HUD, selected token, official sheet bridge, first-click Find and hidden reader; confirm one genuine Roll20 chat hit roll.
+- [ ] Publish first signed Firefox XPI to GitHub only after Mozilla signs it; verify permanent install and Firefox self-update. Chrome browser-specific development resumes later.

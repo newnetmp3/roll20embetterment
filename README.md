@@ -1,6 +1,12 @@
 # Roll20 Embetterment — player-focused combat HUD
 
-## Standalone Firefox / Chrome extension (v3.4.0)
+## Firefox-first browser extensions (v3.4.1 Firefox, v3.4.0 Chrome)
+
+R20eb Firefox and Chrome are now **separate add-ons**, not a synchronized two-browser package. Firefox is the primary target: `npm run build:firefox` and `npm run check:firefox` build and test only Firefox. Chrome stays on v3.4.0 and uses the independent `npm run build:chrome` / `npm run check:chrome` workflow. Both share only the core Roll20 logic under `v3/`.
+
+Firefox development, Mozilla unlisted signing, and GitHub-hosted update instructions: [Firefox guide](extension/firefox/README.md). Chrome can be updated later without bumping Firefox. Actual Mozilla-signed XPI distribution is **not yet active**; AMO API credentials are still needed.
+
+## Original combined extension milestone (v3.4.0)
 
 **Tampermonkey is no longer required.** Both Firefox/Floorp and Chrome/Chromium extensions run the existing v3 HUD, importer, token watcher and official sheet bridge on Roll20. Both are built from the same source modules as the optional userscript.
 
