@@ -4,7 +4,7 @@ const R3_BF_PANELS=new Set([
   'actions','categories','turn','profile','concentration','resources',
   'notes','advanced','tools','flyout','native','importer','show-profile'
 ]);
-const R3_BF_DRAG={scope:'',positions:{},active:null,enabled:false,root:null};
+const R3_BF_DRAG={scope:'',positions:{},active:null,suppressClick:null,enabled:false,root:null};
 function r3BattlefieldLayoutKey(){
   return r3StorageKey()+':firefox-panel-layout:v1';
 }
@@ -29,19 +29,11 @@ function r3BattlefieldLayoutSave(){
     schema:1,positions:R3_BF_DRAG.positions
   }));}catch{/* Layout remains usable within this session. */}
 }
-function r3BattlefieldGrip(name){
-  if(!R3_BF_PANELS.has(name))return '';
-  const human=name.replace(/-/g,' ');
-  return '<button type="button" class="r3-bf-drag-grip" data-bf-grip="'+name+
-    '" aria-label="Move '+r3Escape(human)+' panel" title="Drag to move '+r3Escape(human)+
-    ' · arrow keys when focused" draggable="false">⠿</button>';
-}
 function r3BattlefieldDraggableFlyout(markup){
-  const match=String(markup||'').match(/^<section\b[^>]*class="hud-flyout"[^>]*>/);
-  if(!match)return markup;
-  return markup.replace(match[0],
-    match[0].replace('<section','<section data-bf-panel="flyout"')+
-    r3BattlefieldGrip('flyout'));
+  // The flyout is the drag surface, without an extra grab tab.
+  return String(markup||'').replace(
+    /^(<section\b[^>]*class="hud-flyout"[^>]*)(>)/,
+    '$1 data-bf-panel="flyout"$2');
 }
 function r3BattlefieldChatInset(){
   // Roll20's sidebar is an ordinary page DOM element. Read geometry only:
@@ -98,14 +90,12 @@ function r3BattlefieldPlacePanels(){
   // Importer is outside the HUD's root but should be as movable as everything
   // else, and should default next to the canvas rather than over chat.
   const importer=root.getElementById?.('r3-wrap');
-  if(importer){
-    importer.setAttribute?.('data-bf-panel','importer');
-    if(!importer.querySelector?.('[data-bf-grip="importer"]'))
-      importer.insertAdjacentHTML?.('afterbegin',r3BattlefieldGrip('importer'));
-  }
+  if(importer)importer.setAttribute?.('data-bf-panel','importer');
   for(const name of R3_BF_PANELS){
     const panel=r3BattlefieldPanel(root,name);
     if(!panel)continue;
+    panel.setAttribute?.('tabindex','0');
+    panel.setAttribute?.('title','Drag to move · Alt+Arrow to nudge, Alt+Shift+Arrow for 1px');
     const saved=R3_BF_DRAG.positions[name];
     if(saved){
       const at=r3BattlefieldSetPosition(panel,saved.x,saved.y);
@@ -122,47 +112,72 @@ function r3BattlefieldPlacePanels(){
     }
   }
 }
+function r3BattlefieldIsEditor(target){
+  return !!target?.closest?.(
+    'input,textarea,select,option,[contenteditable="true"],[data-bf-no-drag]');
+}
 function r3BattlefieldDragStart(event){
+  if(R3_BF_DRAG.active)return;
   if(event.pointerType==='mouse'&&event.button!==0)return;
-  const grip=event.target?.closest?.('[data-bf-grip]');
-  const name=grip?.getAttribute?.('data-bf-grip');
-  if(!R3_BF_PANELS.has(name))return;
-  const panel=grip.closest?.('[data-bf-panel]')||r3BattlefieldPanel(R3_BF_DRAG.root,name);
-  if(panel?.getAttribute?.('data-bf-panel')!==name)return;
+  const panel=event.target?.closest?.('[data-bf-panel]');
+  const name=panel?.getAttribute?.('data-bf-panel');
+  if(!R3_BF_PANELS.has(name)||r3BattlefieldIsEditor(event.target))return;
+  if(!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return;
   const b=r3BattlefieldBounds(panel);
   R3_BF_DRAG.active={
-    name,id:event.pointerId,
-    offsetX:event.clientX-b.left,offsetY:event.clientY-b.top
+    name,id:event.pointerId,originX:event.clientX,originY:event.clientY,
+    offsetX:event.clientX-b.left,offsetY:event.clientY-b.top,
+    moved:false,panel
   };
-  event.preventDefault?.();
-  event.stopPropagation?.();
-  grip.setPointerCapture?.(event.pointerId);
+  // No preventDefault: normal click still activates all buttons.
 }
 function r3BattlefieldDragMove(event){
   const drag=R3_BF_DRAG.active;
   if(!drag||drag.id!==event.pointerId)return;
   const panel=r3BattlefieldPanel(R3_BF_DRAG.root,drag.name);
   if(!panel)return;
+  if(!drag.moved){
+    if(Math.hypot(event.clientX-drag.originX,event.clientY-drag.originY)<8)return;
+    drag.moved=true;
+    try{panel.setPointerCapture?.(event.pointerId);}catch{}
+  }
   const at=r3BattlefieldSetPosition(panel,
     event.clientX-drag.offsetX,event.clientY-drag.offsetY);
   R3_BF_DRAG.positions[drag.name]=at;
   event.preventDefault?.();
 }
 function r3BattlefieldDragEnd(event){
-  if(!R3_BF_DRAG.active||event.pointerId!==R3_BF_DRAG.active.id)return;
+  const drag=R3_BF_DRAG.active;
+  if(!drag||event.pointerId!==drag.id)return;
   R3_BF_DRAG.active=null;
+  if(!drag.moved)return;
+  R3_BF_DRAG.suppressClick={name:drag.name,until:Date.now()+900};
   r3BattlefieldLayoutSave();
   event.preventDefault?.();
 }
+function r3BattlefieldPreventDragClick(event){
+  const block=R3_BF_DRAG.suppressClick;
+  if(!block||Date.now()>block.until){
+    R3_BF_DRAG.suppressClick=null;return;
+  }
+  // Don't consume a subsequent keyboard-originated activation.
+  if(event.detail===0)return;
+  const panel=event.target?.closest?.('[data-bf-panel]');
+  if(panel?.getAttribute?.('data-bf-panel')!==block.name)return;
+  R3_BF_DRAG.suppressClick=null;
+  event.preventDefault?.();
+  event.stopImmediatePropagation?.();
+  event.stopPropagation?.();
+}
 function r3BattlefieldDragKeyboard(event){
-  const name=event.target?.getAttribute?.('data-bf-grip');
+  if(!event.altKey||r3BattlefieldIsEditor(event.target))return;
+  const panel=event.target?.closest?.('[data-bf-panel]');
+  const name=panel?.getAttribute?.('data-bf-panel');
   if(!R3_BF_PANELS.has(name))return;
   const vectors={ArrowLeft:[-1,0],ArrowRight:[1,0],
     ArrowUp:[0,-1],ArrowDown:[0,1]};
   const direction=vectors[event.key];
   if(!direction)return;
-  const panel=r3BattlefieldPanel(R3_BF_DRAG.root,name);
-  if(!panel)return;
   const rect=r3BattlefieldBounds(panel);
   const step=event.shiftKey?1:12;
   const at=r3BattlefieldSetPosition(panel,
@@ -192,6 +207,7 @@ function r3BattlefieldEnableDragging(root){
   root.addEventListener('pointermove',r3BattlefieldDragMove,true);
   root.addEventListener('pointerup',r3BattlefieldDragEnd,true);
   root.addEventListener('pointercancel',r3BattlefieldDragEnd,true);
+  root.addEventListener('click',r3BattlefieldPreventDragClick,true);
   root.addEventListener('keydown',r3BattlefieldDragKeyboard,true);
   window.addEventListener('resize',r3BattlefieldPlacePanels);
 }
@@ -199,8 +215,7 @@ function r3BattlefieldDragStyles(){
   return [
     // Remove the old all-in-one sidebar layout; children become independent.
     '.r3-bf-sidebar{display:contents!important;pointer-events:none!important}',
-    '.r3-bf-sidebar>.r3-bf-section{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);width:258px;pointer-events:auto;max-height:40vh;overflow-y:auto;padding-top:19px}',
-    '.r3-bf-sidebar>.r3-bf-section>.r3-bf-drag-grip{top:2px!important;left:9px!important;height:14px!important;border-radius:4px!important}',
+    '.r3-bf-sidebar>.r3-bf-section{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);width:258px;pointer-events:auto;max-height:40vh;overflow-y:auto}',
     '.r3-bf-sidebar>.r3-bf-profile{top:60px}',
     '.r3-bf-sidebar>.r3-bf-concentration{top:272px}',
     '.r3-bf-sidebar>.r3-bf-resource-panel{top:345px;max-height:27vh}',
@@ -212,16 +227,16 @@ function r3BattlefieldDragStyles(){
     '.r3-bf-show-profile-wrap{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);top:20px;pointer-events:auto}',
     '.r3-bf-show-profile-wrap>.r3-bf-show-profile{position:static!important;right:auto!important;top:auto!important}',
     '.r3-bf-shell>.hud-flyout{right:calc(var(--r3-bf-chat-inset,330px) + 14px)!important}',
-    '.r3-bf-shell>.hud-flyout{padding-top:21px!important}',
-    '.r3-bf-shell>.hud-flyout>.r3-bf-drag-grip{top:2px!important;border-radius:5px!important}',
     '.r3-bf-shell>.r3-bf-native{position:absolute;right:calc(var(--r3-bf-chat-inset,330px) + 14px);bottom:118px;width:min(480px,calc(100vw - 32px));max-height:36vh;pointer-events:auto;overflow:auto}',
-    '.r3-bf-native{padding-top:19px}.r3-bf-native>.r3-bf-drag-grip{top:2px!important}',
     '.r3-bf-native>.hud-native-status{position:static!important;max-height:none!important}',
     '#r3-wrap{right:calc(var(--r3-bf-chat-inset,330px) + 14px)!important}',
-    // Drag grips are separate controls, not the action buttons or text boxes.
     '.r3-bf-actions,.r3-bf-category-dock,.r3-bf-turnstrip,.r3-bf-mini-tools,#r3-wrap[data-bf-panel]{overflow:visible}',
-    '.r3-bf-drag-grip{position:absolute!important;left:9px!important;top:-15px!important;z-index:10!important;display:grid!important;place-items:center!important;width:38px!important;height:17px!important;min-height:17px!important;padding:0!important;border:1px solid #6284a6!important;border-radius:6px 6px 0 0!important;background:#1b324adf!important;color:#d2ecff!important;font-size:14px!important;line-height:1!important;cursor:grab!important;touch-action:none!important;user-select:none!important;pointer-events:auto!important}',
-    '.r3-bf-drag-grip:active{cursor:grabbing!important}.r3-bf-drag-grip:focus-visible{outline:2px solid #ffe19a!important;outline-offset:2px!important}',
+    '.r3-bf-shell [data-bf-panel],#r3-wrap[data-bf-panel]{cursor:grab;touch-action:none}',
+    '.r3-bf-shell [data-bf-panel]:active,#r3-wrap[data-bf-panel]:active{cursor:grabbing}',
+    '.r3-bf-shell button,#r3-wrap button{cursor:pointer}',
+    '.r3-bf-shell textarea,.r3-bf-shell input,.r3-bf-shell select,#r3-wrap input,#r3-wrap textarea{cursor:text;touch-action:auto}',
+    '.r3-bf-sidebar>.r3-bf-section,.r3-bf-shell>.hud-flyout,.r3-bf-native{touch-action:pan-y}',
+    '.r3-bf-shell [data-bf-panel]:focus-visible{outline:2px solid #ffe19a;outline-offset:2px}',
     // The importer has its own tab and retains its existing usable toggle.
     '#r3-wrap[data-bf-panel]{overflow:visible!important}',
     '.r3-bf-category-dock,.r3-bf-actions,.r3-bf-turnstrip,.r3-bf-mini-tools,.r3-bf-shell>.hud-flyout,.r3-bf-native{isolation:isolate}',
