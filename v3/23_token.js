@@ -158,6 +158,7 @@ function r3TokenSwitch(info){
   R3_NATIVE.status='';
   R3_NATIVE.revision++;
   r3HudLoad();
+  if(typeof r3MoveRebase==='function')r3MoveRebase();
   if(R3_AUTO.enabled){
     // Old in-flight reads cannot overwrite the newly selected character.
     R3_AUTO.generation++;
@@ -183,14 +184,15 @@ function r3TokenPoll(){
   }).filter(Boolean);
   const fresh=tokens.filter(id=>!R3_TOKEN.selectionIds.includes(id));
   R3_TOKEN.selectionIds=tokens;
-  if(!fresh.length)return;
+  if(!fresh.length){if(typeof r3MovePoll==='function')r3MovePoll();return;}
   // For group selection, choose the last newly selected eligible linked
   // token. A later click on a token in the group becomes the current focus.
   for(const id of fresh.slice().reverse()){
     const index=tokens.lastIndexOf(id);
     const info=r3TokenLinkedInfo(picked[index]);
-    if(info){r3TokenSwitch(info);return;}
+    if(info){r3TokenSwitch(info);break;}
   }
+  if(typeof r3MovePoll==='function')r3MovePoll();
 }
 function r3StartTokenWatch(){
   if(R3_TOKEN.started)return;

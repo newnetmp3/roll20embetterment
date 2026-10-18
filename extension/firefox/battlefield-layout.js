@@ -1,9 +1,9 @@
 // Firefox reference layout: compact battlefield-first overlay, no tutorial popups.
 // Only this renderer changes; Roll20's map, sheet and chat remain authoritative.
-const R3_BF={notes:'',sidebar:true,options:false,revision:0};
+const R3_BF={notes:'',sidebar:true,options:false,statusOpen:false,revision:0};
 function r3BattlefieldKey(){return r3TokenSettingsKey()+':battlefield';}
 function r3BattlefieldLoad(){
-  R3_BF.notes='';R3_BF.sidebar=true;R3_BF.options=false;
+  R3_BF.notes='';R3_BF.sidebar=true;R3_BF.options=false;R3_BF.statusOpen=false;
   try{
     const saved=JSON.parse(localStorage.getItem(r3BattlefieldKey())||'null');
     if(saved?.schema===1){
@@ -34,6 +34,8 @@ function r3BattlefieldClick(target){
       R3_BF.sidebar=!R3_BF.sidebar;r3BattlefieldSave();break;
     case 'options':
       R3_BF.options=!R3_BF.options;break;
+    case 'status':
+      R3_BF.statusOpen=!R3_BF.statusOpen;break;
     case 'show-roll20-sheet':
       if(typeof r3SheetRevealAll==='function')r3SheetRevealAll();
       return true;
@@ -135,7 +137,7 @@ function r3BattlefieldMarkup(snapshot){
   const t=R3_TURN,remaining=Math.max(0,1+t.extraActions-t.actionSpent);
   const speed=r3TurnSpeed(snapshot);
   const total=speed===null?null:speed*(1+t.dashes);
-  const left=total===null?'Unknown':Math.max(0,total-t.movementUsed)+' / '+total+' ft';
+  const left=total===null?'Unknown':r3TurnDistance(total-t.movementUsed)+' / '+r3TurnDistance(total)+' ft';
   const fill=total>0?Math.min(100,Math.round(100*t.movementUsed/total)):0;
   const phase=t.phase==='active'?'Your Turn':t.phase==='ended'?'Turn Ended':'Turn Tracking';
   const status=t.noteSource==='observed'?'Initiative observed':'Local markers';
@@ -147,7 +149,7 @@ function r3BattlefieldMarkup(snapshot){
     r3BattlefieldRing('reaction','shield','Reaction',t.reactionSpent?'Spent':'Ready',
       t.reactionSpent?'● ○ ○':'● ○ ○','Reaction persists outside turn until next start'),
     '<div class="r3-bf-movement">'+r3BattlefieldRing('move','move','Move',left,
-      'Used '+t.movementUsed+' ft','Record another 5 ft of movement, without moving token')+
+      'Used '+r3TurnDistance(t.movementUsed)+' ft','Auto-tracked token movement; click to correct by +5 ft')+
       '<span class="r3-bf-movement-meter" role="progressbar" aria-label="Movement used" '+
       'aria-valuemin="0" aria-valuenow="'+t.movementUsed+'"'+
       (total!==null?' aria-valuemax="'+total+'"':'')+'>'+
@@ -189,16 +191,22 @@ function r3BattlefieldMarkup(snapshot){
     '<button type="button" data-bf-action="options" title="Manual turn corrections and detailed counters">'+
     (R3_BF.options?'Hide options':'More options')+'</button>'+
     '<button type="button" id="r3-hud-debug" title="Toggle sheet importer">⚙</button>'+
+    (R3_NATIVE.status?'<button type="button" data-bf-action="status" ' +
+      'title="'+r3Escape(R3_NATIVE.status)+'" aria-label="Toggle native-roll status">'+
+      (R3_BF.statusOpen?'Hide status':'ⓘ Status')+'</button>':'')+
     '<button type="button" data-bf-action="show-roll20-sheet" title="Restore all original character sheets and stop hiding them while you play">Show Sheet</button>'+
     (typeof R3_SHEET_VIS==='object'&&R3_SHEET_VIS.manualPriority?
       '<button type="button" data-bf-action="allow-background" title="Allow optional background readers again">Allow private reader</button>':'')+
     '<button type="button" data-bf-action="reset-layout" title="Reset all panel positions for this game">Reset layout</button>'+ 
     '<button type="button" id="r3-hud-collapse" title="Hide HUD (Shift+A)">−</button></div>'+
     (R3_HUD.flyout||R3_HUD.chooser!==null?
-      r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):
-      (R3_NATIVE.status||R3_NATIVE.preview?
+      r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):'')+
+    ((R3_NATIVE.preview||R3_BF.statusOpen)&&
+      (R3_NATIVE.status||R3_NATIVE.preview)?
         '<div class="r3-bf-native" data-bf-panel="native">'+
-        r3BattlefieldGrip('native')+r3NativeMarkup()+'</div>':''))+
+        r3BattlefieldGrip('native')+
+        '<button type="button" class="r3-bf-dismiss-status" data-bf-action="status" '+
+        'title="Hide status information">×</button>'+r3NativeMarkup()+'</div>':'')+
     '</section>';
 }
 function r3BattlefieldStyles(){
@@ -245,6 +253,7 @@ function r3BattlefieldStyles(){
     '.r3-bf-show-profile{position:absolute;right:14px;top:20px;background:#17273bdd!important;border:1px solid #436080!important;padding:6px 9px!important;border-radius:7px!important}',
     '.r3-bf-shell>.hud-flyout{position:absolute!important;right:14px!important;left:auto!important;bottom:107px!important;width:min(510px,calc(100vw - 32px))!important;max-height:min(54vh,530px)!important;pointer-events:auto;border-radius:10px;background:linear-gradient(145deg,#15273d,#0b1421);border:1px solid #56789a}',
     '.r3-bf-shell>.hud-native-status{position:absolute;bottom:118px;right:14px;width:min(480px,calc(100vw - 32px));max-height:24vh;overflow:auto;border-radius:7px}',
+    '.r3-bf-dismiss-status{position:absolute;top:2px;right:3px;z-index:4;background:#142b41!important;border:1px solid #678aa9!important;border-radius:5px!important;cursor:pointer!important}',
     '.r3-bf-advanced{max-height:37vh;overflow:auto}.r3-bf-advanced .hud-turn-flow{font-size:10px}.r3-bf-advanced .hud-turn-cards{grid-template-columns:repeat(2,minmax(0,1fr))}',
     '.r3-bf-restore{position:absolute;bottom:14px;left:14px;background:#14263dec!important;border:1px solid #6383a7!important;border-radius:8px!important;padding:9px!important}',
     '@media(max-width:1150px){.r3-bf-sidebar{width:216px;top:12px}.r3-bf-actions{width:min(490px,calc(50vw - 20px))}.r3-bf-category-dock{width:min(390px,calc(50vw - 20px))}.r3-bf-quick{flex-basis:91px}.r3-bf-quick button{font-size:9px!important}}',

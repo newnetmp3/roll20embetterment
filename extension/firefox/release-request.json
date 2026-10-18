@@ -1,6 +1,6 @@
 {
-  "version": "3.7.1",
+  "version": "3.8.0",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Restore player-opened Roll20 character sheets and release hidden readers across Auto-sync and native sessions"
+  "reason": "Automatically track controlled token movement by page scale, allow negative remaining speed, and make debug status nonblocking"
 }
