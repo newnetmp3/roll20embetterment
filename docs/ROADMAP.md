@@ -321,3 +321,6 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Live Floorp Roll20 QA: move controlled token during Your Turn, confirm feet increase and Debug status/source/page scale match actual map; test tooltip history and log copy.
 
 **Firefox v3.9.0 signed release checkpoint:** [PR #66](https://github.com/newnetmp3/roll20embetterment/pull/66), [signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.9.0/r20eb-firefox-v3.9.0.xpi), [Mozilla signing 39164290728](https://github.com/newnetmp3/roll20embetterment/actions/runs/39164290728) successful. Next: confirm real Roll20 token movement and collect Debug movement log if source is still unavailable; Debug panel is closed by default and movable. Chrome 3.4.0 unchanged.
+
+
+**2026-10-18 selection-debug follow-up:** In response to a live report that selected graphics show as not selected in Movement Debug, extend the shared token watcher to inspect both Roll20 editor selection and Fabric active selections. Do not bypass character ownership or use arbitrary on-map graphics. Verify under Floorp with the selected token, then test movement counting, source diagnostics, and release/signing separately.

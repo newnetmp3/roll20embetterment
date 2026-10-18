@@ -197,3 +197,30 @@ test('unrelated character data is never a movement fallback',()=>{
   assert.equal(h.api.R3_TURN.movementUsed,0);
   assert.match(h.api.R3_MOVE.status,/Token position unavailable/);
 });
+
+test('token watcher discovers a Fabric getActiveObjects selection when engine.selected is absent',()=>{
+  const h=rig();
+  const watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  // Evaluate the real reader implementation, not a test-only approximation.
+  vm.runInContext(watch,h.ctx);h.ctx.readSelected=vm.runInContext('r3TokenSelected',h.ctx);
+  h.ctx.window.d20.engine.canvas.getActiveObjects=()=>[h.elf.object];
+  assert.equal(h.ctx.readSelected().length,1);
+  assert.equal(h.ctx.readSelected()[0],h.elf.object);
+});
+test('token watcher supports single Fabric active object and collection-like selection',()=>{
+  const h=rig();
+  const watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  vm.runInContext(watch,h.ctx);h.ctx.readSelected=vm.runInContext('r3TokenSelected',h.ctx);
+  const engine=h.ctx.window.d20.engine;
+  engine.canvas.getActiveObjects=undefined;
+  engine.canvas.getActiveObject=()=>h.elf.object;
+  assert.equal(h.ctx.readSelected()[0],h.elf.object);
+  engine.selected=()=>({models:[h.elf.object]});
+  assert.equal(h.ctx.readSelected()[0],h.elf.object);
+});
+test('token watcher never mistakes an unselected map graphic for an active selection',()=>{
+  const h=rig();
+  const watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  vm.runInContext(watch,h.ctx);h.ctx.readSelected=vm.runInContext('r3TokenSelected',h.ctx);
+  assert.equal(h.ctx.readSelected().length,0);
+});
