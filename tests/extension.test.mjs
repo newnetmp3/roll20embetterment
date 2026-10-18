@@ -58,6 +58,10 @@ test('the real v3 source is bundled in order, without legacy or Tampermonkey dep
     assert.match(source,/function r3BattlefieldMarkup\(/);
     assert.match(source,/extension\/firefox\/panel-drag\.js/);
     assert.match(source,/function r3BattlefieldEnableDragging\(/);
+    assert.match(source,/extension\/firefox\/movement-tracker\.js/);
+    assert.match(source,/function r3MoveMeasure\(/);
+    assert.ok(source.indexOf('extension/firefox/movement-tracker.js')<source.indexOf('// ===== v3/30_boot.js ====='));
+
     assert.match(source,/extension\/firefox\/sheet-visibility\.js/);
     assert.match(source,/function r3SheetRevealAll\(/);
     assert.ok(source.indexOf('extension/firefox/sheet-visibility.js')<source.indexOf('// ===== v3/30_boot.js ====='));

@@ -27,6 +27,11 @@ function r3TurnState(){
     concentration:R3_TURN.concentration
   };
 }
+function r3TurnDistance(value){
+  if(!Number.isFinite(value))return '?';
+  const rounded=Math.round(value*10)/10;
+  return String(Object.is(rounded,-0)?0:rounded);
+}
 function r3TurnSync(){
   R3_HUD.used={
     action:R3_TURN.actionSpent>=1+R3_TURN.extraActions,
@@ -62,7 +67,7 @@ function r3TurnLoad(){
       R3_TURN.actionSpent=r3TurnInt(state.actionSpent,0,8,0);
       R3_TURN.bonusSpent=state.bonusSpent===true;
       R3_TURN.reactionSpent=state.reactionSpent===true;
-      R3_TURN.movementUsed=r3TurnInt(state.movementUsed,0,3000,0);
+      R3_TURN.movementUsed=Number.isFinite(state.movementUsed)&&state.movementUsed>=0&&state.movementUsed<=3000?state.movementUsed:0;
       R3_TURN.dashes=r3TurnInt(state.dashes,0,4,0);
       R3_TURN.attackUsed=r3TurnInt(state.attackUsed,0,12,0);
       R3_TURN.bonusAttackUsed=r3TurnInt(state.bonusAttackUsed,0,12,0);
@@ -74,6 +79,7 @@ function r3TurnLoad(){
     }
   }catch{}
   R3_TURN.lastTop=r3TurnLeader();
+  if(typeof r3MoveRebase==='function')r3MoveRebase();
   r3TurnSync();
   R3_TURN.revision++;
 }
@@ -92,7 +98,8 @@ function r3TurnStart(source='manual'){
     reactionSpent:false,movementUsed:0,dashes:0,attackUsed:0,
     bonusAttackUsed:0,freeSpent:false
   });
-  // Concentration can persist between turns; do not reset it.
+  // Don't count repositioning before this turn; concentration can persist.
+  if(typeof r3MoveRebase==='function')r3MoveRebase();
   r3TurnChange(source==='observed'?
     'New turn detected from Roll20 initiative order · markers reset.':
     'New turn started locally · no Roll20 turn-order change.',source);
@@ -192,7 +199,7 @@ function r3TurnBtn(label,action,title='Manual indicator, not a Roll20 action'){
 function r3TurnMarkup(snapshot){
   const t=R3_TURN,speed=r3TurnSpeed(snapshot);
   const total=speed===null?null:speed*(1+t.dashes);
-  const remaining=total===null?null:Math.max(0,total-t.movementUsed);
+  const remaining=total===null?null:total-t.movementUsed;
   const pct=total>0?Math.min(100,Math.round(t.movementUsed/total*100)):0;
   const actionTotal=1+t.extraActions,actionsLeft=Math.max(0,actionTotal-t.actionSpent);
   const cards=[
@@ -202,14 +209,14 @@ function r3TurnMarkup(snapshot){
       'Bonus action state; manually adjustable'],
     ['Reaction',t.reactionSpent?'Spent':'Ready',!t.reactionSpent,'reaction',
       'Reaction persists outside your turn until your next turn begins'],
-    ['Movement',remaining===null?'Unknown':remaining+' ft',remaining===null||remaining>0,'move-plus',
-      'Manual +5 feet (does not move a token in Roll20)']
+    ['Movement',remaining===null?'Unknown':r3TurnDistance(remaining)+' ft',remaining===null||remaining>0,'move-plus',
+      'Distance tracked from your token when map scale is available; click to add 5 feet manually']
   ];
   const states=cards.map(([label,value,ready,action,tip])=>
     '<button type="button" class="hud-turn-card '+(ready?'':'spent')+
     '" data-turn-action="'+action+'" title="'+r3Escape(tip)+'">'+
     '<span>'+label+'</span><strong>'+r3Escape(value)+'</strong>'+
-    '<small>'+(label==='Movement'?'used '+t.movementUsed+' ft':ready?'Available':'Used')+
+    '<small>'+(label==='Movement'?'used '+r3TurnDistance(t.movementUsed)+' ft':ready?'Available':'Used')+
     '</small></button>').join('');
   const features=Array.isArray(snapshot?.features)?snapshot.features:[];
   const extraAttack=features.some(x=>/^extra attack$/i.test(r3String(x.name,90).trim()));
@@ -221,7 +228,7 @@ function r3TurnMarkup(snapshot){
     '<span>'+r3Escape(t.noteSource==='observed'?'Initiative / source observed':'Local tracking')+'</span>'+
     r3TurnBtn('Start / reset turn','start','Resets usage on a new turn; keeps concentration')+
     '</div><div class="hud-turn-cards">'+states+'</div>'+
-    '<div class="hud-turn-movement"><span>Movement '+t.movementUsed+' / '+
+    '<div class="hud-turn-movement"><span>Movement '+r3TurnDistance(t.movementUsed)+' / '+
     (total===null?'?':total)+' ft</span>'+
     '<div class="hud-turn-meter" role="progressbar" aria-label="Movement used" aria-valuemin="0" '+
     'aria-valuenow="'+t.movementUsed+'"'+(total!==null?' aria-valuemax="'+total+'"':'')+'>'+
