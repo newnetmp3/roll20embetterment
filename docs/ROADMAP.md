@@ -211,3 +211,11 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [ ] Publish first signed Firefox XPI to GitHub only after Mozilla signs it; verify permanent install and Firefox self-update. Chrome browser-specific development resumes later.
 
 **Independent build merged:** PR #58 `436a73402ed003a95a643f4e8f5f9056e3bf0814`, Firefox test gate 347 passing, Chrome independently passing; signed Firefox release and live QA are still open.
+
+## Firefox v3.4.1 first unlisted signing (2026-10-17)
+
+- [x] AMO signing credentials configured by user (their confirmation; inaccessible/opaque to assistant).
+- [x] Add main-only, version-locked release-request trigger to start the authorized first Firefox signing without manual workflow dispatch.
+- [ ] Verify PR CI and signing run after merging the request; troubleshoot Mozilla submission if needed.
+- [ ] Confirm signed XPI GitHub Release and nonempty signed-only update feed (do not substitute unsigned ZIP).
+- [ ] Install signed Firefox XPI and verify hidden sheets, first Find and real native chat roll in live Floorp.

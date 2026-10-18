@@ -31,3 +31,10 @@ The feed begins empty: unsigned ZIPs will never be published to it. Normal Firef
 Chrome metadata/version/popup live in `extension/chrome/` (v3.4.0). Its independent build and tests are `npm run build:chrome` and `npm run check:chrome`, with an optional separate Chrome CI job. No Firefox release affects Chrome's version, zip, or release cadence.
 
 **Before using any R20eb extension, disable the previous Tampermonkey userscript and reload Roll20.** Live verification of private sheet concealment, first Find, and actual Roll20 chat rolls is still required before distributing widely.
+
+
+## First signed release trigger (2026-10-17)
+
+The user's Mozilla AMO JWT secrets are now configured. To launch signing without needing manual access to the GitHub Actions Run workflow button, the release workflow also listens for a change to `extension/firefox/release-request.json` on **main only**. The requested version must exactly match `extension/firefox/package.json`, and a release for that version must not exist. This protects against accidental signatures when Firefox or Chrome code changes. PR merge #59 requests the first Firefox 3.4.1 unlisted signature. A protected `firefox-signing` environment can still require explicit approval. Future updates increment the Firefox version, update this request, then merge with passing CI.
+
+Publishing remains conditional on Mozilla producing an authentic signed XPI. If GitHub Actions reports an AMO authentication or validation failure, fix the workflow or account settings rather than publishing the unsigned ZIP.
