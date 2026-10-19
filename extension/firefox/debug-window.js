@@ -35,7 +35,10 @@ function r3DebugMovementRows(){
   const state=r3DebugMovement();
   return [['Status',state.status],['Reason',state.details],
     ['Turn',state.turn],['Controlled token',state.selectedToken?'Linked':'Not linked'],
-    ['Renderer',state.selectionRenderer],['Selection source',state.selectionSource],
+    ['Renderer',state.selectionRenderer],
+    ['Roll20 editor bridge',state.editorBridge],
+    ['Campaign data',state.campaignBridge],
+    ['Selection source',state.selectionSource],
     ['Selected candidates',state.selectionCount],['Selection diagnosis',state.selectionReason],
     ['Jumpgate getter',state.selectionGetter],
     ['Selection result shape',state.selectionReturnShape],
