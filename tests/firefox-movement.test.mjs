@@ -405,3 +405,30 @@ test('Jumpgate confirmed getter failure is captured without affecting game',()=>
   assert.equal(probe.items.length,0);
   assert.equal(h.api.R3_TURN.movementUsed,0);
 });
+
+test('Jumpgate without optional Roll20 editor bridge reports missing native d20 safely',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.d20=undefined;
+  h.ctx.document={querySelector(selector){
+    return selector.includes('babylonCanvas')?{}:null;
+  }};
+  vm.runInContext(watch,h.ctx);
+  const selection=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(selection.renderer,'Babylon.js');
+  assert.equal(selection.editorBridge,'window.d20 unavailable');
+  assert.equal(selection.campaignBridge,'unavailable');
+  assert.match(selection.reason,/window.d20 unavailable/);
+  assert.equal(selection.eligible,false);
+  assert.equal(selection.selectionCount,0);
+});
+test('Jumpgate with d20 but no engine distinguishes missing editor bridge',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.d20={Campaign:null};
+  h.ctx.document={querySelector(selector){
+    return selector.includes('babylonCanvas')?{}:null;
+  }};
+  vm.runInContext(watch,h.ctx);
+  const selection=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(selection.editorBridge,'window.d20.engine unavailable');
+  assert.match(selection.reason,/no Roll20 selection API accessible/);
+});
