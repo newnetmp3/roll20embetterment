@@ -136,7 +136,14 @@ function r3TokenSelectionProbe(){
     Object.keys(item).slice(0,16).join(', ')||'(no enumerable keys)':typeof item;
   const keys=(source)=>source&&typeof source==='object'?
     Object.keys(source).filter(k=>/select|token|graphic|scene/i.test(k)).slice(0,20).join(', '):'';
+  // A visible Babylon canvas does not mean the optional legacy d20 bridge
+  // is exposed. Keep this distinct from a getter returning zero tokens.
+  const editorBridge=!window.d20?'window.d20 unavailable':
+    !engine?'window.d20.engine unavailable':
+    'editor engine available';
+  const campaignBridge=window.d20?.Campaign?'available':'unavailable';
   return {items,sources:names.join(', ')||'none',renderer,
+    editorBridge,campaignBridge,
     selectionTypes:types.join(', ')||'none',
     selectionGetter:getterState,selectionReturnShape:getterShape,
     selectionShape:items.length?shape(items[0]):'none',
@@ -220,6 +227,7 @@ function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
     if(result.info)return {renderer:probe.renderer,selectionSource:probe.sources,
       selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
       selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
+      editorBridge:probe.editorBridge,campaignBridge:probe.campaignBridge,
       selectionGetter:probe.selectionGetter,selectionReturnShape:probe.selectionReturnShape,
       reason:result.reason,eligible:true};
     if(!reasons.includes(result.reason))reasons.push(result.reason);
@@ -227,10 +235,13 @@ function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
   return {renderer:probe.renderer,selectionSource:probe.sources,
     selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
     selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
+    editorBridge:probe.editorBridge,campaignBridge:probe.campaignBridge,
     selectionGetter:probe.selectionGetter,selectionReturnShape:probe.selectionReturnShape,
     eligible:false,
     reason:reasons.join(' | ')||
-      (probe.selectionGetter==='confirmed getter read failed'?
+      (probe.editorBridge!=='editor engine available'?
+        probe.editorBridge+'; no Roll20 selection API accessible':
+        probe.selectionGetter==='confirmed getter read failed'?
         'Jumpgate selection getter failed':
         probe.selectionGetter==='confirmed getter read'?
           'Jumpgate getter returned no supported selected tokens ('+
