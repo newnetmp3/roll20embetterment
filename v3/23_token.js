@@ -261,38 +261,39 @@ function r3TokenInspectLinked(item){
 }
 function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
   const reasons=[];
-  for(const item of probe.items){
-    const result=r3TokenInspectLinked(item);
-    if(result.info)return {renderer:probe.renderer,selectionSource:probe.sources,
-      selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
-      selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
-      editorBridge:probe.editorBridge,campaignBridge:probe.campaignBridge,
-    nativeState:probe.nativeState,nativeKeys:probe.nativeKeys,
-    nativeTabletopKeys:probe.nativeTabletopKeys,
-      nativeState:probe.nativeState,nativeKeys:probe.nativeKeys,
-      nativeTabletopKeys:probe.nativeTabletopKeys,
-      selectionGetter:probe.selectionGetter,selectionReturnShape:probe.selectionReturnShape,
-      reason:result.reason,eligible:true};
-    if(!reasons.includes(result.reason))reasons.push(result.reason);
-  }
-  return {renderer:probe.renderer,selectionSource:probe.sources,
+  const common={
+    renderer:probe.renderer,selectionSource:probe.sources,
     selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
     selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
     editorBridge:probe.editorBridge,campaignBridge:probe.campaignBridge,
-    selectionGetter:probe.selectionGetter,selectionReturnShape:probe.selectionReturnShape,
-    eligible:false,
-    reason:reasons.join(' | ')||
-      (probe.editorBridge==='window.d20 unavailable'||
-       probe.editorBridge==='window.d20.engine unavailable'?
-        probe.editorBridge+'; no native Jumpgate selection getter found':
-        probe.selectionGetter==='confirmed getter read failed'?
-        'Jumpgate selection getter failed':
-        probe.selectionGetter==='confirmed getter read'?
-          'Jumpgate getter returned no supported selected tokens ('+
-          probe.selectionReturnShape+')':
-          probe.renderer==='Babylon.js'?
-            'Babylon selection not exposed by inspected editor APIs':
-            'Roll20 selection not exposed by inspected editor APIs')};
+    nativeState:probe.nativeState,nativeKeys:probe.nativeKeys,
+    nativeTabletopKeys:probe.nativeTabletopKeys,
+    selectionGetter:probe.selectionGetter,
+    selectionReturnShape:probe.selectionReturnShape
+  };
+  for(const item of probe.items){
+    const result=r3TokenInspectLinked(item);
+    if(result.info)return {...common,reason:result.reason,eligible:true};
+    if(!reasons.includes(result.reason))reasons.push(result.reason);
+  }
+  let reason=reasons.join(' | ');
+  if(!reason){
+    if(probe.nativeState==='native getSelection failed')
+      reason='Native Jumpgate selection getter failed';
+    else if(probe.nativeState==='native getSelection read')
+      reason='Native Jumpgate getter returned no supported selected tokens ('+
+        probe.selectionReturnShape+')';
+    else if(probe.selectionGetter==='confirmed getter read failed')
+      reason='Legacy Jumpgate selection getter failed';
+    else if(probe.selectionGetter==='confirmed getter read')
+      reason='Legacy Jumpgate getter returned no supported selected tokens ('+
+        probe.selectionReturnShape+')';
+    else if(probe.editorBridge==='window.d20 unavailable'||
+            probe.editorBridge==='window.d20.engine unavailable')
+      reason=probe.editorBridge+'; no native Jumpgate selection getter found';
+    else reason='Roll20 selection not exposed by inspected editor APIs';
+  }
+  return {...common,eligible:false,reason};
 }
 function r3TokenSafeArt(raw){
   try{
