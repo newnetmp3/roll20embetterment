@@ -257,6 +257,8 @@ function r3MoveDiagnostics(){
     turn:typeof R3_TURN==='object'?R3_TURN.phase:'unknown',
     selectedToken:!!token?.tokenId,
     selectionRenderer:selection?.renderer||'unknown',
+    editorBridge:selection?.editorBridge||'unavailable',
+    campaignBridge:selection?.campaignBridge||'unavailable',
     selectionSource:selection?.selectionSource||'unavailable',
     selectionCount:selection?.selectionCount??0,
     selectionReason:selection?.reason||'unavailable',
