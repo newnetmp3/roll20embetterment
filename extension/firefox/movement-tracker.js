@@ -44,7 +44,9 @@ function r3MoveCollection(collection){
   return [];
 }
 function r3MovePage(candidate){
-  const c=window.d20?.Campaign,d=window.d20,engine=d?.engine;
+  const c=typeof r3TokenCampaign==='function'?
+    r3TokenCampaign():(window.d20?.Campaign||window.Campaign);
+  const d=window.d20,engine=d?.engine;
   if(!c)return null;
   const tokenPage=r3String(r3MoveGet(candidate,'_pageid')||
     r3MoveGet(candidate,'pageid')||r3MoveGet(candidate,'_page')||'',110);
@@ -259,6 +261,9 @@ function r3MoveDiagnostics(){
     selectionRenderer:selection?.renderer||'unknown',
     editorBridge:selection?.editorBridge||'unavailable',
     campaignBridge:selection?.campaignBridge||'unavailable',
+    nativeSelection:selection?.nativeState||'unavailable',
+    nativeEngineKeys:selection?.nativeKeys||'none',
+    nativeTabletopKeys:selection?.nativeTabletopKeys||'none',
     selectionSource:selection?.selectionSource||'unavailable',
     selectionCount:selection?.selectionCount??0,
     selectionReason:selection?.reason||'unavailable',
