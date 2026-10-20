@@ -6,6 +6,23 @@ const R3_TOKEN={
   active:null,selectionIds:[],snapshots:new Map(),legacy:null,
   timer:null,started:false
 };
+function r3TokenCampaign(){
+  // Jumpgate exposes Campaign directly even when the optional d20 bridge
+  // does not exist. Use the same authenticated page's Backbone model.
+  return window.d20?.Campaign||window.Campaign||null;
+}
+function r3TokenNativeTabletop(){
+  // The user's isolated Jumpgate page exposes window.vttEngine. Its exact
+  // structure varies: inspect known tabletop roots, never traverse arbitrary
+  // webpack modules or manipulate the scene.
+  const native=window.vttEngine;
+  if(!native||typeof native!=='object')return null;
+  for(const value of [native.tabletop,native.instance?.tabletop]){
+    if(value&&typeof value==='object')return value;
+  }
+  return null;
+}
+
 function r3TokenModelGet(model,key){
   try{return model?.get?.(key)??model?.attributes?.[key];}catch{return undefined;}
 }
@@ -20,7 +37,8 @@ function r3TokenPlayerId(){
       r3TokenModelGet(model,'id'),100);
     if(id)return id;
   }
-  return r3String(window.player_id||window.playerid||d?.player_id,100);
+  return r3String(window.d20_player_id||window.player_id||
+    window.playerid||d?.player_id,100);
 }
 function r3TokenControls(character,playerId=r3TokenPlayerId()){
   if(!character||!playerId)return false;
@@ -30,7 +48,7 @@ function r3TokenControls(character,playerId=r3TokenPlayerId()){
   return ids.includes('all')||ids.includes(playerId);
 }
 function r3TokenCharacter(charId){
-  const characters=window.d20?.Campaign?.characters;
+  const characters=r3TokenCampaign()?.characters;
   if(!characters||!charId)return null;
   try{
     const exact=characters.get?.(charId);
@@ -74,6 +92,18 @@ function r3TokenSelectionArray(value,depth=0){
 }
 function r3TokenSelectionProbe(){
   const engine=window.d20?.engine,canvas=engine?.canvas;
+  const nativeTabletop=r3TokenNativeTabletop();
+  let nativeSelection=null,nativeState='unavailable';
+  // Observed wrapper from the real editor resolves to tabletop.getSelection().
+  // Only call the known zero-argument read API on an exposed tabletop object.
+  if(typeof nativeTabletop?.getSelection==='function'){
+    if(nativeTabletop.getSelection.length===0){
+      try{
+        nativeSelection=nativeTabletop.getSelection();
+        nativeState='native getSelection read';
+      }catch{nativeState='native getSelection failed';}
+    }else nativeState='native getter unexpected arity';
+  }else if(window.vttEngine)nativeState='native tabletop getter not exposed';
   // A verified Jumpgate build exposes tabletopSelected as a getter wrapper.
   // Verified against a real Jumpgate session (2026-10-18):
   // () => VTTEngine.instance.tabletop.getSelection()
@@ -91,6 +121,7 @@ function r3TokenSelectionProbe(){
     }
   }else if(tabletop!==undefined)getterState='selection property';
   const sources=[
+    ['vttEngine.tabletop.getSelection',()=>nativeSelection],
     ['engine.tabletopSelected',()=>tabletop],
     ['engine.selected',()=>typeof engine?.selected==='function'?engine.selected():engine?.selected],
     ['engine.selectedTokens',()=>typeof engine?.selectedTokens==='function'?engine.selectedTokens():engine?.selectedTokens],
@@ -116,7 +147,9 @@ function r3TokenSelectionProbe(){
   for(const [name,read] of sources){
     try{
       const value=read(),batch=r3TokenSelectionArray(value);
-      if(name==='engine.tabletopSelected')getterShape=shapeOf(value);
+      if(name==='engine.tabletopSelected'&&getterShape==='none')getterShape=shapeOf(value);
+      if(name==='vttEngine.tabletop.getSelection'&&nativeState==='native getSelection read')
+        getterShape=shapeOf(value);
       if(value!==undefined&&value!==null)
         types.push(name+':'+(Array.isArray(value)?'array':typeof value));
       if(!batch.length)continue;
@@ -138,12 +171,18 @@ function r3TokenSelectionProbe(){
     Object.keys(source).filter(k=>/select|token|graphic|scene/i.test(k)).slice(0,20).join(', '):'';
   // A visible Babylon canvas does not mean the optional legacy d20 bridge
   // is exposed. Keep this distinct from a getter returning zero tokens.
-  const editorBridge=!window.d20?'window.d20 unavailable':
-    !engine?'window.d20.engine unavailable':
-    'editor engine available';
-  const campaignBridge=window.d20?.Campaign?'available':'unavailable';
+  const editorBridge=engine?'legacy editor engine available':
+    nativeState==='native getSelection read'?'native Jumpgate tabletop available':
+    !window.d20?'window.d20 unavailable':'window.d20.engine unavailable';
+  const campaignBridge=r3TokenCampaign()?'available':'unavailable';
+  const nativeKeys=window.vttEngine&&typeof window.vttEngine==='object'?
+    Object.keys(window.vttEngine).filter(k=>/tabletop|engine|scene|instance|select/i.test(k))
+      .slice(0,16).join(', ')||'none':'none';
+  const nativeTabletopKeys=nativeTabletop?
+    Object.keys(nativeTabletop).filter(k=>/select|token|graphic/i.test(k))
+      .slice(0,16).join(', ')||'none':'none';
   return {items,sources:names.join(', ')||'none',renderer,
-    editorBridge,campaignBridge,
+    editorBridge,campaignBridge,nativeState,nativeKeys,nativeTabletopKeys,
     selectionTypes:types.join(', ')||'none',
     selectionGetter:getterState,selectionReturnShape:getterShape,
     selectionShape:items.length?shape(items[0]):'none',
@@ -161,7 +200,7 @@ function r3TokenGraphicId(value){
 }
 function r3TokenFindGraphic(id){
   if(!id)return null;
-  const c=window.d20?.Campaign,engine=window.d20?.engine;
+  const c=r3TokenCampaign(),engine=window.d20?.engine;
   let page=null;
   try{page=typeof c?.activePage==='function'?c.activePage():c?.activePage;}catch{}
   // Exact graphic ID lookup only; arbitrary displayed tokens never become
@@ -222,33 +261,39 @@ function r3TokenInspectLinked(item){
 }
 function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
   const reasons=[];
-  for(const item of probe.items){
-    const result=r3TokenInspectLinked(item);
-    if(result.info)return {renderer:probe.renderer,selectionSource:probe.sources,
-      selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
-      selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
-      editorBridge:probe.editorBridge,campaignBridge:probe.campaignBridge,
-      selectionGetter:probe.selectionGetter,selectionReturnShape:probe.selectionReturnShape,
-      reason:result.reason,eligible:true};
-    if(!reasons.includes(result.reason))reasons.push(result.reason);
-  }
-  return {renderer:probe.renderer,selectionSource:probe.sources,
+  const common={
+    renderer:probe.renderer,selectionSource:probe.sources,
     selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
     selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
     editorBridge:probe.editorBridge,campaignBridge:probe.campaignBridge,
-    selectionGetter:probe.selectionGetter,selectionReturnShape:probe.selectionReturnShape,
-    eligible:false,
-    reason:reasons.join(' | ')||
-      (probe.editorBridge!=='editor engine available'?
-        probe.editorBridge+'; no Roll20 selection API accessible':
-        probe.selectionGetter==='confirmed getter read failed'?
-        'Jumpgate selection getter failed':
-        probe.selectionGetter==='confirmed getter read'?
-          'Jumpgate getter returned no supported selected tokens ('+
-          probe.selectionReturnShape+')':
-          probe.renderer==='Babylon.js'?
-            'Babylon selection not exposed by inspected editor APIs':
-            'Roll20 selection not exposed by inspected editor APIs')};
+    nativeState:probe.nativeState,nativeKeys:probe.nativeKeys,
+    nativeTabletopKeys:probe.nativeTabletopKeys,
+    selectionGetter:probe.selectionGetter,
+    selectionReturnShape:probe.selectionReturnShape
+  };
+  for(const item of probe.items){
+    const result=r3TokenInspectLinked(item);
+    if(result.info)return {...common,reason:result.reason,eligible:true};
+    if(!reasons.includes(result.reason))reasons.push(result.reason);
+  }
+  let reason=reasons.join(' | ');
+  if(!reason){
+    if(probe.nativeState==='native getSelection failed')
+      reason='Native Jumpgate selection getter failed';
+    else if(probe.nativeState==='native getSelection read')
+      reason='Native Jumpgate getter returned no supported selected tokens ('+
+        probe.selectionReturnShape+')';
+    else if(probe.selectionGetter==='confirmed getter read failed')
+      reason='Legacy Jumpgate selection getter failed';
+    else if(probe.selectionGetter==='confirmed getter read')
+      reason='Legacy Jumpgate getter returned no supported selected tokens ('+
+        probe.selectionReturnShape+')';
+    else if(probe.editorBridge==='window.d20 unavailable'||
+            probe.editorBridge==='window.d20.engine unavailable')
+      reason=probe.editorBridge+'; no native Jumpgate selection getter found';
+    else reason='Roll20 selection not exposed by inspected editor APIs';
+  }
+  return {...common,eligible:false,reason};
 }
 function r3TokenSafeArt(raw){
   try{
@@ -260,7 +305,7 @@ function r3TokenLinkedInfo(object){
   return r3TokenInspectLinked(object).info||null;
 }
 function r3TokenUnambiguousName(name){
-  const collection=window.d20?.Campaign?.characters;
+  const collection=r3TokenCampaign()?.characters;
   const all=Array.isArray(collection?.models)?collection.models:null;
   if(!all)return true; // No exposed full collection; require linked token below.
   return all.filter(model=>r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===
