@@ -200,7 +200,8 @@ function r3TokenSelectionProbe(){
   for(const [name,read] of sources){
     try{
       const value=read(),batch=r3TokenSelectionArray(value);
-      if(name==='jumpgate.tabletop.getSelection')getterShape=shapeOf(value);
+      if(name==='jumpgate.tabletop.getSelection'&&
+         nativeState==='verified Jumpgate selection read')getterShape=shapeOf(value);
       if(name==='engine.tabletopSelected'&&getterShape==='none')getterShape=shapeOf(value);
       if(value!==undefined&&value!==null)
         types.push(name+':'+(Array.isArray(value)?'array':typeof value));
