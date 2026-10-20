@@ -1,6 +1,6 @@
 {
-  "version": "3.9.8",
+  "version": "3.9.9",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Validate Jumpgate selection capabilities across compatible builds and safely wait for late tabletop initialization"
+  "reason": "Prevent Jumpgate startup failure by deferring lazy VTTEngine.instance access until Roll20 first page render completes"
 }
