@@ -496,58 +496,108 @@ test('engine-mode string does not interfere with real verified legacy selection 
   assert.equal(diag.selectionGetter,'confirmed getter read');
 });
 
-test('pinned Jumpgate webpack runtime returns selected dataWrapper model, with d20 absent',()=>{
-  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  const campaign=h.ctx.window.d20.Campaign;
-  campaign.characters={get(id){return id==='char-elf'?{
-    id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
-  }:null;}};
-  h.ctx.window.Campaign=campaign;h.ctx.window.d20=undefined;
-  h.ctx.window.d20_player_id='player-elf';
-  h.ctx.window.vttEngine='jumpgate';
-  let registrations=0;
-  const selected=[{id:'scene-node',dataWrapper:{model:h.elf.model}}];
-  const table={getSelection(){return selected;}};
-  const module={VTTEngine:class VTTEngine{}};
-  module.VTTEngine.instance={tabletop:table};
-  function fakeRequire(id){assert.equal(id,73210);return module;}
-  fakeRequire.h=()=> '19490f9953b3c5b0e6c6';
-  fakeRequire.m={73210(){}};
-  const chunks=[];
-  chunks.push=function(chunk){registrations++;return chunk[2](fakeRequire);};
+// The factory fixture models only the documented selection-specific slices
+// of the 2026-10-19 and 2026-10-20 uploaded Roll20 bundles. The proprietary
+// bundle itself is NOT included. Both real modules were independently checked
+// against this same matcher in source analysis.
+function jumpgateSelectionFactory(ctx,padding=51000,selectionGetter=true){
+  const source='(y,c,n)=>{"use strict";n.d(c,{VTTEngine:()=>wy});'+
+    '/*'+'X'.repeat(padding)+'*/'+
+    'class Tabletop {getSelection(){var U,se;return(se=(U=this.state)==null?void 0:U.children)!=null?se:[]}}'+
+    'class Engine {getSelection(){return this.tabletop.getSelection()}}'+
+    '/*dataWrapper.model*/}';
+  const factory=vm.runInContext(source,ctx);
+  assert.ok(Function.prototype.toString.call(factory).length>50000);
+  return factory;
+}
+function jumpgateSelectionTable(items=[]){
+  return {state:{children:items},
+    getSelection(){var U,se;return(se=(U=this.state)==null?void 0:U.children)!=null?se:[]}};
+}
+function jumpgateSelectionRequire(factory,tabletop,build='355ac54d7a30c962e0a5'){
+  class VTTEngine{}
+  VTTEngine.instance={tabletop};
+  let calls=0;
+  function requireModule(id){
+    calls++;assert.equal(id,73210);
+    return {VTTEngine};
+  }
+  requireModule.h=()=>build;
+  requireModule.m={73210:factory};
+  requireModule.getCalls=()=>calls;
+  return requireModule;
+}
+function jumpgateSelectionInstall(h,requireModule){
+  const chunks=[];let registrations=0;
+  chunks.push=packet=>{registrations++;return packet[2](requireModule);};
   h.ctx.window.webpackChunkvtt=chunks;
-  vm.runInContext(watch,h.ctx);
-  const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
-  const status=diag();
-  assert.equal(registrations,1);
-  assert.equal(status.eligible,true);
-  assert.equal(status.nativeState,'verified Jumpgate selection read');
-  assert.match(status.selectionSource,/jumpgate.tabletop.getSelection/);
-  assert.equal(status.selectionCount,1);
-  assert.equal(diag().eligible,true);
-  assert.equal(registrations,1,'Do not re-register chunks on each 400ms poll');
-  selected.length=0;
-  assert.equal(diag().eligible,false);
-  assert.match(diag().reason,/no linked controlled tokens/);
+  return ()=>registrations;
+}
+test('both different Jumpgate build hashes accept the same proven selection interface',()=>{
+  for(const [build,padding] of [
+    ['19490f9953b3c5b0e6c6',51000],
+    ['355ac54d7a30c962e0a5',51250]
+  ]){
+    const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+    const campaign=h.ctx.window.d20.Campaign;
+    campaign.characters={get(id){return id==='char-elf'?{
+      id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
+    }:null;}};
+    h.ctx.window.Campaign=campaign;
+    h.ctx.window.d20=undefined;
+    h.ctx.window.d20_player_id='player-elf';
+    h.ctx.window.vttEngine='jumpgate';
+    const selected=[{id:'scene-node',dataWrapper:{model:h.elf.model}}];
+    const factory=jumpgateSelectionFactory(h.ctx,padding);
+    const requireModule=jumpgateSelectionRequire(
+      factory,jumpgateSelectionTable(selected),build);
+    const registrations=jumpgateSelectionInstall(h,requireModule);
+    vm.runInContext(watch,h.ctx);
+    const diagnose=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
+    const result=diagnose();
+    assert.equal(result.eligible,true);
+    assert.equal(result.nativeState,'verified Jumpgate selection read');
+    assert.equal(result.moduleSignature,'verified selection capability');
+    assert.equal(result.actualBuild,build);
+    assert.equal(result.selectionCount,1);
+    assert.equal(registrations(),1);
+    assert.equal(requireModule.getCalls(),1);
+    assert.equal(diagnose().eligible,true);
+    selected.length=0;
+    assert.equal(diagnose().eligible,false);
+  }
 });
-test('unrecognized Jumpgate webpack build is not accessed',()=>{
+test('unknown source signature cannot execute a Jumpgate module',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   h.ctx.window.d20=undefined;h.ctx.window.vttEngine='jumpgate';
   let called=0;
-  function fakeRequire(){called++;throw Error('Unknown build must not load modules');}
-  fakeRequire.h=()=> 'a-changed-roll20-build';
-  fakeRequire.m={73210(){}};
-  const chunks=[];
-  chunks.push=chunk=>chunk[2](fakeRequire);
-  h.ctx.window.webpackChunkvtt=chunks;
+  function unknownFactory(){}
+  function unknownRequire(){called++;throw Error('unsafe module executed');}
+  unknownRequire.h=()=> 'yet-another-build';
+  unknownRequire.m={73210:unknownFactory};
+  jumpgateSelectionInstall(h,unknownRequire);
   vm.runInContext(watch,h.ctx);
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(called,0);
-  assert.equal(diag.nativeState,'unsupported Jumpgate module signature');
-  assert.equal(diag.moduleSignature,'factory length differs');
+  assert.equal(diag.nativeState,'unsupported Jumpgate selection interface');
+  assert.equal(diag.moduleSignature,'selection interfaces differ');
   assert.equal(diag.eligible,false);
 });
-test('pinned Jumpgate selection obeys exact character ownership',()=>{
+test('source-compatible module with changed getter fails closed',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.d20=undefined;
+  const factory=jumpgateSelectionFactory(h.ctx);
+  const unsafeTable={getSelection(){return [{id:'fake'}];}};
+  const required=jumpgateSelectionRequire(factory,unsafeTable);
+  jumpgateSelectionInstall(h,required);
+  vm.runInContext(watch,h.ctx);
+  const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(diag.eligible,false);
+  assert.equal(diag.nativeState,'unsupported Jumpgate selection getter');
+  assert.equal(diag.moduleSignature,'runtime getter differs');
+  assert.equal(required.getCalls(),1);
+});
+test('capability-matched Jumpgate selection still denies characters controlled by others',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   const campaign=h.ctx.window.d20.Campaign;
   campaign.characters={get(){return {
@@ -555,14 +605,10 @@ test('pinned Jumpgate selection obeys exact character ownership',()=>{
   };}};
   h.ctx.window.Campaign=campaign;h.ctx.window.d20=undefined;
   h.ctx.window.d20_player_id='player-elf';
-  const scene=[{dataWrapper:{model:h.elf.model}}];
-  class VTTEngine{}
-  VTTEngine.instance={tabletop:{getSelection(){return scene;}}};
-  function fakeRequire(id){return {VTTEngine};}
-  fakeRequire.h=()=> '19490f9953b3c5b0e6c6';
-  fakeRequire.m={73210(){}};
-  const chunks=[];chunks.push=packet=>packet[2](fakeRequire);
-  h.ctx.window.webpackChunkvtt=chunks;
+  const selected=[{dataWrapper:{model:h.elf.model}}];
+  const factory=jumpgateSelectionFactory(h.ctx);
+  const requireModule=jumpgateSelectionRequire(factory,jumpgateSelectionTable(selected));
+  jumpgateSelectionInstall(h,requireModule);
   vm.runInContext(watch,h.ctx);
   const d=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(d.eligible,false);
@@ -577,75 +623,6 @@ test('Jumpgate runtime returns no candidates when bundle has not initialized',()
   assert.equal(d.eligible,false);
   assert.match(d.nativeState,/not ready/);
 });
-
-test('changed Jumpgate build reads selection only after exact module SHA-256 verification',async()=>{
-  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  const campaign=h.ctx.window.d20.Campaign;
-  campaign.characters={get(id){return id==='char-elf'?{
-    id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
-  }:null;}};
-  h.ctx.window.Campaign=campaign;h.ctx.window.d20=undefined;
-  h.ctx.window.d20_player_id='player-elf';
-  const selected=[{dataWrapper:{model:h.elf.model}}];
-  class VTTEngine{}
-  VTTEngine.instance={tabletop:{getSelection(){return selected;}}};
-  let required=0,hashed=0;
-  function fakeRequire(id){required++;assert.equal(id,73210);return {VTTEngine};}
-  fakeRequire.h=()=> 'another-web-pack-build-hash';
-  const prefix='(y,c,n)=>{/*',suffix='*/}';
-  const factory=vm.runInContext(prefix+'x'.repeat(791859-prefix.length-suffix.length)+suffix,h.ctx);
-  assert.equal(Function.prototype.toString.call(factory).length,791859);
-  fakeRequire.m={73210:factory};
-  const bytes=Uint8Array.from(Buffer.from(
-    'a6cb76395dae7621c757151a5e20ff1eedbdc416ba5e2157ab9914653c627ee3','hex'));
-  h.ctx.window.TextEncoder=TextEncoder;
-  h.ctx.window.crypto={subtle:{digest:async (algorithm,data)=>{
-    hashed++;assert.equal(algorithm,'SHA-256');assert.equal(data.length,791859);
-    return bytes.buffer;
-  }}};
-  const chunks=[];let registrations=0;
-  chunks.push=packet=>{registrations++;packet[2](fakeRequire);};
-  h.ctx.window.webpackChunkvtt=chunks;
-  vm.runInContext(watch,h.ctx);
-  const read=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
-  const before=read();
-  assert.match(before.nativeState,/verifying Jumpgate module fingerprint/);
-  assert.equal(before.eligible,false);
-  assert.equal(required,0,'Unverified module must never execute');
-  await new Promise(resolve=>setImmediate(resolve));
-  const after=read();
-  assert.equal(after.eligible,true);
-  assert.equal(after.nativeState,'verified Jumpgate selection read');
-  assert.equal(after.moduleSignature,'known module fingerprint');
-  assert.equal(after.actualBuild,'another-web-pack-build-hash');
-  assert.equal(hashed,1);
-  assert.equal(required,1);
-  assert.equal(registrations,1);
-});
-test('changed Jumpgate module fingerprint never executes unknown module',async()=>{
-  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  h.ctx.window.d20=undefined;
-  let calls=0;
-  const factory=vm.runInContext(
-    '(y,c,n)=>{/*'+'x'.repeat(791859-'(y,c,n)=>{/*'.length-'*/}'.length)+'*/}',h.ctx);
-  function req(){calls++;throw Error('must never require unverified code');}
-  req.h=()=> 'changed-build';
-  req.m={73210:factory};
-  h.ctx.window.TextEncoder=TextEncoder;
-  h.ctx.window.crypto={subtle:{digest:async()=>new Uint8Array(32).buffer}};
-  const chunks=[];chunks.push=packet=>packet[2](req);
-  h.ctx.window.webpackChunkvtt=chunks;
-  vm.runInContext(watch,h.ctx);
-  const read=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
-  read();
-  await new Promise(resolve=>setImmediate(resolve));
-  const result=read();
-  assert.equal(result.eligible,false);
-  assert.equal(result.nativeState,'unsupported Jumpgate module signature');
-  assert.equal(result.moduleSignature,'module fingerprint differs');
-  assert.equal(calls,0);
-});
-
 test('Jumpgate selected scene node measures using dataWrapper.model without Fabric or d20',()=>{
   const h=rig();
   const campaign=h.ctx.window.d20.Campaign;
