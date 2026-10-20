@@ -27,7 +27,11 @@ function rig(options={}){
   const elf=make('token-elf');
   const ctx={
     window:{d20:{Campaign:campaign,engine:{canvas:{getObjects(){
-      return [...chars.values()].map(x=>x.object);}}}}},
+      return [...chars.values()].map(x=>x.object);}}}},
+      performance:{getEntriesByName(name,kind){
+        return name==='jumpgate-render-end'&&kind==='mark'?
+          [{name:'jumpgate-render-end',entryType:'mark'}]:[];
+      }}},
     R3_TOKEN:{active:{tokenId:'token-elf',characterId:'char-elf',name:'Elf'}},
     R3_HUD:{used:{}},
     R3_UI:{snapshot:{stats:{speed:30}}},
@@ -677,4 +681,73 @@ test('compatible Jumpgate module waits safely for late tabletop startup',()=>{
   assert.equal(active.eligible,true);
   assert.equal(active.moduleSignature,'verified selection capability');
   assert.equal(registrations(),1,'No need to register a new webpack chunk after startup');
+});
+
+test('R20eb does not touch webpack or lazy VTTEngine instance before first Jumpgate page render',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.d20=undefined;
+  h.ctx.window.vttEngine='jumpgate';
+  const factory=jumpgateSelectionFactory(h.ctx);
+  let engineConstructors=0,moduleLoads=0,registrations=0;
+  const Engine=class VTTEngine {
+    static get instance(){engineConstructors++;throw Error('premature lazy singleton created');}
+  };
+  function requireModule(id){moduleLoads++;return {VTTEngine:Engine};}
+  requireModule.h=()=> '355ac54d7a30c962e0a5';
+  requireModule.m={73210:factory};
+  const chunks=[];chunks.push=packet=>{registrations++;packet[2](requireModule);};
+  h.ctx.window.webpackChunkvtt=chunks;
+  h.ctx.window.performance.getEntriesByName=()=>[];
+  vm.runInContext(watch,h.ctx);
+  const probe=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
+  for(let i=0;i<4;i++){
+    const d=probe();
+    assert.equal(d.eligible,false);
+    assert.equal(d.nativeState,'waiting for Jumpgate first page render');
+  }
+  assert.equal(registrations,0,'No new Webpack chunks before Roll20 finishes initialization');
+  assert.equal(moduleLoads,0,'Cannot execute Roll20 modules prematurely');
+  assert.equal(engineConstructors,0,'Must not invoke static VTTEngine.instance');
+  const state=vm.runInContext('R3_JUMPGATE_RUNTIME',h.ctx);
+  assert.equal(state.tried,0,'Readiness retries must not exhaust connection attempts');
+});
+test('after Roll20 first-render marker, compatible Jumpgate selection initializes once',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  const campaign=h.ctx.window.d20.Campaign;
+  campaign.characters={get(id){return id==='char-elf'?{
+    id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
+  }:null;}};
+  h.ctx.window.Campaign=campaign;
+  h.ctx.window.d20=undefined;h.ctx.window.d20_player_id='player-elf';
+  let marked=false;
+  h.ctx.window.performance.getEntriesByName=(name,kind)=>
+    marked&&name==='jumpgate-render-end'&&kind==='mark'?
+      [{name,entryType:kind}]:[];
+  const factory=jumpgateSelectionFactory(h.ctx);
+  const selected=[{dataWrapper:{model:h.elf.model}}];
+  const module=jumpgateSelectionRequire(factory,jumpgateSelectionTable(selected));
+  const registrations=jumpgateSelectionInstall(h,module);
+  vm.runInContext(watch,h.ctx);
+  const probe=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
+  assert.equal(probe().nativeState,'waiting for Jumpgate first page render');
+  assert.equal(module.getCalls(),0);
+  marked=true;
+  const result=probe();
+  assert.equal(result.eligible,true);
+  assert.equal(result.nativeState,'verified Jumpgate selection read');
+  assert.equal(result.moduleSignature,'verified selection capability');
+  assert.equal(module.getCalls(),1);
+  assert.equal(registrations(),1);
+});
+test('missing Performance marks fail closed without initializing Roll20 engine',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.performance=undefined;
+  let registered=0;
+  const chunks=[];chunks.push=()=>{registered++;};
+  h.ctx.window.webpackChunkvtt=chunks;
+  vm.runInContext(watch,h.ctx);
+  const result=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(result.eligible,false);
+  assert.equal(result.nativeState,'waiting for Jumpgate first page render');
+  assert.equal(registered,0);
 });
