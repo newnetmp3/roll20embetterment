@@ -1,6 +1,6 @@
 {
-  "version": "3.9.5",
+  "version": "3.9.6",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Pinned read-only Jumpgate selected-token bridge verified against exact user-supplied Roll20 bundle for movement QA"
+  "reason": "Accept source-verified SHA-256 Jumpgate module when full Webpack build hash changes; read selected scene model for movement"
 }
