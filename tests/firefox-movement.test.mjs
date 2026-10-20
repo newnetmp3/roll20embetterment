@@ -430,7 +430,7 @@ test('Jumpgate with d20 but no engine distinguishes missing editor bridge',()=>{
   vm.runInContext(watch,h.ctx);
   const selection=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(selection.editorBridge,'window.d20.engine unavailable');
-  assert.match(selection.reason,/vttEngine is a mode flag, not a selection API/);
+  assert.match(selection.reason,/native selection: Jumpgate webpack runtime not ready/);
 });
 
 
@@ -442,11 +442,11 @@ test('native Jumpgate Campaign page resolves without d20 and engine mode is a st
   h.ctx.window.d20_player_id='player-elf';
   vm.runInContext(watch,h.ctx);
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
-  assert.equal(diag.nativeState,'string mode flag');
+  assert.equal(diag.modeFlag,'string mode flag');
   assert.equal(diag.campaignBridge,'available');
   assert.equal(diag.eligible,false);
   assert.equal(diag.selectionCount,0);
-  assert.match(diag.reason,/mode flag, not a selection API/);
+  assert.match(diag.reason,/native selection: Jumpgate webpack runtime not ready/);
   assert.equal(h.api.r3MoveDiagnostics().pageScale,5);
   assert.equal(vm.runInContext('r3TokenPlayerId',h.ctx)(),'player-elf');
 });
@@ -457,7 +457,7 @@ test('boxed String vttEngine is not mistaken for an exposed tabletop API',()=>{
   h.ctx.window.vttEngine=new String('jumpgate');
   vm.runInContext(watch,h.ctx);
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
-  assert.equal(diag.nativeState,'boxed string mode flag');
+  assert.equal(diag.modeFlag,'boxed string mode flag');
   assert.equal(diag.nativeTabletopKeys,'not exposed');
   assert.equal(diag.eligible,false);
 });
@@ -491,7 +491,88 @@ test('engine-mode string does not interfere with real verified legacy selection 
   }:null;}};
   vm.runInContext(watch,h.ctx);
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
-  assert.equal(diag.nativeState,'string mode flag');
+  assert.equal(diag.modeFlag,'string mode flag');
   assert.equal(diag.eligible,true);
   assert.equal(diag.selectionGetter,'confirmed getter read');
+});
+
+test('pinned Jumpgate webpack runtime returns selected dataWrapper model, with d20 absent',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  const campaign=h.ctx.window.d20.Campaign;
+  campaign.characters={get(id){return id==='char-elf'?{
+    id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
+  }:null;}};
+  h.ctx.window.Campaign=campaign;h.ctx.window.d20=undefined;
+  h.ctx.window.d20_player_id='player-elf';
+  h.ctx.window.vttEngine='jumpgate';
+  let registrations=0;
+  const selected=[{id:'scene-node',dataWrapper:{model:h.elf.model}}];
+  const table={getSelection(){return selected;}};
+  const module={VTTEngine:class VTTEngine{}};
+  module.VTTEngine.instance={tabletop:table};
+  function fakeRequire(id){assert.equal(id,73210);return module;}
+  fakeRequire.h=()=> '19490f9953b3c5b0e6c6';
+  fakeRequire.m={73210(){}};
+  const chunks=[];
+  chunks.push=function(chunk){registrations++;return chunk[2](fakeRequire);};
+  h.ctx.window.webpackChunkvtt=chunks;
+  vm.runInContext(watch,h.ctx);
+  const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
+  const status=diag();
+  assert.equal(registrations,1);
+  assert.equal(status.eligible,true);
+  assert.equal(status.nativeState,'verified Jumpgate selection read');
+  assert.match(status.selectionSource,/jumpgate.tabletop.getSelection/);
+  assert.equal(status.selectionCount,1);
+  assert.equal(diag().eligible,true);
+  assert.equal(registrations,1,'Do not re-register chunks on each 400ms poll');
+  selected.length=0;
+  assert.equal(diag().eligible,false);
+  assert.match(diag().reason,/no linked controlled tokens/);
+});
+test('unrecognized Jumpgate webpack build is not accessed',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.d20=undefined;h.ctx.window.vttEngine='jumpgate';
+  let called=0;
+  function fakeRequire(){called++;throw Error('Unknown build must not load modules');}
+  fakeRequire.h=()=> 'a-changed-roll20-build';
+  fakeRequire.m={73210(){}};
+  const chunks=[];
+  chunks.push=chunk=>chunk[2](fakeRequire);
+  h.ctx.window.webpackChunkvtt=chunks;
+  vm.runInContext(watch,h.ctx);
+  const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(called,0);
+  assert.equal(diag.nativeState,'unsupported Jumpgate build');
+  assert.equal(diag.eligible,false);
+});
+test('pinned Jumpgate selection obeys exact character ownership',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  const campaign=h.ctx.window.d20.Campaign;
+  campaign.characters={get(){return {
+    id:'char-elf',get(k){return {name:'Elf',controlledby:'enemy-player'}[k];}
+  };}};
+  h.ctx.window.Campaign=campaign;h.ctx.window.d20=undefined;
+  h.ctx.window.d20_player_id='player-elf';
+  const scene=[{dataWrapper:{model:h.elf.model}}];
+  class VTTEngine{}
+  VTTEngine.instance={tabletop:{getSelection(){return scene;}}};
+  function fakeRequire(id){return {VTTEngine};}
+  fakeRequire.h=()=> '19490f9953b3c5b0e6c6';
+  fakeRequire.m={73210(){}};
+  const chunks=[];chunks.push=packet=>packet[2](fakeRequire);
+  h.ctx.window.webpackChunkvtt=chunks;
+  vm.runInContext(watch,h.ctx);
+  const d=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(d.eligible,false);
+  assert.match(d.reason,/Controlled By/);
+});
+test('Jumpgate runtime returns no candidates when bundle has not initialized',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.d20=undefined;
+  h.ctx.window.vttEngine='jumpgate';
+  vm.runInContext(watch,h.ctx);
+  const d=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(d.eligible,false);
+  assert.match(d.nativeState,/not ready/);
 });
