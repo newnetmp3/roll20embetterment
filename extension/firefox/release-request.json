@@ -1,6 +1,6 @@
 {
-  "version": "3.9.4",
+  "version": "3.9.5",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Use source-verified Jumpgate tabletopSelected getter to discover selected controlled tokens and expose selection return shape"
+  "reason": "Pinned read-only Jumpgate selected-token bridge verified against exact user-supplied Roll20 bundle for movement QA"
 }
