@@ -491,7 +491,7 @@ test('engine-mode string does not interfere with real verified legacy selection 
   }:null;}};
   vm.runInContext(watch,h.ctx);
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
-  assert.equal(diag.nativeState,'string mode flag');
+  assert.equal(diag.modeFlag,'string mode flag');
   assert.equal(diag.eligible,true);
   assert.equal(diag.selectionGetter,'confirmed getter read');
 });
