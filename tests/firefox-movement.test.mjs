@@ -719,10 +719,16 @@ test('after Roll20 first-render marker, compatible Jumpgate selection initialize
   }:null;}};
   h.ctx.window.Campaign=campaign;
   h.ctx.window.d20=undefined;h.ctx.window.d20_player_id='player-elf';
-  let marked=false;
-  h.ctx.window.performance.getEntriesByName=(name,kind)=>
-    marked&&name==='jumpgate-render-end'&&kind==='mark'?
-      [{name,entryType:kind}]:[];
+  // Roll20 clears the mark in the same call stack that creates it, so
+  // a later getEntriesByName poll always returns [].
+  h.ctx.window.performance.getEntriesByName=()=>[];
+  let emitMark=null,disconnected=0,observerOptions;
+  h.ctx.window.PerformanceObserver=class {
+    constructor(callback){emitMark=entries=>
+      callback({getEntries(){return entries;}});}
+    observe(options){observerOptions=options;}
+    disconnect(){disconnected++;}
+  };
   const factory=jumpgateSelectionFactory(h.ctx);
   const selected=[{dataWrapper:{model:h.elf.model}}];
   const module=jumpgateSelectionRequire(factory,jumpgateSelectionTable(selected));
@@ -731,7 +737,16 @@ test('after Roll20 first-render marker, compatible Jumpgate selection initialize
   const probe=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
   assert.equal(probe().nativeState,'waiting for Jumpgate first page render');
   assert.equal(module.getCalls(),0);
-  marked=true;
+  assert.equal(observerOptions.type,'mark');
+  assert.equal(observerOptions.buffered,true);
+  emitMark([{name:'unrelated',entryType:'mark'}]);
+  assert.equal(probe().nativeState,'waiting for Jumpgate first page render');
+  assert.equal(module.getCalls(),0);
+  // Deliver the observation after Roll20's synchronous clearMarks call.
+  // The performance timeline is empty, but the observer still owns a record.
+  emitMark([{name:'jumpgate-render-end',entryType:'mark'}]);
+  assert.equal(disconnected,1,'Detach observer after first completed render');
+  assert.equal(h.ctx.window.performance.getEntriesByName().length,0);
   const result=probe();
   assert.equal(result.eligible,true);
   assert.equal(result.nativeState,'verified Jumpgate selection read');
@@ -750,4 +765,40 @@ test('missing Performance marks fail closed without initializing Roll20 engine',
   assert.equal(result.eligible,false);
   assert.equal(result.nativeState,'waiting for Jumpgate first page render');
   assert.equal(registered,0);
+});
+
+test('observed first-render completion remains latched after Roll20 clears timeline',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  let deliver,disconnectCount=0;
+  h.ctx.window.performance.getEntriesByName=()=>[];
+  h.ctx.window.PerformanceObserver=class {
+    constructor(callback){deliver=entry=>callback({getEntries:()=>[entry]});}
+    observe(){}
+    disconnect(){disconnectCount++;}
+  };
+  vm.runInContext(watch,h.ctx);
+  assert.equal(vm.runInContext('r3JumpgateFirstRenderComplete()',h.ctx),false);
+  deliver({name:'jumpgate-render-end',entryType:'measure'});
+  assert.equal(vm.runInContext('r3JumpgateFirstRenderComplete()',h.ctx),false);
+  deliver({name:'jumpgate-render-end',entryType:'mark'});
+  assert.equal(vm.runInContext('r3JumpgateFirstRenderComplete()',h.ctx),true);
+  assert.equal(vm.runInContext('r3JumpgateFirstRenderComplete()',h.ctx),true);
+  assert.equal(disconnectCount,1,'Observer stops processing other performance marks');
+});
+test('browser PerformanceObserver keeps mark record after its timeline is cleared',async()=>{
+  // Browser PerformanceObserver and Node perf_hooks have the same
+  // buffered-entry delivery semantics under clearMarks().
+  const perf=await import('node:perf_hooks');
+  const seen=await new Promise((resolve,reject)=>{
+    const observer=new perf.PerformanceObserver(list=>{
+      observer.disconnect();
+      resolve(list.getEntries().map(entry=>entry.name));
+    });
+    observer.observe({type:'mark'});
+    perf.performance.mark('jumpgate-render-end');
+    perf.performance.clearMarks('jumpgate-render-end');
+    assert.equal(perf.performance.getEntriesByName('jumpgate-render-end').length,0);
+    setTimeout(()=>{observer.disconnect();reject(Error('mark not delivered'));},250);
+  });
+  assert.ok(seen.includes('jumpgate-render-end'));
 });

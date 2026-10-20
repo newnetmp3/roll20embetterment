@@ -2577,23 +2577,65 @@ function r3JumpgateGetterSupported(getter){
       source.endsWith('}');
   }catch{return false;}
 }
-function r3JumpgateFirstRenderComplete(){
-  // Roll20's own Jumpgate renderer marks this only after completing its
-  // first page render, in both inspected production bundles. Before that
-  // point VTTEngine.instance's lazy getter can CREATE a partially initialized
-  // engine; even an apparently read-only access can corrupt Roll20 startup.
+// Install the observer during MAIN-world document_start, well before
+// DOMContentLoaded or the native game engine finishes initializing.
+// The two inspected Roll20 bundles call performance.mark('jumpgate-render-end')
+// and then immediately performance.clearMarks('jumpgate-render-end') in the
+// same synchronous page-change handler. Polling getEntriesByName *after*
+// startup will ALWAYS miss that transient mark. PerformanceObserver retains
+// records queued for its callback even after Roll20 clears the timeline.
+const R3_JUMPGATE_RENDER={complete:false,observer:null,tracking:'not started'};
+function r3JumpgateRememberFirstRender(entries){
+  if(R3_JUMPGATE_RENDER.complete||!entries)return;
   try{
-    const entries=window.performance?.getEntriesByName?.(
-      'jumpgate-render-end','mark');
-    return Array.isArray(entries)&&entries.some(entry=>
-      entry?.name==='jumpgate-render-end'&&entry?.entryType==='mark');
-  }catch{return false;}
+    for(const entry of entries){
+      if(entry?.name!=='jumpgate-render-end'||entry.entryType!=='mark')
+        continue;
+      R3_JUMPGATE_RENDER.complete=true;
+      R3_JUMPGATE_RENDER.tracking='first render observed';
+      try{R3_JUMPGATE_RENDER.observer?.disconnect?.();}catch{}
+      R3_JUMPGATE_RENDER.observer=null;
+      break;
+    }
+  }catch{/* No engine access on malformed performance entries. */}
+}
+function r3JumpgateObserveFirstRender(){
+  // A mark can already exist in the performance timeline during a late
+  // attachment. Only passive browser Performance APIs are inspected.
+  try{
+    r3JumpgateRememberFirstRender(window.performance?.getEntriesByName?.(
+      'jumpgate-render-end','mark'));
+  }catch{}
+  if(R3_JUMPGATE_RENDER.complete)return;
+  try{
+    const Observer=window.PerformanceObserver;
+    if(typeof Observer!=='function'){
+      R3_JUMPGATE_RENDER.tracking='PerformanceObserver unavailable';
+      return;
+    }
+    const observer=new Observer(list=>{
+      try{r3JumpgateRememberFirstRender(list.getEntries());}catch{}
+    });
+    R3_JUMPGATE_RENDER.observer=observer;
+    // buffered:true also covers a briefly retained mark if the extension
+    // started just after its creation. Future marks are always observed.
+    observer.observe({type:'mark',buffered:true});
+    R3_JUMPGATE_RENDER.tracking='watching first render';
+  }catch{
+    R3_JUMPGATE_RENDER.tracking='PerformanceObserver failed';
+    try{R3_JUMPGATE_RENDER.observer?.disconnect?.();}catch{}
+    R3_JUMPGATE_RENDER.observer=null;
+  }
+}
+r3JumpgateObserveFirstRender();
+function r3JumpgateFirstRenderComplete(){
+  return R3_JUMPGATE_RENDER.complete;
 }
 function r3JumpgateSelection(){
   const state=R3_JUMPGATE_RUNTIME;
   // Critical safety barrier: don't register a Webpack callback, import its
   // VTTEngine module, or access the lazy .instance singleton until Roll20
-  // finishes the first page render. Missing/unsupported marks fail closed.
+  // finishes the first page render. Missing observer evidence fails closed.
   if(!r3JumpgateFirstRenderComplete()){
     state.status='waiting for Jumpgate first page render';
     return {items:[],state:state.status};
