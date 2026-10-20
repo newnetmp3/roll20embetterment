@@ -118,7 +118,10 @@ function r3MoveFind(){
     for(const [name,group] of r3MoveGraphicSources(engine,page)){
       if(candidate)break;
       for(const item of r3MoveCollection(group)){
-        const model=item?.model||item;
+        // Jumpgate's selected scene nodes carry the real Roll20 graphic
+        // Backbone model via dataWrapper.model; not Fabric's item.model.
+        // Compare only the verified active token ID, never names/artwork.
+        const model=item?.dataWrapper?.model||item?.model||item;
         if(r3MoveId(model)===active.tokenId||r3MoveId(item)===active.tokenId){
           candidate=item;source=name;break;
         }
@@ -127,7 +130,7 @@ function r3MoveFind(){
     }
   }catch{/* One unsupported fabric collection must not affect combat UI. */}
   if(!candidate)return null;
-  const model=candidate.model||candidate;
+  const model=candidate?.dataWrapper?.model||candidate?.model||candidate;
   const chosenPage=r3MovePage(model)||page;
   return {model,object:candidate,page:chosenPage,source,
     tokenId:active.tokenId,characterId:active.characterId,
