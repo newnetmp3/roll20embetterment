@@ -2542,20 +2542,44 @@ function r3TokenEngineMode(){
   return mode===undefined?'not present':'unexpected '+typeof mode;
 }
 
-// Verified against the user's exact Jumpgate bundle. Different webpack
-// full hashes can be emitted when unrelated chunks change. Allow ONLY the
-// pinned runtime hash OR a byte-exact SHA-256 of the same module factory.
-// A changed engine module cannot be required until its signature is verified.
+// Verified against TWO independent user-supplied Roll20 Jumpgate bundles.
+// The Webpack full hash and large VTTEngine module change when unrelated
+// code changes. We pin the known module ID and check ONLY the exact
+// selection-specific, read-only interfaces before importing the module.
+// Never enumerate arbitrary Webpack modules, mutate selection or infer token
+// identity from appearance/name. Unknown interfaces fail closed.
 const R3_JUMPGATE_RUNTIME={
-  build:'19490f9953b3c5b0e6c6',moduleId:73210,
-  factoryLength:791859,
-  factorySha256:'a6cb76395dae7621c757151a5e20ff1eedbdc416ba5e2157ab9914653c627ee3',
-  tried:0,lastTry:0,engineClass:null,status:'not inspected',
-  activeBuild:'unavailable',signature:'not checked',verifying:false
+  moduleId:73210,tried:0,lastTry:0,engineClass:null,status:'not inspected',
+  activeBuild:'unavailable',signature:'not checked'
 };
+function r3JumpgateFactorySupported(factory){
+  try{
+    if(typeof factory!=='function')return false;
+    const source=Function.prototype.toString.call(factory);
+    // Fast bounded check on the module entry followed by only stable,
+    // source-verified selection code. No whole-file hash or length.
+    if(source.length<50000||source.length>2000000)return false;
+    return /VTTEngine:\(\)=>[\w$]+/.test(source.slice(0,160))&&
+      source.includes('getSelection(){return this.tabletop.getSelection()}')&&
+      /getSelection\(\)\{var [\w$]+,[\w$]+;return[^}]{0,180}\.children[^}]{0,80}\}/.test(source)&&
+      source.includes('dataWrapper.model');
+  }catch{return false;}
+}
+function r3JumpgateGetterSupported(getter){
+  try{
+    if(typeof getter!=='function'||getter.length!==0)return false;
+    const source=Function.prototype.toString.call(getter);
+    // Both inspected builds expose a non-mutating zero-arg method that
+    // returns the multi-select holder's children, or [].
+    return source.length<=250&&
+      /^getSelection\(\)\{/.test(source)&&
+      source.includes('return')&&source.includes('.children')&&
+      source.endsWith('}');
+  }catch{return false;}
+}
 function r3JumpgateSelection(){
   const state=R3_JUMPGATE_RUNTIME;
-  if(!state.engineClass&&!state.verifying&&state.tried<3&&
+  if(!state.engineClass&&state.tried<3&&
      (!state.lastTry||Date.now()-state.lastTry>3000)){
     state.tried++;state.lastTry=Date.now();
     const chunks=window.webpackChunkvtt;
@@ -2564,19 +2588,6 @@ function r3JumpgateSelection(){
     }else{
       let invoked=false;
       try{
-        const activate=require=>{
-          if(window.webpackChunkvtt!==chunks)return;
-          try{
-            const exported=require(state.moduleId)?.VTTEngine;
-            if(typeof exported!=='function'){
-              state.status='VTTEngine export unavailable';return;
-            }
-            state.engineClass=exported;
-            state.status='verified Jumpgate runtime connected';
-          }catch{state.status='VTTEngine module activation failed';}
-        };
-        // Empty Webpack JSONP chunk with a read-only runtime callback;
-        // no game methods are replaced and no unverified module is required.
         chunks.push([['r20eb-selection-read-'+state.tried],{},
           require=>{
             invoked=true;
@@ -2584,56 +2595,41 @@ function r3JumpgateSelection(){
             try{hash=typeof require?.h==='function'?
               String(require.h()).slice(0,64):'';}catch{}
             state.activeBuild=hash||'unavailable';
-            if(typeof require?.m?.[state.moduleId]!=='function'){
-              state.status='VTTEngine module missing';state.tried=3;return;
-            }
-            if(hash===state.build){
-              state.signature='known full build';
-              activate(require);return;
-            }
-            // A full build hash can change for unrelated assets. Only trust
-            // the module when its exact source bytes match the inspected
-            // bundle. The digest runs locally; no code or hashes are sent.
-            const factory=Function.prototype.toString.call(
-              require.m[state.moduleId]);
-            if(factory.length!==state.factoryLength){
-              state.status='unsupported Jumpgate module signature';
-              state.signature='factory length differs';state.tried=3;return;
-            }
-            const subtle=window.crypto?.subtle;
-            if(typeof subtle?.digest!=='function'||
-               typeof window.TextEncoder!=='function'){
-              state.status='Jumpgate signature verifier unavailable';
+            // Require only the source-verified selection module. A changed
+            // unrelated module is never examined; unknown signatures fail
+            // before a module loader is invoked.
+            if(!r3JumpgateFactorySupported(require?.m?.[state.moduleId])){
+              state.signature='selection interfaces differ';
+              state.status='unsupported Jumpgate selection interface';
               state.tried=3;return;
             }
-            state.verifying=true;
-            state.status='verifying Jumpgate module fingerprint';
-            state.tried=3;
-            Promise.resolve(subtle.digest('SHA-256',
-              new window.TextEncoder().encode(factory))).then(buffer=>{
-                if(window.webpackChunkvtt!==chunks)return;
-                const digest=Array.from(new Uint8Array(buffer),byte=>
-                  byte.toString(16).padStart(2,'0')).join('');
-                if(digest!==state.factorySha256){
-                  state.signature='module fingerprint differs';
-                  state.status='unsupported Jumpgate module signature';return;
-                }
-                state.signature='known module fingerprint';
-                activate(require);
-              }).catch(()=>{
-                state.status='Jumpgate signature verification failed';
-              }).finally(()=>{state.verifying=false;});
+            try{
+              const exported=require(state.moduleId)?.VTTEngine;
+              if(typeof exported!=='function'){
+                state.status='VTTEngine export unavailable';state.tried=3;return;
+              }
+              const getter=exported.instance?.tabletop?.getSelection;
+              if(!r3JumpgateGetterSupported(getter)){
+                state.status='unsupported Jumpgate selection getter';
+                state.signature='runtime getter differs';state.tried=3;return;
+              }
+              state.engineClass=exported;
+              state.signature='verified selection capability';
+              state.status='verified Jumpgate runtime connected';
+            }catch{
+              state.status='VTTEngine module activation failed';
+              state.tried=3;
+            }
           }]);
-        if(!invoked&&!state.verifying)
-          state.status='Jumpgate runtime callback unavailable';
+        if(!invoked)state.status='Jumpgate runtime callback unavailable';
       }catch{state.status='Jumpgate runtime access failed';}
     }
   }
   if(!state.engineClass)return {items:[],state:state.status};
   try{
     const tabletop=state.engineClass.instance?.tabletop;
-    if(typeof tabletop?.getSelection!=='function')
-      return {items:[],state:'Jumpgate tabletop not ready'};
+    if(!r3JumpgateGetterSupported(tabletop?.getSelection))
+      return {items:[],state:'Jumpgate selection getter changed'};
     const selected=tabletop.getSelection();
     if(!Array.isArray(selected))
       return {items:[],state:'Jumpgate selection returned unsupported shape'};
@@ -2889,8 +2885,9 @@ function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
   }
   let reason=reasons.join(' | ');
   if(!reason){
-    if(probe.nativeState==='unsupported Jumpgate module signature')
-      reason='Jumpgate module changed; selection bridge disabled';
+    if(probe.nativeState==='unsupported Jumpgate selection interface'||
+       probe.nativeState==='unsupported Jumpgate selection getter')
+      reason='Jumpgate selection interface changed; bridge disabled';
     else if(probe.nativeState==='verified Jumpgate selection read')
       reason='Jumpgate selection returned no linked controlled tokens';
     else if(probe.selectionGetter==='confirmed getter read failed')
