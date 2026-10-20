@@ -1,6 +1,6 @@
 {
-  "version": "3.9.9",
+  "version": "3.9.10",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Prevent Jumpgate startup failure by deferring lazy VTTEngine.instance access until Roll20 first page render completes"
+  "reason": "Capture and latch transient Jumpgate first-render completion mark using early PerformanceObserver without reintroducing unsafe engine startup access"
 }
