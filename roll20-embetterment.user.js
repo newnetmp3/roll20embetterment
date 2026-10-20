@@ -2608,14 +2608,12 @@ function r3JumpgateSelection(){
               if(typeof exported!=='function'){
                 state.status='VTTEngine export unavailable';state.tried=3;return;
               }
-              const getter=exported.instance?.tabletop?.getSelection;
-              if(!r3JumpgateGetterSupported(getter)){
-                state.status='unsupported Jumpgate selection getter';
-                state.signature='runtime getter differs';state.tried=3;return;
-              }
+              // A source-matched module can load before the Babylon
+              // tabletop is initialized. Retain it and retry the getter
+              // check during normal polling; do not fail permanently.
               state.engineClass=exported;
-              state.signature='verified selection capability';
-              state.status='verified Jumpgate runtime connected';
+              state.signature='selection module compatible';
+              state.status='waiting for Jumpgate tabletop';
             }catch{
               state.status='VTTEngine module activation failed';
               state.tried=3;
@@ -2628,8 +2626,15 @@ function r3JumpgateSelection(){
   if(!state.engineClass)return {items:[],state:state.status};
   try{
     const tabletop=state.engineClass.instance?.tabletop;
-    if(!r3JumpgateGetterSupported(tabletop?.getSelection))
-      return {items:[],state:'Jumpgate selection getter changed'};
+    if(!tabletop||typeof tabletop.getSelection!=='function')
+      return {items:[],state:'Jumpgate tabletop not ready'};
+    if(!r3JumpgateGetterSupported(tabletop.getSelection)){
+      state.signature='runtime getter differs';
+      state.status='unsupported Jumpgate selection getter';
+      state.engineClass=null;state.tried=3;
+      return {items:[],state:state.status};
+    }
+    state.signature='verified selection capability';
     const selected=tabletop.getSelection();
     if(!Array.isArray(selected))
       return {items:[],state:'Jumpgate selection returned unsupported shape'};
