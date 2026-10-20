@@ -62,8 +62,27 @@ function r3JumpgateGetterSupported(getter){
       source.endsWith('}');
   }catch{return false;}
 }
+function r3JumpgateFirstRenderComplete(){
+  // Roll20's own Jumpgate renderer marks this only after completing its
+  // first page render, in both inspected production bundles. Before that
+  // point VTTEngine.instance's lazy getter can CREATE a partially initialized
+  // engine; even an apparently read-only access can corrupt Roll20 startup.
+  try{
+    const entries=window.performance?.getEntriesByName?.(
+      'jumpgate-render-end','mark');
+    return Array.isArray(entries)&&entries.some(entry=>
+      entry?.name==='jumpgate-render-end'&&entry?.entryType==='mark');
+  }catch{return false;}
+}
 function r3JumpgateSelection(){
   const state=R3_JUMPGATE_RUNTIME;
+  // Critical safety barrier: don't register a Webpack callback, import its
+  // VTTEngine module, or access the lazy .instance singleton until Roll20
+  // finishes the first page render. Missing/unsupported marks fail closed.
+  if(!r3JumpgateFirstRenderComplete()){
+    state.status='waiting for Jumpgate first page render';
+    return {items:[],state:state.status};
+  }
   if(!state.engineClass&&state.tried<3&&
      (!state.lastTry||Date.now()-state.lastTry>3000)){
     state.tried++;state.lastTry=Date.now();
