@@ -2542,6 +2542,63 @@ function r3TokenEngineMode(){
   return mode===undefined?'not present':'unexpected '+typeof mode;
 }
 
+// Exact build identified by a user-supplied Jumpgate production bundle.
+// Its Webpack runtime exposes module 73210's VTTEngine class. Do not scan,
+// import or modify any unrelated modules, and fail closed on build changes.
+const R3_JUMPGATE_RUNTIME={
+  build:'19490f9953b3c5b0e6c6',moduleId:73210,
+  tried:0,lastTry:0,engineClass:null,status:'not inspected'
+};
+function r3JumpgateSelection(){
+  const state=R3_JUMPGATE_RUNTIME;
+  if(!state.engineClass&&state.tried<3&&
+     (!state.lastTry||Date.now()-state.lastTry>3000)){
+    state.tried++;state.lastTry=Date.now();
+    const chunks=window.webpackChunkvtt;
+    if(!Array.isArray(chunks)||typeof chunks.push!=='function'){
+      state.status='Jumpgate webpack runtime not ready';
+    }else{
+      let invoked=false;
+      try{
+        // This is the Webpack JSONP callback contract from the exact bundle.
+        // Register an empty, uniquely named chunk once to read the exports
+        // through the runtime callback; no game functions are replaced.
+        chunks.push([['r20eb-selection-read-'+state.tried],{},
+          require=>{
+            invoked=true;
+            if(typeof require?.h!=='function'||require.h()!==state.build){
+              state.status='unsupported Jumpgate build';state.tried=3;
+              return;
+            }
+            if(typeof require?.m?.[state.moduleId]!=='function'){
+              state.status='VTTEngine module missing';return;
+            }
+            const exported=require(state.moduleId)?.VTTEngine;
+            if(typeof exported!=='function'){
+              state.status='VTTEngine export unavailable';return;
+            }
+            state.engineClass=exported;
+            state.status='verified Jumpgate runtime connected';
+          }]);
+        if(!invoked&&state.status!=='unsupported Jumpgate build')
+          state.status='Jumpgate runtime callback unavailable';
+      }catch{state.status='Jumpgate runtime access failed';}
+    }
+  }
+  if(!state.engineClass)return {items:[],state:state.status};
+  try{
+    const tabletop=state.engineClass.instance?.tabletop;
+    if(typeof tabletop?.getSelection!=='function')
+      return {items:[],state:'Jumpgate tabletop not ready'};
+    // Verified source: tabletop.getSelection() returns multiselect children.
+    const selected=tabletop.getSelection();
+    if(!Array.isArray(selected))
+      return {items:[],state:'Jumpgate selection returned unsupported shape'};
+    return {items:selected.slice(0,80),state:'verified Jumpgate selection read'};
+  }catch{
+    return {items:[],state:'Jumpgate selection read failed'};
+  }
+}
 function r3TokenModelGet(model,key){
   try{return model?.get?.(key)??model?.attributes?.[key];}catch{return undefined;}
 }
@@ -2611,9 +2668,10 @@ function r3TokenSelectionArray(value,depth=0){
 }
 function r3TokenSelectionProbe(){
   const engine=window.d20?.engine,canvas=engine?.canvas;
-  // The mode flag does not expose selection. Keep probing only established
-  // legacy editor selection APIs when a real d20 engine is present.
-  const nativeState=r3TokenEngineMode();
+  // The global vttEngine remains a string mode flag. The verified internal
+  // Webpack module is a different source and is version-pinned.
+  const runtime=r3JumpgateSelection(),nativeState=runtime.state;
+  const modeFlag=r3TokenEngineMode();
   // A verified Jumpgate build exposes tabletopSelected as a getter wrapper.
   // Verified against a real Jumpgate session (2026-10-18):
   // () => VTTEngine.instance.tabletop.getSelection()
@@ -2631,6 +2689,7 @@ function r3TokenSelectionProbe(){
     }
   }else if(tabletop!==undefined)getterState='selection property';
   const sources=[
+    ['jumpgate.tabletop.getSelection',()=>runtime.items],
     ['engine.tabletopSelected',()=>tabletop],
     ['engine.selected',()=>typeof engine?.selected==='function'?engine.selected():engine?.selected],
     ['engine.selectedTokens',()=>typeof engine?.selectedTokens==='function'?engine.selectedTokens():engine?.selectedTokens],
@@ -2656,6 +2715,7 @@ function r3TokenSelectionProbe(){
   for(const [name,read] of sources){
     try{
       const value=read(),batch=r3TokenSelectionArray(value);
+      if(name==='jumpgate.tabletop.getSelection')getterShape=shapeOf(value);
       if(name==='engine.tabletopSelected'&&getterShape==='none')getterShape=shapeOf(value);
       if(value!==undefined&&value!==null)
         types.push(name+':'+(Array.isArray(value)?'array':typeof value));
@@ -2679,11 +2739,14 @@ function r3TokenSelectionProbe(){
   // A visible Babylon canvas does not mean the optional legacy d20 bridge
   // is exposed. Keep this distinct from a getter returning zero tokens.
   const editorBridge=engine?'legacy editor engine available':
+    runtime.state==='verified Jumpgate selection read'?
+    'native Jumpgate selection available':
     !window.d20?'window.d20 unavailable':'window.d20.engine unavailable';
   const campaignBridge=r3TokenCampaign()?'available':'unavailable';
   const nativeKeys='not an object API',nativeTabletopKeys='not exposed';
   return {items,sources:names.join(', ')||'none',renderer,
     editorBridge,campaignBridge,nativeState,nativeKeys,nativeTabletopKeys,
+    modeFlag,
     selectionTypes:types.join(', ')||'none',
     selectionGetter:getterState,selectionReturnShape:getterShape,
     selectionShape:items.length?shape(items[0]):'none',
@@ -2731,7 +2794,8 @@ function r3TokenFindGraphic(id){
   return null;
 }
 function r3TokenCandidateModel(item){
-  const variants=[item?.model,item?.graphic?.model,item?.graphic,
+  const variants=[item?.dataWrapper?.model,item?.model,
+    item?.graphic?.dataWrapper?.model,item?.graphic?.model,item?.graphic,
     item?.token?.model,item?.token,item?.metadata?.model,
     item?.metadata?.graphic?.model,item?.metadata?.graphic,
     item?.metadata?.token?.model,item?.metadata?.token,item];
@@ -2767,7 +2831,8 @@ function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
     selectionCount:probe.items.length,selectionTypes:probe.selectionTypes,
     selectionShape:probe.selectionShape,engineKeys:probe.engineKeys,
     editorBridge:probe.editorBridge,campaignBridge:probe.campaignBridge,
-    nativeState:probe.nativeState,nativeKeys:probe.nativeKeys,
+    nativeState:probe.nativeState,modeFlag:probe.modeFlag,
+    nativeKeys:probe.nativeKeys,
     nativeTabletopKeys:probe.nativeTabletopKeys,
     selectionGetter:probe.selectionGetter,
     selectionReturnShape:probe.selectionReturnShape
@@ -2779,7 +2844,11 @@ function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
   }
   let reason=reasons.join(' | ');
   if(!reason){
-    if(probe.selectionGetter==='confirmed getter read failed')
+    if(probe.nativeState==='unsupported Jumpgate build')
+      reason='Jumpgate build changed; selection bridge disabled';
+    else if(probe.nativeState==='verified Jumpgate selection read')
+      reason='Jumpgate selection returned no linked controlled tokens';
+    else if(probe.selectionGetter==='confirmed getter read failed')
       reason='Legacy Jumpgate selection getter failed';
     else if(probe.selectionGetter==='confirmed getter read')
       reason='Legacy Jumpgate getter returned no supported selected tokens ('+
@@ -2787,7 +2856,7 @@ function r3TokenSelectionDiagnostics(probe=r3TokenSelectionProbe()){
     else if(probe.editorBridge==='window.d20 unavailable'||
             probe.editorBridge==='window.d20.engine unavailable')
       reason=probe.editorBridge+
-        '; vttEngine is a mode flag, not a selection API';
+        '; native selection: '+probe.nativeState;
     else reason='Roll20 selection not exposed by inspected editor APIs';
   }
   return {...common,eligible:false,reason};
