@@ -39,6 +39,8 @@ function r3DebugMovementRows(){
     ['Roll20 editor bridge',state.editorBridge],
     ['Campaign data',state.campaignBridge],
     ['Native Jumpgate selection',state.nativeSelection],
+    ['Jumpgate runtime hash',state.jumpgateBuild],
+    ['Module verification',state.jumpgateModuleSignature],
     ['vttEngine fields',state.nativeEngineKeys],
     ['Native tabletop fields',state.nativeTabletopKeys],
     ['Selection source',state.selectionSource],

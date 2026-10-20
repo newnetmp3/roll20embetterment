@@ -262,6 +262,8 @@ function r3MoveDiagnostics(){
     editorBridge:selection?.editorBridge||'unavailable',
     campaignBridge:selection?.campaignBridge||'unavailable',
     nativeSelection:selection?.nativeState||'unavailable',
+    jumpgateBuild:selection?.actualBuild||'unavailable',
+    jumpgateModuleSignature:selection?.moduleSignature||'not checked',
     nativeEngineKeys:selection?.nativeKeys||'none',
     nativeTabletopKeys:selection?.nativeTabletopKeys||'none',
     selectionSource:selection?.selectionSource||'unavailable',
