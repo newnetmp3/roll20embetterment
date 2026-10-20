@@ -430,7 +430,7 @@ test('Jumpgate with d20 but no engine distinguishes missing editor bridge',()=>{
   vm.runInContext(watch,h.ctx);
   const selection=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(selection.editorBridge,'window.d20.engine unavailable');
-  assert.match(selection.reason,/no Roll20 selection API accessible/);
+  assert.match(selection.reason,/no native Jumpgate selection getter found/);
 });
 
 test('native Jumpgate globals support selection and ownership with d20 absent',()=>{
