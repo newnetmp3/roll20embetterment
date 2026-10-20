@@ -430,7 +430,7 @@ test('Jumpgate with d20 but no engine distinguishes missing editor bridge',()=>{
   vm.runInContext(watch,h.ctx);
   const selection=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(selection.editorBridge,'window.d20.engine unavailable');
-  assert.match(selection.reason,/vttEngine is a mode flag, not a selection API/);
+  assert.match(selection.reason,/native selection: Jumpgate webpack runtime not ready/);
 });
 
 
@@ -442,11 +442,11 @@ test('native Jumpgate Campaign page resolves without d20 and engine mode is a st
   h.ctx.window.d20_player_id='player-elf';
   vm.runInContext(watch,h.ctx);
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
-  assert.equal(diag.nativeState,'string mode flag');
+  assert.equal(diag.modeFlag,'string mode flag');
   assert.equal(diag.campaignBridge,'available');
   assert.equal(diag.eligible,false);
   assert.equal(diag.selectionCount,0);
-  assert.match(diag.reason,/mode flag, not a selection API/);
+  assert.match(diag.reason,/native selection: Jumpgate webpack runtime not ready/);
   assert.equal(h.api.r3MoveDiagnostics().pageScale,5);
   assert.equal(vm.runInContext('r3TokenPlayerId',h.ctx)(),'player-elf');
 });
@@ -457,7 +457,7 @@ test('boxed String vttEngine is not mistaken for an exposed tabletop API',()=>{
   h.ctx.window.vttEngine=new String('jumpgate');
   vm.runInContext(watch,h.ctx);
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
-  assert.equal(diag.nativeState,'boxed string mode flag');
+  assert.equal(diag.modeFlag,'boxed string mode flag');
   assert.equal(diag.nativeTabletopKeys,'not exposed');
   assert.equal(diag.eligible,false);
 });
