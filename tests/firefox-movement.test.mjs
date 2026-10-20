@@ -430,10 +430,38 @@ test('Jumpgate with d20 but no engine distinguishes missing editor bridge',()=>{
   vm.runInContext(watch,h.ctx);
   const selection=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(selection.editorBridge,'window.d20.engine unavailable');
-  assert.match(selection.reason,/no native Jumpgate selection getter found/);
+  assert.match(selection.reason,/vttEngine is a mode flag, not a selection API/);
 });
 
-test('native Jumpgate globals support selection and ownership with d20 absent',()=>{
+
+test('native Jumpgate Campaign page resolves without d20 and engine mode is a string flag',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.Campaign=h.ctx.window.d20.Campaign;
+  h.ctx.window.d20=undefined;
+  h.ctx.window.vttEngine='jumpgate';
+  h.ctx.window.d20_player_id='player-elf';
+  vm.runInContext(watch,h.ctx);
+  const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(diag.nativeState,'string mode flag');
+  assert.equal(diag.campaignBridge,'available');
+  assert.equal(diag.eligible,false);
+  assert.equal(diag.selectionCount,0);
+  assert.match(diag.reason,/mode flag, not a selection API/);
+  assert.equal(h.api.r3MoveDiagnostics().pageScale,5);
+  assert.equal(vm.runInContext('r3TokenPlayerId',h.ctx)(),'player-elf');
+});
+test('boxed String vttEngine is not mistaken for an exposed tabletop API',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  h.ctx.window.Campaign=h.ctx.window.d20.Campaign;
+  h.ctx.window.d20=undefined;
+  h.ctx.window.vttEngine=new String('jumpgate');
+  vm.runInContext(watch,h.ctx);
+  const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(diag.nativeState,'boxed string mode flag');
+  assert.equal(diag.nativeTabletopKeys,'not exposed');
+  assert.equal(diag.eligible,false);
+});
+test('native Campaign character lookups and permission checks work without d20',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   const campaign=h.ctx.window.d20.Campaign;
   campaign.characters={get(id){return id==='char-elf'?{
@@ -442,56 +470,28 @@ test('native Jumpgate globals support selection and ownership with d20 absent',(
   h.ctx.window.Campaign=campaign;
   h.ctx.window.d20=undefined;
   h.ctx.window.d20_player_id='player-elf';
-  h.ctx.window.vttEngine={tabletop:{getSelection(){return [h.elf.object];}}};
+  h.ctx.window.vttEngine='jumpgate';
   vm.runInContext(watch,h.ctx);
-  const read=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
-  const result=read();
-  assert.equal(result.editorBridge,'native Jumpgate tabletop available');
-  assert.equal(result.nativeState,'native getSelection read');
-  assert.equal(result.campaignBridge,'available');
-  assert.equal(result.selectionCount,1);
-  assert.equal(result.eligible,true);
-  assert.match(result.selectionSource,/vttEngine.tabletop.getSelection/);
-  assert.equal(h.api.r3MoveDiagnostics().pageScale,5);
+  const inspect=vm.runInContext('r3TokenInspectLinked',h.ctx);
+  assert.equal(inspect(h.elf.object).info.characterId,'char-elf');
+  campaign.characters.get=id=>id==='char-elf'?{
+    id,get(key){return {name:'Elf',controlledby:'another-player'}[key];}
+  }:null;
+  assert.match(inspect(h.elf.object).reason,/Controlled By/);
 });
-test('native Jumpgate exact graphic IDs are resolved without d20',()=>{
+test('engine-mode string does not interfere with real verified legacy selection getter',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  const campaign=h.ctx.window.d20.Campaign;
-  campaign.characters={get(id){return id==='char-elf'?{
+  h.ctx.window.vttEngine='legacy';
+  h.ctx.VTTEngine={instance:{tabletop:{getSelection(){return [h.elf.object];}}}};
+  h.ctx.window.d20.engine.tabletopSelected=vm.runInContext(
+    '()=>VTTEngine.instance.tabletop.getSelection()',h.ctx);
+  h.ctx.window.currentPlayer={id:'player-elf'};
+  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
     id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
   }:null;}};
-  h.page.thegraphics=new Map([['token-elf',h.elf.model]]);
-  h.ctx.window.Campaign=campaign;h.ctx.window.d20=undefined;
-  h.ctx.window.d20_player_id='player-elf';
-  h.ctx.window.vttEngine={tabletop:{getSelection(){return new Set(['token-elf']);}}};
   vm.runInContext(watch,h.ctx);
-  const diagnose=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
-  assert.equal(diagnose().eligible,true);
-  h.ctx.window.vttEngine.tabletop.getSelection=()=>new Set(['not-selected-graphic']);
-  assert.equal(diagnose().eligible,false);
-});
-test('native Jumpgate selection never follows another player’s linked token',()=>{
-  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  const campaign=h.ctx.window.d20.Campaign;
-  campaign.characters={get(id){return id==='char-elf'?{
-    id,get(key){return {name:'Elf',controlledby:'somebody-else'}[key];}
-  }:null;}};
-  h.ctx.window.Campaign=campaign;h.ctx.window.d20=undefined;
-  h.ctx.window.d20_player_id='player-elf';
-  h.ctx.window.vttEngine={tabletop:{getSelection(){return [h.elf.object];}}};
-  vm.runInContext(watch,h.ctx);
-  const result=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
-  assert.equal(result.eligible,false);
-  assert.match(result.reason,/Controlled By/);
-});
-test('native Jumpgate without getSelection reports available global keys but no token',()=>{
-  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  h.ctx.window.Campaign=h.ctx.window.d20.Campaign;
-  h.ctx.window.d20=undefined;
-  h.ctx.window.vttEngine={tabletop:{selectToken(){throw Error('not a getter');}}};
-  vm.runInContext(watch,h.ctx);
-  const result=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
-  assert.equal(result.eligible,false);
-  assert.equal(result.nativeState,'native tabletop getter not exposed');
-  assert.match(result.nativeTabletopKeys,/selectToken/);
+  const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(diag.nativeState,'string mode flag');
+  assert.equal(diag.eligible,true);
+  assert.equal(diag.selectionGetter,'confirmed getter read');
 });
