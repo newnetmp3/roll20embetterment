@@ -652,3 +652,29 @@ test('Jumpgate selected scene node cannot track a different token ID',()=>{
   assert.equal(h.api.R3_TURN.movementUsed,0);
   assert.match(h.api.R3_MOVE.status,/Token position unavailable/);
 });
+
+test('compatible Jumpgate module waits safely for late tabletop startup',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  const campaign=h.ctx.window.d20.Campaign;
+  campaign.characters={get(id){return id==='char-elf'?{
+    id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
+  }:null;}};
+  h.ctx.window.Campaign=campaign;h.ctx.window.d20=undefined;
+  h.ctx.window.d20_player_id='player-elf';
+  const factory=jumpgateSelectionFactory(h.ctx);
+  const tabletop=jumpgateSelectionTable([{dataWrapper:{model:h.elf.model}}]);
+  const requireModule=jumpgateSelectionRequire(factory,undefined);
+  const registrations=jumpgateSelectionInstall(h,requireModule);
+  vm.runInContext(watch,h.ctx);
+  const probe=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
+  const waiting=probe();
+  assert.equal(waiting.nativeState,'Jumpgate tabletop not ready');
+  assert.equal(waiting.eligible,false);
+  assert.equal(waiting.moduleSignature,'selection module compatible');
+  requireModule(73210).VTTEngine.instance.tabletop=tabletop;
+  const active=probe();
+  assert.equal(active.nativeState,'verified Jumpgate selection read');
+  assert.equal(active.eligible,true);
+  assert.equal(active.moduleSignature,'verified selection capability');
+  assert.equal(registrations(),1,'No need to register a new webpack chunk after startup');
+});
