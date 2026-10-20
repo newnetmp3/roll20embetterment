@@ -645,3 +645,33 @@ test('changed Jumpgate module fingerprint never executes unknown module',async()
   assert.equal(result.moduleSignature,'module fingerprint differs');
   assert.equal(calls,0);
 });
+
+test('Jumpgate selected scene node measures using dataWrapper.model without Fabric or d20',()=>{
+  const h=rig();
+  const campaign=h.ctx.window.d20.Campaign;
+  h.ctx.window.Campaign=campaign;
+  h.ctx.window.d20=undefined;
+  const selected=[{id:'babylon-scene-node',dataWrapper:{model:h.elf.model}}];
+  h.ctx.r3TokenSelected=()=>selected;
+  // Force fallback to the explicitly selected model, not a page-wide scan.
+  h.ctx.r3TokenFindGraphic=()=>null;
+  h.api.r3TurnStart();
+  assert.equal(h.api.R3_MOVE.source,'selected');
+  assert.equal(h.api.R3_MOVE.tokenId,'token-elf');
+  h.elf.move(210,210);
+  h.elf.move(140,210);
+  assert.equal(h.api.R3_TURN.movementUsed,10,
+    'Jumpgate movement sums both forward and back segments');
+  assert.equal(h.api.r3MoveDiagnostics().pageScale,5);
+});
+test('Jumpgate selected scene node cannot track a different token ID',()=>{
+  const h=rig();
+  h.ctx.window.Campaign=h.ctx.window.d20.Campaign;
+  h.ctx.window.d20=undefined;
+  const other=h.make('enemy','another-character',700,700);
+  h.ctx.r3TokenSelected=()=>[{dataWrapper:{model:other.model}}];
+  h.ctx.r3TokenFindGraphic=()=>null;
+  h.api.r3TurnStart();
+  assert.equal(h.api.R3_TURN.movementUsed,0);
+  assert.match(h.api.R3_MOVE.status,/Token position unavailable/);
+});
