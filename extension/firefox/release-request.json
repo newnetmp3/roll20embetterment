@@ -1,6 +1,6 @@
 {
-  "version": "3.9.6",
+  "version": "3.9.7",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Accept source-verified SHA-256 Jumpgate module when full Webpack build hash changes; read selected scene model for movement"
+  "reason": "Verify source-stable Jumpgate selection interface rather than entire changing webpack module and runtime hash"
 }
