@@ -140,19 +140,23 @@ function r3NativeMapAbility(kind,entry,character,snapshot){
     'Multiple same-named native attacks; no verified repeating row identity.':
     'Several source entries have this name; their native actions are ambiguous.'};
   const matches=[];
+  let rejectedReason='';
   for(const ability of r3NativeActionModels(character)){
     const abilityName=r3String(r3TokenModelGet(ability,'name'),125);
     if(!abilityName||/[{}|\r\n]/.test(abilityName))continue;
     if(!rowId&&abilityName.toLowerCase()!==name.toLowerCase())continue;
     const inspected=r3NativeSheetReference(kind,r3TokenModelGet(ability,'action'),character);
-    if(!inspected.reference)continue;
+    if(!inspected.reference){
+      if(abilityName.toLowerCase()===name.toLowerCase())rejectedReason=inspected.reason;
+      continue;
+    }
     if(rowId&&!r3NativeReferenceHasRow(inspected.reference,rowId))continue;
     matches.push({ability,abilityName,action:r3String(r3TokenModelGet(ability,'action'),4000)});
   }
   if(matches.length!==1)return {reason:matches.length>1?
     'Multiple Roll20 abilities match this source action; no native action was sent.':
     rowId?'No existing Roll20 ability references this exact imported repeating row.':
-    'No safe, character-bound '+kind+' ability matches '+name+'.'};
+    rejectedReason||'No safe, character-bound '+kind+' ability matches '+name+'.'};
   const matched=matches[0];
   return {abilityName:matched.abilityName,
     abilityId:r3String(matched.ability.id||r3TokenModelGet(matched.ability,'_id'),120),
