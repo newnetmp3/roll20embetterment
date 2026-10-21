@@ -159,7 +159,7 @@ test('unsupported or custom Roll20 turn-order entry does not trigger a turn',()=
   const h=rig(),t=h.api.R3_TURN;
   h.context.window.d20=undefined;
   let order='[{"id":"-1"}]';
-  h.context.window.Campaign={attributes:{get unused(){}},get(){return order;}};
+  h.context.window.Campaign={get(){return order;}};
   h.api.r3TurnLoad();
   assert.equal(t.lastTop,null);
   order=JSON.stringify([{id:'token-brom'}]);
