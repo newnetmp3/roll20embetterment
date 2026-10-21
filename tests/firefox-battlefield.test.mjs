@@ -61,19 +61,19 @@ test('reference: two short corner docks with pass-through map and compact top-ri
   assert.match(html,/class="r3-bf-turnstrip"/);
   assert.match(css,/#r3-hud\{position:absolute!important;inset:0!important;/);
   assert.match(css,/pointer-events:none!important/,'HUD root must not intercept map clicks');
-  assert.match(css,/\.r3-bf-actions\{position:absolute;bottom:12px;left:14px;width:min\(530px/);
-  assert.match(css,/\.r3-bf-category-dock\{position:absolute;right:14px;bottom:12px;width:min\(470px/);
+  assert.match(css,/\.r3-bf-actions\{position:absolute;bottom:12px;left:14px;width:min\(calc\(570px/);
+  assert.match(css,/\.r3-bf-category-dock\{position:absolute;right:14px;bottom:12px;width:min\(calc\(555px/);
   assert.match(css,/\.r3-bf-sidebar\{position:absolute;right:14px;top:32px;width:258px/);
   assert.match(css,/\.r3-bf-shell>\.hud-flyout\{position:absolute!important;right:14px!important;left:auto!important;bottom:107px/);
   assert.match(css,/@media\(max-width:760px\)/,'narrow viewport responsive behavior');
   assert.doesNotMatch(html,/hud-reference-bar|hud-main-segments|hud-portrait-panel/);
 });
-test('reference: four available economy rings and five existing category flyouts',()=>{
+test('reference: four economy rings and six classified/MISC flyouts',()=>{
   const h=harness();
   const html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
   for(const type of ['action','bonus','reaction','move'])
     assert.match(html,new RegExp('r3-bf-ring r3-bf-'+type));
-  for(const kind of ['actions','features','spells','inventory','skills'])
+  for(const kind of ['actions','features','spells','inventory','skills','misc'])
     assert.match(html,new RegExp('data-hud-flyout="'+kind+'"'));
   assert.match(html,/data-turn-action="dash-action"/);
   assert.match(html,/data-bf-action="disengage"/);
@@ -133,14 +133,13 @@ test('side-panel toggle saves local preference without hiding the central battle
   h.api.r3BattlefieldLoad();
   assert.equal(h.api.R3_BF.sidebar,true);
 });
-test('advanced economy controls are inline and only expand when requested',()=>{
+test('old utility toolbar is removed; advanced controls are only reachable through Debug',()=>{
   const h=harness();
-  let html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
-  assert.doesNotMatch(html,/hud-turn-flow/);
-  h.api.r3BattlefieldClick({dataset:{bfAction:'options'}});
-  html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
-  assert.match(html,/class="hud-turn-flow"/);
-  assert.match(html,/r3-bf-advanced/);
+  const html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
+  assert.doesNotMatch(html,/r3-bf-mini-tools|class="r3-bf-advanced"|hud-turn-flow/);
+  assert.match(html,/id="r3-hud-debug"/);
+  assert.match(html,/data-hud-flyout="misc"/);
+  assert.doesNotMatch(html,/Show Sheet|Reset layout|More options|Allow private reader/);
   assert.doesNotMatch(economy+battlefield,/\b(?:alert|confirm|prompt)\s*\(/);
 });
 test('sourced resource and HP values shown, no invented class or initiative round',()=>{
