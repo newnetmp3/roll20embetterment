@@ -72,12 +72,12 @@ function r3DebugMarkup(){
     '<details class="r3-debug-operations" open><summary>HUD & sheet controls</summary>'+
     '<p>Advanced controls live here. Normal combat actions remain in their own menus.</p>'+
     '<div class="r3-debug-ops">'+
-    '<button type="button" data-r3-debug="sync">'+(R3_AUTO.enabled?'Turn sync off':'Turn sync on')+'</button>'+
+    '<button type="button" data-r3-debug="sync">'+(typeof R3_AUTO==='object'&&R3_AUTO.enabled?'Turn sync off':'Turn sync on')+'</button>'+
     '<button type="button" data-r3-debug="show-sheet">Show original Roll20 sheet</button>'+
     (typeof R3_SHEET_VIS==='object'&&R3_SHEET_VIS.manualPriority?
       '<button type="button" data-r3-debug="allow-private">Allow private reader</button>':'')+
     '<button type="button" data-r3-debug="reset-layout">Reset HUD layout</button>'+
-    '<button type="button" data-r3-debug="toggle-hud">'+(R3_HUD.collapsed?'Restore HUD':'Hide HUD')+'</button>'+
+    '<button type="button" data-r3-debug="toggle-hud">'+(typeof R3_HUD==='object'&&R3_HUD.collapsed?'Restore HUD':'Hide HUD')+'</button>'+
     '</div><small>Sheet visibility and privacy take priority over automatic imports. No action above modifies character statistics.</small></details>'+
     '<details class="r3-debug-movement"><summary>Manual turn corrections</summary>'+
     (typeof r3TurnMarkup==='function'?r3TurnMarkup(R3_UI.snapshot):'<p>Turn tracker unavailable.</p>')+
