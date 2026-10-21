@@ -1,6 +1,6 @@
 {
-  "version": "3.9.10",
+  "version": "3.9.11",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Capture and latch transient Jumpgate first-render completion mark using early PerformanceObserver without reintroducing unsafe engine startup access"
+  "reason": "Firefox-only passive Debug fields for exact first-render observer state, observed completion mark and post-render Webpack attempt count; no Jumpgate engine/selection behavior changes"
 }
