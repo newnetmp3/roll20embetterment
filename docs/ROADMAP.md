@@ -1,5 +1,25 @@
-# R20 Embetterment — v3 clean restart roadmap
+# R20 Embetterment — Development Roadmap
 
+**Current baseline (2026-10-21):** Firefox v3.9.18 update feed published; Chrome and optional userscript remain independently versioned at v3.4.0. [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106) merged the shared native-action registry with **467/467** simulated tests. Real Floorp 2024 action-card parity and [movement #73](https://github.com/newnetmp3/roll20embetterment/issues/73) remain **unverified/open**. For authoritative active status, see [HANDOVER.md](HANDOVER.md). The historical log below records prior milestones and may mention superseded versions; it is not a release-status source.
+
+## Priority: complete native-action integration before any new HUD features
+
+| Priority | Native milestone | State | Exit criteria |
+| --- | --- | --- | --- |
+| 1 | Character-bound, category-verified existing Roll20 ability dispatch | Implemented in v3.9.18; hardening in PR | Correct controlled PC and exactly one safe, complete macro; unsafe commands never dispatched |
+| 2 | Distinguish duplicate names using official repeating row identity | Conditional implementation under test | Explicit row ID in rendered source and the same ID in an existing Roll20 ability; no guessing from labels/indexes |
+| 3 | Discover complete D&D 2024 Advanced Tools/token-action identifiers | Not implemented | Authenticated stable IDs for attacks, features, spells, items and checks even when cards do not expose row identifiers |
+| 4 | Verify actual native attack/damage/spell/skill/feature chat behavior | Live QA pending | Compare against clicking original Roll20 sheet for prompts, bonuses, damage, criticals, slots, effects |
+| 5 | Type-safe state writes (quantity, equip/attune, HP, slots, resource counters) | Not implemented | Verified native control identity, user action, authoritative re-read and rollback/error path |
+| 6 | Cover remaining native interactions (targeted actions, conditions and undocumented buttons) | Not implemented | No invented calls; versioned source-backed, player-authorized contract and regression fixtures |
+| 7 | Resume new HUD features | Blocked on native milestones | Native parity established in Floorp for supported controls |
+| Parallel | Jumpgate selection and movement #73 | Open | Live 5-ft out/back, character switch, negative remaining, no startup regressions |
+
+**Current feature branch:** `feature/native-action-identity-hardening` only allows a single current-character native sheet macro, rejects selection-relative/compound/other-character macros and consumes explicit official repeating-row identity where available. No signed release or green CI may be claimed for this branch until checks and a release workflow confirm them.
+
+## Superseded historical development notes
+
+The following dated changelog is retained for engineering provenance, not current release/setup advice. See the handover and README for current facts.
 Updated: October 14, 2026 (v3.3.4 currentPlayer selected-token identity correction merged). v2.3.13 continued to fail real Floorp/Roll20 imports despite green DOM mocks. The production script is being **replaced**, not patched.
 
 | Priority | Milestone | Status | Required verification |
