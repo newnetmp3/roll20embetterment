@@ -1240,6 +1240,101 @@ function multiTokenRig(){
   const outsider=make('char-gm','GM Monster','other-player');
   return {h,selections,make,a,b,outsider};
 }
+test('install-and-play auto-sync binds to verified token without importer setup',()=>{
+  const x=multiTokenRig(),h=x.h;
+  h.api.r3StartAuto();
+  assert.equal(h.api.R3_AUTO.enabled,false,'no character has been verified yet');
+  assert.equal(h.store.has('roll20-embetterment-v3:123:auto'),false);
+  x.selections.push(x.a);h.api.r3TokenPoll();
+  const a=h.api.R3_AUTO;
+  assert.equal(a.enabled,true);
+  assert.equal(a.name,'Elowen Dawnsong');
+  assert.equal(a.characterId,'char-elf');
+  assert.equal(a.origin,'token');
+  assert.match(h.store.get('roll20-embetterment-v3:123:auto'),/"enabled":true/);
+  assert.ok([...h.timeouts.values()].some(v=>v.ms===0),
+    'first authorized selection queues a sync attempt without waiting for 8s timer');
+  const generation=a.generation;
+  x.selections.push(x.b);h.api.r3TokenPoll();
+  assert.equal(a.characterId,'char-dwarf');
+  assert.equal(a.name,'Brom Stonebeard');
+  assert.equal(a.generation,generation+1,'old sheet requests invalidated on PC change');
+  assert.equal(h.api.R3_UI.snapshot.name,'Brom Stonebeard');
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,undefined);
+});
+test('uncontrolled and unlinked selections never enable background auto-sync',()=>{
+  const x=multiTokenRig(),h=x.h;
+  h.api.r3StartAuto();
+  x.selections.push(x.outsider);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_AUTO.enabled,false);
+  x.selections.length=0;h.api.r3TokenPoll();
+  x.selections.push({model:{id:'unlinked',get(){return null;}}});h.api.r3TokenPoll();
+  assert.equal(h.api.R3_AUTO.enabled,false);
+  assert.equal(h.store.has('roll20-embetterment-v3:123:auto'),false);
+});
+test('explicit Auto-sync Off is sticky across token changes and restart',()=>{
+  const x=multiTokenRig(),h=x.h;
+  h.api.r3StartAuto();
+  x.selections.push(x.a);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_AUTO.enabled,true);
+  h.api.r3ToggleAuto();
+  assert.equal(h.api.R3_AUTO.enabled,false);
+  assert.equal(h.api.R3_AUTO.explicitlyDisabled,true);
+  x.selections.push(x.b);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_AUTO.enabled,false);
+  const priorGen=h.api.R3_AUTO.generation;
+  h.api.R3_AUTO.explicitlyDisabled=false;
+  h.api.R3_AUTO.name='';h.api.R3_AUTO.characterId='';
+  vm.runInContext('r3AutoLoad()',h.context);
+  assert.equal(h.api.R3_AUTO.explicitlyDisabled,true,
+    'read-back of Off survives a reload');
+  assert.equal(h.api.R3_AUTO.generation,priorGen);
+  h.api.r3ToggleAuto();
+  assert.equal(h.api.R3_AUTO.explicitlyDisabled,false);
+  assert.equal(h.api.R3_AUTO.characterId,'char-dwarf',
+    're-enabling prefers current verified controlled token');
+});
+test('token-mode auto-sync refuses to open a saved character before live token selection',async()=>{
+  const x=multiTokenRig(),h=x.h;
+  h.api.R3_AUTO.enabled=true;
+  h.api.R3_AUTO.origin='token';
+  h.api.R3_AUTO.name='Elowen Dawnsong';
+  h.api.R3_AUTO.characterId='char-elf';
+  vm.runInContext('globalThis.testAutoTick=r3AutoTick',h.context);
+  h.api.R3_TOKEN.active=null;
+  h.api.R3_AUTO.lastOpenAttempt=0;
+  await h.context.testAutoTick();
+  assert.equal(h.api.R3_AUTO.lastOpenAttempt,0);
+  assert.equal(h.api.R3_AUTO.opened,false);
+});
+test('automatic sync never accepts ID-less same-name sheet for a different PC',()=>{
+  const x=multiTokenRig(),h=x.h;
+  const twinA=x.make('twin-a','Twin');
+  x.make('twin-b','Twin');
+  x.selections.push(twinA);h.api.r3TokenPoll();
+  const noId={type:'popout',name:'Twin',visible:true,window:{},characterId:''};
+  const exact={type:'iframe',name:'Twin',visible:true,window:{},
+    characterId:'twin-a'};
+  h.context.r3Candidates=()=>[noId];
+  assert.equal(h.api.r3AutoCandidate(),null,
+    'name alone cannot identify one of two same-name player characters');
+  h.context.r3Candidates=()=>[noId,exact];
+  assert.equal(h.api.r3AutoCandidate(),exact);
+  h.context.r3Candidates=()=>[noId,{...exact,characterId:'twin-b'}];
+  assert.equal(h.api.r3AutoCandidate(),null);
+});
+test('token-mode Journal discovery never dispatches name-only wrong-character opening',()=>{
+  const x=multiTokenRig(),h=x.h;
+  x.selections.push(x.a);h.api.r3TokenPoll();
+  let opened=0;
+  const other={getAttribute(k){return k==='title'?'Elowen Dawnsong':null;},
+    textContent:'Elowen Dawnsong',dispatchEvent(){opened++;}};
+  const query=h.document.querySelectorAll.bind(h.document);
+  h.document.querySelectorAll=sel=>sel.startsWith('#journal')?[other]:query(sel);
+  vm.runInContext('globalThis.tryAutoOpen=r3AutoOpenFromJournal',h.context);
+  h.context.tryAutoOpen(Date.now());
+  assert.equal(opened,0);
+});
 test('HUD automatically follows most recently selected controllable linked token',()=>{
   const x=multiTokenRig(),h=x.h;
   x.selections.push(x.a);
