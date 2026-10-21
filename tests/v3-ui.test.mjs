@@ -1589,8 +1589,13 @@ test('Jumpgate with no d20 exposes direct Campaign and one Attack click invokes 
   h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
   h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
   assert.match(h.nodes.get('r3-hud').innerHTML,/data-hud-attack-key="staff\|melee\+4\|1d6\+2"/);
-  await h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:'staff|melee+4|1d6+2'}}});
-  assert.equal(received.filter(m=>m.type==='native-probe').length,1);
+  h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:'staff|melee+4|1d6+2'}}});
+  // The event listener deliberately does not await an async native roll;
+  // yield until its authenticated reader handshake has had a chance to finish.
+  for(let i=0;i<12&&h.api.R3_NATIVE.busy;i++)
+    await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(received.filter(m=>m.type==='native-probe').length,1,
+    'Attack never reached Roll20: '+h.api.R3_NATIVE.status);
   assert.equal(received.filter(m=>m.type==='native-invoke').length,1);
   assert.equal(received.find(m=>m.type==='native-invoke').attackKey,'staff|melee+4|1d6+2');
   assert.equal(x.log.filter(m=>m.kind==='show').length,1);
