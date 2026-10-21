@@ -184,8 +184,8 @@ const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
 function r3NativeBgResolve(name){
   const wanted=r3String(name,120).trim().toLowerCase();
   if(!wanted)return {reason:'No imported character name is available in the HUD.'};
-  const chars=window.d20?.Campaign?.characters;
-  if(!chars)return {reason:'Roll20 character models are not ready. Wait for the editor to finish loading, then retry.'};
+  const chars=r3TokenCampaign()?.characters;
+  if(!chars)return {reason:'Jumpgate has not exposed window.Campaign.characters. Confirm the tabletop finished loading and select your character token.'};
   const player=r3TokenPlayerId();
   if(!player)return {reason:'Roll20 did not expose the logged-in player identity. Reload the editor and retry.'};
   const named=Array.isArray(chars.models)?chars.models.filter(model=>
