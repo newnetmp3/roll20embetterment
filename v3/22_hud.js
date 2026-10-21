@@ -70,7 +70,12 @@ function r3HudEntries(snapshot,kind){
     .map(x=>({...x,_hudSource:'Item'}));
   if(kind==='features')return items('features').map(x=>({...x,_hudSource:'Feature'}));
   if(kind==='resources')return items('resources').map(x=>({...x,_hudSource:'Resource'}));
-  if(kind==='misc')return items('misc').map(x=>({...x,_hudSource:'Misc'}));
+  if(kind==='misc'){
+    const saved=items('misc');
+    const observed=typeof r3NativeMiscCatalog==='function'?r3NativeMiscCatalog(snapshot):[];
+    return [...saved,...observed.filter(x=>!saved.some(y=>y.nativeActionRef===x.nativeActionRef))]
+      .map(x=>({...x,_hudSource:'Misc'}));
+  }
   if(kind==='bonus'||kind==='reactions'){
     // Only explicitly labeled action economy belongs here; no guessing
     // from a feature's prose, its name or D&D spell traditions.
