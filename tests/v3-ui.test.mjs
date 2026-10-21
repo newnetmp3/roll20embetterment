@@ -65,7 +65,7 @@ function panelHarness(character='NIER'){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudAttackCatalog,r3HudWeaponToggle,r3HudAttackMenu,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,r3NativeChatCommand,r3NativeChatAttack,r3NativeMappedAbility,r3NativeMappedPreview,r3NativeMappedAttack,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3NativeBgReveal,r3TokenPlayerId,r3TokenControls};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudAttackCatalog,r3HudWeaponToggle,r3HudAttackMenu,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,r3NativeChatCommand,r3NativeChatAttack,r3NativeMappedAbility,r3NativeMappedPreview,r3NativeMappedAttack,R3_NATIVE_CATEGORIES,r3NativeMapSource,r3NativeMapAbility,r3NativeMapPreview,r3NativeInvoke,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3NativeBgReveal,r3TokenPlayerId,r3TokenControls};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1295,6 +1295,87 @@ test('sheet-free Attack reports missing Roll20 chat controls rather than opening
   assert.equal(x.sent.length,0);
   assert.match(h.api.R3_NATIVE.status,/Roll20 chat controls are not available/);
   assert.equal(h.sent.length,0);
+});
+test('shared native mappings cover spells, features, inventory, skills, saves, ability checks and resources',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  const categories=[
+    ['spells','Fireball','fireball','%{char-player|repeating_spell_ROW_cast}','Cast'],
+    ['features','Second Wind','second-wind','%{char-player|repeating_feature_ROW_use}','Use'],
+    ['inventory','Potion of Healing','potion','%{char-player|repeating_item_ROW_use}','Use'],
+    ['resources','Ki Point','ki','%{char-player|repeating_resource_ROW_use}','Use']
+  ];
+  for(const [kind,name,key] of categories)
+    snap[kind]=[{name,_key:key,visible:'Official sheet item '+name,actions:[{label:'Roll'}]}];
+  snap.skills={Acrobatics:7};snap.saves={Dexterity:5};snap.modifiers={Wisdom:2};
+  x.model.abilities={models:[
+    ...categories.map(([,name,,action],i)=>({id:'ability-'+i,get(k){return {name,action}[k];}})),
+    {id:'skill',get(k){return {name:'Acrobatics',action:'%{char-player|skill_acrobatics_check'}[k];}},
+    {id:'save',get(k){return {name:'Dexterity',action:'%{char-player|dexterity_save'}[k];}},
+    {id:'check',get(k){return {name:'Wisdom',action:'%{char-player|wisdom_ability_check'}[k];}}
+  ]};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  for(const [kind,name,key,,caption] of categories){
+    assert.equal(h.api.r3NativeMapPreview(kind,key).abilityName,name,kind+' mapped');
+    assert.equal(h.api.r3NativeInvoke(kind,key),true,kind+' dispatched');
+    assert.equal(x.sent.at(-1),'%{char-player|'+name+'}');
+    assert.equal(x.sent.length,categories.indexOf(categories.find(x=>x[0]===kind))+1);
+    h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:
+      kind==='spells'?'spells':kind==='inventory'?'inventory':
+      kind==='features'?'features':'resources'}}});
+    const html=h.nodes.get('r3-hud').innerHTML;
+    assert.match(html,new RegExp('data-hud-native-kind="'+kind+'"'));
+    assert.ok(html.includes('>'+caption+'</button>'),kind+' native button');
+  }
+  for(const [kind,key] of [['skills','Acrobatics'],['saves','Dexterity'],['modifiers','Wisdom']]){
+    assert.equal(h.api.r3NativeMapPreview(kind,key).abilityName,key);
+    assert.equal(h.api.r3NativeInvoke(kind,key),true);
+    assert.equal(x.sent.at(-1),'%{char-player|'+key+'}');
+  }
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'skills'}}});
+  const skills=h.nodes.get('r3-hud').innerHTML;
+  for(const kind of ['skills','saves','modifiers'])
+    assert.match(skills,new RegExp('data-hud-native-kind="'+kind+'"'));
+  assert.equal(h.sent.length,0,'no user sheet iframe is ever used');
+});
+test('generic native controls dispatch original macro and never synthetic dice or resource edits',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.spells=[{name:'Mage Hand',_key:'mage-hand',visible:'Cantrip'}];
+  x.model.abilities={models:[{get(k){return {
+    name:'Mage Hand',action:'%{char-player|repeating_spell_ROW_cast}'
+  }[k];}}]};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'spells'}}});
+  h.shadow.handlers.get('click')({target:{dataset:{hudNativeKind:'spells',hudNativeKey:'mage-hand'}}});
+  assert.deepEqual(x.sent,['%{char-player|Mage Hand}']);
+  assert.equal(h.sent.length,0);
+  assert.match(h.api.R3_NATIVE.status,/Invoked mapped Roll20 spells action/);
+});
+test('native registry rejects ambiguous, stale, cross-kind, unverified and unmanaged controls',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.spells=[{name:'Shield',_key:'a'},{name:'Shield',_key:'b'}];
+  snap.features=[{name:'Shield',_key:'feature-shield'}];
+  snap.inventory=[{name:'Antidote',_key:'item',quantity:3,
+    controls:[{label:'Quantity',value:3}]}];
+  x.model.abilities={models:[{get(k){return {name:'Shield',action:'%{char-player|repeating_spell_ROW_cast}'}[k];}},
+    {get(k){return {name:'Antidote',action:'%{char-player|repeating_spell_ROW_cast}'}[k];}}]};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  assert.match(h.api.r3NativeMapPreview('spells','a').reason,/Several source/);
+  assert.match(h.api.r3NativeMapPreview('features','feature-shield').reason,/not an identified features/);
+  assert.match(h.api.r3NativeMapPreview('inventory','item').reason,/not an identified inventory/);
+  assert.equal(h.api.r3NativeInvoke('inventory','item'),false);
+  assert.equal(x.sent.length,0);
+  assert.deepEqual(Array.from(h.api.R3_UI.snapshot.inventory.map(x=>x.quantity)),[3]);
+  assert.match(h.api.r3NativeMapSource('inventory','other').reason,/no unique source identity/);
+  h.api.R3_TOKEN.active={name:'Wrong PC',characterId:'char-other'};
+  assert.equal(h.api.r3NativeInvoke('spells','a'),false);
+  assert.equal(x.sent.length,0);
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'inventory'}}});
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/Native unmapped/);
+  assert.doesNotMatch(html,/data-hud-native-key="item"/);
 });
 test('mapped native attack uses exact existing Roll20 character action and never opens a sheet',()=>{
   const x=observedChatRig('Elowen'),h=x.h;
