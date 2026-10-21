@@ -65,7 +65,7 @@ function panelHarness(character='NIER'){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3NativeBgReveal,r3TokenPlayerId,r3TokenControls};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,r3NativeChatCommand,r3NativeChatAttack,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3NativeBgReveal,r3TokenPlayerId,r3TokenControls};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1196,6 +1196,64 @@ function observedChatRig(character='Elowen',draft=''){
     selector==='#textchat-input .btn'?send:null;
   return {h,sent,textarea,send,events,model};
 }
+test('sheet-free attack fails closed when Roll20 chat has an unsent draft',()=>{
+  const x=observedChatRig('Elowen','A message the player is writing');
+  const snap=x.h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Spear',_key:'spear',visible:'Spear +4 Attack 1d6+2'}];
+  x.h.api.R3_UI.snapshot=x.h.api.r3Coverage(snap);
+  assert.equal(x.h.api.r3NativeChatAttack('spear'),false);
+  assert.equal(x.sent.length,0);
+  assert.equal(x.textarea.value,'A message the player is writing');
+  assert.match(x.h.api.R3_NATIVE.status,/unsent draft/);
+});
+test('sheet-free attack does not require an open character dialog, but requires a controlled model',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Spear',_key:'spear',visible:'Spear +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  x.model.get=k=>({name:'Elowen',controlledby:'someone-else'})[k];
+  assert.equal(h.api.r3NativeChatAttack('spear'),false);
+  assert.equal(x.sent.length,0);
+  assert.match(h.api.R3_NATIVE.status,/Controlled By/);
+  x.model.get=k=>({name:'Elowen',controlledby:'player-one'})[k];
+  h.api.R3_TOKEN.active={name:'Elsewhere',characterId:'char-other'};
+  assert.equal(h.api.r3NativeChatAttack('spear'),false);
+  assert.equal(x.sent.length,0);
+  assert.match(h.api.R3_NATIVE.status,/another character/);
+});
+test('sheet-free Attack never guesses a missing modifier or changes private chat drafts',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Saving throw effect',_key:'effect',visible:'Save DC 17 8d6 fire damage'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  assert.equal(h.api.r3NativeChatCommand(snap.attacks[0]),null);
+  assert.equal(h.api.r3NativeChatAttack('effect'),false);
+  assert.equal(x.sent.length,0);
+  assert.match(h.api.R3_NATIVE.status,/No confirmed hit-roll modifier/);
+});
+test('sheet-free rolls strip unsafe template and macro markup from imported names',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Spear}} {{evil=[[100d100]]}}',_key:'spear',
+    visible:'Spear +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  assert.equal(h.api.r3NativeChatAttack('spear'),true);
+  assert.equal(x.sent.length,1);
+  assert.doesNotMatch(x.sent[0],/evil|100d100/);
+  assert.ok(x.sent[0].includes('1d20+4'));
+  assert.ok(x.sent[0].includes('1d6+2'));
+});
+test('sheet-free Attack reports missing Roll20 chat controls rather than opening a sheet',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Spear',_key:'spear',visible:'Spear +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.document.querySelector=()=>null;
+  assert.equal(h.api.r3NativeChatAttack('spear'),false);
+  assert.equal(x.sent.length,0);
+  assert.match(h.api.R3_NATIVE.status,/Roll20 chat controls are not available/);
+  assert.equal(h.sent.length,0);
+});
 test('Attack buttons for arbitrary 2024 character names roll hit and damage in chat without sheets',()=>{
   for(const [character,weapon,bonus,damage] of [
     ['Elowen Dawnsong','Longbow','+7','1d8+3'],
