@@ -1427,8 +1427,8 @@ const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
 function r3NativeBgResolve(name){
   const wanted=r3String(name,120).trim().toLowerCase();
   if(!wanted)return {reason:'No imported character name is available in the HUD.'};
-  const chars=window.d20?.Campaign?.characters;
-  if(!chars)return {reason:'Roll20 character models are not ready. Wait for the editor to finish loading, then retry.'};
+  const chars=r3TokenCampaign()?.characters;
+  if(!chars)return {reason:'Jumpgate has not exposed window.Campaign.characters. Confirm the tabletop finished loading and select your character token.'};
   const player=r3TokenPlayerId();
   if(!player)return {reason:'Roll20 did not expose the logged-in player identity. Reload the editor and retry.'};
   const named=Array.isArray(chars.models)?chars.models.filter(model=>
@@ -2295,7 +2295,7 @@ function r3HudFlyoutMarkup(snapshot){
     '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
     '<small>'+(flyout==='actions'?'Attack uses the verified Roll20 roll button':'Read-only · official sheet remains authoritative')+'</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
-    content+r3NativeMarkup()+'</section>';
+    (flyout==='actions'?r3NativeMarkup()+content:content+r3NativeMarkup())+'</section>';
 }
 function r3HudSegment(label,kind,buttons){
   const tracks=kind==='action'||kind==='bonus'||kind==='reaction';
@@ -2582,9 +2582,9 @@ const R3_TOKEN={
   timer:null,started:false
 };
 function r3TokenCampaign(){
-  // Jumpgate exposes Campaign directly even when the optional d20 bridge
-  // does not exist. Use the same authenticated page's Backbone model.
-  return window.d20?.Campaign||window.Campaign||null;
+  // Jumpgate's editor owns the direct Campaign Backbone model. Do not
+  // consult the obsolete d20.Campaign namespace for character identity.
+  return window.Campaign||null;
 }
 function r3TokenEngineMode(){
   // Roll20's window.vttEngine is an engine-mode flag, not the VTTEngine
