@@ -104,8 +104,9 @@ function r3NativeMiscCatalog(snapshot=R3_UI.snapshot){
     const action=r3String(r3TokenModelGet(model,'action'),350);
     if(!id||!/^[A-Za-z0-9_-]{4,120}$/.test(id)||!name||/[{}|\r\n]/.test(name)||ids.has(id))continue;
     ids.add(id);
-    if(!r3NativeSheetReference('misc',action,identity.model).reference)continue;
-    const reference=action.match(/^%\\{[A-Za-z0-9_-]+\\|([^{}]+)\\}$/)?.[1]||'';
+    const inspected=r3NativeSheetReference('misc',action,identity.model);
+    if(!inspected.reference)continue;
+    const reference=inspected.reference;
     if(Object.entries(R3_NATIVE_CATEGORIES).some(([kind,config])=>
       kind!=='misc'&&config.pattern.test(reference)))continue;
     if(refs.has(action))continue;
@@ -168,7 +169,7 @@ function r3NativeMapAbility(kind,entry,character,snapshot){
     return {reason:'Imported repeating row ID is invalid; no native action was linked.'};
   const directRef=typeof entry?.nativeActionRef==='string'?entry.nativeActionRef:'';
   const uniqueDirectRef=!!directRef&&rows.filter(x=>x?.nativeActionRef===directRef).length===1;
-  if(!rowId&&sameName!==1&&!uniqueDirectRef)return {reason:kind==='attacks'?
+  if(!rowId&&sameName!==1&&!uniqueDirectRef&&kind!=='misc')return {reason:kind==='attacks'?
     'Multiple same-named native attacks; no verified repeating row identity.':
     'Several source entries have this name; their native actions are ambiguous.'};
   // The official authenticated sheet may explicitly expose an action macro
