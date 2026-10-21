@@ -1646,14 +1646,15 @@ test('duplicate-named weapons submit their own distinct observed rolls',()=>{
     visible:'Dagger Melee +5 Attack 1d4+2',tab:'Combat'};
   snap.attacks=[a,b];h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
   h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  h.shadow.handlers.get('click')({target:{dataset:{hudWeapon:'melee|dagger'}}});
   const html=h.nodes.get('r3-hud').innerHTML;
-  assert.match(html,/data-hud-attack-key="dagger\|melee\|\+7\|1d4\+4"/);
-  assert.match(html,/data-hud-attack-key="dagger\|offhand\|\+5\|1d4\+2"/);
-  h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:b._key}}});
+  assert.match(html,/data-hud-dice-key="dagger\|melee\|\+7\|1d4\+4"/);
+  assert.match(html,/data-hud-dice-key="dagger\|offhand\|\+5\|1d4\+2"/);
+  h.shadow.handlers.get('click')({target:{dataset:{hudDiceKey:b._key}}});
   assert.equal(x.sent.length,1);
   assert.ok(x.sent[0].includes('1d20+5'));
   assert.ok(x.sent[0].includes('1d4+2'));
-  h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:a._key}}});
+  h.shadow.handlers.get('click')({target:{dataset:{hudDiceKey:a._key}}});
   assert.equal(x.sent.length,2);
   assert.ok(x.sent[1].includes('1d20+7'));
   assert.ok(x.sent[1].includes('1d4+4'));
@@ -1737,7 +1738,7 @@ test('advanced native-sheet diagnostic still works through private reader',async
     visible:'Quarterstaff Melee +4 Attack 1d6+2'}];
   h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
   h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
-  assert.match(h.nodes.get('r3-hud').innerHTML,/data-hud-attack-key="staff\|melee\+4\|1d6\+2"/);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/data-hud-dice-key="staff\|melee\+4\|1d6\+2"/);
   void h.api.r3NativeProbe('staff|melee+4|1d6+2',true);
   // The event listener deliberately does not await an async native roll;
   // yield until its authenticated reader handshake has had a chance to finish.
