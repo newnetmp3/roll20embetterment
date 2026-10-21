@@ -66,10 +66,23 @@ function r3DebugMarkup(){
   return '<aside class="r3-debug-window" data-bf-panel="debug" role="complementary" '+
     'aria-label="R20eb developer Debug window">'+
     '<header class="r3-debug-header"><strong>R20eb Debug</strong>'+
-    '<span>Local diagnostics</span>'+
+    '<span>Tools & local diagnostics</span>'+
     '<button type="button" data-r3-debug="close" aria-label="Close Debug window">×</button></header>'+
     '<div class="r3-debug-body">'+
-    '<details class="r3-debug-movement" open><summary>Movement tracking diagnostics</summary>'+
+    '<details class="r3-debug-operations" open><summary>HUD & sheet controls</summary>'+
+    '<p>Advanced controls live here. Normal combat actions remain in their own menus.</p>'+
+    '<div class="r3-debug-ops">'+
+    '<button type="button" data-r3-debug="sync">'+(R3_AUTO.enabled?'Turn sync off':'Turn sync on')+'</button>'+
+    '<button type="button" data-r3-debug="show-sheet">Show original Roll20 sheet</button>'+
+    (typeof R3_SHEET_VIS==='object'&&R3_SHEET_VIS.manualPriority?
+      '<button type="button" data-r3-debug="allow-private">Allow private reader</button>':'')+
+    '<button type="button" data-r3-debug="reset-layout">Reset HUD layout</button>'+
+    '<button type="button" data-r3-debug="toggle-hud">'+(R3_HUD.collapsed?'Restore HUD':'Hide HUD')+'</button>'+
+    '</div><small>Sheet visibility and privacy take priority over automatic imports. No action above modifies character statistics.</small></details>'+
+    '<details class="r3-debug-movement"><summary>Manual turn corrections</summary>'+
+    (typeof r3TurnMarkup==='function'?r3TurnMarkup(R3_UI.snapshot):'<p>Turn tracker unavailable.</p>')+
+    '</details>'+
+    '<details class="r3-debug-movement"><summary>Movement tracking diagnostics</summary>' +<summary>Movement tracking diagnostics</summary>'+
     '<dl id="r3-debug-movement-values">'+r3DebugMovementRows()+'</dl><small>Move your token while Your Turn is active. First-render observer status indicates whether the safe Jumpgate startup barrier completed; it does not prove token movement works. If the source, scale or position is unavailable, its reason appears above.</small></details>'+
     '<div class="r3-debug-toolbar"><label for="r3-debug-filter">Messages</label>'+
     '<select id="r3-debug-filter" aria-label="Filter Debug messages">'+
@@ -114,6 +127,25 @@ function r3DebugAction(target){
     target?.closest?.('[data-r3-debug]')?.dataset?.r3Debug;
   if(!name)return false;
   switch(name){
+    case 'sync':
+      if(typeof r3ToggleAuto==='function')r3ToggleAuto();
+      r3HudRender();break;
+    case 'show-sheet':
+      if(typeof r3SheetRevealAll==='function')r3SheetRevealAll();
+      else r3DebugNotice('Native sheet visibility controls unavailable.');
+      break;
+    case 'allow-private':
+      if(typeof r3SheetAllowPrivateReaders==='function')r3SheetAllowPrivateReaders();
+      else r3DebugNotice('Private reader controls unavailable.');
+      break;
+    case 'reset-layout':
+      if(typeof r3BattlefieldResetPositions==='function')r3BattlefieldResetPositions();
+      else r3DebugNotice('Layout controls unavailable.');
+      break;
+    case 'toggle-hud':
+      R3_HUD.collapsed=!R3_HUD.collapsed;
+      if(R3_HUD.collapsed){R3_HUD.flyout='';R3_HUD.chooser=null;}
+      r3HudSave();r3HudRender();break;
     case 'close':r3DebugToggle();break;
     case 'clear':
       R3_DEBUG.entries=[];R3_DEBUG.seen.clear();r3DebugRefresh();break;
@@ -152,7 +184,15 @@ function r3DebugInstall(root){
 }
 function r3DebugStyles(){
   return [
-    '.r3-debug-window{position:absolute;left:18px;top:76px;width:min(410px,calc(100vw - 36px));max-height:min(65vh,680px);overflow:hidden;pointer-events:auto;background:#111c2beF;border:1px solid #6181a1;border-radius:11px;box-shadow:0 12px 35px #000a;color:#f2f4f8;display:flex;flex-direction:column;font:12px/1.45 system-ui,sans-serif;z-index:12}',
+    '.r3-debug-window{position:absolute;left:18px;top:70px;width:min(600px,calc(100vw - var(--r3-bf-chat-inset,0px) - 32px));max-height:min(83dvh,850px);overflow:hidden;pointer-events:auto;background:#111c2bef;border:1px solid #6181a1;border-radius:13px;box-shadow:0 20px 45px #000c;color:#e9f3fd;font:calc(12px * var(--r3-bf-scale,1))/1.4 system-ui,sans-serif}',
+    '.r3-debug-operations{border:1px solid #3c5671;border-radius:8px;padding:10px;margin-bottom:10px;background:#15273b}',
+    '.r3-debug-operations>summary{font-size:13px;font-weight:700;cursor:pointer;color:#e7c486}',
+    '.r3-debug-operations p,.r3-debug-operations small{color:#b4c8d9;font-size:11px;line-height:1.35}',
+    '.r3-debug-ops{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:9px 0}',
+    '.r3-debug-ops button{min-height:36px;white-space:normal;text-align:left;background:#243c55!important;border:1px solid #4d6c88!important;border-radius:7px!important;color:#edf4fc!important;padding:7px 9px!important;font-weight:600}',
+    '.r3-debug-ops button:hover,.r3-debug-ops button:focus-visible{border-color:#a2c7e6!important;background:#36577a!important}',
+    '.r3-debug-window details+details{margin-top:8px}',
+    '@media(max-width:680px){.r3-debug-ops{grid-template-columns:1fr}.r3-debug-window{max-height:75dvh}}',
     '.r3-debug-header{display:flex;gap:10px;align-items:center;padding:8px 11px;background:#243c55;border-bottom:1px solid #4d6580}',
     '.r3-debug-header strong{font-size:14px}.r3-debug-header span{flex:1;color:#b5cada}',
     '.r3-debug-header button{background:#2c4966!important;border:1px solid #7798b4!important;padding:2px 9px!important}',
