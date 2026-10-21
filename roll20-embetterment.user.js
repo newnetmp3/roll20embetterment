@@ -3115,7 +3115,7 @@ const R3_AUTO={
   healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,dirtyTimer:null,
   ownedDialog:null,ownedContainer:null,originalPosition:null,preOpenOverlays:null,
   ownedOverlay:null,originalOverlay:null,openObserver:null,
-  explicitlyDisabled:false,origin:'token'
+  explicitlyDisabled:false,origin:'manual'
 };
 function r3AutoKey(){return r3StorageKey()+':auto';}
 function r3AutoLoad(){
