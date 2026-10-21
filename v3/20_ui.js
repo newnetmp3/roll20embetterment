@@ -191,6 +191,8 @@ function r3UIEvent(event){
   const spent=field('hudUsed','[data-hud-used]');
   const attackMode=field('hudAttackMode','[data-hud-attack-mode]');
   const attackWeapon=field('hudWeapon','[data-hud-weapon]');
+  const nativeKind=field('hudNativeKind','[data-hud-native-kind]');
+  const nativeKey=field('hudNativeKey','[data-hud-native-key]');
   const nativeAttack=field('hudAttackKey','[data-hud-attack-key]');
   const diceAttack=field('hudDiceKey','[data-hud-dice-key]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
@@ -227,6 +229,10 @@ function r3UIEvent(event){
   }
   else if(typeof attackWeapon==='string'&&attackWeapon.length>0&&attackWeapon.length<=180){
     return r3HudWeaponToggle(attackWeapon);
+  }
+  else if(typeof nativeKind==='string'&&R3_NATIVE_CATEGORIES[nativeKind]&&
+    typeof nativeKey==='string'&&nativeKey.length>0&&nativeKey.length<=240){
+    return r3NativeInvoke(nativeKind,nativeKey);
   }
   else if(typeof nativeAttack==='string'&&nativeAttack.length>0&&nativeAttack.length<=240){
     // Official source-verified Roll20 ability; no sheet window or guess.
