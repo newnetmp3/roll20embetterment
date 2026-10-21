@@ -551,20 +551,12 @@ function r3TokenSwitch(info){
   R3_NATIVE.revision++;
   r3HudLoad();
   if(typeof r3MoveRebase==='function')r3MoveRebase();
-  if(R3_AUTO.enabled){
-    // Old in-flight reads cannot overwrite the newly selected character.
-    R3_AUTO.generation++;
-    if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
-    R3_AUTO.dirtyTimer=null;
-    R3_AUTO.name=info.name;
-    R3_AUTO.characterId=info.characterId;
-    R3_AUTO.lastScan=0;R3_AUTO.lastHealth=0;
-    r3AutoSave();
-    r3AutoDisplay('Following selected token: '+info.name);
-  }
+  // The user has already selected an authorized Roll20 character; a
+  // second Auto-sync toggle or explicit first import is unnecessary.
+  if(typeof r3AutoFollowToken==='function')r3AutoFollowToken(info);
   r3UIStatus('Selected '+info.name+'. '+(R3_UI.snapshot.coverage?.attacks?
     'Using this character’s saved sheet.':
-    'Import its official sheet through Debug if no data appears.'));
+    'Synchronizing from Roll20 when its official sheet is available.'));
   r3UIRefresh();
 }
 function r3TokenPoll(){
