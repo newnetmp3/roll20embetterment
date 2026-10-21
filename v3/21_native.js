@@ -28,12 +28,12 @@ function r3NativeAttackMetric(raw){
 function r3NativeChatCommand(item){
   const observed=r3NativeAttackMetric(item?.visible||'');
   // Without an unambiguous sheet-observed hit bonus, don't invent a roll.
-  if(!/^[+-]\\d{1,3}$/.test(observed.bonus))return null;
+  if(!/^[+-]\d{1,3}$/.test(observed.bonus))return null;
   const raw=r3String(item?.name,100);
-  const label=raw.replace(/[^\\p{L}\\p{N} .,'()+\\-]/gu,'').trim().slice(0,65);
+  const label=raw.replace(/[^\p{L}\p{N} .,'()+-]/gu,'').trim().slice(0,65);
   if(!label)return null;
   const dice='1d20'+observed.bonus;
-  const damage=/^\\d{1,3}d\\d{1,3}(?:[+-]\\d{1,3})?$/.test(observed.damage)?
+  const damage=/^\d{1,3}d\d{1,3}(?:[+-]\d{1,3})?$/.test(observed.damage)?
     ' {{Damage=[['+observed.damage+']]}}':'';
   // Roll20's built-in default chat template is available independent of
   // character sheets. The attack bonus/damage are immutable captured data.
