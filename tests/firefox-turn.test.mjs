@@ -134,6 +134,41 @@ test('initiative tracker resets only on observed transition to the selected toke
   h.api.r3TurnObserveInitiative();
   assert.equal(t.reactionSpent,true,'same initiative leader cannot reset again');
 });
+test('direct Jumpgate Campaign detects initiative transitions without legacy window.d20',()=>{
+  const h=rig(),t=h.api.R3_TURN;
+  let order=JSON.stringify([{id:'token-elf'}]);
+  h.context.window.Campaign={get(key){return key==='turnorder'?order:null;}};
+  h.context.window.d20=undefined;
+  h.api.r3TurnLoad();
+  h.api.r3TurnApply('reaction');
+  h.api.r3TurnObserveInitiative();
+  assert.equal(t.phase,'unknown','Already-leading on attachment must not fabricate a new turn');
+  assert.equal(t.reactionSpent,true);
+  order=JSON.stringify([{id:'token-brom'}]);
+  h.api.r3TurnObserveInitiative();
+  order=JSON.stringify([{id:'token-elf'}]);
+  h.api.r3TurnObserveInitiative();
+  assert.equal(t.phase,'active');
+  assert.equal(t.noteSource,'observed');
+  assert.equal(t.reactionSpent,false);
+  h.api.r3TurnApply('reaction');
+  h.api.r3TurnObserveInitiative();
+  assert.equal(t.reactionSpent,true,'Same leader cannot reset spent resources');
+});
+test('unsupported or custom Roll20 turn-order entry does not trigger a turn',()=>{
+  const h=rig(),t=h.api.R3_TURN;
+  h.context.window.d20=undefined;
+  let order='[{"id":"-1"}]';
+  h.context.window.Campaign={attributes:{get unused(){}},get(){return order;}};
+  h.api.r3TurnLoad();
+  assert.equal(t.lastTop,null);
+  order=JSON.stringify([{id:'token-brom'}]);
+  h.api.r3TurnObserveInitiative();
+  assert.equal(t.phase,'unknown');
+  order='not valid JSON';
+  h.api.r3TurnObserveInitiative();
+  assert.equal(t.phase,'unknown');
+});
 test('only exact official casting-time labels assign action costs, never names',()=>{
   const h=rig(),cost=h.api.r3TurnCost;
   for(const [castingTime,expected] of [
