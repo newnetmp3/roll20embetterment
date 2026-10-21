@@ -95,6 +95,113 @@ function r3NativeMappedAbility(attack,character,snapshot){
   return {abilityName,abilityId:r3String(ability.id||r3TokenModelGet(ability,'_id'),120),
     source:'Roll20 character ability',action};
 }
+// Shared read-only mapping registry for all player-facing 2024 sheet
+// actions. A DOM button caption is an observation, NOT a callable macro ID.
+// Map only pre-existing, uniquely named controlled-character abilities with
+// a category-consistent Roll20 sheet-action reference; never guess row IDs.
+const R3_NATIVE_CATEGORIES={
+  attacks:{title:'Attack',pattern:/repeating_(?:attack|npcaction)\s*(?:\(|_)/i},
+  spells:{title:'Cast',pattern:/(?:repeating_(?:spell|spellattack|spellcard)\s*(?:\(|_)|\bspell_(?:roll|cast|attack)\b)/i},
+  features:{title:'Use',pattern:/(?:repeating_(?:feature|trait|action|classfeature|npcaction)\s*(?:\(|_)|\bfeature_(?:roll|use)\b)/i},
+  inventory:{title:'Use',pattern:/(?:repeating_(?:inventory|equipment|item|consumable)\s*(?:\(|_)|\bitem_(?:roll|use)\b)/i},
+  resources:{title:'Use',pattern:/repeating_(?:resource|feature|action)\s*(?:\(|_)/i},
+  skills:{title:'Roll',pattern:/(?:\b(?:skill|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:skill|check)\b)/i},
+  saves:{title:'Roll',pattern:/(?:\b(?:saving[_-]?throw|save)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:save|saving[_-]?throw)\b)/i},
+  modifiers:{title:'Roll',pattern:/(?:\b(?:ability[_-]?check|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:ability[_-]?check|check)\b)/i}
+};
+function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
+  if(!Object.prototype.hasOwnProperty.call(R3_NATIVE_CATEGORIES,kind)||!key||
+    typeof key!=='string'||key.length>240)return {reason:'Unknown source category or action key.'};
+  const source=snapshot?.[kind];
+  if(['skills','saves','modifiers'].includes(kind)){
+    if(!source||!Object.prototype.hasOwnProperty.call(source,key))
+      return {reason:'The selected native check is no longer in this character snapshot.'};
+    return {name:key,key,value:source[key]};
+  }
+  const rows=Array.isArray(source)?source:[];
+  const found=rows.filter(row=>row?._key===key&&typeof row._key==='string');
+  if(found.length!==1)return {reason:'This imported action has no unique source identity.'};
+  return found[0];
+}
+function r3NativeMapAbility(kind,entry,character,snapshot){
+  if(!R3_NATIVE_CATEGORIES[kind])return {reason:'Unsupported native action category.'};
+  if(kind==='attacks')return r3NativeMappedAbility(entry,character,snapshot);
+  const name=r3String(entry?.name,125).trim();
+  if(!name||/[{}|\r\n]/.test(name))return {reason:'The source action name is invalid for Roll20 macros.'};
+  if(!['skills','saves','modifiers'].includes(kind)){
+    const list=Array.isArray(snapshot?.[kind])?snapshot[kind]:[];
+    if(list.filter(x=>r3String(x?.name,125).toLowerCase()===name.toLowerCase()).length!==1)
+      return {reason:'Several source entries have this name; their native actions are ambiguous.'};
+  }
+  const models=r3NativeActionModels(character).filter(model=>
+    r3String(r3TokenModelGet(model,'name'),125).toLowerCase()===name.toLowerCase());
+  if(models.length!==1)return {reason:models.length?
+    'Multiple same-named Roll20 abilities; no unique native action.':
+    'Roll20 has not exposed a matching token action for '+name+'.'};
+  const ability=models[0],action=r3String(r3TokenModelGet(ability,'action'),4000);
+  // A free-text macro can print a message or consume a resource, so name
+  // alone is never sufficient evidence of a corresponding sheet action.
+  if(!R3_NATIVE_CATEGORIES[kind].pattern.test(action))
+    return {reason:'The matching ability is not an identified '+kind+' sheet action.'};
+  const abilityName=r3String(r3TokenModelGet(ability,'name'),125);
+  if(!/^[^{}|\r\n]{1,125}$/.test(abilityName))
+    return {reason:'The native action name contains unsupported macro syntax.'};
+  return {abilityName,abilityId:r3String(ability.id||r3TokenModelGet(ability,'_id'),120),
+    source:'Verified Roll20 '+kind+' ability',action};
+}
+function r3NativeMapPreview(kind,key,snapshot=R3_UI.snapshot){
+  const entry=r3NativeMapSource(kind,key,snapshot);
+  if(!entry.name)return entry;
+  const name=r3String(snapshot?.name,120),active=R3_TOKEN.active;
+  const chars=r3TokenCampaign()?.characters;
+  if(!chars)return {reason:'Jumpgate has no exposed character collection.'};
+  let model=null;
+  if(active){
+    if(active.name?.toLowerCase()!==name.toLowerCase())
+      return {reason:'Selected token and imported character differ.'};
+    model=r3TokenCharacter(active.characterId);
+  }else{
+    const models=Array.isArray(chars.models)?chars.models.filter(c=>
+      r3String(r3TokenModelGet(c,'name'),120).toLowerCase()===name.toLowerCase()):[];
+    if(models.length===1)model=models[0];
+    else return {reason:'Select a uniquely identified controllable character.'};
+  }
+  if(!model||!r3TokenControls(model))return {reason:'This character is not verified as controllable by the player.'};
+  if(R3_AUTO.characterId&&R3_AUTO.name?.toLowerCase()===name.toLowerCase()&&
+    R3_AUTO.characterId!==r3String(model.id||r3TokenModelGet(model,'_id'),120))
+    return {reason:'Imported actions belong to another character ID.'};
+  return r3NativeMapAbility(kind,entry,model,snapshot);
+}
+function r3NativeInvoke(kind,key){
+  if(R3_NATIVE.busy)return false;
+  const snapshot=R3_UI.snapshot,entry=r3NativeMapSource(kind,key,snapshot);
+  if(!entry.name){r3NativeStatus(entry.reason);return false;}
+  const name=r3String(snapshot?.name,120);
+  const identity=r3NativeBgResolve(name); // validates ownership; NO showDialog
+  if(!identity.model){r3NativeStatus(identity.reason||'Character unavailable.');return false;}
+  if(R3_TOKEN.active&&
+    (R3_TOKEN.active.characterId!==identity.id||
+     R3_TOKEN.active.name?.toLowerCase()!==name.toLowerCase())){
+    r3NativeStatus('Selected token is not the source character.');return false;
+  }
+  if(R3_AUTO.characterId&&R3_AUTO.name?.toLowerCase()===name.toLowerCase()&&
+    R3_AUTO.characterId!==identity.id){
+    r3NativeStatus('Source character identity changed; no native action sent.');return false;
+  }
+  const mapped=r3NativeMapAbility(kind,entry,identity.model,snapshot);
+  if(!mapped.abilityName){r3NativeStatus(mapped.reason);return false;}
+  if(!/^[\w-]{4,120}$/.test(identity.id)){
+    r3NativeStatus('Character ID is not a valid native action reference.');return false;
+  }
+  R3_NATIVE.busy=true;
+  try{
+    const outcome=r3NativeChatSubmit('%{'+identity.id+'|'+mapped.abilityName+'}');
+    if(!outcome.ok){r3NativeStatus(outcome.reason);return false;}
+    r3NativeStatus('Invoked mapped Roll20 '+kind+' action: '+r3String(entry.name,80)+
+      '. Verify its native result in chat.');
+    return true;
+  }finally{R3_NATIVE.busy=false;}
+}
 function r3NativeMappedPreview(key,snapshot=R3_UI.snapshot){
   const attack=r3NativeSelectAttack(key,snapshot);
   if(!attack||r3String(attack._key,240)!==key)return {reason:'No unique imported attack.'};
