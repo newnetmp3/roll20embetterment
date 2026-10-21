@@ -192,6 +192,7 @@ function r3UIEvent(event){
   const attackMode=field('hudAttackMode','[data-hud-attack-mode]');
   const attackWeapon=field('hudWeapon','[data-hud-weapon]');
   const nativeAttack=field('hudAttackKey','[data-hud-attack-key]');
+  const diceAttack=field('hudDiceKey','[data-hud-dice-key]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
   if(typeof r3DebugAction==='function'&&r3DebugAction(target))return;
@@ -228,9 +229,12 @@ function r3UIEvent(event){
     return r3HudWeaponToggle(attackWeapon);
   }
   else if(typeof nativeAttack==='string'&&nativeAttack.length>0&&nativeAttack.length<=240){
-    // The normal Attack action rolls from imported data in Roll20 chat;
-    // it never requires a mounted or manually opened character sheet.
-    return r3NativeChatAttack(nativeAttack);
+    // Official source-verified Roll20 ability; no sheet window or guess.
+    return r3NativeMappedAttack(nativeAttack);
+  }
+  else if(typeof diceAttack==='string'&&diceAttack.length>0&&diceAttack.length<=240){
+    // Explicitly labeled non-native dice fallback only; no silent downgrade.
+    return r3NativeChatAttack(diceAttack);
   }
   else if(typeof nativeProbe==='string'&&nativeProbe.length<=240){
     return r3NativeProbe(nativeProbe);
