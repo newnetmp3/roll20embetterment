@@ -380,7 +380,7 @@ function r3HudFlyoutMarkup(snapshot){
     '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
     '<small>'+(flyout==='actions'?'Attack uses the verified Roll20 roll button':'Read-only · official sheet remains authoritative')+'</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
-    content+r3NativeMarkup()+'</section>';
+    (flyout==='actions'?r3NativeMarkup()+content:content+r3NativeMarkup())+'</section>';
 }
 function r3HudSegment(label,kind,buttons){
   const tracks=kind==='action'||kind==='bonus'||kind==='reaction';
