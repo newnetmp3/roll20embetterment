@@ -59,7 +59,7 @@ function r3CardsView(kind){
 function r3Results(){
   const snap=R3_UI.snapshot;
   if(!snap)return '<p class="muted">No import yet. Only the official sheet reader supplies data; nothing is filled from default or token values.</p>';
-  const menu=['summary','spells','attacks','inventory','features','resources','skills','fields','diagnostics'];
+  const menu=['summary','spells','attacks','inventory','features','resources','misc','skills','fields','diagnostics'];
   const nav='<nav class="views">'+menu.map(v=>
     '<button data-view="'+v+'"'+(R3_UI.view===v?' class="selected"':'')+'>'+r3Escape(v)+'</button>').join('')+'</nav>';
   let content='';
@@ -69,7 +69,7 @@ function r3Results(){
       '<h3>Modifiers and saving throws</h3>'+r3ObjectRows(snap.modifiers,snap.provenance,'modifiers')+
       '<h3>Saving throws</h3>'+r3ObjectRows(snap.saves,snap.provenance,'saves')+
       '<h3>Spell slots</h3>'+r3ObjectRows(snap.slots);
-  }else if(['spells','attacks','inventory','features','resources','skills'].includes(R3_UI.view)){
+  }else if(['spells','attacks','inventory','features','resources','misc','skills'].includes(R3_UI.view)){
     content=R3_UI.view==='skills'?r3ObjectRows(snap.skills,snap.provenance,'skills'):r3CardsView(R3_UI.view);
   }else if(R3_UI.view==='fields'){
     content='<p class="muted">Raw labeled controls actually present in the rendered DOM; no guessed values.</p>'+
@@ -275,7 +275,7 @@ function r3UIEvent(event){
     else{R3_HUD.used[spent]=!R3_HUD.used[spent];r3HudRender();}
   }
   else if(flyout&&['spells','skills','actions','bonus','reactions','inventory',
-    'features','resources'].includes(flyout)){
+    'features','resources','misc'].includes(flyout)){
     R3_HUD.chooser=null;
     R3_HUD.flyout=R3_HUD.flyout===flyout?'':flyout;
     R3_HUD.attackGroup='';R3_HUD.openKeys=[];R3_HUD.scrollTop=0;r3HudRender();
