@@ -1,6 +1,6 @@
 {
-  "version": "3.9.13",
+  "version": "3.9.14",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Automatic sync of verified controllable Roll20 characters with persistent Off, safe character switching and exact identity checks; Firefox-only signed release"
+  "reason": "Autoload official attack actions as individual weapon rows with observed hit/damage and a verified one-click native Roll20 Attack button; preserve identity safety"
 }
