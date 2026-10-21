@@ -1,6 +1,6 @@
 {
-  "version": "3.9.11",
+  "version": "3.9.12",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Firefox-only passive Debug fields for exact first-render observer state, observed completion mark and post-render Webpack attempt count; no Jumpgate engine/selection behavior changes"
+  "reason": "Read direct authenticated Jumpgate Campaign turn order when window.d20 is unavailable; keep passive automatic turn tracking and startup safety"
 }
