@@ -41,11 +41,10 @@ function r3TurnSync(){
 }
 function r3TurnLeader(){
   try{
-    // Modern Jumpgate can expose the same local Campaign model directly
-    // without the optional legacy d20 bridge. Read only the game's own
-    // initiative order; never advance it or infer a turn from appearance.
+    // Jumpgate's direct Campaign model is the initiative source; observe
+    // turnorder only. Do not touch the obsolete d20.Campaign namespace.
     const c=typeof r3TokenCampaign==='function'?r3TokenCampaign():
-      (window.d20?.Campaign||window.Campaign);
+      window.Campaign;
     const raw=c?.get?.('turnorder')??c?.attributes?.turnorder;
     if(typeof raw==='string'&&raw.length>50000)return null;
     const list=typeof raw==='string'?JSON.parse(raw):raw;
