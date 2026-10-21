@@ -420,7 +420,7 @@ test('Jumpgate without optional Roll20 editor bridge reports missing native d20 
   const selection=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(selection.renderer,'Babylon.js');
   assert.equal(selection.editorBridge,'window.d20 unavailable');
-  assert.equal(selection.campaignBridge,'unavailable');
+  assert.equal(selection.campaignBridge,'available', 'direct Jumpgate Campaign remains available without d20');
   assert.match(selection.reason,/window.d20 unavailable/);
   assert.equal(selection.eligible,false);
   assert.equal(selection.selectionCount,0);
