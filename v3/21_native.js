@@ -20,6 +20,82 @@ function r3NativeAttackMetric(raw){
   const damage=text.match(/\b\d{1,3}d\d{1,3}(?:[+-]\d{1,3})?\b/i);
   return {bonus:bonus?bonus[1]:'',damage:damage?damage[0].toLowerCase():''};
 }
+// Sheet-free standard attacks use the current Roll20 chat composer and
+// the *observed* hit/damage formulas. They never open, hide or navigate any
+// character sheet. This is a standard dice roll, not a D&D 2024 sheet macro:
+// advanced sheet features (advantage, crit, effects, modifiers added later)
+// cannot be assumed. Native official-sheet actions remain diagnostic opt-in.
+function r3NativeChatCommand(item){
+  const observed=r3NativeAttackMetric(item?.visible||'');
+  // Without an unambiguous sheet-observed hit bonus, don't invent a roll.
+  if(!/^[+-]\\d{1,3}$/.test(observed.bonus))return null;
+  const raw=r3String(item?.name,100);
+  const label=raw.replace(/[^\\p{L}\\p{N} .,'()+\\-]/gu,'').trim().slice(0,65);
+  if(!label)return null;
+  const dice='1d20'+observed.bonus;
+  const damage=/^\\d{1,3}d\\d{1,3}(?:[+-]\\d{1,3})?$/.test(observed.damage)?
+    ' {{Damage=[['+observed.damage+']]}}':'';
+  // Roll20's built-in default chat template is available independent of
+  // character sheets. The attack bonus/damage are immutable captured data.
+  return '&{template:default} {{name='+label+' Attack}} {{To Hit=[['+dice+']]}}'+damage;
+}
+function r3NativeChatSubmit(command){
+  // Chat is the native editor's own interface. Never dispatch onto an
+  // unrelated textbox, mutate private Jumpgate internals, or fake chat logs.
+  const input=document.querySelector?.('#textchat-input textarea');
+  const send=document.querySelector?.('#textchat-input .btn');
+  if(!input||!send||typeof send.click!=='function'||input.disabled||send.disabled)
+    return {ok:false,reason:'Roll20 chat controls are not available. Open the chat panel and retry; the character sheet can remain closed.'};
+  // Do not overwrite something the player was already typing. Unlike a
+  // hidden chat API, the DOM composer owns a real draft.
+  if(String(input.value||'').length)
+    return {ok:false,reason:'Your Roll20 chat has an unsent draft. Send or clear it before using Attack (the draft was not changed).'};
+  try{
+    const proto=Object.getPrototypeOf(input);
+    const setter=proto&&Object.getOwnPropertyDescriptor(proto,'value')?.set;
+    if(typeof setter==='function')setter.call(input,command);
+    else input.value=command;
+    if(typeof Event==='function')input.dispatchEvent?.(new Event('input',{bubbles:true}));
+    send.click();
+    return {ok:true};
+  }catch(error){
+    return {ok:false,reason:'Roll20 chat did not accept the attack roll: '+
+      r3String(error?.message||error,120)};
+  }
+}
+function r3NativeChatAttack(key){
+  if(R3_NATIVE.busy){r3NativeStatus('Another attack is still processing.');return false;}
+  const snapshot=R3_UI.snapshot;
+  const attack=r3NativeSelectAttack(key,snapshot);
+  const name=r3String(snapshot?.name,120);
+  if(!attack||!name||!r3String(attack._key,240)||
+     r3String(attack._key,240)!==key){
+    r3NativeStatus('Choose an identified attack from the currently imported character.');return false;
+  }
+  const identity=r3NativeBgResolve(name); // read-only permission lookup; NO showDialog
+  if(!identity.model){r3NativeStatus(identity.reason||'The selected character could not be verified.');return false;}
+  const active=R3_TOKEN.active;
+  if(active&&(active.characterId!==identity.id||active.name.toLowerCase()!==name.toLowerCase())){
+    r3NativeStatus('The selected token belongs to another character. Select the matching token before attacking.');return false;
+  }
+  if(R3_AUTO.name.toLowerCase()===name.toLowerCase()&&R3_AUTO.characterId&&
+     R3_AUTO.characterId!==identity.id){
+    r3NativeStatus('The imported attacks belong to another character ID. No roll sent.');return false;
+  }
+  const command=r3NativeChatCommand(attack);
+  if(!command){
+    r3NativeStatus('No confirmed hit-roll modifier was imported for '+r3String(attack.name,55)+
+      '. Nothing was rolled; refresh the source attack data.');return false;
+  }
+  R3_NATIVE.busy=true;
+  try{
+    const result=r3NativeChatSubmit(command);
+    if(!result.ok){r3NativeStatus(result.reason);return false;}
+    r3NativeStatus('Submitted '+r3String(attack.name,75)+
+      ' using observed attack and damage dice. Verify its result in Roll20 chat; sheet not required.');
+    return true;
+  }finally{R3_NATIVE.busy=false;}
+}
 function r3NativeAttackControl(name,source={}){
   const tab=r3CurrentTabLabel();
   if(!/^combat$/i.test(tab))
