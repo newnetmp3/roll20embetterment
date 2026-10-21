@@ -1088,7 +1088,10 @@ function r3UIEvent(event){
   const assignment=field('hudAssign','[data-hud-assign]');
   const spellLevel=field('hudSpellLevel','[data-hud-spell-level]');
   const spent=field('hudUsed','[data-hud-used]');
+  const attackMode=field('hudAttackMode','[data-hud-attack-mode]');
+  const attackWeapon=field('hudWeapon','[data-hud-weapon]');
   const nativeAttack=field('hudAttackKey','[data-hud-attack-key]');
+  const diceAttack=field('hudDiceKey','[data-hud-dice-key]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
   if(typeof r3DebugAction==='function'&&r3DebugAction(target))return;
@@ -1115,10 +1118,22 @@ function r3UIEvent(event){
   else if(target?.id==='r3-hud-native-confirm')return r3NativeConfirm();
   else if(target?.id==='r3-hud-native-cancel')return r3NativeCancel();
   else if(target?.id==='r3-hud-native-reveal')return r3NativeBgReveal();
+  else if(typeof attackMode==='string'&&['melee','ranged','other'].includes(attackMode)){
+    const catalog=r3HudAttackCatalog(R3_UI.snapshot);
+    if(!catalog.modes[attackMode].length)return;
+    R3_HUD.attackMode=attackMode;R3_HUD.attackGroup='';
+    r3HudRender();
+  }
+  else if(typeof attackWeapon==='string'&&attackWeapon.length>0&&attackWeapon.length<=180){
+    return r3HudWeaponToggle(attackWeapon);
+  }
   else if(typeof nativeAttack==='string'&&nativeAttack.length>0&&nativeAttack.length<=240){
-    // The normal Attack action rolls from imported data in Roll20 chat;
-    // it never requires a mounted or manually opened character sheet.
-    return r3NativeChatAttack(nativeAttack);
+    // Official source-verified Roll20 ability; no sheet window or guess.
+    return r3NativeMappedAttack(nativeAttack);
+  }
+  else if(typeof diceAttack==='string'&&diceAttack.length>0&&diceAttack.length<=240){
+    // Explicitly labeled non-native dice fallback only; no silent downgrade.
+    return r3NativeChatAttack(diceAttack);
   }
   else if(typeof nativeProbe==='string'&&nativeProbe.length<=240){
     return r3NativeProbe(nativeProbe);
@@ -1129,6 +1144,7 @@ function r3UIEvent(event){
   }
   else if(target?.id==='r3-hud-drawer-close'||target?.id==='r3-hud-flyout-close'){
     R3_HUD.drawerOpen=false;R3_HUD.flyout='';R3_HUD.chooser=null;
+    R3_HUD.attackGroup='';
     r3HudSave();r3HudRender();
   }
   else if(slot!==undefined&&/^[0-5]$/.test(String(slot))){
@@ -1155,7 +1171,7 @@ function r3UIEvent(event){
     'features','resources'].includes(flyout)){
     R3_HUD.chooser=null;
     R3_HUD.flyout=R3_HUD.flyout===flyout?'':flyout;
-    R3_HUD.openKeys=[];R3_HUD.scrollTop=0;r3HudRender();
+    R3_HUD.attackGroup='';R3_HUD.openKeys=[];R3_HUD.scrollTop=0;r3HudRender();
   }
   else if(hudCategory&&R3_HUD_TABS.some(tab=>tab.key===hudCategory)){
     R3_HUD.category=hudCategory;R3_HUD.flyout=hudCategory;
@@ -1211,6 +1227,14 @@ function r3StartUI(){
       r3UIStatus('Action failed: '+r3String(err?.message||err,250));
       console.error('[roll20 Embetterment] Importer control',err);
     }
+  });
+  // Windows-style context menu for each weapon; the normal left-click
+  // Options control provides the same keyboard/touch-accessible path.
+  root.addEventListener('contextmenu',event=>{
+    const row=event.target?.closest?.('[data-hud-weapon-row]');
+    const key=row?.dataset?.hudWeaponRow;
+    if(!key||!r3HudWeaponToggle(key))return;
+    event.preventDefault?.();event.stopPropagation?.();
   });
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
   if(typeof r3BattlefieldEnableDragging==='function')r3BattlefieldEnableDragging(root);
@@ -1306,6 +1330,89 @@ function r3NativeChatSubmit(command){
     return {ok:false,reason:'Roll20 chat did not accept the attack roll: '+
       r3String(error?.message||error,120)};
   }
+}
+// Shared native-action mapping. Roll20 2024's "Add Action to Token Bar"
+ // creates an actual character action. Invoke that *existing* ability
+ // instead of recreating the attack template. Never guess a repeating ID.
+function r3NativeActionModels(character){
+  const abilities=character?.abilities||r3TokenModelGet(character,'abilities');
+  if(Array.isArray(abilities))return abilities.slice(0,300);
+  return Array.isArray(abilities?.models)?abilities.models.slice(0,300):[];
+}
+function r3NativeMappedAbility(attack,character,snapshot){
+  const name=r3String(attack?.name,125).trim();
+  if(!name)return {reason:'This imported attack has no verified name.'};
+  // A name-only Roll20 ability cannot distinguish two separate source
+  // actions with identical names. The HUD attack key alone isn't evidence.
+  if((snapshot?.attacks||[]).filter(x=>
+    r3String(x.name,125).toLowerCase()===name.toLowerCase()).length!==1)
+    return {reason:'Multiple same-named native attacks; cannot identify one exact Roll20 ability.'};
+  const abilityNames=r3NativeActionModels(character).filter(model=>
+    r3String(r3TokenModelGet(model,'name'),125).toLowerCase()===name.toLowerCase());
+  if(abilityNames.length!==1)return {reason:abilityNames.length?
+    'Several Roll20 abilities have that name; the native action is ambiguous.':
+    'No corresponding Roll20 token action is registered for '+name+'.'};
+  const ability=abilityNames[0],action=r3String(r3TokenModelGet(ability,'action'),4000);
+  // Reject arbitrary chat commands and source-free dice templates. This
+  // proves the named ability delegates to a real repeating sheet action.
+  if(!/repeating_(?:attack|npcaction)\s*(?:\(|_)/i.test(action))
+    return {reason:'The matching Roll20 ability is not a verified repeating attack action.'};
+  const abilityName=r3String(r3TokenModelGet(ability,'name'),125);
+  if(!/^[^{}|\r\n]{1,125}$/.test(abilityName))
+    return {reason:'The native ability name contains unsupported macro syntax.'};
+  return {abilityName,abilityId:r3String(ability.id||r3TokenModelGet(ability,'_id'),120),
+    source:'Roll20 character ability',action};
+}
+function r3NativeMappedPreview(key,snapshot=R3_UI.snapshot){
+  const attack=r3NativeSelectAttack(key,snapshot);
+  if(!attack||r3String(attack._key,240)!==key)return {reason:'No unique imported attack.'};
+  const name=r3String(snapshot?.name,120),active=R3_TOKEN.active;
+  const chars=r3TokenCampaign()?.characters;
+  if(!chars)return {reason:'Roll20 characters unavailable'};
+  let model=null;
+  if(active){
+    if(active.name?.toLowerCase()!==name.toLowerCase())return {reason:'Different selected character'};
+    model=r3TokenCharacter(active.characterId);
+  }else{
+    const named=Array.isArray(chars.models)?chars.models.filter(c=>
+      r3String(r3TokenModelGet(c,'name'),120).toLowerCase()===name.toLowerCase()):[];
+    if(named.length===1)model=named[0];
+  }
+  if(!model||!r3TokenControls(model))return {reason:'No verified controlled character'};
+  return r3NativeMappedAbility(attack,model,snapshot);
+}
+function r3NativeMappedAttack(key){
+  if(R3_NATIVE.busy)return false;
+  const snapshot=R3_UI.snapshot,attack=r3NativeSelectAttack(key,snapshot);
+  if(!attack||attack._key!==key){r3NativeStatus('No uniquely identified source attack.');return false;}
+  const name=r3String(snapshot?.name,120);
+  const identity=r3NativeBgResolve(name); // read-only identity; never showDialog
+  if(!identity.model){r3NativeStatus(identity.reason);return false;}
+  const active=R3_TOKEN.active;
+  if(active&&(active.characterId!==identity.id||active.name?.toLowerCase()!==name.toLowerCase())){
+    r3NativeStatus('Selected token differs from the imported attack.');return false;
+  }
+  if(R3_AUTO.characterId&&R3_AUTO.name?.toLowerCase()===name.toLowerCase()&&
+     R3_AUTO.characterId!==identity.id){
+    r3NativeStatus('Imported source character does not match this Roll20 character.');return false;
+  }
+  const mapping=r3NativeMappedAbility(attack,identity.model,snapshot);
+  if(!mapping.abilityName){r3NativeStatus(mapping.reason);return false;}
+  // Official Roll20 character abilities can be called from text chat even
+  // while the 2024 sheet is closed. The ability's original repeating macro
+  // determines the correct native attack card, damage button and effects.
+  if(!/^[\w-]{4,120}$/.test(identity.id)){
+    r3NativeStatus('The native character ID is not a valid Roll20 reference.');return false;
+  }
+  const command='%{'+identity.id+'|'+mapping.abilityName+'}';
+  R3_NATIVE.busy=true;
+  try{
+    const result=r3NativeChatSubmit(command);
+    if(!result.ok){r3NativeStatus(result.reason);return false;}
+    r3NativeStatus('Invoked the mapped Roll20 '+r3String(attack.name,80)+
+      ' native ability. Confirm the resulting attack card in chat.');
+    return true;
+  }finally{R3_NATIVE.busy=false;}
 }
 function r3NativeChatAttack(key){
   if(R3_NATIVE.busy){r3NativeStatus('Another attack is still processing.');return false;}
@@ -1993,7 +2100,7 @@ function r3NativeMarkup(){
 // Roll20 Embetterment HUD v1: read-only combat presentation of v3 sheet data.
 // This module never dispatches native Roll20 rolls, casts or sheet mutations.
 const R3_HUD={category:'actions',collapsed:false,drawerOpen:false,flyout:'',spellLevel:'',weaponSet:0,weaponSets:[null,null,null,null,null,null],chooser:null,used:{action:false,bonus:false,reaction:false},renderedSnapshot:null,
-  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedNative:-1,renderedDebug:null,portraitName:'',portraitUrl:'',portraitChecked:0,portraitCache:null,openKeys:[],scrollTop:0};
+  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedNative:-1,renderedDebug:null,attackMode:'melee',attackGroup:'',renderedAttackMode:null,renderedAttackGroup:null,portraitName:'',portraitUrl:'',portraitChecked:0,portraitCache:null,openKeys:[],scrollTop:0};
 const R3_HUD_TABS=[
   {key:'actions',title:'Actions',icon:'⚔'},
   {key:'bonus',title:'Bonus',icon:'✦'},
@@ -2007,6 +2114,8 @@ function r3HudLoad(){
   // Always reset character-specific preferences before entering a different
   // character's profile. Otherwise previous weapon sets/icons would leak.
   R3_HUD.category='actions';R3_HUD.collapsed=false;R3_HUD.drawerOpen=false;
+  R3_HUD.attackMode='melee';R3_HUD.attackGroup='';R3_HUD.renderedAttackMode=null;
+  R3_HUD.renderedAttackGroup=null;
   R3_HUD.weaponSet=0;R3_HUD.weaponSets=[null,null,null,null,null,null];
   R3_HUD.portraitCache=null;R3_HUD.renderedSnapshot=null;
   R3_HUD.renderedLoadouts=null;
@@ -2284,41 +2393,153 @@ function r3HudSpellLevels(snapshot){
   return [...levels.entries()].sort((a,b)=>
     a[0]==='other'?1:b[0]==='other'?-1:Number(a[0])-Number(b[0]));
 }
-// The official Combat import is the source of truth: one row per recorded
-// attack variant, including same-name weapons with different attack/damage.
-// No loadout assignments or extra setup are required before using the menu.
+// The 2024 importer records attack *variants*, not a weapon taxonomy.
+// Classify only observed melee/ranged evidence and named variant suffixes.
+// Thrown attacks always live in Ranged. Unidentified actions remain Other.
+// Keep every original _key intact; grouping never changes roll execution.
+function r3HudWeaponName(name){
+  const raw=r3String(name,125).trim();
+  const m=raw.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
+  if(!m)return raw;
+  const modifiers=m[2].split(/[,/+]\s*/).map(x=>x.trim());
+  return modifiers.length&&modifiers.every(x=>
+    /^(?:melee|ranged|thrown|finesse|off[ -]?hand|two[ -]?handed|versatile|dual wield|main hand)$/i.test(x))?
+    m[1].trim():raw;
+}
+function r3HudAttackType(item){
+  const name=r3String(item?.name,125);
+  if(/\b(?:thrown|ranged)\b/i.test(name))return 'ranged';
+  if(/\b(?:melee|finesse|off[ -]?hand|versatile|two[ -]?handed)\b/i.test(name))
+    return 'melee';
+  // The original attack's own short text can independently identify its
+  // mode. Don't inspect unrelated sheet rows or guess based on weapon names.
+  const visible=r3String(item?.visible,240);
+  if(/\bmelee\b/i.test(visible))return 'melee';
+  if(/\branged\b/i.test(visible)||/\bthrown\s+attack\b/i.test(visible))
+    return 'ranged';
+  return 'other';
+}
+function r3HudAttackVariant(item,base){
+  const name=r3String(item?.name,125).trim();
+  if(name.toLowerCase()===base.toLowerCase())return 'Standard';
+  const suffix=name.slice(base.length).trim().replace(/^\(|\)$/g,'').trim();
+  return suffix||name;
+}
+function r3HudAttackCatalog(snapshot){
+  const attacks=Array.isArray(snapshot?.attacks)?snapshot.attacks.slice(0,400):[];
+  // Identify genuine variants of the same base weapon; retain distinct
+  // entries even with identical labels and/or distinct attack roll modifiers.
+  const families=new Map();
+  for(const item of attacks){
+    const name=r3String(item?.name,125).trim();
+    if(!name)continue;
+    const base=r3HudWeaponName(name);
+    const familyKey=base.toLowerCase();
+    if(!families.has(familyKey))families.set(familyKey,{name:base,entries:[]});
+    families.get(familyKey).entries.push({item,mode:r3HudAttackType(item)});
+  }
+  const modes={melee:[],ranged:[],other:[]};
+  for(const family of families.values()){
+    const known=family.entries.some(x=>x.mode==='melee');
+    for(const entry of family.entries){
+      // A plain weapon entry alongside an explicitly melee variant belongs
+      // to that family's standard melee options, not an invented fourth mode.
+      if(entry.mode==='other'&&known&&
+         r3String(entry.item.name,125).trim().toLowerCase()===family.name.toLowerCase())
+        entry.mode='melee';
+    }
+    for(const mode of Object.keys(modes)){
+      const variants=family.entries.filter(x=>x.mode===mode);
+      if(variants.length)modes[mode].push({name:family.name,mode,variants,
+        key:mode+'|'+family.name.toLowerCase()});
+    }
+  }
+  for(const rows of Object.values(modes))
+    rows.sort((a,b)=>a.name.localeCompare(b.name));
+  return {modes,attackCount:attacks.length};
+}
+function r3HudAttackOption(entry,base){
+  const item=entry.item,name=r3HudAttackVariant(item,base);
+  const key=r3String(item?._key||'',240);
+  const unique=!!key&&typeof r3NativeSelectAttack==='function'&&
+    r3NativeSelectAttack(key,R3_UI.snapshot)===item;
+  const mapped=unique&&typeof r3NativeMappedPreview==='function'?
+    r3NativeMappedPreview(key,R3_UI.snapshot):{reason:'No unique imported action key'};
+  const native=unique&&!!mapped.abilityName;
+  const metrics=typeof r3NativeAttackMetric==='function'?
+    r3NativeAttackMetric(item.visible||''):{bonus:'',damage:''};
+  const meta=[metrics.bonus?'Hit '+metrics.bonus:'',
+    metrics.damage?'Damage '+metrics.damage:''].filter(Boolean);
+  const label=r3Escape(item.name||base);
+  return '<div class="hud-weapon-option">'+
+    '<div class="hud-weapon-option-label"><strong>'+r3Escape(name)+'</strong>'+
+    (meta.length?'<small>'+r3Escape(meta.join(' · '))+'</small>':'')+
+    '<small class="'+(native?'hud-weapon-native':'hud-weapon-unmapped')+'" title="'+
+      r3Escape(native?'Source-verified Roll20 repeating attack action':mapped.reason||'No matching official action')+'">'+
+      (native?'Native linked':'Native unmapped')+'</small></div>'+
+    (native?'<button type="button" class="hud-attack-button" data-hud-attack-key="'+
+      r3Escape(key)+'" aria-label="Native attack '+label+'">Attack</button>':
+      '<button type="button" class="hud-dice-button"'+
+      (unique?' data-hud-dice-key="'+r3Escape(key)+'"':' disabled')+
+      ' aria-label="Roll imported dice for '+label+'" title="Observed hit and damage only; not a native Roll20 sheet attack">Dice</button>')+
+    '</div>';
+}
 function r3HudAttackMenu(snapshot){
-  const items=Array.isArray(snapshot?.attacks)?snapshot.attacks.slice(0,400):[];
-  if(!items.length)return '<p class="hud-empty">No attacks detected yet. Select your character; R20eb will read the official Combat sheet when available.</p>';
-  const rows=items.map((item,index)=>{
-    const name=r3String(item?.name,125)||'Unnamed attack';
-    const key=r3String(item?._key||item?.name,240);
-    const unique=key&&typeof r3NativeSelectAttack==='function'&&
-      r3NativeSelectAttack(key,snapshot)===item;
-    // Reuse the *same* conservative Roll20 attack parsing used to bind
-    // official roll buttons. Missing values remain unknown, never guessed.
-    const metrics=typeof r3NativeAttackMetric==='function'?
-      r3NativeAttackMetric(item?.visible||''):{bonus:'',damage:''};
-    const meta=[metrics.bonus?'To hit '+metrics.bonus:'',
-      metrics.damage?'Damage '+metrics.damage:'',
-      r3String(item?.range,60)].filter(Boolean);
-    const more=r3String(item?.visible,1100);
-    return '<div class="hud-attack-row" data-hud-attack-row="'+index+'">'+
-      '<span class="hud-attack-icon" aria-hidden="true">'+r3HudIcon('blade')+'</span>'+
-      '<div class="hud-attack-info"><strong>'+r3Escape(name)+'</strong>'+
-      (meta.length?'<span class="hud-attack-metrics">'+meta.map(x=>
-        '<span>'+r3Escape(x)+'</span>').join('')+'</span>':
-        '<small class="hud-attack-muted">Roll modifiers not observed</small>')+
-      (more?'<details class="hud-attack-details"><summary>Details</summary><p>'+r3Escape(more)+'</p></details>':'')+
-      '</div><button type="button" class="hud-attack-button"'+
-      (unique?' data-hud-attack-key="'+r3Escape(key)+'"':' disabled')+
-      ' aria-label="Attack with '+r3Escape(name)+'"'+
-      ' title="'+(unique?'Roll the observed '+r3Escape(name)+' attack in Roll20 chat without opening the sheet':
-        'Cannot safely identify a unique imported attack')+'">Attack</button></div>';
+  const catalog=r3HudAttackCatalog(snapshot);
+  if(!catalog.attackCount)return '<p class="hud-empty">No attacks detected yet. Select your character; R20eb will read the official Combat sheet when available.</p>';
+  const labels={melee:'Melee',ranged:'Ranged',other:'Other'};
+  const populated=Object.keys(labels).filter(mode=>catalog.modes[mode].length);
+  const selected=populated.includes(R3_HUD.attackMode)?R3_HUD.attackMode:populated[0];
+  const groups=catalog.modes[selected]||[];
+  const categories='<nav class="hud-attack-categories" aria-label="Attack types">'+
+    populated.map(mode=>'<button type="button" data-hud-attack-mode="'+mode+'"'+
+      ' class="'+(mode===selected?'selected':'')+'" aria-pressed="'+(mode===selected)+'">'+
+      labels[mode]+' <small>'+catalog.modes[mode].length+'</small></button>').join('')+
+    '</nav>';
+  const content=groups.map(group=>{
+    const expanded=R3_HUD.attackGroup===group.key;
+    // A single available option rolls directly; multiple variants get
+    // an Explorer-style expandable submenu, with right-click also supported.
+    const hasOptions=group.variants.length>1;
+    const one=group.variants[0];
+    const roll=hasOptions?
+      '<button type="button" class="hud-weapon-toggle" data-hud-weapon="'+
+        r3Escape(group.key)+'" aria-expanded="'+expanded+
+        '" aria-label="Choose '+r3Escape(group.name)+' attack variant">'+
+        (expanded?'Hide options':'Options')+' ▸</button>':
+      r3HudAttackOption(one,group.name);
+    return '<div class="hud-weapon-group'+(expanded?' is-open':'')+'" data-hud-weapon-row="'+
+      r3Escape(group.key)+'">'+
+      '<div class="hud-weapon-heading">'+
+        '<span class="hud-attack-icon" aria-hidden="true">'+r3HudIcon('blade')+'</span>'+
+        '<strong>'+r3Escape(group.name)+'</strong>'+
+        (hasOptions?'<small>'+group.variants.length+' variants</small>':'')+
+        (!hasOptions?'<span class="hud-weapon-single">'+
+          r3Escape(r3HudAttackVariant(one.item,group.name))+'</span>':'')+
+        (hasOptions?roll:'<button type="button" class="hud-weapon-toggle" data-hud-weapon="'+
+          r3Escape(group.key)+'" aria-label="Show '+r3Escape(group.name)+' attack details">⋯</button>')+
+      '</div>'+
+      (expanded?'<div class="hud-weapon-submenu" role="group" aria-label="'+
+        r3Escape(group.name)+' '+labels[selected]+' attack variants">'+
+        group.variants.map(entry=>r3HudAttackOption(entry,group.name)).join('')+'</div>':'')+
+      (!hasOptions?'<div class="hud-weapon-direct">'+roll+'</div>':'')+
+      '</div>';
   }).join('');
-  return '<div class="hud-attack-list" aria-label="Detected weapon attacks">'+
-    '<div class="hud-attack-count">'+items.length+' attack'+(items.length===1?'':'s')+
-    ' from the official sheet</div>'+rows+'</div>';
+  return '<div class="hud-attack-list" aria-label="Detected weapons">'+
+    '<div class="hud-attack-count">'+catalog.attackCount+' imported attacks · '+
+    Object.values(catalog.modes).reduce((sum,arr)=>sum+arr.length,0)+
+    ' weapon/type groups · Right-click or choose Options for variants</div>'+
+    categories+'<div class="hud-weapon-list">'+content+'</div></div>';
+}
+function r3HudWeaponToggle(key){
+  if(typeof key!=='string'||key.length>180||R3_HUD.flyout!=='actions')return false;
+  const catalog=r3HudAttackCatalog(R3_UI.snapshot);
+  const found=Object.values(catalog.modes).flat().find(group=>group.key===key);
+  if(!found)return false;
+  R3_HUD.attackMode=found.mode;
+  R3_HUD.attackGroup=R3_HUD.attackGroup===key?'':key;
+  r3HudRender();
+  return true;
 }
 function r3HudFlyoutMarkup(snapshot){
   if(R3_HUD.chooser!==null){
@@ -2370,7 +2591,7 @@ function r3HudFlyoutMarkup(snapshot){
   }
   return '<section class="hud-flyout" aria-label="Combat '+r3Escape(titles[flyout]||flyout)+' flyout">'+
     '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
-    '<small>'+(flyout==='actions'?'Attack rolls in Roll20 chat without opening the sheet':'Read-only · official sheet remains authoritative')+'</small>'+
+    '<small>'+(flyout==='actions'?'Native Attack when mapped · Dice fallback is not the sheet action':'Read-only · official sheet remains authoritative')+'</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
     (flyout==='actions'?r3NativeMarkup()+content:content+r3NativeMarkup())+'</section>';
 }
@@ -2465,6 +2686,8 @@ function r3HudRender(){
     R3_HUD.renderedCollapsed===R3_HUD.collapsed&&
     R3_HUD.renderedDrawer===R3_HUD.drawerOpen&&
     R3_HUD.renderedFlyout===R3_HUD.flyout&&
+    R3_HUD.renderedAttackMode===R3_HUD.attackMode&&
+    R3_HUD.renderedAttackGroup===R3_HUD.attackGroup&&
     R3_HUD.renderedSpellLevel===R3_HUD.spellLevel&&
     R3_HUD.renderedLoadouts===JSON.stringify(R3_HUD.weaponSets)&&
     R3_HUD.renderedWeaponSet===R3_HUD.weaponSet&&
@@ -2509,6 +2732,8 @@ function r3HudRender(){
   R3_HUD.renderedCollapsed=R3_HUD.collapsed;
   R3_HUD.renderedDrawer=R3_HUD.drawerOpen;
   R3_HUD.renderedFlyout=R3_HUD.flyout;
+  R3_HUD.renderedAttackMode=R3_HUD.attackMode;
+  R3_HUD.renderedAttackGroup=R3_HUD.attackGroup;
   R3_HUD.renderedSpellLevel=R3_HUD.spellLevel;
   R3_HUD.renderedLoadouts=JSON.stringify(R3_HUD.weaponSets);
   R3_HUD.renderedWeaponSet=R3_HUD.weaponSet;
@@ -2580,6 +2805,19 @@ function r3HudStyles(){
     '.hud-spell-levels button.active{background:#9e7987!important;color:white!important}.hud-spell-levels small{opacity:.8}',
     '.hud-flyout-caption{padding:2px 8px;color:#f0dbe7;font-weight:700;font-size:10px}.hud-flyout-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:4px;padding:7px}',
     '.hud-attack-list{display:flex;flex-direction:column;gap:5px;padding:7px;min-width:0}.hud-attack-count{font-size:10px;color:#becfde;padding:3px 4px}',
+    '.hud-attack-categories{display:flex;flex-wrap:wrap;gap:5px;position:sticky;top:31px;z-index:2;padding:5px 0;background:#27394b;border-bottom:1px solid #567089}',
+    '.hud-attack-categories button{border:1px solid #607994!important;border-radius:5px!important;background:#263d56!important;padding:7px 12px!important;color:#dae7f5!important;font-weight:650!important}',
+    '.hud-attack-categories button.selected{background:#2b75b2!important;border-color:#9acaf4!important;color:white!important}.hud-attack-categories small{opacity:.8;margin-left:3px}',
+    '.hud-weapon-list{display:flex;flex-direction:column;gap:6px;padding-top:5px}.hud-weapon-group{background:#192a3c;border:1px solid #3b5978;border-radius:7px;min-width:0;overflow:hidden}',
+    '.hud-weapon-group.is-open{border-color:#73a8d7}.hud-weapon-heading{display:flex;align-items:center;gap:9px;padding:8px;min-height:32px}.hud-weapon-heading>strong{font-size:13px;flex:1;overflow-wrap:anywhere}',
+    '.hud-weapon-heading>small,.hud-weapon-single{color:#adbed0;font-size:11px}.hud-weapon-toggle{background:#294660!important;border:1px solid #607d99!important;border-radius:5px!important;padding:6px 9px!important;flex:0 0 auto}',
+    '.hud-weapon-toggle:hover,.hud-weapon-toggle:focus-visible{background:#316b9b!important}.hud-weapon-submenu{border-top:1px solid #52738e;background:#101f30;padding:4px 7px 8px 38px;display:flex;flex-direction:column;gap:4px}',
+    '.hud-weapon-option{display:flex;align-items:center;gap:8px;padding:5px 0;min-width:0;border-bottom:1px solid #2d4864}.hud-weapon-option:last-child{border-bottom:0}.hud-weapon-option-label{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}.hud-weapon-option-label strong{font-size:11px;overflow-wrap:anywhere}.hud-weapon-option-label small{font-size:10px;color:#c2d4e5}',
+    '.hud-weapon-direct{display:flex;justify-content:flex-end;align-items:center;padding:0 8px 7px}.hud-weapon-direct .hud-weapon-option{width:100%;border:0;padding:0}.hud-weapon-direct .hud-weapon-option-label strong{display:none}',
+    '.hud-weapon-native{color:#9bdcba!important}.hud-weapon-unmapped{color:#dfbd8d!important}',
+    '.hud-dice-button{flex:0 0 auto;min-width:68px!important;border:1px solid #6a839b!important;border-radius:6px!important;background:#30465d!important;color:#e9eef5!important;padding:8px 9px!important;font-weight:650!important}.hud-dice-button:hover:not(:disabled){background:#44627e!important}.hud-dice-button:disabled{opacity:.45}',
+
+
     '.hud-attack-row{display:flex;align-items:center;gap:9px;background:#192a3c;border:1px solid #3b5978;border-radius:7px;padding:8px;min-width:0}',
     '.hud-attack-icon{flex:0 0 27px;color:#a9c6e4}.hud-attack-icon svg{width:25px;height:25px}',
     '.hud-attack-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}.hud-attack-info>strong{font-size:12px;overflow-wrap:anywhere}',

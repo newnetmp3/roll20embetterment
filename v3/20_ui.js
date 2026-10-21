@@ -189,7 +189,10 @@ function r3UIEvent(event){
   const assignment=field('hudAssign','[data-hud-assign]');
   const spellLevel=field('hudSpellLevel','[data-hud-spell-level]');
   const spent=field('hudUsed','[data-hud-used]');
+  const attackMode=field('hudAttackMode','[data-hud-attack-mode]');
+  const attackWeapon=field('hudWeapon','[data-hud-weapon]');
   const nativeAttack=field('hudAttackKey','[data-hud-attack-key]');
+  const diceAttack=field('hudDiceKey','[data-hud-dice-key]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
   if(typeof r3DebugAction==='function'&&r3DebugAction(target))return;
@@ -216,10 +219,22 @@ function r3UIEvent(event){
   else if(target?.id==='r3-hud-native-confirm')return r3NativeConfirm();
   else if(target?.id==='r3-hud-native-cancel')return r3NativeCancel();
   else if(target?.id==='r3-hud-native-reveal')return r3NativeBgReveal();
+  else if(typeof attackMode==='string'&&['melee','ranged','other'].includes(attackMode)){
+    const catalog=r3HudAttackCatalog(R3_UI.snapshot);
+    if(!catalog.modes[attackMode].length)return;
+    R3_HUD.attackMode=attackMode;R3_HUD.attackGroup='';
+    r3HudRender();
+  }
+  else if(typeof attackWeapon==='string'&&attackWeapon.length>0&&attackWeapon.length<=180){
+    return r3HudWeaponToggle(attackWeapon);
+  }
   else if(typeof nativeAttack==='string'&&nativeAttack.length>0&&nativeAttack.length<=240){
-    // The normal Attack action rolls from imported data in Roll20 chat;
-    // it never requires a mounted or manually opened character sheet.
-    return r3NativeChatAttack(nativeAttack);
+    // Official source-verified Roll20 ability; no sheet window or guess.
+    return r3NativeMappedAttack(nativeAttack);
+  }
+  else if(typeof diceAttack==='string'&&diceAttack.length>0&&diceAttack.length<=240){
+    // Explicitly labeled non-native dice fallback only; no silent downgrade.
+    return r3NativeChatAttack(diceAttack);
   }
   else if(typeof nativeProbe==='string'&&nativeProbe.length<=240){
     return r3NativeProbe(nativeProbe);
@@ -230,6 +245,7 @@ function r3UIEvent(event){
   }
   else if(target?.id==='r3-hud-drawer-close'||target?.id==='r3-hud-flyout-close'){
     R3_HUD.drawerOpen=false;R3_HUD.flyout='';R3_HUD.chooser=null;
+    R3_HUD.attackGroup='';
     r3HudSave();r3HudRender();
   }
   else if(slot!==undefined&&/^[0-5]$/.test(String(slot))){
@@ -256,7 +272,7 @@ function r3UIEvent(event){
     'features','resources'].includes(flyout)){
     R3_HUD.chooser=null;
     R3_HUD.flyout=R3_HUD.flyout===flyout?'':flyout;
-    R3_HUD.openKeys=[];R3_HUD.scrollTop=0;r3HudRender();
+    R3_HUD.attackGroup='';R3_HUD.openKeys=[];R3_HUD.scrollTop=0;r3HudRender();
   }
   else if(hudCategory&&R3_HUD_TABS.some(tab=>tab.key===hudCategory)){
     R3_HUD.category=hudCategory;R3_HUD.flyout=hudCategory;
@@ -312,6 +328,14 @@ function r3StartUI(){
       r3UIStatus('Action failed: '+r3String(err?.message||err,250));
       console.error('[roll20 Embetterment] Importer control',err);
     }
+  });
+  // Windows-style context menu for each weapon; the normal left-click
+  // Options control provides the same keyboard/touch-accessible path.
+  root.addEventListener('contextmenu',event=>{
+    const row=event.target?.closest?.('[data-hud-weapon-row]');
+    const key=row?.dataset?.hudWeaponRow;
+    if(!key||!r3HudWeaponToggle(key))return;
+    event.preventDefault?.();event.stopPropagation?.();
   });
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
   if(typeof r3BattlefieldEnableDragging==='function')r3BattlefieldEnableDragging(root);
