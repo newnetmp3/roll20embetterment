@@ -428,3 +428,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 
 
 **2026-10-20 native Attack-menu milestone (in progress):** Use existing official 2024 imported attack catalog to autoload one compact weapon/action row per exact attack `_key`, exposing observed hit bonus and damage die, plus a dedicated **Attack** button. The player's one intentional click runs the existing authenticated native Roll20 probe and, if it identifies a single official hit-roll control for that exact character/attack, invokes it once; no redundant second confirmation. Ambiguity and stale character/sheet state fail closed, and rendering never triggers rolls. Replace the former cumbersome expandable attack-card workflow in the battlefield Attacks flyout. Preserve sheet ownership, auto-sync, defensive Jumpgate boot barrier and manual diagnostic Find/Confirm path. CI and live Floorp validation to be tracked separately; #73 token movement remains open.
+
+**PR #98 Firefox CI:** 452/452 automated tests passed, generated userscript consistent (runs 39529343178 and 39529323994). Live first-click native roll and in-game attack catalog QA still pending.
