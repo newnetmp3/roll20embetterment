@@ -108,3 +108,23 @@ test('Firefox ZIP are valid root-manifest packages',()=>{
     }
   }
 });
+
+
+test('milestone: one Debug entry replaces toolbar, MISC exists and screen scaling respects chat',()=>{
+  const {source}=pack('firefox');
+  const battlefield=source.split('// ===== extension/firefox/battlefield-layout.js =====')[1]
+    .split('// ===== extension/firefox/panel-drag.js =====')[0];
+  const debug=source.split('// ===== extension/firefox/debug-window.js =====')[1]
+    .split('// ===== extension/firefox/battlefield-layout.js =====')[0];
+  assert.doesNotMatch(battlefield,/class="r3-bf-mini-tools" data-bf-panel="tools"/);
+  assert.match(battlefield,/r3BattlefieldControl\('star','MISC','misc'\)/);
+  assert.match(battlefield,/id="r3-hud-debug"/);
+  assert.match(debug,/data-r3-debug="show-sheet"/);
+  assert.match(debug,/data-r3-debug="allow-private"/);
+  assert.match(debug,/data-r3-debug="reset-layout"/);
+  assert.match(debug,/data-r3-debug="toggle-hud"/);
+  assert.match(debug,/data-r3-debug="sync"/);
+  assert.match(debug,/Manual turn corrections/);
+  assert.match(source,/--r3-bf-scale/);
+  assert.match(source,/r3BattlefieldChatInset/);
+});
