@@ -1,6 +1,6 @@
 {
-  "version": "3.9.15",
+  "version": "3.9.16",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Fix Jumpgate native Attack button by eliminating obsolete window.d20.Campaign use, resolving authorized character sheets via window.Campaign and surfacing native-roll status"
+  "reason": "Sheet-free weapon Attack buttons send sourced hit and damage dice through Roll20 native chat without opening any official character sheet; preserve controlled-character identity and player chat draft"
 }
