@@ -100,14 +100,14 @@ function r3NativeMappedAbility(attack,character,snapshot){
 // Map only pre-existing, uniquely named controlled-character abilities with
 // a category-consistent Roll20 sheet-action reference; never guess row IDs.
 const R3_NATIVE_CATEGORIES={
-  attacks:{title:'Attack',pattern:/repeating_(?:attack|npcaction)\\s*(?:\\(|_)/i},
-  spells:{title:'Cast',pattern:/(?:repeating_(?:spell|spellattack|spellcard)\\s*(?:\\(|_)|\\bspell_(?:roll|cast|attack)\\b)/i},
-  features:{title:'Use',pattern:/(?:repeating_(?:feature|trait|action|classfeature|npcaction)\\s*(?:\\(|_)|\\bfeature_(?:roll|use)\\b)/i},
-  inventory:{title:'Use',pattern:/(?:repeating_(?:inventory|equipment|item|consumable)\\s*(?:\\(|_)|\\bitem_(?:roll|use)\\b)/i},
-  resources:{title:'Use',pattern:/repeating_(?:resource|feature|action)\\s*(?:\\(|_)/i},
-  skills:{title:'Roll',pattern:/(?:\\b(?:skill|check)[-_][a-z][\\w-]*|[a-z][\\w-]*[-_](?:skill|check)\\b)/i},
-  saves:{title:'Roll',pattern:/(?:\\b(?:saving[_-]?throw|save)[-_][a-z][\\w-]*|[a-z][\\w-]*[-_](?:save|saving[_-]?throw)\\b)/i},
-  modifiers:{title:'Roll',pattern:/(?:\\b(?:ability[_-]?check|check)[-_][a-z][\\w-]*|[a-z][\\w-]*[-_](?:ability[_-]?check|check)\\b)/i}
+  attacks:{title:'Attack',pattern:/repeating_(?:attack|npcaction)\s*(?:\(|_)/i},
+  spells:{title:'Cast',pattern:/(?:repeating_(?:spell|spellattack|spellcard)\s*(?:\(|_)|\bspell_(?:roll|cast|attack)\b)/i},
+  features:{title:'Use',pattern:/(?:repeating_(?:feature|trait|action|classfeature|npcaction)\s*(?:\(|_)|\bfeature_(?:roll|use)\b)/i},
+  inventory:{title:'Use',pattern:/(?:repeating_(?:inventory|equipment|item|consumable)\s*(?:\(|_)|\bitem_(?:roll|use)\b)/i},
+  resources:{title:'Use',pattern:/repeating_(?:resource|feature|action)\s*(?:\(|_)/i},
+  skills:{title:'Roll',pattern:/(?:\b(?:skill|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:skill|check)\b)/i},
+  saves:{title:'Roll',pattern:/(?:\b(?:saving[_-]?throw|save)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:save|saving[_-]?throw)\b)/i},
+  modifiers:{title:'Roll',pattern:/(?:\b(?:ability[_-]?check|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:ability[_-]?check|check)\b)/i}
 };
 function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
   if(!Object.prototype.hasOwnProperty.call(R3_NATIVE_CATEGORIES,kind)||!key||
@@ -127,7 +127,7 @@ function r3NativeMapAbility(kind,entry,character,snapshot){
   if(!R3_NATIVE_CATEGORIES[kind])return {reason:'Unsupported native action category.'};
   if(kind==='attacks')return r3NativeMappedAbility(entry,character,snapshot);
   const name=r3String(entry?.name,125).trim();
-  if(!name||/[{}|\\r\\n]/.test(name))return {reason:'The source action name is invalid for Roll20 macros.'};
+  if(!name||/[{}|\r\n]/.test(name))return {reason:'The source action name is invalid for Roll20 macros.'};
   if(!['skills','saves','modifiers'].includes(kind)){
     const list=Array.isArray(snapshot?.[kind])?snapshot[kind]:[];
     if(list.filter(x=>r3String(x?.name,125).toLowerCase()===name.toLowerCase()).length!==1)
@@ -144,7 +144,7 @@ function r3NativeMapAbility(kind,entry,character,snapshot){
   if(!R3_NATIVE_CATEGORIES[kind].pattern.test(action))
     return {reason:'The matching ability is not an identified '+kind+' sheet action.'};
   const abilityName=r3String(r3TokenModelGet(ability,'name'),125);
-  if(!/^[^{}|\\r\\n]{1,125}$/.test(abilityName))
+  if(!/^[^{}|\r\n]{1,125}$/.test(abilityName))
     return {reason:'The native action name contains unsupported macro syntax.'};
   return {abilityName,abilityId:r3String(ability.id||r3TokenModelGet(ability,'_id'),120),
     source:'Verified Roll20 '+kind+' ability',action};
@@ -190,7 +190,7 @@ function r3NativeInvoke(kind,key){
   }
   const mapped=r3NativeMapAbility(kind,entry,identity.model,snapshot);
   if(!mapped.abilityName){r3NativeStatus(mapped.reason);return false;}
-  if(!/^[\\w-]{4,120}$/.test(identity.id)){
+  if(!/^[\w-]{4,120}$/.test(identity.id)){
     r3NativeStatus('Character ID is not a valid native action reference.');return false;
   }
   R3_NATIVE.busy=true;
