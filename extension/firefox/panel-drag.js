@@ -84,9 +84,18 @@ function r3BattlefieldPlacePanels(){
   const root=R3_UI.root;
   if(!root)return;
   const inset=r3BattlefieldChatInset();
+  // Use CSS-pixel viewport dimensions, not physical monitor pixels; browser
+  // zoom and HiDPI scaling are already reflected in these measurements.
+  // Recompute on every resize instead of persisting monitor-specific sizes.
+  const width=Math.max(320,Number(window.innerWidth)||1280);
+  const height=Math.max(300,Number(window.innerHeight)||800);
+  const usable=Math.max(320,width-inset);
+  const scale=Math.max(.78,Math.min(1.32,Math.min(usable/1400,height/900)));
   const host=R3_UI.host;
   host?.style?.setProperty?.('--r3-bf-chat-inset',inset+'px');
+  host?.style?.setProperty?.('--r3-bf-scale',String(scale));
   root.querySelector?.('.r3-bf-shell')?.style?.setProperty?.('--r3-bf-chat-inset',inset+'px');
+  root.querySelector?.('.r3-bf-shell')?.style?.setProperty?.('--r3-bf-scale',String(scale));
   // Importer is outside the HUD's root but should be as movable as everything
   // else, and should default next to the canvas rather than over chat.
   const importer=root.getElementById?.('r3-wrap');
