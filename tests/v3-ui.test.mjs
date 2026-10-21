@@ -1310,9 +1310,9 @@ test('shared native mappings cover spells, features, inventory, skills, saves, a
   snap.skills={Acrobatics:7};snap.saves={Dexterity:5};snap.modifiers={Wisdom:2};
   x.model.abilities={models:[
     ...categories.map(([,name,,action],i)=>({id:'ability-'+i,get(k){return {name,action}[k];}})),
-    {id:'skill',get(k){return {name:'Acrobatics',action:'%{char-player|skill_acrobatics_check'}[k];}},
-    {id:'save',get(k){return {name:'Dexterity',action:'%{char-player|dexterity_save'}[k];}},
-    {id:'check',get(k){return {name:'Wisdom',action:'%{char-player|wisdom_ability_check'}[k];}}
+    {id:'skill',get(k){return {name:'Acrobatics',action:'%{char-player|skill_acrobatics_check}'}[k];}},
+    {id:'save',get(k){return {name:'Dexterity',action:'%{char-player|dexterity_save}'}[k];}},
+    {id:'check',get(k){return {name:'Wisdom',action:'%{char-player|wisdom_ability_check}'}[k];}}
   ]};
   h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
   for(const [kind,name,key,,caption] of categories){
@@ -1377,6 +1377,62 @@ test('native registry rejects ambiguous, stale, cross-kind, unverified and unman
   assert.match(html,/Native unmapped/);
   assert.doesNotMatch(html,/data-hud-native-key="item"/);
 });
+test('native macro mapping rejects additional chat, wrong identity and selection-relative targets',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.spells=[{name:'Magic Missile',_key:'missile'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  const ability={id:'safe-ability',get(k){return this[k];},
+    name:'Magic Missile',action:'%{char-player|repeating_spell_ROW_cast}'};
+  x.model.abilities={models:[ability]};
+  assert.equal(h.api.r3NativeMapPreview('spells','missile').abilityName,'Magic Missile');
+  for(const invalid of [
+    '%{char-player|repeating_spell_ROW_cast} &{template:default} {{leak=1}}',
+    '%{selected|repeating_spell_ROW_cast}',
+    '%{char-other|repeating_spell_ROW_cast}',
+    '%{char-player|repeating_spell_ROW_cast',
+    '!api repeating_spell_ROW_cast'
+  ]){
+    ability.action=invalid;
+    assert.equal(h.api.r3NativeMapPreview('spells','missile').abilityName,undefined,invalid);
+    assert.equal(h.api.r3NativeInvoke('spells','missile'),false,invalid);
+  }
+  assert.equal(x.sent.length,0,'invalid native action macros must never be sent to chat');
+});
+test('exact official repeating row ID safely disambiguates same-named native attacks',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[
+    {name:'Dagger',_key:'first',nativeRowId:'row-attack-001',visible:'Dagger +6 Attack 1d4+3'},
+    {name:'Dagger',_key:'second',nativeRowId:'row-attack-002',visible:'Dagger +4 Attack 1d4+2'}
+  ];
+  const actions=[
+    {name:'Attack A',action:'%{char-player|repeating_attack_row-attack-001_attack}'},
+    {name:'Attack B',action:'%{char-player|repeating_attack("row-attack-002", "attack")}'}
+  ];
+  x.model.abilities={models:actions.map((model,i)=>({
+    id:'native-'+i,get(k){return model[k];}
+  }))};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  assert.equal(h.api.r3NativeMappedPreview('first').abilityName,'Attack A');
+  assert.equal(h.api.r3NativeMappedPreview('second').abilityName,'Attack B');
+  assert.equal(h.api.r3NativeMappedAttack('second'),true);
+  assert.deepEqual(x.sent,['%{char-player|Attack B}']);
+  actions[1].action='%{char-player|repeating_attack_row-attack-002-other_attack}';
+  assert.equal(h.api.r3NativeMappedPreview('second').abilityName,undefined,
+    'row-id substring must not match a different row');
+  assert.equal(h.api.r3NativeMappedAttack('second'),false);
+  assert.equal(x.sent.length,1);
+});
+test('capture preserves only row identity explicitly exposed on official sheet card',()=>{
+  const h=panelHarness('Elowen');
+  const observed=vm.runInContext('r3NativeObservedRowId',h.context);
+  const card=attrs=>({getAttribute(k){return attrs[k]??null;}});
+  assert.equal(observed(card({'data-row-id':'-OfficialRow12'})),'-OfficialRow12');
+  assert.equal(observed(card({'data-testid':'attack-999','id':'row-42'})),'');
+  assert.equal(observed(card({'data-row-id':'bad id'})),'');
+  assert.equal(observed(card({'data-row-id':'attack-one','data-repeating-id':'attack-two'})),'');
+});
 test('mapped native attack uses exact existing Roll20 character action and never opens a sheet',()=>{
   const x=observedChatRig('Elowen'),h=x.h;
   const snap=h.api.r3Empty();snap.name='Elowen';
@@ -1417,7 +1473,7 @@ test('native action mapping refuses guesses and duplicate weapon labels',()=>{
   assert.equal(x.sent.length,0);
   h.api.R3_UI.snapshot=h.api.r3Coverage({...snap,attacks:[snap.attacks[0]]});
   x.model.abilities.models[0].get=k=>({name:'Dagger',action:'&{template:default} {{name=Dagger}}'})[k];
-  assert.match(h.api.r3NativeMappedPreview('dagger-a',h.api.R3_UI.snapshot).reason,/not a verified repeating/);
+  assert.match(h.api.r3NativeMappedPreview('dagger-a',h.api.R3_UI.snapshot).reason,/one complete, safe sheet-action reference/);
   assert.equal(h.api.r3NativeMappedAttack('dagger-a'),false);
   assert.equal(x.sent.length,0);
 });

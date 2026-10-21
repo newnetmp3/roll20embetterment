@@ -237,8 +237,19 @@ function r3Name(row,kind){
   const titled=row.querySelector?.('[data-testid$="-name"],[role="heading"],h3,h4');
   return r3Text(titled,125)||r3Attr(row,'aria-label');
 }
+// Preserve only an explicit row identifier on the card itself. Rendered
+// labels, child element IDs, ordinals and data-testid strings are NOT stable
+// repeating-action identifiers and are never promoted to a macro ID.
+function r3NativeObservedRowId(card){
+  const names=['data-repeating-row-id','data-repeating-id','data-row-id'];
+  const ids=names.map(name=>r3Attr(card,name)).filter(Boolean);
+  if(ids.length!==1||!/^[A-Za-z0-9_-]{4,120}$/.test(ids[0]))return '';
+  return ids[0];
+}
 function r3CardInfo(card,kind,name,tab){
   const info={name,tab,visible:r3Text(card,1100)};
+  const nativeRowId=r3NativeObservedRowId(card);
+  if(nativeRowId)info.nativeRowId=nativeRowId;
   const tag=r3Attr(card,'data-testid');if(tag)info.testId=tag;
   const buttons=Array.from(card.querySelectorAll?.('button')||[]).slice(0,18)
     .filter(r3Shown).map(b=>({label:r3String(r3Attr(b,'aria-label')||r3Attr(b,'title')||r3Text(b,70),70)}))
@@ -386,7 +397,8 @@ function r3InventoryControls(row,info){
 function r3AddNamedCard(s,kind,row,name,tab){
   if(!Array.isArray(s[kind])||!name||s[kind].length>=400)return;
   const info=r3CardInfo(row,kind,name,tab);
-  const key=name.toLowerCase()+'|'+(kind==='spells'?info.level||'':'')+'|'+(kind==='attacks'?info.visible.slice(0,60):'');
+  const key=info.nativeRowId?'row:'+info.nativeRowId:
+    name.toLowerCase()+'|'+(kind==='spells'?info.level||'':'')+'|'+(kind==='attacks'?info.visible.slice(0,60):'');
   if(!s[kind].some(x=>x._key===key))s[kind].push({...info,_key:key});
 }
 function r3InventoryRows(root,s,tab){
