@@ -1433,6 +1433,61 @@ test('capture preserves only row identity explicitly exposed on official sheet c
   assert.equal(observed(card({'data-row-id':'bad id'})),'');
   assert.equal(observed(card({'data-row-id':'attack-one','data-repeating-id':'attack-two'})),'');
 });
+
+test('explicit authenticated sheet macros execute directly when token-bar abilities are absent',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.spells=[
+    {name:'Shield',_key:'shield-1',nativeActionRef:'%{char-player|repeating_spell_ROW111_cast}'},
+    {name:'Shield',_key:'shield-2',nativeActionRef:'%{char-player|repeating_spell_ROW222_cast}'}
+  ];
+  x.model.abilities={models:[]};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  assert.equal(h.api.r3NativeMapPreview('spells','shield-2').source,
+    'Exact authenticated official-sheet action reference');
+  assert.equal(h.api.r3NativeInvoke('spells','shield-2'),true);
+  assert.deepEqual(x.sent,['%{char-player|repeating_spell_ROW222_cast}']);
+  snap.spells[1].nativeActionRef='%{char-other|repeating_spell_ROW222_cast}';
+  assert.equal(h.api.r3NativeInvoke('spells','shield-2'),false);
+  assert.equal(x.sent.length,1);
+  snap.spells[1].nativeActionRef='%{char-player|repeating_spell_ROW222_cast}; !api';
+  assert.equal(h.api.r3NativeInvoke('spells','shield-2'),false);
+  assert.equal(x.sent.length,1);
+});
+test('MISC native actions are source-bound, and unknown controls remain unmapped',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.misc=[{name:'Custom roll',_key:'misc-custom',
+    nativeActionRef:'%{char-player|repeating_custom_ROW123_roll}'}];
+  x.model.abilities={models:[]};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  assert.equal(h.api.r3HudEntries(snap,'misc').length,1);
+  assert.equal(h.api.r3NativeMapPreview('misc','misc-custom').abilityName,'Custom roll');
+  assert.equal(h.api.r3NativeInvoke('misc','misc-custom'),true);
+  assert.deepEqual(x.sent,['%{char-player|repeating_custom_ROW123_roll}']);
+  snap.misc.push({name:'Unmapped custom',_key:'unknown'});
+  assert.equal(h.api.r3NativeInvoke('misc','unknown'),false);
+  assert.equal(x.sent.length,1);
+});
+test('official rendered controls are imported into MISC only with complete explicit macros',()=>{
+  const h=panelHarness('Elowen');
+  const capture=h.context.r3Capture||vm.runInContext('r3Capture',h.context);
+  const button=(name,action)=>({
+    tagName:'BUTTON',innerText:name,
+    getAttribute(k){return k==='aria-label'?name:k==='data-roll20-macro'?action:null;},
+    querySelectorAll(){return [];},closest(){return null;},getClientRects(){return [{}];}
+  });
+  const valid=button('Custom roll','%{char-player|repeating_custom_ROW123_roll}');
+  const malformed=button('Ignore injected','%{char-player|repeating_custom_ROW123_roll};!api');
+  const unnamed=button('','%{char-player|repeating_custom_ROW123_roll}');
+  const root={title:'Elowen',querySelectorAll(selector){
+    return selector.includes('button[data-roll20-macro]')?[valid,malformed,unnamed]:[];
+  },querySelector(){return null;}};
+  const snap=capture(root,'Other');
+  assert.equal(snap.misc.length,1);
+  assert.equal(snap.misc[0].name,'Custom roll');
+  assert.equal(snap.coverage.misc,1);
+});
 test('mapped native attack uses exact existing Roll20 character action and never opens a sheet',()=>{
   const x=observedChatRig('Elowen'),h=x.h;
   const snap=h.api.r3Empty();snap.name='Elowen';
