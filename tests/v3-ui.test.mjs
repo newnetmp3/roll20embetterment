@@ -1454,6 +1454,30 @@ test('explicit authenticated sheet macros execute directly when token-bar abilit
   assert.equal(h.api.r3NativeInvoke('spells','shield-2'),false);
   assert.equal(x.sent.length,1);
 });
+
+test('MISC discovers unclassified controlled-character repeating abilities without a sheet',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  x.model.abilities={models:[
+    {id:'custom-row-01',get(k){return {name:'Custom Item Action',
+      action:'%{char-player|repeating_custom_rowfoo_effect}'}[k];}},
+    {id:'attack-row-01',get(k){return {name:'Dagger',
+      action:'%{char-player|repeating_attack_rowbar_attack}'}[k];}},
+    {id:'malicious-row-01',get(k){return {name:'Injected',action:'!api repeating_custom_foo'}[k];}},
+    {id:'foreign-row-01',get(k){return {name:'Foreign',
+      action:'%{char-other|repeating_custom_bar_effect}'}[k];}}
+  ]};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  const list=h.api.r3HudEntries(snap,'misc');
+  assert.deepEqual(Array.from(list.map(item=>item.name)),['Custom Item Action']);
+  assert.equal(h.api.r3NativeMapPreview('misc','ability:custom-row-01').abilityName,
+    'Custom Item Action');
+  assert.equal(h.api.r3NativeInvoke('misc','ability:custom-row-01'),true);
+  assert.deepEqual(x.sent,['%{char-player|repeating_custom_rowfoo_effect}']);
+  h.api.R3_TOKEN.active={name:'Other PC',characterId:'char-other'};
+  assert.equal(h.api.r3NativeInvoke('misc','ability:custom-row-01'),false);
+  assert.equal(x.sent.length,1);
+});
 test('MISC native actions are source-bound, and unknown controls remain unmapped',()=>{
   const x=observedChatRig('Elowen'),h=x.h;
   const snap=h.api.r3Empty();snap.name='Elowen';
