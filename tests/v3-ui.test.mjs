@@ -65,7 +65,7 @@ function panelHarness(character='NIER'){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudAttackCatalog,r3HudWeaponToggle,r3HudAttackMenu,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,r3NativeChatCommand,r3NativeChatAttack,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3NativeBgReveal,r3TokenPlayerId,r3TokenControls};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudAttackCatalog,r3HudWeaponToggle,r3HudAttackMenu,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,r3NativeChatCommand,r3NativeChatAttack,r3NativeMappedAbility,r3NativeMappedPreview,r3NativeMappedAttack,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3NativeBgReveal,r3TokenPlayerId,r3TokenControls};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1164,24 +1164,24 @@ test('attack menu groups exactly observed variants by weapon and mode with Throw
   assert.match(html,/data-hud-attack-mode="melee"/);
   assert.match(html,/data-hud-attack-mode="ranged"/);
   assert.match(html,/data-hud-attack-mode="other"/);
-  assert.doesNotMatch(html,/data-hud-attack-key="dagger-off"/,
+  assert.doesNotMatch(html,/data-hud-dice-key="dagger-off"/,
     'variant buttons not rendered until weapon menu opens');
   h.shadow.handlers.get('click')({target:{dataset:{hudWeapon:'melee|dagger'}}});
   html=h.nodes.get('r3-hud').innerHTML;
-  assert.match(html,/data-hud-attack-key="dagger-base"/);
-  assert.match(html,/data-hud-attack-key="dagger-fin"/);
-  assert.match(html,/data-hud-attack-key="dagger-off"/);
+  assert.match(html,/data-hud-dice-key="dagger-base"/);
+  assert.match(html,/data-hud-dice-key="dagger-fin"/);
+  assert.match(html,/data-hud-dice-key="dagger-off"/);
   assert.equal([...html.matchAll(/class="hud-weapon-option"/g)].length,3);
   h.shadow.handlers.get('click')({target:{dataset:{hudAttackMode:'ranged'}}});
   html=h.nodes.get('r3-hud').innerHTML;
   assert.equal([...html.matchAll(/class="hud-weapon-group/g)].length,2);
-  assert.doesNotMatch(html,/data-hud-attack-key="dagger-off"/);
+  assert.doesNotMatch(html,/data-hud-dice-key="dagger-off"/);
   assert.match(html,/Shortbow/);
   assert.match(html,/Dagger/);
   h.shadow.handlers.get('click')({target:{dataset:{hudWeapon:'ranged|dagger'}}});
   html=h.nodes.get('r3-hud').innerHTML;
-  assert.match(html,/data-hud-attack-key="dagger-thrown"/);
-  assert.doesNotMatch(html,/data-hud-attack-key="dagger-base"/);
+  assert.match(html,/data-hud-dice-key="dagger-thrown"/);
+  assert.doesNotMatch(html,/data-hud-dice-key="dagger-base"/);
   h.shadow.handlers.get('click')({target:{dataset:{hudAttackMode:'other'}}});
   html=h.nodes.get('r3-hud').innerHTML;
   assert.match(html,/Molotov Cocktail/);
@@ -1219,7 +1219,7 @@ test('duplicate legacy attack without stable identity is displayed but not rolle
   assert.equal([...html.matchAll(/class="hud-weapon-group/g)].length,2);
   h.shadow.handlers.get('click')({target:{dataset:{hudWeapon:'other|dagger'}}});
   const expanded=h.nodes.get('r3-hud').innerHTML;
-  assert.match(expanded,/class="hud-attack-button" disabled aria-label="Attack with Dagger"/);
+  assert.match(expanded,/class="hud-dice-button" disabled aria-label="Roll imported dice for Dagger"/);
   assert.doesNotMatch(html,/<script>|<img onerror/);
   assert.match(html,/&lt;script&gt;oops&lt;\/script&gt;/);
   assert.match(html,/&lt;script&gt;oops&lt;\/script&gt;/);
@@ -1296,6 +1296,67 @@ test('sheet-free Attack reports missing Roll20 chat controls rather than opening
   assert.match(h.api.R3_NATIVE.status,/Roll20 chat controls are not available/);
   assert.equal(h.sent.length,0);
 });
+test('mapped native attack uses exact existing Roll20 character action and never opens a sheet',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Dagger',_key:'dagger-a',visible:'Dagger +7 Attack 1d4+4'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  x.model.abilities={models:[{id:'ab-one',get(k){return {
+    name:'Dagger',action:'%{char-player|repeating_attack("row-mapped", "attack")}'
+  }[k];}}]};
+  h.api.r3HudRender();
+  const mapping=h.api.r3NativeMappedPreview('dagger-a',h.api.R3_UI.snapshot);
+  assert.equal(mapping.abilityName,'Dagger');
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  h.shadow.handlers.get('click')({target:{dataset:{hudAttackMode:'other'}}});
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/Native linked/);
+  assert.match(html,/data-hud-attack-key="dagger-a"/);
+  assert.doesNotMatch(html,/data-hud-dice-key="dagger-a"/);
+  h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:'dagger-a'}}});
+  assert.equal(x.sent.length,1);
+  assert.equal(x.sent[0],'%{char-player|Dagger}');
+  assert.equal(h.sent.length,0,'never contacted an official sheet iframe');
+  assert.match(h.api.R3_NATIVE.status,/Invoked the mapped Roll20/);
+});
+test('native action mapping refuses guesses and duplicate weapon labels',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[
+    {name:'Dagger',_key:'dagger-a',visible:'Dagger +7 Attack 1d4+4'},
+    {name:'Dagger',_key:'dagger-b',visible:'Dagger +5 Attack 1d4+2'}
+  ];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  x.model.abilities={models:[{get(k){return {
+    name:'Dagger',action:'%{char-player|repeating_attack("row-mapped", "attack")}'
+  }[k];}}]};
+  const map=h.api.r3NativeMappedPreview('dagger-a',h.api.R3_UI.snapshot);
+  assert.match(map.reason,/same-named/);
+  assert.equal(h.api.r3NativeMappedAttack('dagger-a'),false);
+  assert.equal(x.sent.length,0);
+  h.api.R3_UI.snapshot=h.api.r3Coverage({...snap,attacks:[snap.attacks[0]]});
+  x.model.abilities.models[0].get=k=>({name:'Dagger',action:'&{template:default} {{name=Dagger}}'})[k];
+  assert.match(h.api.r3NativeMappedPreview('dagger-a',h.api.R3_UI.snapshot).reason,/not a verified repeating/);
+  assert.equal(h.api.r3NativeMappedAttack('dagger-a'),false);
+  assert.equal(x.sent.length,0);
+});
+test('Explorer-style right click opens an observed weapon without rolling',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';
+  snap.attacks=[
+    {name:'Dagger',_key:'dagger',visible:'Dagger +7 Attack 1d4+4'},
+    {name:'Dagger (Off-Hand)',_key:'offhand',visible:'Off-Hand Melee +5 Attack 1d4+2'}
+  ];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  let prevented=0;
+  h.shadow.handlers.get('contextmenu')({target:{
+    closest(sel){return sel==='[data-hud-weapon-row]'?{dataset:{hudWeaponRow:'melee|dagger'}}:null;}
+  },preventDefault(){prevented++;},stopPropagation(){}});
+  assert.equal(prevented,1);
+  assert.match(h.nodes.get('r3-hud').innerHTML,/data-hud-dice-key="offhand"/);
+  assert.equal(h.sent.length,0);
+});
 test('Attack buttons for arbitrary 2024 character names roll hit and damage in chat without sheets',()=>{
   for(const [character,weapon,bonus,damage] of [
     ['Elowen Dawnsong','Longbow','+7','1d8+3'],
@@ -1310,7 +1371,7 @@ test('Attack buttons for arbitrary 2024 character names roll hit and damage in c
     h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
     assert.match(h.nodes.get('r3-hud').innerHTML,/ATTACKS &amp; WEAPONS/);
     assert.equal(x.sent.length,0);
-    h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:weapon.toLowerCase()}}});
+    h.shadow.handlers.get('click')({target:{dataset:{hudDiceKey:weapon.toLowerCase()}}});
     assert.equal(x.sent.length,1,'a single player click submits one chat command');
     assert.ok(x.sent[0].includes('1d20'+bonus));
     assert.ok(x.sent[0].includes('Damage=[['+damage+']]'));
