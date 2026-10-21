@@ -1277,8 +1277,9 @@ function multiTokenRig(){
   const characters=new Map();
   const collection={models:[],get(id){return characters.get(id)}};
   const selections=[];
+  h.context.window.Campaign={characters:collection};
   h.context.window.d20={player:{id:'player-one'},
-    Campaign:{characters:collection},engine:{selected(){return selections.slice()}}};
+    engine:{selected(){return selections.slice()}}};
   const make=(id,name,controllers='player-one')=>{
     const ch={id,attributes:{name,controlledby:controllers},
       get(key){return this.attributes[key]}};
@@ -1551,10 +1552,65 @@ function backgroundNativeRig(){
   }
   create('char-elf','Elowen');create('char-dwarf','Brom');
   create('char-locked','Secret NPC','other-player');
-  h.context.window.d20={player:{id:'player-one'},
-    Campaign:{characters:{models,get(id){return characters.get(id)}}}};
+  h.context.window.Campaign={characters:{models,get(id){return characters.get(id)}}};
+  h.context.window.d20={player:{id:'player-one'}};
   return {h,dialogs,frames,overlays,log,create};
 }
+test('Jumpgate with no d20 exposes direct Campaign and one Attack click invokes one verified official roll',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  // Real Jumpgate does not require window.d20.Campaign, engine or player.
+  h.context.window.d20=undefined;
+  h.context.window.currentPlayer={id:'player-one'};
+  assert.equal(h.api.r3NativeBgResolve('Elowen').id,'char-elf');
+  const character=h.context.window.Campaign.characters.get('char-elf');
+  const originalShow=character.view.showDialog;
+  const received=[];
+  character.view.showDialog=function(){
+    originalShow.call(this);
+    const w=x.frames.at(-1).contentWindow;
+    w.postMessage=(msg)=>{
+      received.push(msg);
+      const data=msg.type==='hello'?
+        {type:'ready',name:'Elowen',session:'jumpgate-2024-reader',mode:'iframe'}:
+        {type:'native-result',id:msg.id,
+          status:msg.type==='native-probe'?'ready':'clicked',
+          token:'verified-once-only',label:'+4 Attack',
+          message:'Clicked the official attack control once'};
+      queueMicrotask(()=>h.windowListeners.get('message')({
+        origin:'https://advanced-sheets.production.roll20preflight.net',
+        source:w,data:{protocol:'r20eb:import:v3',...data}
+      }));
+    };
+  };
+  h.context.setTimeout=(fn,ms)=>{if(ms<4000)queueMicrotask(fn);return 1;};
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Quarterstaff',_key:'staff|melee+4|1d6+2',
+    visible:'Quarterstaff Melee +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  assert.match(h.nodes.get('r3-hud').innerHTML,/data-hud-attack-key="staff\|melee\+4\|1d6\+2"/);
+  h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:'staff|melee+4|1d6+2'}}});
+  // The event listener deliberately does not await an async native roll;
+  // yield until its authenticated reader handshake has had a chance to finish.
+  for(let i=0;i<12&&h.api.R3_NATIVE.busy;i++)
+    await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(received.filter(m=>m.type==='native-probe').length,1,
+    'Attack never reached Roll20: '+h.api.R3_NATIVE.status);
+  assert.equal(received.filter(m=>m.type==='native-invoke').length,1);
+  assert.equal(received.find(m=>m.type==='native-invoke').attackKey,'staff|melee+4|1d6+2');
+  assert.equal(x.log.filter(m=>m.kind==='show').length,1);
+  assert.match(h.api.R3_NATIVE.status,/Clicked the official attack control once/);
+  assert.equal(h.api.R3_NATIVE.preview,null,
+    'single-click path consumed the token and cannot invoke again');
+});
+test('obsolete d20 Campaign alone is never permission evidence for native Attack opening',()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const legacy=h.context.window.Campaign;
+  h.context.window.Campaign=undefined;
+  h.context.window.d20={Campaign:legacy,player:{id:'player-one'}};
+  assert.match(h.api.r3NativeBgResolve('Elowen').reason,/Jumpgate.*window.Campaign.characters/);
+  assert.equal(x.log.filter(m=>m.kind==='show').length,0);
+});
 test('background native reader opens only a new linked controllable player sheet and moves it offscreen',async()=>{
   const x=backgroundNativeRig();
   const manual={style:{left:'400px',top:'100px',position:'absolute'},
@@ -1618,7 +1674,7 @@ test('an attack can probe and confirm through a HUD-owned sheet without opening 
   // The fake official reader answers authenticated requests as a mounted
   // reader would. No preexisting character iframe or manually opened sheet.
   const original=x.create;
-  const models=h.context.window.d20.Campaign.characters.models;
+  const models=h.context.window.Campaign.characters.models;
   const char=models.find(c=>c.id==='char-elf');
   const originalShow=char.view.showDialog;
   char.view.showDialog=function(){
@@ -1758,7 +1814,7 @@ test('missing editor identity provides actionable diagnostics, never opens a gue
 test('Roll20 all-player and array-shaped controlledby grants work, but view-only does not',()=>{
   const x=backgroundNativeRig(),h=x.h;
   h.context.window.currentPlayer={id:'player-one'};
-  const models=h.context.window.d20.Campaign.characters.models;
+  const models=h.context.window.Campaign.characters.models;
   const char=models.find(m=>m.id==='char-elf');
   char.attributes.controlledby=['other-player','player-one'];
   assert.equal(h.api.r3TokenControls(char),true);
@@ -1777,7 +1833,7 @@ test('native HUD owner hides a newly identified sheet before iframe validation',
     observe(){observed=true;}
     disconnect(){disconnected=true;}
   };
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const show=model.view.showDialog;
   model.view.showDialog=function(){
     show.call(this);
@@ -1794,7 +1850,7 @@ test('native HUD owner hides a newly identified sheet before iframe validation',
 test('HUD owner shields only its new modal overlay',async()=>{
   const x=backgroundNativeRig(),h=x.h,old={style:{opacity:'0.6',pointerEvents:'auto'}};
   x.overlays.push(old);
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const show=model.view.showDialog;
   model.view.showDialog=function(){show.call(this);x.overlays.push({style:{opacity:'0.6',pointerEvents:'auto'}});};
   await h.api.r3NativeBgEnsure('Elowen');
@@ -1842,7 +1898,7 @@ test('first Find waits for an official reader that ignores early hello messages'
   snapshot.attacks=[{name:'Longbow',_key:'bow-one',visible:'Longbow +5 Attack 1d8+3'}];
   h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
   let helloCount=0,nativeCount=0;
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const opening=model.view.showDialog;
   model.view.showDialog=function(){
     opening.call(this);
@@ -1908,7 +1964,7 @@ test('initial native Find retries transient Combat mounting errors on one HUD ac
   h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
   h.api.r3StartEditorBridge();
   let probes=0;
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const open=model.view.showDialog;
   model.view.showDialog=function(){
     open.call(this);
@@ -1938,7 +1994,7 @@ test('wrong official sheet name fails closed before attempting attack even when 
   h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
   h.api.r3StartEditorBridge();
   let nativeRequests=0;
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const open=model.view.showDialog;
   model.view.showDialog=function(){
     open.call(this);

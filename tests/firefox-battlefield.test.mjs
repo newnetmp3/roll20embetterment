@@ -17,7 +17,7 @@ function harness(){
     shown:false
   };
   const ctx={
-    window:{d20:{Campaign:{get(){return '[]';}}}},
+    window:{Campaign:{get(){return '[]';}}},
     R3_UI:ui,
     R3_TOKEN:{active:{tokenId:'elf-token',characterId:'elf-id',name:'Elowen'}},
     R3_HUD:{used:{action:false,bonus:false,reaction:false},

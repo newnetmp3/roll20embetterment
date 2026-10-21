@@ -8,7 +8,7 @@ const source=readFileSync(join(root,'extension/firefox/turn-economy.js'),'utf8')
 function rig(){
   const storage=new Map(),rendered={count:0};
   const context={
-    window:{d20:{Campaign:{get(){return '[]';}}}},
+    window:{Campaign:{get(){return '[]';}}},
     R3_HUD:{used:{}},R3_UI:{snapshot:{stats:{speed:30},features:[]}},
     R3_TOKEN:{active:{tokenId:'token-elf',characterId:'char-elf',name:'Elowen'}},
     r3TokenSettingsKey(){return 'game123:char:'+context.R3_TOKEN.active.characterId;},
@@ -118,7 +118,7 @@ test('turn data persists strictly per controlled character and sanitizes corrupt
 test('initiative tracker resets only on observed transition to the selected token',()=>{
   const h=rig(),t=h.api.R3_TURN;
   let order=JSON.stringify([{id:'token-elf'}]);
-  h.context.window.d20.Campaign.get=()=>order;
+  h.context.window.Campaign.get=()=>order;
   h.api.r3TurnLoad();
   h.api.r3TurnApply('reaction');
   h.api.r3TurnObserveInitiative();

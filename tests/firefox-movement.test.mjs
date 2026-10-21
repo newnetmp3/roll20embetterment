@@ -26,7 +26,7 @@ function rig(options={}){
   }
   const elf=make('token-elf');
   const ctx={
-    window:{d20:{Campaign:campaign,engine:{canvas:{getObjects(){
+    window:{Campaign:campaign,d20:{engine:{canvas:{getObjects(){
       return [...chars.values()].map(x=>x.object);}}}},
       performance:{getEntriesByName(name,kind){
         return name==='jumpgate-render-end'&&kind==='mark'?
@@ -161,9 +161,9 @@ test('selected token is resolved when no canvas exposes a graphics collection',(
 });
 test('page lookup resolves playerpageid and missing optional snapping_increment',()=>{
   const h=rig();
-  h.ctx.window.d20.Campaign.activePage=()=>null;
-  h.ctx.window.d20.Campaign.pages={get(id){return id==='page-one'?h.page:null;}};
-  h.ctx.window.d20.Campaign.get=key=>key==='playerpageid'?'page-one':'[]';
+  h.ctx.window.Campaign.activePage=()=>null;
+  h.ctx.window.Campaign.pages={get(id){return id==='page-one'?h.page:null;}};
+  h.ctx.window.Campaign.get=key=>key==='playerpageid'?'page-one':'[]';
   delete h.pageAttrs.snapping_increment;
   h.api.r3TurnStart();
   h.elf.move(210,210);
@@ -247,7 +247,7 @@ test('selected token is retried when linked character loads after initial select
   h.ctx.window.d20.engine.selectedTokens=new Set([h.elf.object]);
   h.ctx.window.currentPlayer={id:'player-elf'};
   let ready=false;
-  h.ctx.window.d20.Campaign.characters={get(id){return ready&&id==='char-elf'?{
+  h.ctx.window.Campaign.characters={get(id){return ready&&id==='char-elf'?{
     id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
   }:null;}};
   vm.runInContext(watch,h.ctx);
@@ -263,7 +263,7 @@ test('selected token is retried when linked character loads after initial select
 test('candidate token with wrong Controlled By permission is never accepted',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   h.ctx.window.currentPlayer={id:'player-elf'};
-  h.ctx.window.d20.Campaign.characters={get(){return {
+  h.ctx.window.Campaign.characters={get(){return {
     id:'char-elf',get(key){return {name:'Elf',controlledby:'somebody-else'}[key];}
   };}};
   vm.runInContext(watch,h.ctx);
@@ -275,7 +275,7 @@ test('candidate token with wrong Controlled By permission is never accepted',()=
 test('Babylon selected mesh resolves only explicit graphic metadata ID',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   h.ctx.window.currentPlayer={id:'player-elf'};
-  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+  h.ctx.window.Campaign.characters={get(id){return id==='char-elf'?{
     id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
   }:null;}};
   h.page.thegraphics={get(id){return id==='token-elf'?h.elf.model:null;}};
@@ -291,7 +291,7 @@ test('Jumpgate tabletopSelected Set is preferred as explicit selection and linke
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   h.ctx.window.d20.engine.tabletopSelected=new Set([h.elf.object]);
   h.ctx.window.currentPlayer={id:'player-elf'};
-  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+  h.ctx.window.Campaign.characters={get(id){return id==='char-elf'?{
     id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
   }:null;}};
   vm.runInContext(watch,h.ctx);
@@ -306,7 +306,7 @@ test('Jumpgate selected graphic ID resolves only a matching page graphics model'
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   h.page.thegraphics=new Map([['token-elf',h.elf.model]]);
   h.ctx.window.currentPlayer={id:'player-elf'};
-  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+  h.ctx.window.Campaign.characters={get(id){return id==='char-elf'?{
     id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
   }:null;}};
   h.ctx.window.d20.engine.tabletopSelected={selected:['token-elf']};
@@ -358,7 +358,7 @@ test('verified Jumpgate tabletopSelected getter returns a controlled selected to
   engine.tabletopSelected=vm.runInContext(
     '()=>_BabylonConversion_VTTEngine__WEBPACK_IMPORTED_MODULE_17__.VTTEngine.instance.tabletop.getSelection()',h.ctx);
   h.ctx.window.currentPlayer={id:'player-elf'};
-  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+  h.ctx.window.Campaign.characters={get(id){return id==='char-elf'?{
     id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
   }:null;}};
   vm.runInContext(watch,h.ctx);
@@ -377,7 +377,7 @@ test('verified Jumpgate getter resolves a selected ID against exact page graphic
   engine.tabletopSelected=vm.runInContext(
     '()=>VTTEngine.instance.tabletop.getSelection()',h.ctx);
   h.ctx.window.currentPlayer={id:'player-elf'};
-  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+  h.ctx.window.Campaign.characters={get(id){return id==='char-elf'?{
     id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
   }:null;}};
   vm.runInContext(watch,h.ctx);
@@ -420,7 +420,7 @@ test('Jumpgate without optional Roll20 editor bridge reports missing native d20 
   const selection=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(selection.renderer,'Babylon.js');
   assert.equal(selection.editorBridge,'window.d20 unavailable');
-  assert.equal(selection.campaignBridge,'unavailable');
+  assert.equal(selection.campaignBridge,'available', 'direct Jumpgate Campaign remains available without d20');
   assert.match(selection.reason,/window.d20 unavailable/);
   assert.equal(selection.eligible,false);
   assert.equal(selection.selectionCount,0);
@@ -440,7 +440,7 @@ test('Jumpgate with d20 but no engine distinguishes missing editor bridge',()=>{
 
 test('native Jumpgate Campaign page resolves without d20 and engine mode is a string flag',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  h.ctx.window.Campaign=h.ctx.window.d20.Campaign;
+  
   h.ctx.window.d20=undefined;
   h.ctx.window.vttEngine='jumpgate';
   h.ctx.window.d20_player_id='player-elf';
@@ -456,7 +456,7 @@ test('native Jumpgate Campaign page resolves without d20 and engine mode is a st
 });
 test('boxed String vttEngine is not mistaken for an exposed tabletop API',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  h.ctx.window.Campaign=h.ctx.window.d20.Campaign;
+  
   h.ctx.window.d20=undefined;
   h.ctx.window.vttEngine=new String('jumpgate');
   vm.runInContext(watch,h.ctx);
@@ -467,7 +467,7 @@ test('boxed String vttEngine is not mistaken for an exposed tabletop API',()=>{
 });
 test('native Campaign character lookups and permission checks work without d20',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  const campaign=h.ctx.window.d20.Campaign;
+  const campaign=h.ctx.window.Campaign;
   campaign.characters={get(id){return id==='char-elf'?{
     id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
   }:null;}};
@@ -490,7 +490,7 @@ test('engine-mode string does not interfere with real verified legacy selection 
   h.ctx.window.d20.engine.tabletopSelected=vm.runInContext(
     '()=>VTTEngine.instance.tabletop.getSelection()',h.ctx);
   h.ctx.window.currentPlayer={id:'player-elf'};
-  h.ctx.window.d20.Campaign.characters={get(id){return id==='char-elf'?{
+  h.ctx.window.Campaign.characters={get(id){return id==='char-elf'?{
     id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
   }:null;}};
   vm.runInContext(watch,h.ctx);
@@ -543,7 +543,7 @@ test('both different Jumpgate build hashes accept the same proven selection inte
     ['355ac54d7a30c962e0a5',51250]
   ]){
     const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-    const campaign=h.ctx.window.d20.Campaign;
+    const campaign=h.ctx.window.Campaign;
     campaign.characters={get(id){return id==='char-elf'?{
       id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
     }:null;}};
@@ -603,7 +603,7 @@ test('source-compatible module with changed getter fails closed',()=>{
 });
 test('capability-matched Jumpgate selection still denies characters controlled by others',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  const campaign=h.ctx.window.d20.Campaign;
+  const campaign=h.ctx.window.Campaign;
   campaign.characters={get(){return {
     id:'char-elf',get(k){return {name:'Elf',controlledby:'enemy-player'}[k];}
   };}};
@@ -629,7 +629,7 @@ test('Jumpgate runtime returns no candidates when bundle has not initialized',()
 });
 test('Jumpgate selected scene node measures using dataWrapper.model without Fabric or d20',()=>{
   const h=rig();
-  const campaign=h.ctx.window.d20.Campaign;
+  const campaign=h.ctx.window.Campaign;
   h.ctx.window.Campaign=campaign;
   h.ctx.window.d20=undefined;
   const selected=[{id:'babylon-scene-node',dataWrapper:{model:h.elf.model}}];
@@ -647,7 +647,7 @@ test('Jumpgate selected scene node measures using dataWrapper.model without Fabr
 });
 test('Jumpgate selected scene node cannot track a different token ID',()=>{
   const h=rig();
-  h.ctx.window.Campaign=h.ctx.window.d20.Campaign;
+  
   h.ctx.window.d20=undefined;
   const other=h.make('enemy','another-character',700,700);
   h.ctx.r3TokenSelected=()=>[{dataWrapper:{model:other.model}}];
@@ -659,7 +659,7 @@ test('Jumpgate selected scene node cannot track a different token ID',()=>{
 
 test('compatible Jumpgate module waits safely for late tabletop startup',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  const campaign=h.ctx.window.d20.Campaign;
+  const campaign=h.ctx.window.Campaign;
   campaign.characters={get(id){return id==='char-elf'?{
     id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
   }:null;}};
@@ -713,7 +713,7 @@ test('R20eb does not touch webpack or lazy VTTEngine instance before first Jumpg
 });
 test('after Roll20 first-render marker, compatible Jumpgate selection initializes once',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
-  const campaign=h.ctx.window.d20.Campaign;
+  const campaign=h.ctx.window.Campaign;
   campaign.characters={get(id){return id==='char-elf'?{
     id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
   }:null;}};

@@ -45,7 +45,7 @@ function r3MoveCollection(collection){
 }
 function r3MovePage(candidate){
   const c=typeof r3TokenCampaign==='function'?
-    r3TokenCampaign():(window.d20?.Campaign||window.Campaign);
+    r3TokenCampaign():window.Campaign;
   const d=window.d20,engine=d?.engine;
   if(!c)return null;
   const tokenPage=r3String(r3MoveGet(candidate,'_pageid')||

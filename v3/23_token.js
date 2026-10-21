@@ -7,9 +7,9 @@ const R3_TOKEN={
   timer:null,started:false
 };
 function r3TokenCampaign(){
-  // Jumpgate exposes Campaign directly even when the optional d20 bridge
-  // does not exist. Use the same authenticated page's Backbone model.
-  return window.d20?.Campaign||window.Campaign||null;
+  // Jumpgate's editor owns the direct Campaign Backbone model. Do not
+  // consult the obsolete d20.Campaign namespace for character identity.
+  return window.Campaign||null;
 }
 function r3TokenEngineMode(){
   // Roll20's window.vttEngine is an engine-mode flag, not the VTTEngine
