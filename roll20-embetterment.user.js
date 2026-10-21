@@ -3066,20 +3066,12 @@ function r3TokenSwitch(info){
   R3_NATIVE.revision++;
   r3HudLoad();
   if(typeof r3MoveRebase==='function')r3MoveRebase();
-  if(R3_AUTO.enabled){
-    // Old in-flight reads cannot overwrite the newly selected character.
-    R3_AUTO.generation++;
-    if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
-    R3_AUTO.dirtyTimer=null;
-    R3_AUTO.name=info.name;
-    R3_AUTO.characterId=info.characterId;
-    R3_AUTO.lastScan=0;R3_AUTO.lastHealth=0;
-    r3AutoSave();
-    r3AutoDisplay('Following selected token: '+info.name);
-  }
+  // The user has already selected an authorized Roll20 character; a
+  // second Auto-sync toggle or explicit first import is unnecessary.
+  if(typeof r3AutoFollowToken==='function')r3AutoFollowToken(info);
   r3UIStatus('Selected '+info.name+'. '+(R3_UI.snapshot.coverage?.attacks?
     'Using this character’s saved sheet.':
-    'Import its official sheet through Debug if no data appears.'));
+    'Synchronizing from Roll20 when its official sheet is available.'));
   r3UIRefresh();
 }
 function r3TokenPoll(){
@@ -3114,29 +3106,73 @@ function r3StartTokenWatch(){
 }
 
 // ===== v3/25_auto.js =====
-// Opt-in background importer for a character the player can already open.
+// Automatic, player-owned sync for a verified controlled character. Importer
+// settings and manual recovery remain optional. No character/sheet writes.
 // Never fetch privileged data, synthesize character records, or scan other sheets.
 const R3_AUTO={
   enabled:false,name:'',characterId:'',running:false,active:false,opened:false,openedAt:0,
   lastScan:0,lastFull:0,lastOpenAttempt:0,lastError:'',timer:null,healthTimer:null,
   healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,dirtyTimer:null,
   ownedDialog:null,ownedContainer:null,originalPosition:null,preOpenOverlays:null,
-  ownedOverlay:null,originalOverlay:null,openObserver:null
+  ownedOverlay:null,originalOverlay:null,openObserver:null,
+  explicitlyDisabled:false,origin:'token'
 };
 function r3AutoKey(){return r3StorageKey()+':auto';}
 function r3AutoLoad(){
   try{
     const stored=JSON.parse(localStorage.getItem(r3AutoKey())||'null');
-    if(stored?.enabled&&typeof stored.name==='string'&&stored.name.length<120){
+    // An explicit Off is sticky across token changes and page reloads.
+    // An unconfigured install has no saved Off, so selection can start sync.
+    R3_AUTO.explicitlyDisabled=stored?.enabled===false;
+    if(stored?.enabled===true&&typeof stored.name==='string'&&
+       stored.name.length>0&&stored.name.length<120){
       R3_AUTO.enabled=true;R3_AUTO.name=stored.name;
       R3_AUTO.characterId=r3String(stored.characterId,100);
+      R3_AUTO.origin=stored.origin==='token'?'token':'manual';
     }
   }catch{}
 }
 function r3AutoSave(){
   try{localStorage.setItem(r3AutoKey(),JSON.stringify({
-    enabled:R3_AUTO.enabled,name:R3_AUTO.name,characterId:R3_AUTO.characterId
+    enabled:R3_AUTO.enabled,name:R3_AUTO.name,
+    characterId:R3_AUTO.characterId,origin:R3_AUTO.origin
   }));}catch{}
+}
+// Called only AFTER r3TokenInspectLinked has verified the exact represented
+// character and the current player's Controlled By permission. No name-only
+// auto-adoption and no need to visit Debug or import a sheet first.
+function r3AutoFollowToken(info){
+  if(!info?.tokenId||!info?.characterId||!info?.name||
+     R3_AUTO.explicitlyDisabled)return false;
+  const changed=R3_AUTO.characterId!==info.characterId||
+    R3_AUTO.name!==info.name;
+  if(!changed&&R3_AUTO.enabled)return true;
+  // Invalidates requests from another character before a late iframe result
+  // can write its data to this character's visible HUD.
+  R3_AUTO.generation++;
+  if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
+  R3_AUTO.dirtyTimer=null;
+  // Release an owned former-character dialog; never leave a previous PC's
+  // character sheet hidden or reassign its DOM to a new PC.
+  if(changed&&(R3_AUTO.ownedDialog||R3_AUTO.opened))
+    r3AutoRestoreDialog();
+  R3_AUTO.enabled=true;
+  R3_AUTO.origin='token';
+  R3_AUTO.name=info.name;R3_AUTO.characterId=info.characterId;
+  R3_AUTO.lastScan=0;R3_AUTO.lastHealth=0;R3_AUTO.lastFull=0;
+  R3_AUTO.lastOpenAttempt=0;
+  r3AutoSave();
+  r3AutoDisplay('Following selected character: '+info.name);
+  // Boot starts the scheduler before token polling. Scan on the next turn
+  // of the event loop, never during Roll20's selection callback.
+  if(R3_AUTO.timer!==null){
+    const generation=R3_AUTO.generation;
+    setTimeout(()=>{
+      if(R3_AUTO.generation===generation&&R3_AUTO.enabled)
+        r3AutoTick();
+    },0);
+  }
+  return true;
 }
 function r3AutoDisplay(message){
   // Routine UI refreshes must not erase a useful "journal not loaded" status.
@@ -3169,15 +3205,22 @@ function r3AutoCandidate(){
     r3AutoId(c)===R3_AUTO.characterId);
   const named=eligible.filter(c=>r3String(c.name,120).toLowerCase()===
     R3_AUTO.name.toLowerCase());
-  const popouts=named.filter(c=>c.type==='popout');
+  // Same-name characters may have different sheets. If Roll20 exposes
+  // duplicates, an ID-less iframe/popout is not sufficient identity proof.
+  const models=r3TokenCampaign?.()?.characters?.models;
+  const duplicateName=Array.isArray(models)&&models.filter(model=>
+    r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===
+      R3_AUTO.name.toLowerCase()).length>1;
+  const safe=named.filter(c=>!duplicateName||r3AutoId(c)===R3_AUTO.characterId);
+  const popouts=safe.filter(c=>c.type==='popout');
   if(popouts.length===1)return popouts[0];
   if(popouts.length>1)return null; // same-named popouts are ambiguous
   if(R3_AUTO.characterId){
-    const exact=eligible.filter(c=>c.type==='iframe'&&r3AutoId(c)===R3_AUTO.characterId);
+    const exact=safe.filter(c=>c.type==='iframe'&&r3AutoId(c)===R3_AUTO.characterId);
     if(exact.length===1)return exact[0];
     if(exact.length>1)return null;
   }
-  return named.length===1?named[0]:null;
+  return safe.length===1?safe[0]:null;
 }
 function r3AutoRemember(candidate){
   const charId=r3AutoId(candidate);
@@ -3198,6 +3241,9 @@ function r3AutoJournalEntry(){
       .some(v=>v===id));
     if(exact)return exact;
   }
+  // An automatically selected character is pinned by a verified Roll20 ID.
+  // Never double-click a name-only Journal row belonging to another PC.
+  if(id&&R3_AUTO.origin==='token')return null;
   const matches=found.filter(el=>{
     const title=r3String(el.getAttribute?.('title')||
       el.getAttribute?.('aria-label')||el.querySelector?.('.name,.journalitem-name')?.textContent||
@@ -3407,6 +3453,11 @@ function r3AutoQueueDirty(candidate){
 }
 async function r3AutoTick(eventTriggered=false){
   if(!R3_AUTO.enabled||R3_AUTO.running||R3_UI.busy||!R3_AUTO.name)return;
+  // Implicit sync cannot run against a stale saved PC before a verified
+  // controlled token has been selected in this browser session.
+  if(R3_AUTO.origin==='token'&&
+     (R3_TOKEN.active?.characterId!==R3_AUTO.characterId||
+       R3_TOKEN.active?.name!==R3_AUTO.name))return;
   const now=Date.now();
   const candidate=r3AutoCandidate();
   if(!candidate){
@@ -3483,14 +3534,16 @@ async function r3AutoHealthTick(){
 
 function r3ToggleAuto(){
   if(R3_AUTO.enabled){
-    R3_AUTO.enabled=false;R3_AUTO.generation++;
+    R3_AUTO.enabled=false;R3_AUTO.explicitlyDisabled=true;
+    R3_AUTO.generation++;
     if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
     R3_AUTO.dirtyTimer=null;
     r3AutoSave();r3AutoRestoreDialog();
     r3AutoDisplay('');return;
   }
   const selected=r3Candidates().find(c=>c.key===R3_UI.selected);
-  const name=r3String(R3_UI.snapshot?.name||selected?.name,120);
+  const active=R3_TOKEN.active;
+  const name=r3String(active?.name||R3_UI.snapshot?.name||selected?.name,120);
   if(!name||/^(?:2024 character sheet|unnamed sheet)/i.test(name)){
     r3UIStatus('Import a named character once before enabling auto-sync.');
     r3AutoDisplay();
@@ -3500,8 +3553,12 @@ function r3ToggleAuto(){
   // ever imported in this campaign. Clear the old character's ID before
   // enabling a different character (the user selected this explicitly).
   if(R3_AUTO.name.toLowerCase()!==name.toLowerCase())R3_AUTO.characterId='';
-  R3_AUTO.enabled=true;R3_AUTO.generation++;R3_AUTO.name=name;
-  if(selected&&selected.name.toLowerCase()===name.toLowerCase())r3AutoRemember(selected);
+  R3_AUTO.enabled=true;R3_AUTO.explicitlyDisabled=false;
+  R3_AUTO.generation++;R3_AUTO.name=name;
+  R3_AUTO.origin=active?'token':'manual';
+  if(active)R3_AUTO.characterId=active.characterId;
+  else if(selected&&selected.name.toLowerCase()===name.toLowerCase())
+    r3AutoRemember(selected);
   r3AutoSave();r3AutoDisplay('Enabled for '+name+'; checking Roll20 session');
   r3AutoTick();
 }
