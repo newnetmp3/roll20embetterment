@@ -1,6 +1,6 @@
 {
-  "version": "3.9.18",
+  "version": "3.9.19",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Unified player-controlled native Roll20 action mapping for attacks, features, spells, inventory, resources, skills, saves, and checks with direct-sheet-free macros, explicit unmapped/read-only states"
+  "reason": "Native-action identity hardening: require single same-character sheet macro, reject unsafe selected/compound references, bind official explicit repeating-row IDs when exposed, and refresh current handover and README; 470 passing tests. Live Roll20 2024 parity and movement QA still pending."
 }
