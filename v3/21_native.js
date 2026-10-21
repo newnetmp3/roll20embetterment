@@ -88,6 +88,34 @@ const R3_NATIVE_CATEGORIES={
   modifiers:{title:'Roll',pattern:/(?:\b(?:ability[_-]?check|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:ability[_-]?check|check)\b)/i},
   misc:{title:'Use',pattern:/^repeating_[A-Za-z0-9_-]{3,240}(?:_|\()/i}
 };
+// Read existing player-owned character abilities that have a real exact
+// repeating sheet reference but do not belong to any known category. These
+// do not need a sheet read, a first-run setup wizard, or a guessed row ID.
+// Never surface an arbitrary macro, a duplicate or another player's action.
+function r3NativeMiscCatalog(snapshot=R3_UI.snapshot){
+  if(!snapshot?.name)return [];
+  const identity=r3NativeBgResolve(snapshot.name);
+  if(!identity.model||!r3TokenControls(identity.model))return [];
+  const existing=Array.isArray(snapshot.misc)?snapshot.misc:[];
+  const out=[],ids=new Set(),refs=new Set(existing.map(x=>x.nativeActionRef).filter(Boolean));
+  for(const model of r3NativeActionModels(identity.model)){
+    const id=r3String(model.id||r3TokenModelGet(model,'_id'),120);
+    const name=r3String(r3TokenModelGet(model,'name'),125);
+    const action=r3String(r3TokenModelGet(model,'action'),350);
+    if(!id||!/^[A-Za-z0-9_-]{4,120}$/.test(id)||!name||/[{}|\r\n]/.test(name)||ids.has(id))continue;
+    ids.add(id);
+    if(!r3NativeSheetReference('misc',action,identity.model).reference)continue;
+    const reference=action.match(/^%\\{[A-Za-z0-9_-]+\\|([^{}]+)\\}$/)?.[1]||'';
+    if(Object.entries(R3_NATIVE_CATEGORIES).some(([kind,config])=>
+      kind!=='misc'&&config.pattern.test(reference)))continue;
+    if(refs.has(action))continue;
+    refs.add(action);
+    out.push({name,_key:'ability:'+id,nativeActionRef:action,tab:'Roll20 character abilities',
+      visible:'Existing controlled-character native action'});
+    if(out.length>=80)break;
+  }
+  return out;
+}
 function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
   if(!Object.prototype.hasOwnProperty.call(R3_NATIVE_CATEGORIES,kind)||!key||
     typeof key!=='string'||key.length>240)return {reason:'Unknown source category or action key.'};
@@ -98,7 +126,8 @@ function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
     return {name:key,key,value:source[key]};
   }
   const rows=Array.isArray(source)?source:[];
-  const found=rows.filter(row=>row?._key===key&&typeof row._key==='string');
+  const candidates=kind==='misc'?[...rows,...r3NativeMiscCatalog(snapshot)]:rows;
+  const found=candidates.filter(row=>row?._key===key&&typeof row._key==='string');
   if(found.length!==1)return {reason:'This imported action has no unique source identity.'};
   return found[0];
 }
