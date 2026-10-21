@@ -10,12 +10,12 @@
 - **Firefox:** v3.9.18 is referenced by the published Firefox update manifest on `main`: [updates.json](../extension/firefox/updates.json) and [release](https://github.com/newnetmp3/roll20embetterment/releases/tag/firefox-v3.9.18). The update-feed commit is `46263ec`. Firefox build/release is independent of Chrome.
 - **Chrome and optional Tampermonkey distribution:** v3.4.0. The generated userscript is synchronized with v3 source and is *not* the Firefox version number.
 - **Latest merged functional milestone:** [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106) unified existing character-ability native mapping across attacks, spells, features, inventory, resources, skills, saving throws, and ability checks. **467/467 automated tests passed** in its branch and PR checks. This is not evidence of end-to-end Roll20 game validation.
-- **Current in-progress hardening:** `feature/native-action-identity-hardening` tightens macro ownership and exact repeating-row identity, adds regressions and purges obsolete documentation. It is **not part of signed v3.9.18** until CI, merge and a subsequent Firefox signing run complete.
+- **Latest merged hardening:** [PR #108](https://github.com/newnetmp3/roll20embetterment/pull/108) merged as `486f79a` after [Firefox CI run 39693899199](https://github.com/newnetmp3/roll20embetterment/actions/runs/39693899199) passed **470/470 automated tests**, including generated userscript parity. It tightened macro ownership, added conditional explicit repeating-row ID linking, and removed obsolete documentation. It is **not in signed Firefox v3.9.18**; a subsequent signed Firefox release and live Floorp action verification are separate steps.
 - **Outstanding live blocker:** [Jumpgate token movement issue #73](https://github.com/newnetmp3/roll20embetterment/issues/73) remains open. Automatic token selection/movement has not passed the required in-game forward/backtracking acceptance test.
 
 ## Current runtime
 
-1. `v3/00_capture.js`: bounded, read-only official 2024 sheet DOM observations (stats, attacks, spells, inventory, features, resources, skill/save/check fields). Source labels and card buttons are *observations*, not action references. The hardening branch recognizes only an explicit official repeating-row data attribute on a card and records `nativeRowId` when unambiguous.
+1. `v3/00_capture.js`: bounded, read-only official 2024 sheet DOM observations (stats, attacks, spells, inventory, features, resources, skill/save/check fields). Source labels and card buttons are *observations*, not action references. PR #108 recognizes only an explicit official repeating-row data attribute on a card and records `nativeRowId` when unambiguous.
 2. `v3/10_reader.js`: authenticated official sheet iframe/popout import bridge.
 3. `v3/20_ui.js`: diagnostics, importer and snapshot presentation.
 4. `v3/21_native.js`: native-action mapping and one-click Roll20 chat dispatch; separate legacy native sheet probe for opt-in diagnostics; verified controlled-character permission gates and source identity.
@@ -41,7 +41,7 @@ Existing Roll20 character abilities may be invoked by a player click using the o
 | Saving throws | Existing specific named save abilities | No ability-name-only fallback |
 | Ability checks | Existing specific named check abilities | No fabricated modifiers or chat template substitutions |
 
-The hardening branch requires a **single complete macro pointing to the current character**, with a category-consistent sheet-action reference. It rejects multi-command scripts, `selected`/other-character references, stale identities and ambiguous mappings. For duplicate-named card entries, it can match by an *explicit* row ID captured from the official card **and** a matching existing character ability reference. If the sheet does not expose that ID, duplicate names remain deliberately unmapped. Never derive a repeating ID from a DOM index, caption, button label or cached guess.
+Current `main` requires a **single complete macro pointing to the current character**, with a category-consistent sheet-action reference. It rejects multi-command scripts, `selected`/other-character references, stale identities and ambiguous mappings. For duplicate-named card entries, it can match by an *explicit* row ID captured from the official card **and** a matching existing character ability reference. If the sheet does not expose that ID, duplicate names remain deliberately unmapped. Never derive a repeating ID from a DOM index, caption, button label or cached guess.
 
 The earlier opt-in diagnostic sheet probe and explicitly labeled non-native **Dice** fallback remain separate from native mappings. **Dice is not a faithful native 2024 sheet roll.** Successful chat-button dispatch alone does not establish that a game chat card appeared.
 
@@ -82,4 +82,4 @@ These are **explicitly unimplemented**, not hidden behind disabled buttons and n
 - [PR #104](https://github.com/newnetmp3/roll20embetterment/pull/104): weapon-first grouping and conditional native ability linking.
 - [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106): shared native mapping across all imported player action categories.
 
-Only the above current architecture and status should be treated as the active handover. Superseded v2/v3 patch-by-patch details belong to Git history, not the live engineering baseline.
+Current merged code baseline: `486f79a`, 470 passing tests. Signed Firefox release remains 3.9.18 until a separate release workflow updates it. Only the above current architecture and status should be treated as the active handover. Superseded v2/v3 patch-by-patch details belong to Git history, not the live engineering baseline.
