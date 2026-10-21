@@ -1178,10 +1178,10 @@ test('duplicate legacy attack without stable identity is displayed but not rolle
   h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
   const html=h.nodes.get('r3-hud').innerHTML;
   assert.equal([...html.matchAll(/class="hud-attack-row"/g)].length,3);
-  assert.match(html,/aria-label="Attack with Dagger" disabled/);
+  assert.match(html,/class="hud-attack-button" disabled aria-label="Attack with Dagger"/);
   assert.doesNotMatch(html,/<script>|<img onerror/);
   assert.match(html,/&lt;script&gt;oops&lt;\/script&gt;/);
-  assert.match(html,/data-hud-attack-key="evil&amp;quot;/);
+  assert.match(html,/data-hud-attack-key="evil&quot;/);
   assert.equal(h.sent.length,0);
 });
 test('native attack UI supports arbitrary imported character names and own actions',async()=>{
