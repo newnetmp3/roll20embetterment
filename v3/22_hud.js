@@ -9,7 +9,8 @@ const R3_HUD_TABS=[
   {key:'spells',title:'Spells',icon:'✧'},
   {key:'inventory',title:'Inventory',icon:'◈'},
   {key:'features',title:'Features',icon:'◆'},
-  {key:'resources',title:'Resources',icon:'◉'}
+  {key:'resources',title:'Resources',icon:'◉'},
+  {key:'misc',title:'MISC',icon:'◇'}
 ];
 function r3HudLoad(){
   // Always reset character-specific preferences before entering a different
@@ -69,6 +70,7 @@ function r3HudEntries(snapshot,kind){
     .map(x=>({...x,_hudSource:'Item'}));
   if(kind==='features')return items('features').map(x=>({...x,_hudSource:'Feature'}));
   if(kind==='resources')return items('resources').map(x=>({...x,_hudSource:'Resource'}));
+  if(kind==='misc')return items('misc').map(x=>({...x,_hudSource:'Misc'}));
   if(kind==='bonus'||kind==='reactions'){
     // Only explicitly labeled action economy belongs here; no guessing
     // from a feature's prose, its name or D&D spell traditions.
@@ -134,7 +136,7 @@ function r3HudNativeEntryControl(kind,key,name){
 }
 function r3HudSourceKind(item){
   return {Attack:'attacks',Spell:'spells',Item:'inventory',Feature:'features',
-    Resource:'resources'}[item?._hudSource]||'';
+    Resource:'resources',Misc:'misc'}[item?._hudSource]||'';
 }
 function r3HudCard(item,index){
   const key=r3Escape(r3String(item._key||item.name,140)+'|'+r3String(item.tab,60)+'|'+index);
@@ -485,7 +487,7 @@ function r3HudFlyoutMarkup(snapshot){
   const flyout=R3_HUD.flyout;
   const titles={spells:'CAST SPELL',skills:'SAVES / SKILLS / TOOLS',inventory:'USE ITEM',
     features:'USE FEATURE',actions:'ATTACKS & WEAPONS',bonus:'BONUS ACTION',reactions:'REACTION',
-    resources:'RESOURCES'};
+    resources:'RESOURCES',misc:'MISC · OTHER ACTIONS'};
   let content='';
   if(flyout==='spells'){
     const levels=r3HudSpellLevels(snapshot);
