@@ -63,6 +63,89 @@ function r3NativeChatSubmit(command){
       r3String(error?.message||error,120)};
   }
 }
+// Shared native-action mapping. Roll20 2024's "Add Action to Token Bar"
+ // creates an actual character action. Invoke that *existing* ability
+ // instead of recreating the attack template. Never guess a repeating ID.
+function r3NativeActionModels(character){
+  const abilities=character?.abilities||r3TokenModelGet(character,'abilities');
+  if(Array.isArray(abilities))return abilities.slice(0,300);
+  return Array.isArray(abilities?.models)?abilities.models.slice(0,300):[];
+}
+function r3NativeMappedAbility(attack,character,snapshot){
+  const name=r3String(attack?.name,125).trim();
+  if(!name)return {reason:'This imported attack has no verified name.'};
+  // A name-only Roll20 ability cannot distinguish two separate source
+  // actions with identical names. The HUD attack key alone isn't evidence.
+  if((snapshot?.attacks||[]).filter(x=>
+    r3String(x.name,125).toLowerCase()===name.toLowerCase()).length!==1)
+    return {reason:'Multiple same-named native attacks; cannot identify one exact Roll20 ability.'};
+  const abilityNames=r3NativeActionModels(character).filter(model=>
+    r3String(r3TokenModelGet(model,'name'),125).toLowerCase()===name.toLowerCase());
+  if(abilityNames.length!==1)return {reason:abilityNames.length?
+    'Several Roll20 abilities have that name; the native action is ambiguous.':
+    'No corresponding Roll20 token action is registered for '+name+'.'};
+  const ability=abilityNames[0],action=r3String(r3TokenModelGet(ability,'action'),4000);
+  // Reject arbitrary chat commands and source-free dice templates. This
+  // proves the named ability delegates to a real repeating sheet action.
+  if(!/repeating_(?:attack|npcaction)\s*(?:\(|_)/i.test(action))
+    return {reason:'The matching Roll20 ability is not a verified repeating attack action.'};
+  const abilityName=r3String(r3TokenModelGet(ability,'name'),125);
+  if(!/^[^{}|\r\n]{1,125}$/.test(abilityName))
+    return {reason:'The native ability name contains unsupported macro syntax.'};
+  return {abilityName,abilityId:r3String(ability.id||r3TokenModelGet(ability,'_id'),120),
+    source:'Roll20 character ability',action};
+}
+function r3NativeMappedPreview(key,snapshot=R3_UI.snapshot){
+  const attack=r3NativeSelectAttack(key,snapshot);
+  if(!attack||r3String(attack._key,240)!==key)return {reason:'No unique imported attack.'};
+  const name=r3String(snapshot?.name,120),active=R3_TOKEN.active;
+  const chars=r3TokenCampaign()?.characters;
+  if(!chars)return {reason:'Roll20 characters unavailable'};
+  let model=null;
+  if(active){
+    if(active.name?.toLowerCase()!==name.toLowerCase())return {reason:'Different selected character'};
+    model=r3TokenCharacter(active.characterId);
+  }else{
+    const named=Array.isArray(chars.models)?chars.models.filter(c=>
+      r3String(r3TokenModelGet(c,'name'),120).toLowerCase()===name.toLowerCase()):[];
+    if(named.length===1)model=named[0];
+  }
+  if(!model||!r3TokenControls(model))return {reason:'No verified controlled character'};
+  return r3NativeMappedAbility(attack,model,snapshot);
+}
+function r3NativeMappedAttack(key){
+  if(R3_NATIVE.busy)return false;
+  const snapshot=R3_UI.snapshot,attack=r3NativeSelectAttack(key,snapshot);
+  if(!attack||attack._key!==key){r3NativeStatus('No uniquely identified source attack.');return false;}
+  const name=r3String(snapshot?.name,120);
+  const identity=r3NativeBgResolve(name); // read-only identity; never showDialog
+  if(!identity.model){r3NativeStatus(identity.reason);return false;}
+  const active=R3_TOKEN.active;
+  if(active&&(active.characterId!==identity.id||active.name?.toLowerCase()!==name.toLowerCase())){
+    r3NativeStatus('Selected token differs from the imported attack.');return false;
+  }
+  if(R3_AUTO.characterId&&R3_AUTO.name?.toLowerCase()===name.toLowerCase()&&
+     R3_AUTO.characterId!==identity.id){
+    r3NativeStatus('Imported source character does not match this Roll20 character.');return false;
+  }
+  const mapping=r3NativeMappedAbility(attack,identity.model,snapshot);
+  if(!mapping.abilityName){r3NativeStatus(mapping.reason);return false;}
+  // Official Roll20 character abilities can be called from text chat even
+  // while the 2024 sheet is closed. The ability's original repeating macro
+  // determines the correct native attack card, damage button and effects.
+  if(!/^[\w-]{4,120}$/.test(identity.id)){
+    r3NativeStatus('The native character ID is not a valid Roll20 reference.');return false;
+  }
+  const command='%{'+identity.id+'|'+mapping.abilityName+'}';
+  R3_NATIVE.busy=true;
+  try{
+    const result=r3NativeChatSubmit(command);
+    if(!result.ok){r3NativeStatus(result.reason);return false;}
+    r3NativeStatus('Invoked the mapped Roll20 '+r3String(attack.name,80)+
+      ' native ability. Confirm the resulting attack card in chat.');
+    return true;
+  }finally{R3_NATIVE.busy=false;}
+}
 function r3NativeChatAttack(key){
   if(R3_NATIVE.busy){r3NativeStatus('Another attack is still processing.');return false;}
   const snapshot=R3_UI.snapshot;
