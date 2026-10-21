@@ -1277,8 +1277,9 @@ function multiTokenRig(){
   const characters=new Map();
   const collection={models:[],get(id){return characters.get(id)}};
   const selections=[];
+  h.context.window.Campaign={characters:collection};
   h.context.window.d20={player:{id:'player-one'},
-    Campaign:{characters:collection},engine:{selected(){return selections.slice()}}};
+    engine:{selected(){return selections.slice()}}};
   const make=(id,name,controllers='player-one')=>{
     const ch={id,attributes:{name,controlledby:controllers},
       get(key){return this.attributes[key]}};
@@ -1551,8 +1552,8 @@ function backgroundNativeRig(){
   }
   create('char-elf','Elowen');create('char-dwarf','Brom');
   create('char-locked','Secret NPC','other-player');
-  h.context.window.d20={player:{id:'player-one'},
-    Campaign:{characters:{models,get(id){return characters.get(id)}}}};
+  h.context.window.Campaign={characters:{models,get(id){return characters.get(id)}}};
+  h.context.window.d20={player:{id:'player-one'}};
   return {h,dialogs,frames,overlays,log,create};
 }
 test('background native reader opens only a new linked controllable player sheet and moves it offscreen',async()=>{
@@ -1618,7 +1619,7 @@ test('an attack can probe and confirm through a HUD-owned sheet without opening 
   // The fake official reader answers authenticated requests as a mounted
   // reader would. No preexisting character iframe or manually opened sheet.
   const original=x.create;
-  const models=h.context.window.d20.Campaign.characters.models;
+  const models=h.context.window.Campaign.characters.models;
   const char=models.find(c=>c.id==='char-elf');
   const originalShow=char.view.showDialog;
   char.view.showDialog=function(){
@@ -1758,7 +1759,7 @@ test('missing editor identity provides actionable diagnostics, never opens a gue
 test('Roll20 all-player and array-shaped controlledby grants work, but view-only does not',()=>{
   const x=backgroundNativeRig(),h=x.h;
   h.context.window.currentPlayer={id:'player-one'};
-  const models=h.context.window.d20.Campaign.characters.models;
+  const models=h.context.window.Campaign.characters.models;
   const char=models.find(m=>m.id==='char-elf');
   char.attributes.controlledby=['other-player','player-one'];
   assert.equal(h.api.r3TokenControls(char),true);
@@ -1777,7 +1778,7 @@ test('native HUD owner hides a newly identified sheet before iframe validation',
     observe(){observed=true;}
     disconnect(){disconnected=true;}
   };
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const show=model.view.showDialog;
   model.view.showDialog=function(){
     show.call(this);
@@ -1794,7 +1795,7 @@ test('native HUD owner hides a newly identified sheet before iframe validation',
 test('HUD owner shields only its new modal overlay',async()=>{
   const x=backgroundNativeRig(),h=x.h,old={style:{opacity:'0.6',pointerEvents:'auto'}};
   x.overlays.push(old);
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const show=model.view.showDialog;
   model.view.showDialog=function(){show.call(this);x.overlays.push({style:{opacity:'0.6',pointerEvents:'auto'}});};
   await h.api.r3NativeBgEnsure('Elowen');
@@ -1842,7 +1843,7 @@ test('first Find waits for an official reader that ignores early hello messages'
   snapshot.attacks=[{name:'Longbow',_key:'bow-one',visible:'Longbow +5 Attack 1d8+3'}];
   h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
   let helloCount=0,nativeCount=0;
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const opening=model.view.showDialog;
   model.view.showDialog=function(){
     opening.call(this);
@@ -1908,7 +1909,7 @@ test('initial native Find retries transient Combat mounting errors on one HUD ac
   h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
   h.api.r3StartEditorBridge();
   let probes=0;
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const open=model.view.showDialog;
   model.view.showDialog=function(){
     open.call(this);
@@ -1938,7 +1939,7 @@ test('wrong official sheet name fails closed before attempting attack even when 
   h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
   h.api.r3StartEditorBridge();
   let nativeRequests=0;
-  const model=h.context.window.d20.Campaign.characters.models.find(m=>m.id==='char-elf');
+  const model=h.context.window.Campaign.characters.models.find(m=>m.id==='char-elf');
   const open=model.view.showDialog;
   model.view.showDialog=function(){
     open.call(this);
