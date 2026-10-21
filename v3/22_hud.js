@@ -413,7 +413,7 @@ function r3HudAttackMenu(snapshot){
         (hasOptions?roll:'<button type="button" class="hud-weapon-toggle" data-hud-weapon="'+
           r3Escape(group.key)+'" aria-label="Show '+r3Escape(group.name)+' attack details">⋯</button>')+
       '</div>'+
-      (hasOptions&&expanded?'<div class="hud-weapon-submenu" role="group" aria-label="'+
+      (expanded?'<div class="hud-weapon-submenu" role="group" aria-label="'+
         r3Escape(group.name)+' '+labels[selected]+' attack variants">'+
         group.variants.map(entry=>r3HudAttackOption(entry,group.name)).join('')+'</div>':'')+
       (!hasOptions?'<div class="hud-weapon-direct">'+roll+'</div>':'')+
@@ -424,6 +424,16 @@ function r3HudAttackMenu(snapshot){
     Object.values(catalog.modes).reduce((sum,arr)=>sum+arr.length,0)+
     ' weapon/type groups · Right-click or choose Options for variants</div>'+
     categories+'<div class="hud-weapon-list">'+content+'</div></div>';
+}
+function r3HudWeaponToggle(key){
+  if(typeof key!=='string'||key.length>180||R3_HUD.flyout!=='actions')return false;
+  const catalog=r3HudAttackCatalog(R3_UI.snapshot);
+  const found=Object.values(catalog.modes).flat().find(group=>group.key===key);
+  if(!found)return false;
+  R3_HUD.attackMode=found.mode;
+  R3_HUD.attackGroup=R3_HUD.attackGroup===key?'':key;
+  r3HudRender();
+  return true;
 }
 function r3HudFlyoutMarkup(snapshot){
   if(R3_HUD.chooser!==null){
