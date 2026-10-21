@@ -257,7 +257,7 @@ function r3NativeObservedActionRef(card){
     .map(key=>r3Attr(button,key)))].filter(Boolean);
   if(refs.length===0||new Set(refs).size!==1)return '';
   const value=refs[0];
-  return /^%\\{[A-Za-z0-9_-]{4,120}\\|[^{}\\r\\n]{1,100}\\}$/.test(value)?value:'';
+  return /^%\{[A-Za-z0-9_-]{4,120}\|[^{}\r\n]{1,100}\}$/.test(value)?value:'';
 }
 function r3CardInfo(card,kind,name,tab){
   const info={name,tab,visible:r3Text(card,1100)};
