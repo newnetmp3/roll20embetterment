@@ -321,8 +321,8 @@ function r3HudAttackMenu(snapshot){
       '</div><button type="button" class="hud-attack-button"'+
       (unique?' data-hud-attack-key="'+r3Escape(key)+'"':' disabled')+
       ' aria-label="Attack with '+r3Escape(name)+'"'+
-      ' title="'+(unique?'Roll the official '+r3Escape(name)+' attack once':
-        'Cannot safely identify a unique official attack')+'">Attack</button></div>';
+      ' title="'+(unique?'Roll the observed '+r3Escape(name)+' attack in Roll20 chat without opening the sheet':
+        'Cannot safely identify a unique imported attack')+'">Attack</button></div>';
   }).join('');
   return '<div class="hud-attack-list" aria-label="Detected weapon attacks">'+
     '<div class="hud-attack-count">'+items.length+' attack'+(items.length===1?'':'s')+
@@ -378,7 +378,7 @@ function r3HudFlyoutMarkup(snapshot){
   }
   return '<section class="hud-flyout" aria-label="Combat '+r3Escape(titles[flyout]||flyout)+' flyout">'+
     '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
-    '<small>'+(flyout==='actions'?'Attack uses the verified Roll20 roll button':'Read-only · official sheet remains authoritative')+'</small>'+
+    '<small>'+(flyout==='actions'?'Attack rolls in Roll20 chat without opening the sheet':'Read-only · official sheet remains authoritative')+'</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
     (flyout==='actions'?r3NativeMarkup()+content:content+r3NativeMarkup())+'</section>';
 }
