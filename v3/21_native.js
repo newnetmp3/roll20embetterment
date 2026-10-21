@@ -107,7 +107,7 @@ function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
 // macro is not safe to run with the sheet closed: it can target a different PC.
 function r3NativeSheetReference(kind,action,character){
   const macro=String(action??'').trim();
-  const match=macro.match(/^%\{([A-Za-z0-9_-]{4,120})\|([^{}\r\n]{1,350})\}$/);
+  const match=macro.match(/^%\{([A-Za-z0-9_-]{4,120})\|([^{}|;!\r\n]{1,350})\}$/);
   if(!match)return {reason:'Roll20 ability does not contain one complete, safe sheet-action reference.'};
   const target=r3String(character?.id||r3TokenModelGet(character,'_id'),120);
   if(!target||match[1]!==target)
@@ -137,7 +137,9 @@ function r3NativeMapAbility(kind,entry,character,snapshot){
   const rowId=checks?'':r3String(entry?.nativeRowId,120);
   if(rowId&&!/^[A-Za-z0-9_-]{4,120}$/.test(rowId))
     return {reason:'Imported repeating row ID is invalid; no native action was linked.'};
-  if(!rowId&&sameName!==1)return {reason:kind==='attacks'?
+  const directRef=typeof entry?.nativeActionRef==='string'?entry.nativeActionRef:'';
+  const uniqueDirectRef=!!directRef&&rows.filter(x=>x?.nativeActionRef===directRef).length===1;
+  if(!rowId&&sameName!==1&&!uniqueDirectRef)return {reason:kind==='attacks'?
     'Multiple same-named native attacks; no verified repeating row identity.':
     'Several source entries have this name; their native actions are ambiguous.'};
   // The official authenticated sheet may explicitly expose an action macro
