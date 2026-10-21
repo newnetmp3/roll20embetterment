@@ -97,7 +97,7 @@ function r3Field(raw){
 }
 function r3Empty(){
   return {schema:3,name:'',capturedAt:new Date().toISOString(),stats:{},abilities:{},modifiers:{},saves:{},skills:{},
-    slots:{},spells:[],attacks:[],inventory:[],features:[],resources:[],observations:[],
+    slots:{},spells:[],attacks:[],inventory:[],features:[],resources:[],misc:[],observations:[],
     diagnostics:{tabs:[],rejected:0,unclassified:0,limits:[],notes:[]},provenance:{},coverage:{}};
 }
 function r3Push(s,kind,key,value,source,limit=400){
@@ -264,10 +264,25 @@ function r3NativeObservedRowId(card){
   if(ids.length!==1||!/^[A-Za-z0-9_-]{4,120}$/.test(ids[0]))return '';
   return ids[0];
 }
+// A directly callable reference is recognized only if the official rendered
+// card or its own visible button publishes an *entire* Roll20 macro. Captions,
+// data-testid strings and arbitrary UI click handlers are not executable IDs.
+function r3NativeObservedActionRef(card){
+  const own=['data-roll20-macro','data-native-macro'].map(key=>r3Attr(card,key));
+  const buttons=Array.from(card.querySelectorAll?.('button[data-roll20-macro],button[data-native-macro]')||[])
+    .slice(0,18).filter(r3Shown);
+  const refs=[...own,...buttons.flatMap(button=>['data-roll20-macro','data-native-macro']
+    .map(key=>r3Attr(button,key)))].filter(Boolean);
+  if(refs.length===0||new Set(refs).size!==1)return '';
+  const value=refs[0];
+  return /^%\{[A-Za-z0-9_-]{4,120}\|[^{}\r\n]{1,100}\}$/.test(value)?value:'';
+}
 function r3CardInfo(card,kind,name,tab){
   const info={name,tab,visible:r3Text(card,1100)};
   const nativeRowId=r3NativeObservedRowId(card);
   if(nativeRowId)info.nativeRowId=nativeRowId;
+  const nativeActionRef=r3NativeObservedActionRef(card);
+  if(nativeActionRef)info.nativeActionRef=nativeActionRef;
   const tag=r3Attr(card,'data-testid');if(tag)info.testId=tag;
   const buttons=Array.from(card.querySelectorAll?.('button')||[]).slice(0,18)
     .filter(r3Shown).map(b=>({label:r3String(r3Attr(b,'aria-label')||r3Attr(b,'title')||r3Text(b,70),70)}))
@@ -500,10 +515,30 @@ function r3Cards(root,s,tab){
   r3InventoryRows(root,s,tab);
   r3ResourceControls(root,s,tab);
 }
+// Capture otherwise unclassified *explicitly identified* native controls.
+// A button without an official macro remains only an observation; it cannot
+// become a synthetic Roll20 action just because it has a visible label.
+function r3MiscNativeActions(root,s,tab){
+  const candidates=Array.from(root.querySelectorAll?.(
+    'button[data-roll20-macro],button[data-native-macro]')||[]).slice(0,300);
+  const classified=Object.values(R3_CATEGORIES).join(',');
+  for(const button of candidates){
+    if(s.misc.length>=100)break;
+    if(!r3Shown(button)||button.closest?.(classified))continue;
+    const ref=r3NativeObservedActionRef(button);
+    const name=r3String(r3Attr(button,'aria-label')||r3Attr(button,'title')||
+      r3Text(button,100),125);
+    if(!ref||!name||/^(more|close|cancel|next|previous|settings|menu)$/i.test(name))continue;
+    const key='native:'+ref;
+    if(!s.misc.some(item=>item._key===key))
+      s.misc.push({name,_key:key,tab,visible:name,nativeActionRef:ref});
+  }
+}
 function r3Capture(root,tab='Current view'){
   const s=r3Empty();s.name=r3NameFromDocument(root);
   if(!root?.querySelectorAll){s.diagnostics.notes.push('No readable official sheet DOM');return s;}
   r3Inputs(root,s,tab);r3VisibleStats(root,s,tab);r3Cards(root,s,tab);
+  r3MiscNativeActions(root,s,tab);
   s.diagnostics.tabs.push(tab);r3Coverage(s);return s;
 }
 function r3NameFromDocument(root){
@@ -562,7 +597,7 @@ function r3Coverage(s){
     modifiers:Object.keys(s.modifiers).length,saves:Object.keys(s.saves).length,
     skills:Object.keys(s.skills).length,slots:Object.keys(s.slots).length,
     spells:s.spells.length,attacks:s.attacks.length,inventory:s.inventory.length,
-    features:s.features.length,resources:s.resources.length,observations:s.observations.length};
+    features:s.features.length,resources:s.resources.length,misc:(s.misc||[]).length,observations:s.observations.length};
   return s;
 }
 function r3Merge(target,source){
@@ -588,6 +623,11 @@ function r3Merge(target,source){
         target[kind].push(item);keys.add(item._key);
       }
     }
+  }
+  target.misc=Array.isArray(target.misc)?target.misc:[];
+  for(const item of source.misc||[]){
+    if(target.misc.length>=100)break;
+    if(!target.misc.some(old=>old._key===item._key))target.misc.push(item);
   }
   const obs=new Set(target.observations.map(o=>o.tab+'|'+o.label+'|'+o.value));
   for(const o of source.observations)if(target.observations.length<750&&!obs.has(o.tab+'|'+o.label+'|'+o.value)){
@@ -970,7 +1010,7 @@ function r3CardsView(kind){
 function r3Results(){
   const snap=R3_UI.snapshot;
   if(!snap)return '<p class="muted">No import yet. Only the official sheet reader supplies data; nothing is filled from default or token values.</p>';
-  const menu=['summary','spells','attacks','inventory','features','resources','skills','fields','diagnostics'];
+  const menu=['summary','spells','attacks','inventory','features','resources','misc','skills','fields','diagnostics'];
   const nav='<nav class="views">'+menu.map(v=>
     '<button data-view="'+v+'"'+(R3_UI.view===v?' class="selected"':'')+'>'+r3Escape(v)+'</button>').join('')+'</nav>';
   let content='';
@@ -980,7 +1020,7 @@ function r3Results(){
       '<h3>Modifiers and saving throws</h3>'+r3ObjectRows(snap.modifiers,snap.provenance,'modifiers')+
       '<h3>Saving throws</h3>'+r3ObjectRows(snap.saves,snap.provenance,'saves')+
       '<h3>Spell slots</h3>'+r3ObjectRows(snap.slots);
-  }else if(['spells','attacks','inventory','features','resources','skills'].includes(R3_UI.view)){
+  }else if(['spells','attacks','inventory','features','resources','misc','skills'].includes(R3_UI.view)){
     content=R3_UI.view==='skills'?r3ObjectRows(snap.skills,snap.provenance,'skills'):r3CardsView(R3_UI.view);
   }else if(R3_UI.view==='fields'){
     content='<p class="muted">Raw labeled controls actually present in the rendered DOM; no guessed values.</p>'+
@@ -1186,7 +1226,7 @@ function r3UIEvent(event){
     else{R3_HUD.used[spent]=!R3_HUD.used[spent];r3HudRender();}
   }
   else if(flyout&&['spells','skills','actions','bonus','reactions','inventory',
-    'features','resources'].includes(flyout)){
+    'features','resources','misc'].includes(flyout)){
     R3_HUD.chooser=null;
     R3_HUD.flyout=R3_HUD.flyout===flyout?'':flyout;
     R3_HUD.attackGroup='';R3_HUD.openKeys=[];R3_HUD.scrollTop=0;r3HudRender();
@@ -1371,7 +1411,8 @@ const R3_NATIVE_CATEGORIES={
   resources:{title:'Use',pattern:/repeating_(?:resource|feature|action)\s*(?:\(|_)/i},
   skills:{title:'Roll',pattern:/(?:\b(?:skill|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:skill|check)\b)/i},
   saves:{title:'Roll',pattern:/(?:\b(?:saving[_-]?throw|save)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:save|saving[_-]?throw)\b)/i},
-  modifiers:{title:'Roll',pattern:/(?:\b(?:ability[_-]?check|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:ability[_-]?check|check)\b)/i}
+  modifiers:{title:'Roll',pattern:/(?:\b(?:ability[_-]?check|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:ability[_-]?check|check)\b)/i},
+  misc:{title:'Use',pattern:/^repeating_[A-Za-z0-9_-]{3,240}(?:_|\()/i}
 };
 function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
   if(!Object.prototype.hasOwnProperty.call(R3_NATIVE_CATEGORIES,kind)||!key||
@@ -1392,7 +1433,7 @@ function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
 // macro is not safe to run with the sheet closed: it can target a different PC.
 function r3NativeSheetReference(kind,action,character){
   const macro=String(action??'').trim();
-  const match=macro.match(/^%\{([A-Za-z0-9_-]{4,120})\|([^{}\r\n]{1,350})\}$/);
+  const match=macro.match(/^%\{([A-Za-z0-9_-]{4,120})\|([^{}|;!\r\n]{1,350})\}$/);
   if(!match)return {reason:'Roll20 ability does not contain one complete, safe sheet-action reference.'};
   const target=r3String(character?.id||r3TokenModelGet(character,'_id'),120);
   if(!target||match[1]!==target)
@@ -1422,9 +1463,22 @@ function r3NativeMapAbility(kind,entry,character,snapshot){
   const rowId=checks?'':r3String(entry?.nativeRowId,120);
   if(rowId&&!/^[A-Za-z0-9_-]{4,120}$/.test(rowId))
     return {reason:'Imported repeating row ID is invalid; no native action was linked.'};
-  if(!rowId&&sameName!==1)return {reason:kind==='attacks'?
+  const directRef=typeof entry?.nativeActionRef==='string'?entry.nativeActionRef:'';
+  const uniqueDirectRef=!!directRef&&rows.filter(x=>x?.nativeActionRef===directRef).length===1;
+  if(!rowId&&sameName!==1&&!uniqueDirectRef)return {reason:kind==='attacks'?
     'Multiple same-named native attacks; no verified repeating row identity.':
     'Several source entries have this name; their native actions are ambiguous.'};
+  // The official authenticated sheet may explicitly expose an action macro
+  // even if the player has not added it to the Roll20 token bar. This path
+  // never guesses an ID and always revalidates ownership when clicked.
+  // MISC cannot fall back to a name-only character ability.
+  if(entry?.nativeActionRef){
+    const direct=r3NativeSheetReference(kind,entry.nativeActionRef,character);
+    if(!direct.reference)return {reason:direct.reason};
+    return {abilityName:name,command:String(entry.nativeActionRef).trim(),
+      source:'Exact authenticated official-sheet action reference'};
+  }
+  if(kind==='misc')return {reason:'No explicit native reference was observed for this MISC action.'};
   const matches=[];
   let rejectedReason='';
   for(const ability of r3NativeActionModels(character)){
@@ -1495,7 +1549,7 @@ function r3NativeInvoke(kind,key){
   }
   R3_NATIVE.busy=true;
   try{
-    const outcome=r3NativeChatSubmit('%{'+identity.id+'|'+mapped.abilityName+'}');
+    const outcome=r3NativeChatSubmit(mapped.command||'%{'+identity.id+'|'+mapped.abilityName+'}');
     if(!outcome.ok){r3NativeStatus(outcome.reason);return false;}
     r3NativeStatus('Invoked mapped Roll20 '+kind+' action: '+r3String(entry.name,80)+
       '. Verify its native result in chat.');
@@ -1543,7 +1597,7 @@ function r3NativeMappedAttack(key){
   if(!/^[\w-]{4,120}$/.test(identity.id)){
     r3NativeStatus('The native character ID is not a valid Roll20 reference.');return false;
   }
-  const command='%{'+identity.id+'|'+mapping.abilityName+'}';
+  const command=mapping.command||'%{'+identity.id+'|'+mapping.abilityName+'}';
   R3_NATIVE.busy=true;
   try{
     const result=r3NativeChatSubmit(command);
@@ -2247,7 +2301,8 @@ const R3_HUD_TABS=[
   {key:'spells',title:'Spells',icon:'✧'},
   {key:'inventory',title:'Inventory',icon:'◈'},
   {key:'features',title:'Features',icon:'◆'},
-  {key:'resources',title:'Resources',icon:'◉'}
+  {key:'resources',title:'Resources',icon:'◉'},
+  {key:'misc',title:'MISC',icon:'◇'}
 ];
 function r3HudLoad(){
   // Always reset character-specific preferences before entering a different
@@ -2307,6 +2362,7 @@ function r3HudEntries(snapshot,kind){
     .map(x=>({...x,_hudSource:'Item'}));
   if(kind==='features')return items('features').map(x=>({...x,_hudSource:'Feature'}));
   if(kind==='resources')return items('resources').map(x=>({...x,_hudSource:'Resource'}));
+  if(kind==='misc')return items('misc').map(x=>({...x,_hudSource:'Misc'}));
   if(kind==='bonus'||kind==='reactions'){
     // Only explicitly labeled action economy belongs here; no guessing
     // from a feature's prose, its name or D&D spell traditions.
@@ -2372,7 +2428,7 @@ function r3HudNativeEntryControl(kind,key,name){
 }
 function r3HudSourceKind(item){
   return {Attack:'attacks',Spell:'spells',Item:'inventory',Feature:'features',
-    Resource:'resources'}[item?._hudSource]||'';
+    Resource:'resources',Misc:'misc'}[item?._hudSource]||'';
 }
 function r3HudCard(item,index){
   const key=r3Escape(r3String(item._key||item.name,140)+'|'+r3String(item.tab,60)+'|'+index);
@@ -2723,7 +2779,7 @@ function r3HudFlyoutMarkup(snapshot){
   const flyout=R3_HUD.flyout;
   const titles={spells:'CAST SPELL',skills:'SAVES / SKILLS / TOOLS',inventory:'USE ITEM',
     features:'USE FEATURE',actions:'ATTACKS & WEAPONS',bonus:'BONUS ACTION',reactions:'REACTION',
-    resources:'RESOURCES'};
+    resources:'RESOURCES',misc:'MISC · OTHER ACTIONS'};
   let content='';
   if(flyout==='spells'){
     const levels=r3HudSpellLevels(snapshot);
