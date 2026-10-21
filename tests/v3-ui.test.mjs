@@ -1473,7 +1473,7 @@ test('native action mapping refuses guesses and duplicate weapon labels',()=>{
   assert.equal(x.sent.length,0);
   h.api.R3_UI.snapshot=h.api.r3Coverage({...snap,attacks:[snap.attacks[0]]});
   x.model.abilities.models[0].get=k=>({name:'Dagger',action:'&{template:default} {{name=Dagger}}'})[k];
-  assert.match(h.api.r3NativeMappedPreview('dagger-a',h.api.R3_UI.snapshot).reason,/not a verified repeating/);
+  assert.match(h.api.r3NativeMappedPreview('dagger-a',h.api.R3_UI.snapshot).reason,/one complete, safe sheet-action reference/);
   assert.equal(h.api.r3NativeMappedAttack('dagger-a'),false);
   assert.equal(x.sent.length,0);
 });
