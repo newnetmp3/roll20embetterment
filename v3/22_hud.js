@@ -364,18 +364,25 @@ function r3HudAttackOption(entry,base){
   const key=r3String(item?._key||'',240);
   const unique=!!key&&typeof r3NativeSelectAttack==='function'&&
     r3NativeSelectAttack(key,R3_UI.snapshot)===item;
+  const mapped=unique&&typeof r3NativeMappedPreview==='function'?
+    r3NativeMappedPreview(key,R3_UI.snapshot):{reason:'No unique imported action key'};
+  const native=unique&&!!mapped.abilityName;
   const metrics=typeof r3NativeAttackMetric==='function'?
     r3NativeAttackMetric(item.visible||''):{bonus:'',damage:''};
   const meta=[metrics.bonus?'Hit '+metrics.bonus:'',
     metrics.damage?'Damage '+metrics.damage:''].filter(Boolean);
+  const label=r3Escape(item.name||base);
   return '<div class="hud-weapon-option">'+
     '<div class="hud-weapon-option-label"><strong>'+r3Escape(name)+'</strong>'+
-    (meta.length?'<small>'+r3Escape(meta.join(' · '))+'</small>':'')+'</div>'+
-    '<button type="button" class="hud-attack-button"'+
-    (unique?' data-hud-attack-key="'+r3Escape(key)+'"':' disabled')+
-    ' aria-label="Attack with '+r3Escape(item.name||base)+'"'+
-    ' title="'+(unique?'Roll this observed '+r3Escape(item.name||base)+' variant':
-      'This imported variant lacks a unique attack identity')+'">Attack</button>'+
+    (meta.length?'<small>'+r3Escape(meta.join(' · '))+'</small>':'')+
+    '<small class="'+(native?'hud-weapon-native':'hud-weapon-unmapped')+'" title="'+
+      r3Escape(native?'Source-verified Roll20 repeating attack action':mapped.reason||'No matching official action')+'">'+
+      (native?'Native linked':'Native unmapped')+'</small></div>'+
+    (native?'<button type="button" class="hud-attack-button" data-hud-attack-key="'+
+      r3Escape(key)+'" aria-label="Native attack '+label+'">Attack</button>':
+      '<button type="button" class="hud-dice-button"'+
+      (unique?' data-hud-dice-key="'+r3Escape(key)+'"':' disabled')+
+      ' aria-label="Roll imported dice for '+label+'" title="Observed hit and damage only; not a native Roll20 sheet attack">Dice</button>')+
     '</div>';
 }
 function r3HudAttackMenu(snapshot){
@@ -485,7 +492,7 @@ function r3HudFlyoutMarkup(snapshot){
   }
   return '<section class="hud-flyout" aria-label="Combat '+r3Escape(titles[flyout]||flyout)+' flyout">'+
     '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
-    '<small>'+(flyout==='actions'?'Attack rolls in Roll20 chat without opening the sheet':'Read-only · official sheet remains authoritative')+'</small>'+
+    '<small>'+(flyout==='actions'?'Native Attack when mapped · Dice fallback is not the sheet action':'Read-only · official sheet remains authoritative')+'</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
     (flyout==='actions'?r3NativeMarkup()+content:content+r3NativeMarkup())+'</section>';
 }
@@ -708,6 +715,9 @@ function r3HudStyles(){
     '.hud-weapon-toggle:hover,.hud-weapon-toggle:focus-visible{background:#316b9b!important}.hud-weapon-submenu{border-top:1px solid #52738e;background:#101f30;padding:4px 7px 8px 38px;display:flex;flex-direction:column;gap:4px}',
     '.hud-weapon-option{display:flex;align-items:center;gap:8px;padding:5px 0;min-width:0;border-bottom:1px solid #2d4864}.hud-weapon-option:last-child{border-bottom:0}.hud-weapon-option-label{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}.hud-weapon-option-label strong{font-size:11px;overflow-wrap:anywhere}.hud-weapon-option-label small{font-size:10px;color:#c2d4e5}',
     '.hud-weapon-direct{display:flex;justify-content:flex-end;align-items:center;padding:0 8px 7px}.hud-weapon-direct .hud-weapon-option{width:100%;border:0;padding:0}.hud-weapon-direct .hud-weapon-option-label strong{display:none}',
+    '.hud-weapon-native{color:#9bdcba!important}.hud-weapon-unmapped{color:#dfbd8d!important}',
+    '.hud-dice-button{flex:0 0 auto;min-width:68px!important;border:1px solid #6a839b!important;border-radius:6px!important;background:#30465d!important;color:#e9eef5!important;padding:8px 9px!important;font-weight:650!important}.hud-dice-button:hover:not(:disabled){background:#44627e!important}.hud-dice-button:disabled{opacity:.45}',
+
 
     '.hud-attack-row{display:flex;align-items:center;gap:9px;background:#192a3c;border:1px solid #3b5978;border-radius:7px;padding:8px;min-width:0}',
     '.hud-attack-icon{flex:0 0 27px;color:#a9c6e4}.hud-attack-icon svg{width:25px;height:25px}',
