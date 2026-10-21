@@ -19,3 +19,15 @@ test('full runtime harness tracks new source modules in production build order',
     assert.equal(source.split(signature).length-1,1,signature+' must have exactly one implementation');
   }
 });
+
+test('Jumpgate runtime does not depend on window.d20.Campaign in any shipped entry point',()=>{
+  const files=['v3/21_native.js','v3/23_token.js','extension/firefox/movement-tracker.js',
+    'extension/firefox/turn-economy.js','roll20-embetterment.user.js'];
+  for(const name of files){
+    const code=readFileSync(join(root,name),'utf8');
+    assert.doesNotMatch(code,/(?:window\.d20(?:\?\.|\.)Campaign|\bd20\?\.Campaign)/,
+      name+' should not use obsolete d20.Campaign in Jumpgate');
+  }
+  const token=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  assert.match(token,/function r3TokenCampaign\(\)\{[\s\S]*?return window\.Campaign\|\|null;/);
+});
