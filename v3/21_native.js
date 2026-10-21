@@ -1,7 +1,6 @@
-// Two-step Roll20-native attack pilot. No macros, fabricated dice,
-// automatic spell casts, resource spends or token movement.
-// Source scan must find one real visible official-sheet "Roll Attack"
-// control before a user can explicitly confirm a single native click.
+// Roll20 2024 native-action bridge. The default HUD invokes only already
+// existing, verified, player-controlled character abilities. Unmapped actions
+// do not synthesize native behavior; the manual sheet probe is diagnostic-only.
 const R3_NATIVE={pending:new Map(),tokens:new Map(),readers:new Map(),preview:null,busy:false,status:'',revision:0};
 function r3NativeStatus(message){
   if(typeof r3DebugLog==='function'&&message!==R3_NATIVE.status)
@@ -72,28 +71,7 @@ function r3NativeActionModels(character){
   return Array.isArray(abilities?.models)?abilities.models.slice(0,300):[];
 }
 function r3NativeMappedAbility(attack,character,snapshot){
-  const name=r3String(attack?.name,125).trim();
-  if(!name)return {reason:'This imported attack has no verified name.'};
-  // A name-only Roll20 ability cannot distinguish two separate source
-  // actions with identical names. The HUD attack key alone isn't evidence.
-  if((snapshot?.attacks||[]).filter(x=>
-    r3String(x.name,125).toLowerCase()===name.toLowerCase()).length!==1)
-    return {reason:'Multiple same-named native attacks; cannot identify one exact Roll20 ability.'};
-  const abilityNames=r3NativeActionModels(character).filter(model=>
-    r3String(r3TokenModelGet(model,'name'),125).toLowerCase()===name.toLowerCase());
-  if(abilityNames.length!==1)return {reason:abilityNames.length?
-    'Several Roll20 abilities have that name; the native action is ambiguous.':
-    'No corresponding Roll20 token action is registered for '+name+'.'};
-  const ability=abilityNames[0],action=r3String(r3TokenModelGet(ability,'action'),4000);
-  // Reject arbitrary chat commands and source-free dice templates. This
-  // proves the named ability delegates to a real repeating sheet action.
-  if(!/repeating_(?:attack|npcaction)\s*(?:\(|_)/i.test(action))
-    return {reason:'The matching Roll20 ability is not a verified repeating attack action.'};
-  const abilityName=r3String(r3TokenModelGet(ability,'name'),125);
-  if(!/^[^{}|\r\n]{1,125}$/.test(abilityName))
-    return {reason:'The native ability name contains unsupported macro syntax.'};
-  return {abilityName,abilityId:r3String(ability.id||r3TokenModelGet(ability,'_id'),120),
-    source:'Roll20 character ability',action};
+  return r3NativeMapAbility('attacks',attack,character,snapshot);
 }
 // Shared read-only mapping registry for all player-facing 2024 sheet
 // actions. A DOM button caption is an observation, NOT a callable macro ID.
@@ -123,31 +101,63 @@ function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
   if(found.length!==1)return {reason:'This imported action has no unique source identity.'};
   return found[0];
 }
+// Accept a single, character-bound Roll20 sheet-ability reference, never an
+// arbitrary chat script containing the word "repeating". A selected-token
+// macro is not safe to run with the sheet closed: it can target a different PC.
+function r3NativeSheetReference(kind,action,character){
+  const macro=String(action??'').trim();
+  const match=macro.match(/^%\{([A-Za-z0-9_-]{4,120})\|([^{}\r\n]{1,350})\}$/);
+  if(!match)return {reason:'Roll20 ability does not contain one complete, safe sheet-action reference.'};
+  const target=r3String(character?.id||r3TokenModelGet(character,'_id'),120);
+  if(!target||match[1]!==target)
+    return {reason:'Native ability references another or selection-dependent character.'};
+  if(!R3_NATIVE_CATEGORIES[kind].pattern.test(match[2]))
+    return {reason:'The matching ability is not an identified '+kind+' sheet action.'};
+  return {reference:match[2]};
+}
+// Some official cards expose their *own* stable repeating row ID. When
+// present it is stronger than a name and allows safe same-named variants.
+// The ID must be present as one whole argument or delimited row token in
+// the pre-existing ability reference; substrings and guessed indexes fail.
+function r3NativeReferenceHasRow(reference,rowId){
+  if(!/^[A-Za-z0-9_-]{4,120}$/.test(rowId||''))return false;
+  return new RegExp('(?:_'
+    +rowId+'_'
+    +'|\\(\\s*["\\x27]'+rowId+'["\\x27]\\s*[,)]'
+    +')').test(reference);
+}
 function r3NativeMapAbility(kind,entry,character,snapshot){
   if(!R3_NATIVE_CATEGORIES[kind])return {reason:'Unsupported native action category.'};
-  if(kind==='attacks')return r3NativeMappedAbility(entry,character,snapshot);
   const name=r3String(entry?.name,125).trim();
   if(!name||/[{}|\r\n]/.test(name))return {reason:'The source action name is invalid for Roll20 macros.'};
-  if(!['skills','saves','modifiers'].includes(kind)){
-    const list=Array.isArray(snapshot?.[kind])?snapshot[kind]:[];
-    if(list.filter(x=>r3String(x?.name,125).toLowerCase()===name.toLowerCase()).length!==1)
-      return {reason:'Several source entries have this name; their native actions are ambiguous.'};
+  const checks=['skills','saves','modifiers'].includes(kind);
+  const rows=checks?[]:Array.isArray(snapshot?.[kind])?snapshot[kind]:[];
+  const sameName=checks?1:rows.filter(x=>r3String(x?.name,125).toLowerCase()===name.toLowerCase()).length;
+  const rowId=checks?'':r3String(entry?.nativeRowId,120);
+  if(rowId&&!/^[A-Za-z0-9_-]{4,120}$/.test(rowId))
+    return {reason:'Imported repeating row ID is invalid; no native action was linked.'};
+  if(!rowId&&sameName!==1)return {reason:kind==='attacks'?
+    'Multiple same-named native attacks; no verified repeating row identity.':
+    'Several source entries have this name; their native actions are ambiguous.'};
+  const matches=[];
+  for(const ability of r3NativeActionModels(character)){
+    const abilityName=r3String(r3TokenModelGet(ability,'name'),125);
+    if(!abilityName||/[{}|\r\n]/.test(abilityName))continue;
+    if(!rowId&&abilityName.toLowerCase()!==name.toLowerCase())continue;
+    const inspected=r3NativeSheetReference(kind,r3TokenModelGet(ability,'action'),character);
+    if(!inspected.reference)continue;
+    if(rowId&&!r3NativeReferenceHasRow(inspected.reference,rowId))continue;
+    matches.push({ability,abilityName,action:r3String(r3TokenModelGet(ability,'action'),4000)});
   }
-  const models=r3NativeActionModels(character).filter(model=>
-    r3String(r3TokenModelGet(model,'name'),125).toLowerCase()===name.toLowerCase());
-  if(models.length!==1)return {reason:models.length?
-    'Multiple same-named Roll20 abilities; no unique native action.':
-    'Roll20 has not exposed a matching token action for '+name+'.'};
-  const ability=models[0],action=r3String(r3TokenModelGet(ability,'action'),4000);
-  // A free-text macro can print a message or consume a resource, so name
-  // alone is never sufficient evidence of a corresponding sheet action.
-  if(!R3_NATIVE_CATEGORIES[kind].pattern.test(action))
-    return {reason:'The matching ability is not an identified '+kind+' sheet action.'};
-  const abilityName=r3String(r3TokenModelGet(ability,'name'),125);
-  if(!/^[^{}|\r\n]{1,125}$/.test(abilityName))
-    return {reason:'The native action name contains unsupported macro syntax.'};
-  return {abilityName,abilityId:r3String(ability.id||r3TokenModelGet(ability,'_id'),120),
-    source:'Verified Roll20 '+kind+' ability',action};
+  if(matches.length!==1)return {reason:matches.length>1?
+    'Multiple Roll20 abilities match this source action; no native action was sent.':
+    rowId?'No existing Roll20 ability references this exact imported repeating row.':
+    'No safe, character-bound '+kind+' ability matches '+name+'.'};
+  const matched=matches[0];
+  return {abilityName:matched.abilityName,
+    abilityId:r3String(matched.ability.id||r3TokenModelGet(matched.ability,'_id'),120),
+    source:rowId?'Verified repeating row ID':'Verified Roll20 '+kind+' ability',
+    action:matched.action};
 }
 function r3NativeMapPreview(kind,key,snapshot=R3_UI.snapshot){
   const entry=r3NativeMapSource(kind,key,snapshot);
