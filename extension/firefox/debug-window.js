@@ -82,7 +82,7 @@ function r3DebugMarkup(){
     '<details class="r3-debug-movement"><summary>Manual turn corrections</summary>'+
     (typeof r3TurnMarkup==='function'?r3TurnMarkup(R3_UI.snapshot):'<p>Turn tracker unavailable.</p>')+
     '</details>'+
-    '<details class="r3-debug-movement"><summary>Movement tracking diagnostics</summary>' +<summary>Movement tracking diagnostics</summary>'+
+    '<details class="r3-debug-movement"><summary>Movement tracking diagnostics</summary>'+
     '<dl id="r3-debug-movement-values">'+r3DebugMovementRows()+'</dl><small>Move your token while Your Turn is active. First-render observer status indicates whether the safe Jumpgate startup barrier completed; it does not prove token movement works. If the source, scale or position is unavailable, its reason appears above.</small></details>'+
     '<div class="r3-debug-toolbar"><label for="r3-debug-filter">Messages</label>'+
     '<select id="r3-debug-filter" aria-label="Filter Debug messages">'+
