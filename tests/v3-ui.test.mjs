@@ -1133,6 +1133,57 @@ test('invalid or cross-character persisted portrait URLs cannot be reused',()=>{
   }
 });
 
+test('attack flyout autoloads each observed weapon without choosing loadouts or importing twice',()=>{
+  const h=panelHarness('Independent Hero');h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const first=h.api.r3Empty();first.name='Independent Hero';
+  first.attacks=[
+    {name:'Handaxe',_key:'handaxe-m',tab:'Combat',
+      visible:'Handaxe Melee 5 ft. +7 Attack 1d6+4'},
+    {name:'Handaxe',_key:'handaxe-o',tab:'Combat',
+      visible:'Handaxe offhand +5 Attack 1d6+2'},
+    {name:'Shortbow',_key:'shortbow',tab:'Combat',
+      visible:'Shortbow Ranged 80/320 ft. +8 Attack 1d6+4'}
+  ];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(first);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  let html=h.nodes.get('r3-hud').innerHTML;
+  assert.equal([...html.matchAll(/class="hud-attack-row"/g)].length,3);
+  assert.equal([...html.matchAll(/class="hud-attack-button"/g)].length,3);
+  assert.match(html,/3 attacks from the official sheet/);
+  assert.match(html,/To hit \+7/);
+  assert.match(html,/Damage 1d6\+2/);
+  assert.match(html,/Shortbow/);
+  assert.equal(h.sent.length,0,'auto-rendered attacks cannot roll without a click');
+  assert.equal(h.api.R3_HUD.chooser,null);
+  assert.deepEqual(Array.from(h.api.R3_HUD.weaponSets),[null,null,null,null,null,null]);
+  const updated=h.api.r3Empty();updated.name='Independent Hero';
+  updated.attacks=[...first.attacks,{name:'Warhammer',_key:'warhammer',tab:'Combat',
+    visible:'Warhammer +9 Attack 1d8+5'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(updated);h.api.r3HudRender();
+  html=h.nodes.get('r3-hud').innerHTML;
+  assert.equal([...html.matchAll(/class="hud-attack-row"/g)].length,4,
+    'a later authenticated import updates the attack menu automatically');
+  assert.match(html,/Warhammer/);
+});
+test('duplicate legacy attack without stable identity is displayed but not rolled; HTML escaped',()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';
+  snap.attacks=[
+    {name:'Dagger',tab:'Combat',visible:'Dagger +7 Attack 1d4+4'},
+    {name:'Dagger',tab:'Combat',visible:'Dagger +5 Attack 1d4+2'},
+    {name:'<script>oops</script>',_key:'evil"',tab:'Combat',
+      visible:'<img onerror=alert(1)> +4 Attack 1d6+1'}
+  ];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.equal([...html.matchAll(/class="hud-attack-row"/g)].length,3);
+  assert.match(html,/class="hud-attack-button" disabled aria-label="Attack with Dagger"/);
+  assert.doesNotMatch(html,/<script>|<img onerror/);
+  assert.match(html,/&lt;script&gt;oops&lt;\/script&gt;/);
+  assert.match(html,/data-hud-attack-key="evil&quot;/);
+  assert.equal(h.sent.length,0);
+});
 test('native attack UI supports arbitrary imported character names and own actions',async()=>{
   for(const [character,attack] of [
     ['Elowen Dawnsong','Longbow'],['Brom Stonebeard','Warhammer'],
@@ -1143,8 +1194,11 @@ test('native attack UI supports arbitrary imported character names and own actio
     snap.attacks=[{name:attack,tab:'Combat',_key:attack.toLowerCase()}];
     h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
     h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
-    assert.match(h.nodes.get('r3-hud').innerHTML,/Find native Roll20 attack/);
-    h.shadow.handlers.get('click')({target:{dataset:{hudProbe:attack}}});
+    const html=h.nodes.get('r3-hud').innerHTML;
+    assert.match(html,/ATTACKS &amp; WEAPONS/);
+    assert.match(html,/data-hud-attack-key="/);
+    assert.doesNotMatch(html,/Find native Roll20 attack/);
+    h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:attack.toLowerCase()}}});
     assert.equal(h.sent.at(-1).message.type,'native-probe');
     assert.equal(h.sent.at(-1).message.characterName,character);
     assert.equal(h.sent.at(-1).message.attackName,attack);
@@ -1156,9 +1210,8 @@ test('native attack UI supports arbitrary imported character names and own actio
         label:'Roll Attack',token:'single-use-token'}
     });
     await new Promise(resolve=>setImmediate(resolve));
-    assert.match(h.nodes.get('r3-hud').innerHTML,/Confirm native roll/);
-    h.click('r3-hud-native-confirm');
-    assert.equal(h.sent.at(-1).message.type,'native-invoke');
+    assert.equal(h.sent.at(-1).message.type,'native-invoke',
+      'one explicit Attack click runs the verified native probe then invokes once');
     assert.equal(h.sent.at(-1).message.characterName,character);
     assert.equal(h.sent.at(-1).message.attackName,attack);
     assert.equal(h.sent.at(-1).message.token,'single-use-token');
@@ -1432,9 +1485,11 @@ test('two imported attacks named Dagger get different per-card native probe iden
   h.api.r3HudRender();
   h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
   const html=h.nodes.get('r3-hud').innerHTML;
-  assert.match(html,/data-hud-probe-key="dagger\|melee\|\+7\|1d4\+4"/);
-  assert.match(html,/data-hud-probe-key="dagger\|offhand\|\+5\|1d4\+2"/);
-  h.shadow.handlers.get('click')({target:{dataset:{hudProbeKey:b._key}}});
+  assert.match(html,/data-hud-attack-key="dagger\|melee\|\+7\|1d4\+4"/);
+  assert.match(html,/data-hud-attack-key="dagger\|offhand\|\+5\|1d4\+2"/);
+  assert.match(html,/To hit \+7/);
+  assert.match(html,/Damage 1d4\+2/);
+  h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:b._key}}});
   const outgoing=h.sent.at(-1).message;
   assert.equal(outgoing.type,'native-probe');
   assert.equal(outgoing.characterName,'Different Player');
@@ -1448,7 +1503,6 @@ test('two imported attacks named Dagger get different per-card native probe iden
       token:'unique-second-dagger',label:'+5 Attack'}
   });
   await new Promise(resolve=>setImmediate(resolve));
-  h.click('r3-hud-native-confirm');
   const invoke=h.sent.at(-1).message;
   assert.equal(invoke.type,'native-invoke');
   assert.equal(invoke.attackKey,b._key);

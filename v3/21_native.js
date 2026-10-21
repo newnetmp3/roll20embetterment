@@ -559,7 +559,9 @@ function r3NativeSelectAttack(input,snapshot=R3_UI.snapshot){
   const named=items.filter(x=>x.name===input);
   return named.length===1?named[0]:null;
 }
-async function r3NativeProbe(name){
+// The explicit Attack button may request a single verified Roll20 roll
+// directly. The legacy Find/Confirm path remains for manual diagnostics.
+async function r3NativeProbe(name,invokeOnVerified=false){
   if(R3_NATIVE.busy)return;
   R3_NATIVE.preview=null;
   const snap=R3_UI.snapshot;
@@ -574,6 +576,7 @@ async function r3NativeProbe(name){
   const characterId=R3_TOKEN.active?.name.toLowerCase()===characterName.toLowerCase()?
     R3_TOKEN.active.characterId:'';
   R3_NATIVE.busy=true;
+  let verifiedForInvocation=false;
   r3NativeStatus('Locating a private character-sheet reader…');
   try{
     let candidate=r3NativeCandidate(characterName),openedNow=false;
@@ -612,11 +615,17 @@ async function r3NativeProbe(name){
        r3NativeSelectAttack(attackKey||attackName)?._key===chosen._key){
       R3_NATIVE.preview={characterName,characterId,attackName,attackKey,attackText,
         token:result.token,window:candidate.window,label:result.label,background};
+      verifiedForInvocation=invokeOnVerified===true;
       r3NativeStatus('Roll20 shows '+r3String(result.label,65)+
-        ' for '+attackName+'. Confirm to click once.');
+        ' for '+attackName+(verifiedForInvocation?'. Sending your requested attack once…':
+          '. Confirm to click once.'));
     }else r3NativeStatus(result.message||'No verified native roll button was found.');
   }catch(e){r3NativeStatus(e.message||'Background roll preparation failed.');}
   finally{R3_NATIVE.busy=false;r3HudRender();}
+  // This is the continuation of the one explicit player click, not an
+  // automatic game action. Revalidate identity and the one-time probe token
+  // in r3NativeConfirm + the official-sheet native-invoke handler.
+  if(verifiedForInvocation)await r3NativeConfirm();
 }
 async function r3NativeConfirm(){
   const preview=R3_NATIVE.preview;
