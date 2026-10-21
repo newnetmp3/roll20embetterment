@@ -16,6 +16,8 @@ function harness(){
       ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));},
     r3MoveDiagnostics(){return {
       status:'Map scale unavailable',details:'Roll20 page scale not exposed',
+      jumpgateFirstRender:'watching first render',
+      jumpgateRenderObserved:'No',jumpgateRuntimeAttempts:0,
       turn:'active',selectedToken:true,positionSource:'canvas._objects',
       pageResolved:true,pageId:'safe-page-id',pageScale:'unavailable',
       pageUnit:'unavailable',gridIncrement:'unspecified',
@@ -42,6 +44,11 @@ test('Debug window is closed by default and opens only through its control',()=>
   assert.match(html,/Movement tracking diagnostics/);
   assert.match(html,/Map scale unavailable/);
   assert.match(html,/Copy log/);
+  assert.match(html,/First-render observer/);
+  assert.match(html,/watching first render/);
+  assert.match(html,/First render observed/);
+  assert.match(html,/Webpack read attempts/);
+  assert.match(h.api.r3DebugCopyText(),/jumpgateFirstRender: watching first render/);
   assert.match(html,/Importer/);
   h.api.r3DebugAction({dataset:{r3Debug:'close'}});
   assert.equal(h.api.r3DebugMarkup(),'');

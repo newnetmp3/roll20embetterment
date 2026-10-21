@@ -265,6 +265,14 @@ function r3MoveDiagnostics(){
     editorBridge:selection?.editorBridge||'unavailable',
     campaignBridge:selection?.campaignBridge||'unavailable',
     nativeSelection:selection?.nativeState||'unavailable',
+    // Passive diagnostics only. Never probe the Webpack runtime or touch
+    // the lazy VTTEngine.instance getter to determine startup readiness.
+    jumpgateFirstRender:typeof R3_JUMPGATE_RENDER==='object'?
+      R3_JUMPGATE_RENDER.tracking:'unavailable',
+    jumpgateRenderObserved:typeof R3_JUMPGATE_RENDER==='object'?
+      (R3_JUMPGATE_RENDER.complete?'Yes':'No'):'unavailable',
+    jumpgateRuntimeAttempts:typeof R3_JUMPGATE_RUNTIME==='object'?
+      R3_JUMPGATE_RUNTIME.tried:'unavailable',
     jumpgateBuild:selection?.actualBuild||'unavailable',
     jumpgateModuleSignature:selection?.moduleSignature||'not checked',
     nativeEngineKeys:selection?.nativeKeys||'none',

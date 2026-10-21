@@ -754,6 +754,37 @@ test('after Roll20 first-render marker, compatible Jumpgate selection initialize
   assert.equal(module.getCalls(),1);
   assert.equal(registrations(),1);
 });
+test('first-render observer diagnostics are passive and show the actual readiness transition',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  // No Roll20 completion mark remains after its synchronous clearMarks().
+  h.ctx.window.performance.getEntriesByName=()=>[];
+  let deliver,registrations=0;
+  h.ctx.window.PerformanceObserver=class {
+    constructor(callback){deliver=entries=>callback({getEntries:()=>entries});}
+    observe(){}
+    disconnect(){}
+  };
+  const chunks=[];
+  chunks.push=()=>{registrations++;};
+  h.ctx.window.webpackChunkvtt=chunks;
+  const before=h.api.r3MoveDiagnostics();
+  assert.equal(before.jumpgateFirstRender,'unavailable');
+  assert.equal(before.jumpgateRenderObserved,'unavailable');
+  vm.runInContext(watch,h.ctx);
+  const waiting=h.api.r3MoveDiagnostics();
+  assert.equal(waiting.jumpgateFirstRender,'watching first render');
+  assert.equal(waiting.jumpgateRenderObserved,'No');
+  assert.equal(waiting.jumpgateRuntimeAttempts,0);
+  assert.equal(registrations,0,'Debug must not bypass first-render barrier');
+  deliver([{name:'jumpgate-render-end',entryType:'mark'}]);
+  // Avoid a live selection probe here: inspect only the passive flags.
+  const observed=h.api.r3MoveDiagnostics();
+  assert.equal(observed.jumpgateFirstRender,'first render observed');
+  assert.equal(observed.jumpgateRenderObserved,'Yes');
+  assert.equal(observed.jumpgateRuntimeAttempts,1,
+    'Module read can begin only after first-render observation');
+});
+
 test('missing Performance marks fail closed without initializing Roll20 engine',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   h.ctx.window.performance=undefined;

@@ -39,6 +39,9 @@ function r3DebugMovementRows(){
     ['Roll20 editor bridge',state.editorBridge],
     ['Campaign data',state.campaignBridge],
     ['Native Jumpgate selection',state.nativeSelection],
+    ['First-render observer',state.jumpgateFirstRender],
+    ['First render observed',state.jumpgateRenderObserved],
+    ['Webpack read attempts',state.jumpgateRuntimeAttempts],
     ['Jumpgate runtime hash',state.jumpgateBuild],
     ['Module verification',state.jumpgateModuleSignature],
     ['vttEngine fields',state.nativeEngineKeys],
@@ -67,7 +70,7 @@ function r3DebugMarkup(){
     '<button type="button" data-r3-debug="close" aria-label="Close Debug window">×</button></header>'+
     '<div class="r3-debug-body">'+
     '<details class="r3-debug-movement" open><summary>Movement tracking diagnostics</summary>'+
-    '<dl id="r3-debug-movement-values">'+r3DebugMovementRows()+'</dl><small>Move your token while Your Turn is active. If the source, scale or position is unavailable, its reason appears above.</small></details>'+
+    '<dl id="r3-debug-movement-values">'+r3DebugMovementRows()+'</dl><small>Move your token while Your Turn is active. First-render observer status indicates whether the safe Jumpgate startup barrier completed; it does not prove token movement works. If the source, scale or position is unavailable, its reason appears above.</small></details>'+
     '<div class="r3-debug-toolbar"><label for="r3-debug-filter">Messages</label>'+
     '<select id="r3-debug-filter" aria-label="Filter Debug messages">'+
       ['All','Movement','Native','Importer','Help','System'].map(k=>
