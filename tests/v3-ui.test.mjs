@@ -1556,6 +1556,56 @@ function backgroundNativeRig(){
   h.context.window.d20={player:{id:'player-one'}};
   return {h,dialogs,frames,overlays,log,create};
 }
+test('Jumpgate with no d20 exposes direct Campaign and one Attack click invokes one verified official roll',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  // Real Jumpgate does not require window.d20.Campaign, engine or player.
+  h.context.window.d20=undefined;
+  h.context.window.currentPlayer={id:'player-one'};
+  assert.equal(h.api.r3NativeBgResolve('Elowen').id,'char-elf');
+  const character=h.context.window.Campaign.characters.get('char-elf');
+  const originalShow=character.view.showDialog;
+  const received=[];
+  character.view.showDialog=function(){
+    originalShow.call(this);
+    const w=x.frames.at(-1).contentWindow;
+    w.postMessage=(msg)=>{
+      received.push(msg);
+      const data=msg.type==='hello'?
+        {type:'ready',name:'Elowen',session:'jumpgate-2024-reader',mode:'iframe'}:
+        {type:'native-result',id:msg.id,
+          status:msg.type==='native-probe'?'ready':'clicked',
+          token:'verified-once-only',label:'+4 Attack',
+          message:'Clicked the official attack control once'};
+      queueMicrotask(()=>h.windowListeners.get('message')({
+        origin:'https://advanced-sheets.production.roll20preflight.net',
+        source:w,data:{protocol:'r20eb:import:v3',...data}
+      }));
+    };
+  };
+  h.context.setTimeout=(fn,ms)=>{if(ms<4000)queueMicrotask(fn);return 1;};
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Quarterstaff',_key:'staff|melee+4|1d6+2',
+    visible:'Quarterstaff Melee +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
+  assert.match(h.nodes.get('r3-hud').innerHTML,/data-hud-attack-key="staff\|melee\+4\|1d6\+2"/);
+  await h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:'staff|melee+4|1d6+2'}}});
+  assert.equal(received.filter(m=>m.type==='native-probe').length,1);
+  assert.equal(received.filter(m=>m.type==='native-invoke').length,1);
+  assert.equal(received.find(m=>m.type==='native-invoke').attackKey,'staff|melee+4|1d6+2');
+  assert.equal(x.log.filter(m=>m.kind==='show').length,1);
+  assert.match(h.api.R3_NATIVE.status,/Clicked the official attack control once/);
+  assert.equal(h.api.R3_NATIVE.preview,null,
+    'single-click path consumed the token and cannot invoke again');
+});
+test('obsolete d20 Campaign alone is never permission evidence for native Attack opening',()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const legacy=h.context.window.Campaign;
+  h.context.window.Campaign=undefined;
+  h.context.window.d20={Campaign:legacy,player:{id:'player-one'}};
+  assert.match(h.api.r3NativeBgResolve('Elowen').reason,/Jumpgate.*window.Campaign.characters/);
+  assert.equal(x.log.filter(m=>m.kind==='show').length,0);
+});
 test('background native reader opens only a new linked controllable player sheet and moves it offscreen',async()=>{
   const x=backgroundNativeRig();
   const manual={style:{left:'400px',top:'100px',position:'absolute'},
