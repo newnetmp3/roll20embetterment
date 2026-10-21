@@ -500,7 +500,7 @@ function r3HudFlyoutMarkup(snapshot){
         (lev===selected?'active':'')+'">'+(lev==='0'?'Cantrip':lev==='other'?'Unclassified':'Level '+lev)+
         ' <small>'+arr.length+'</small></button>').join('')+'</div>'+
         '<div class="hud-flyout-caption">'+(selected==='0'?'Cantrips':selected==='other'?'Unclassified spells':'Level '+selected)+
-        slots+'</div><div class="hud-flyout-cards">'+spells.slice(0,65).map(r3HudCard).join('')+'</div>';
+        slots+'</div><div class="hud-flyout-cards">'+spells.slice(0,65).map((item,index)=>r3HudCard({...item,_hudSource:'Spell'},index)).join('')+'</div>';
     }
   }else if(flyout==='actions'){
     content=r3HudAttackMenu(snapshot);
