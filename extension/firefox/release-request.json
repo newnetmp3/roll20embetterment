@@ -1,6 +1,6 @@
 {
-  "version": "3.9.17",
+  "version": "3.9.18",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Group detected weapon variants under Melee, Ranged and on-demand context submenus, Thrown as Ranged; invoke verified mapped native character repeating-attack abilities where available and explicitly mark non-native Dice fallback"
+  "reason": "Unified player-controlled native Roll20 action mapping for attacks, features, spells, inventory, resources, skills, saves, and checks with direct-sheet-free macros, explicit unmapped/read-only states"
 }
