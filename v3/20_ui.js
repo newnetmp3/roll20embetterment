@@ -189,6 +189,7 @@ function r3UIEvent(event){
   const assignment=field('hudAssign','[data-hud-assign]');
   const spellLevel=field('hudSpellLevel','[data-hud-spell-level]');
   const spent=field('hudUsed','[data-hud-used]');
+  const nativeAttack=field('hudAttackKey','[data-hud-attack-key]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
   if(typeof r3DebugAction==='function'&&r3DebugAction(target))return;
@@ -215,6 +216,10 @@ function r3UIEvent(event){
   else if(target?.id==='r3-hud-native-confirm')return r3NativeConfirm();
   else if(target?.id==='r3-hud-native-cancel')return r3NativeCancel();
   else if(target?.id==='r3-hud-native-reveal')return r3NativeBgReveal();
+  else if(typeof nativeAttack==='string'&&nativeAttack.length>0&&nativeAttack.length<=240){
+    // One deliberate click, bound to the unique imported official-sheet row.
+    return r3NativeProbe(nativeAttack,true);
+  }
   else if(typeof nativeProbe==='string'&&nativeProbe.length<=240){
     return r3NativeProbe(nativeProbe);
   }
