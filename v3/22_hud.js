@@ -292,6 +292,42 @@ function r3HudSpellLevels(snapshot){
   return [...levels.entries()].sort((a,b)=>
     a[0]==='other'?1:b[0]==='other'?-1:Number(a[0])-Number(b[0]));
 }
+// The official Combat import is the source of truth: one row per recorded
+// attack variant, including same-name weapons with different attack/damage.
+// No loadout assignments or extra setup are required before using the menu.
+function r3HudAttackMenu(snapshot){
+  const items=Array.isArray(snapshot?.attacks)?snapshot.attacks.slice(0,400):[];
+  if(!items.length)return '<p class="hud-empty">No attacks detected yet. Select your character; R20eb will read the official Combat sheet when available.</p>';
+  const rows=items.map((item,index)=>{
+    const name=r3String(item?.name,125)||'Unnamed attack';
+    const key=r3String(item?._key||item?.name,240);
+    const unique=key&&typeof r3NativeSelectAttack==='function'&&
+      r3NativeSelectAttack(key,snapshot)===item;
+    // Reuse the *same* conservative Roll20 attack parsing used to bind
+    // official roll buttons. Missing values remain unknown, never guessed.
+    const metrics=typeof r3NativeAttackMetric==='function'?
+      r3NativeAttackMetric(item?.visible||''):{bonus:'',damage:''};
+    const meta=[metrics.bonus?'To hit '+metrics.bonus:'',
+      metrics.damage?'Damage '+metrics.damage:'',
+      r3String(item?.range,60)].filter(Boolean);
+    const more=r3String(item?.visible,1100);
+    return '<div class="hud-attack-row" data-hud-attack-row="'+index+'">'+
+      '<span class="hud-attack-icon" aria-hidden="true">'+r3HudIcon('blade')+'</span>'+
+      '<div class="hud-attack-info"><strong>'+r3Escape(name)+'</strong>'+
+      (meta.length?'<span class="hud-attack-metrics">'+meta.map(x=>
+        '<span>'+r3Escape(x)+'</span>').join('')+'</span>':
+        '<small class="hud-attack-muted">Roll modifiers not observed</small>')+
+      (more?'<details class="hud-attack-details"><summary>Details</summary><p>'+r3Escape(more)+'</p></details>':'')+
+      '</div><button type="button" class="hud-attack-button"'+
+      (unique?' data-hud-attack-key="'+r3Escape(key)+'"':' disabled')+
+      ' aria-label="Attack with '+r3Escape(name)+'"'+
+      ' title="'+(unique?'Roll the official '+r3Escape(name)+' attack once':
+        'Cannot safely identify a unique official attack')+'">Attack</button></div>';
+  }).join('');
+  return '<div class="hud-attack-list" aria-label="Detected weapon attacks">'+
+    '<div class="hud-attack-count">'+items.length+' attack'+(items.length===1?'':'s')+
+    ' from the official sheet</div>'+rows+'</div>';
+}
 function r3HudFlyoutMarkup(snapshot){
   if(R3_HUD.chooser!==null){
     const candidates=r3HudWeaponCandidates(snapshot);
@@ -308,7 +344,7 @@ function r3HudFlyoutMarkup(snapshot){
   if(!R3_HUD.flyout)return '';
   const flyout=R3_HUD.flyout;
   const titles={spells:'CAST SPELL',skills:'SAVES / SKILLS / TOOLS',inventory:'USE ITEM',
-    features:'USE FEATURE',actions:'ACTION',bonus:'BONUS ACTION',reactions:'REACTION',
+    features:'USE FEATURE',actions:'ATTACKS & WEAPONS',bonus:'BONUS ACTION',reactions:'REACTION',
     resources:'RESOURCES'};
   let content='';
   if(flyout==='spells'){
@@ -326,6 +362,8 @@ function r3HudFlyoutMarkup(snapshot){
         '<div class="hud-flyout-caption">'+(selected==='0'?'Cantrips':selected==='other'?'Unclassified spells':'Level '+selected)+
         slots+'</div><div class="hud-flyout-cards">'+spells.slice(0,65).map(r3HudCard).join('')+'</div>';
     }
+  }else if(flyout==='actions'){
+    content=r3HudAttackMenu(snapshot);
   }else if(flyout==='skills'){
     const groups=[['SAVING THROWS',snapshot?.saves||{}],['SKILLS',snapshot?.skills||{}],
       ['ABILITY CHECKS',snapshot?.modifiers||{}]];
@@ -340,7 +378,7 @@ function r3HudFlyoutMarkup(snapshot){
   }
   return '<section class="hud-flyout" aria-label="Combat '+r3Escape(titles[flyout]||flyout)+' flyout">'+
     '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
-    '<small>Read-only · official sheet remains authoritative</small>'+
+    '<small>'+(flyout==='actions'?'Attack uses the verified Roll20 roll button':'Read-only · official sheet remains authoritative')+'</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
     content+r3NativeMarkup()+'</section>';
 }
@@ -549,6 +587,14 @@ function r3HudStyles(){
     '.hud-spell-levels{display:flex;gap:4px;margin:6px;overflow-x:auto}.hud-spell-levels button{background:#526371!important;border:0!important;padding:5px 8px!important;font-size:11px!important;white-space:nowrap}',
     '.hud-spell-levels button.active{background:#9e7987!important;color:white!important}.hud-spell-levels small{opacity:.8}',
     '.hud-flyout-caption{padding:2px 8px;color:#f0dbe7;font-weight:700;font-size:10px}.hud-flyout-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:4px;padding:7px}',
+    '.hud-attack-list{display:flex;flex-direction:column;gap:5px;padding:7px;min-width:0}.hud-attack-count{font-size:10px;color:#becfde;padding:3px 4px}',
+    '.hud-attack-row{display:flex;align-items:center;gap:9px;background:#192a3c;border:1px solid #3b5978;border-radius:7px;padding:8px;min-width:0}',
+    '.hud-attack-icon{flex:0 0 27px;color:#a9c6e4}.hud-attack-icon svg{width:25px;height:25px}',
+    '.hud-attack-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}.hud-attack-info>strong{font-size:12px;overflow-wrap:anywhere}',
+    '.hud-attack-metrics{display:flex;flex-wrap:wrap;gap:4px}.hud-attack-metrics span{background:#2b4157;color:#e0eaf4;border-radius:4px;padding:2px 5px;font-size:10px}',
+    '.hud-attack-muted{color:#9aabbc;font-size:10px}.hud-attack-details{font-size:10px;color:#b8cddd}.hud-attack-details summary{cursor:pointer;max-width:max-content}.hud-attack-details p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}',
+    '.hud-attack-button{flex:0 0 auto;min-width:83px!important;border:1px solid #5999cf!important;border-radius:6px!important;padding:9px 11px!important;background:#206198!important;color:#fff!important;font-weight:700!important;font-size:12px!important}',
+    '.hud-attack-button:hover:not(:disabled){background:#287cb9!important}.hud-attack-button:disabled{opacity:.45;cursor:not-allowed}',
     '.hud-card{background:#536477;border:1px solid #7d8a9b;min-width:0;color:#fff}.hud-card[open]{background:#435a70}',
     '.hud-card summary{display:flex;align-items:center;gap:5px;cursor:pointer;padding:5px;font-size:10px;list-style:none}.hud-card summary::-webkit-details-marker{display:none}',
     '.hud-card-mark{width:24px;height:24px;display:grid;place-items:center;background:#324252;font:700 15px Georgia,serif}.hud-card-title{min-width:0;flex:1;overflow-wrap:anywhere;font-weight:650}.hud-card-title small{display:block;font-size:9px;font-weight:400}.hud-card-count{color:#d7e4f2}.hud-card-caret{font-size:10px}',
