@@ -65,7 +65,7 @@ function panelHarness(character='NIER'){
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
-    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3NativeBgReveal,r3TokenPlayerId,r3TokenControls};',context);
+    '\nglobalThis.uiApi={r3StartUI,r3StartEditorBridge,r3Empty,r3Coverage,R3_UI,R3_AUTO,r3AutoTick,r3AutoStoreSnapshot,r3AutoCombine,r3AutoSignature,r3Candidates,r3ToggleAuto,r3AutoMoveOffscreen,r3AutoHealthTick,r3AutoStoreHealth,r3AutoCandidate,r3StartAuto,r3SendScan,r3AutoQueueDirty,R3_HUD,r3HudEntries,r3HudMarkup,r3HudRender,r3HudHp,r3HudSave,r3HudStyles,r3HudPortraitUrl,r3HudLoad,R3_NATIVE,r3NativeCandidate,r3NativeProbe,r3NativeConfirm,r3NativeChatCommand,r3NativeChatAttack,R3_TOKEN,r3TokenPoll,r3TokenRecordSnapshot,r3TokenSwitch,r3TokenLinkedInfo,r3StartTokenWatch,R3_NATIVE_BG,r3NativeBgEnsure,r3NativeBgCandidate,r3NativeIsOwned,r3NativeBgResolve,r3NativeBgReveal,r3TokenPlayerId,r3TokenControls};',context);
   function click(id){const el=nodes.get(id);assert.ok(el,'Unknown control '+id);shadow.handlers.get('click')({target:el});}
   function respond(snapshot,type='result'){
     const msg=sent.at(-1).message;
@@ -1184,37 +1184,97 @@ test('duplicate legacy attack without stable identity is displayed but not rolle
   assert.match(html,/data-hud-attack-key="evil&quot;/);
   assert.equal(h.sent.length,0);
 });
-test('native attack UI supports arbitrary imported character names and own actions',async()=>{
-  for(const [character,attack] of [
-    ['Elowen Dawnsong','Longbow'],['Brom Stonebeard','Warhammer'],
-    ['Sora Windfall','Shortbow']
+function observedChatRig(character='Elowen',draft=''){
+  const h=panelHarness(character),sent=[],events=[];
+  h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const model={id:'char-player',get(k){return {name:character,controlledby:'player-one'}[k]}};
+  h.context.window.Campaign={characters:{models:[model],get(id){return id==='char-player'?model:null}}};
+  h.context.window.currentPlayer={id:'player-one'};
+  const textarea={value:draft,disabled:false,dispatchEvent(e){events.push(e.type)}};
+  const send={disabled:false,click(){sent.push(textarea.value);textarea.value=''}};
+  h.document.querySelector=selector=>selector==='#textchat-input textarea'?textarea:
+    selector==='#textchat-input .btn'?send:null;
+  return {h,sent,textarea,send,events,model};
+}
+test('sheet-free attack fails closed when Roll20 chat has an unsent draft',()=>{
+  const x=observedChatRig('Elowen','A message the player is writing');
+  const snap=x.h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Spear',_key:'spear',visible:'Spear +4 Attack 1d6+2'}];
+  x.h.api.R3_UI.snapshot=x.h.api.r3Coverage(snap);
+  assert.equal(x.h.api.r3NativeChatAttack('spear'),false);
+  assert.equal(x.sent.length,0);
+  assert.equal(x.textarea.value,'A message the player is writing');
+  assert.match(x.h.api.R3_NATIVE.status,/unsent draft/);
+});
+test('sheet-free attack does not require an open character dialog, but requires a controlled model',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Spear',_key:'spear',visible:'Spear +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  x.model.get=k=>({name:'Elowen',controlledby:'someone-else'})[k];
+  assert.equal(h.api.r3NativeChatAttack('spear'),false);
+  assert.equal(x.sent.length,0);
+  assert.match(h.api.R3_NATIVE.status,/Controlled By/);
+  x.model.get=k=>({name:'Elowen',controlledby:'player-one'})[k];
+  h.api.R3_TOKEN.active={name:'Elsewhere',characterId:'char-other'};
+  assert.equal(h.api.r3NativeChatAttack('spear'),false);
+  assert.equal(x.sent.length,0);
+  assert.match(h.api.R3_NATIVE.status,/another character/);
+});
+test('sheet-free Attack never guesses a missing modifier or changes private chat drafts',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Saving throw effect',_key:'effect',visible:'Save DC 17 8d6 fire damage'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  assert.equal(h.api.r3NativeChatCommand(snap.attacks[0]),null);
+  assert.equal(h.api.r3NativeChatAttack('effect'),false);
+  assert.equal(x.sent.length,0);
+  assert.match(h.api.R3_NATIVE.status,/No confirmed hit-roll modifier/);
+});
+test('sheet-free rolls strip unsafe template and macro markup from imported names',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Spear}} {{evil=[[100d100]]}}',_key:'spear',
+    visible:'Spear +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  assert.equal(h.api.r3NativeChatAttack('spear'),true);
+  assert.equal(x.sent.length,1);
+  assert.doesNotMatch(x.sent[0],/evil|100d100/);
+  assert.ok(x.sent[0].includes('1d20+4'));
+  assert.ok(x.sent[0].includes('1d6+2'));
+});
+test('sheet-free Attack reports missing Roll20 chat controls rather than opening a sheet',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Spear',_key:'spear',visible:'Spear +4 Attack 1d6+2'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.document.querySelector=()=>null;
+  assert.equal(h.api.r3NativeChatAttack('spear'),false);
+  assert.equal(x.sent.length,0);
+  assert.match(h.api.R3_NATIVE.status,/Roll20 chat controls are not available/);
+  assert.equal(h.sent.length,0);
+});
+test('Attack buttons for arbitrary 2024 character names roll hit and damage in chat without sheets',()=>{
+  for(const [character,weapon,bonus,damage] of [
+    ['Elowen Dawnsong','Longbow','+7','1d8+3'],
+    ['Brom Stonebeard','Warhammer','+5','1d10+2'],
+    ['Sora Windfall','Shortbow','+8','1d6+4']
   ]){
-    const h=panelHarness(character);h.api.r3StartEditorBridge();h.api.r3StartUI();
+    const x=observedChatRig(character),h=x.h;
     const snap=h.api.r3Empty();snap.name=character;
-    snap.attacks=[{name:attack,tab:'Combat',_key:attack.toLowerCase()}];
+    snap.attacks=[{name:weapon,tab:'Combat',_key:weapon.toLowerCase(),
+      visible:weapon+' '+bonus+' Attack '+damage}];
     h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
     h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
-    const html=h.nodes.get('r3-hud').innerHTML;
-    assert.match(html,/ATTACKS &amp; WEAPONS/);
-    assert.match(html,/data-hud-attack-key="/);
-    assert.doesNotMatch(html,/Find native Roll20 attack/);
-    h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:attack.toLowerCase()}}});
-    assert.equal(h.sent.at(-1).message.type,'native-probe');
-    assert.equal(h.sent.at(-1).message.characterName,character);
-    assert.equal(h.sent.at(-1).message.attackName,attack);
-    const id=h.sent.at(-1).message.id;
-    h.windowListeners.get('message')({
-      origin:'https://advanced-sheets.production.roll20preflight.net',
-      source:h.frameWindow,
-      data:{protocol:'r20eb:import:v3',type:'native-result',id,status:'ready',
-        label:'Roll Attack',token:'single-use-token'}
-    });
-    await new Promise(resolve=>setImmediate(resolve));
-    assert.equal(h.sent.at(-1).message.type,'native-invoke',
-      'one explicit Attack click runs the verified native probe then invokes once');
-    assert.equal(h.sent.at(-1).message.characterName,character);
-    assert.equal(h.sent.at(-1).message.attackName,attack);
-    assert.equal(h.sent.at(-1).message.token,'single-use-token');
+    assert.match(h.nodes.get('r3-hud').innerHTML,/ATTACKS &amp; WEAPONS/);
+    assert.equal(x.sent.length,0);
+    h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:weapon.toLowerCase()}}});
+    assert.equal(x.sent.length,1,'a single player click submits one chat command');
+    assert.ok(x.sent[0].includes('1d20'+bonus));
+    assert.ok(x.sent[0].includes('Damage=[['+damage+']]'));
+    assert.ok(x.sent[0].includes('name='+weapon+' Attack'));
+    assert.equal(h.sent.length,0,'no character sheet was contacted');
+    assert.match(h.api.R3_NATIVE.status,/Submitted/);
   }
 });
 test('native attack confirm refuses a changed active character snapshot',async()=>{
@@ -1474,40 +1534,26 @@ test('real authenticated pending native attack is cancelled on character-token s
   assert.equal(h.api.R3_NATIVE.preview,null);
 });
 
-test('two imported attacks named Dagger get different per-card native probe identities',async()=>{
-  const h=panelHarness('Different Player');
-  h.api.r3StartEditorBridge();h.api.r3StartUI();
+test('duplicate-named weapons submit their own distinct observed rolls',()=>{
+  const x=observedChatRig('Different Player'),h=x.h;
   const snap=h.api.r3Empty();snap.name='Different Player';
   const a={name:'Dagger',_key:'dagger|melee|+7|1d4+4',
     visible:'Dagger Melee +7 Attack 1d4+4',tab:'Combat'};
   const b={name:'Dagger',_key:'dagger|offhand|+5|1d4+2',
     visible:'Dagger Melee +5 Attack 1d4+2',tab:'Combat'};
-  snap.attacks=[a,b];h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
-  h.api.r3HudRender();
+  snap.attacks=[a,b];h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
   h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
   const html=h.nodes.get('r3-hud').innerHTML;
   assert.match(html,/data-hud-attack-key="dagger\|melee\|\+7\|1d4\+4"/);
   assert.match(html,/data-hud-attack-key="dagger\|offhand\|\+5\|1d4\+2"/);
-  assert.match(html,/To hit \+7/);
-  assert.match(html,/Damage 1d4\+2/);
   h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:b._key}}});
-  const outgoing=h.sent.at(-1).message;
-  assert.equal(outgoing.type,'native-probe');
-  assert.equal(outgoing.characterName,'Different Player');
-  assert.equal(outgoing.attackName,'Dagger');
-  assert.equal(outgoing.attackKey,b._key);
-  assert.equal(outgoing.attackText,b.visible);
-  h.windowListeners.get('message')({
-    origin:'https://advanced-sheets.production.roll20preflight.net',
-    source:h.frameWindow,data:{protocol:'r20eb:import:v3',
-      type:'native-result',id:outgoing.id,status:'ready',
-      token:'unique-second-dagger',label:'+5 Attack'}
-  });
-  await new Promise(resolve=>setImmediate(resolve));
-  const invoke=h.sent.at(-1).message;
-  assert.equal(invoke.type,'native-invoke');
-  assert.equal(invoke.attackKey,b._key);
-  assert.equal(invoke.attackText,b.visible);
+  assert.equal(x.sent.length,1);
+  assert.ok(x.sent[0].includes('1d20+5'));
+  assert.ok(x.sent[0].includes('1d4+2'));
+  h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:a._key}}});
+  assert.equal(x.sent.length,2);
+  assert.ok(x.sent[1].includes('1d20+7'));
+  assert.ok(x.sent[1].includes('1d4+4'));
 });
 test('legacy name-only native probe refuses two identically named imported attacks',()=>{
   const h=panelHarness('Another Player');h.api.r3StartEditorBridge();h.api.r3StartUI();
@@ -1556,7 +1602,7 @@ function backgroundNativeRig(){
   h.context.window.d20={player:{id:'player-one'}};
   return {h,dialogs,frames,overlays,log,create};
 }
-test('Jumpgate with no d20 exposes direct Campaign and one Attack click invokes one verified official roll',async()=>{
+test('advanced native-sheet diagnostic still works through private reader',async()=>{
   const x=backgroundNativeRig(),h=x.h;
   // Real Jumpgate does not require window.d20.Campaign, engine or player.
   h.context.window.d20=undefined;
@@ -1589,7 +1635,7 @@ test('Jumpgate with no d20 exposes direct Campaign and one Attack click invokes 
   h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.r3HudRender();
   h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'actions'}}});
   assert.match(h.nodes.get('r3-hud').innerHTML,/data-hud-attack-key="staff\|melee\+4\|1d6\+2"/);
-  h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:'staff|melee+4|1d6+2'}}});
+  void h.api.r3NativeProbe('staff|melee+4|1d6+2',true);
   // The event listener deliberately does not await an async native roll;
   // yield until its authenticated reader handshake has had a chance to finish.
   for(let i=0;i<12&&h.api.R3_NATIVE.busy;i++)
