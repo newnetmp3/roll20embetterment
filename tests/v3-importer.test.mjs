@@ -264,6 +264,7 @@ test('official reader cancels a private full import immediately after manual she
   const id='r3-cancel-background-100';
   const request={protocol:'r20eb:import:v3',type:'scan',mode:'all',id};
   const pending=h.r3ReaderReceive({source:editor,origin:'https://app.roll20.net',data:request});
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(active,'Inventory');
   assert.equal(typeof unblock,'function');
   await h.r3ReaderReceive({source:editor,origin:'https://app.roll20.net',
