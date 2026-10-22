@@ -193,7 +193,7 @@ test('verified selected character auto-imports all tabs through a private reader
   const frame=h.api.r3Candidates()[0].frame;
   const dialog={style:{position:'absolute',left:'40px',top:'50px'},
     getAttribute(key){return key==='data-characterid'?'-verified-id':null;}};
-  frame.closest=()=>dialog;
+  frame.closest=selector=>selector.includes('characterdialog')?dialog:null;
   let opened=false,journalLookups=0;
   const originalQuery=h.document.querySelectorAll.bind(h.document);
   h.document.querySelectorAll=selector=>{
