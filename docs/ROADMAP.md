@@ -1,6 +1,17 @@
 # R20 Embetterment — Development Roadmap
 
-**Current baseline (2026-10-21):** Firefox v3.9.19 signed update feed published; Chrome and optional userscript remain independently versioned at v3.4.0. [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106) merged the shared native-action registry with **467/467** simulated tests. Real Floorp 2024 action-card parity and [movement #73](https://github.com/newnetmp3/roll20embetterment/issues/73) remain **unverified/open**. For authoritative active status, see [HANDOVER.md](HANDOVER.md). The historical log below records prior milestones and may mention superseded versions; it is not a release-status source.
+**Current baseline (2026-10-22):** Firefox v3.10.1 signed and published. Firefox v3.10.2 candidate adds native sheet-click attacks/skills and fixes hidden-node starvation in control discovery; local check passes **492/492 tests**. Current release/CI status is tracked in [HANDOVER.md](HANDOVER.md). Historical entries below may describe superseded limitations or versions.
+
+## 2026-10-22 — Native sheet-click attacks and skills
+
+- Source-observed attack-hit and standard skill buttons now have a native sheet adapter when no exact macro mapping exists. One user click probes and invokes one live control through the authenticated reader; macro mapping remains preferred.
+- Recheck source metrics, unique control, character, ownership and session; suppress duplicate clicks and never retry invocation. Preserve manual sheet tabs/visibility. Pause automatic full scans during native requests.
+- Fix discovery stopping before visible Inventory controls because hidden DOM nodes exhausted the budget; retain row-owner evidence and classify skills/ranges correctly.
+- Export coverage: 19 of 20 attack entries and all 18 standard skills are supported candidates; no live roll claim. Other cast/use/write interactions and movement #73 remain incomplete.
+- Validation: **492/492 local tests**, including session/permission/selection changes, stale sources, duplicates, hidden-node coverage and no-retry behavior. Firefox v3.10.2 release request accompanies this PR; signing and live acceptance remain separate. User prefers signed Firefox updates.
+
+## Historical milestones
+
 
 ## 2026-10-21: Native Integration Milestone — PR #110
 

@@ -23,7 +23,7 @@ function r3String(value,max=160){return String(value??'').replace(/\s+/g,' ').tr
 function r3Text(el,max=300){return r3String(typeof el?.innerText==='string'?el.innerText:'',max);}
 function r3Attr(el,key){return r3String(el?.getAttribute?.(key),160);}
 function r3Shown(el){
-  if(!el||el.disabled||el.type==='hidden'||el.hidden||el.getAttribute?.('aria-hidden')==='true')return false;
+  if(!el||el.disabled||el.type==='hidden'||el.hidden||el.getAttribute?.('aria-hidden')==='true'||el.getAttribute?.('aria-disabled')==='true')return false;
   if(el.closest?.('[hidden],[inert],[aria-hidden="true"]'))return false;
   // Explicitly hidden ancestor styles also apply to text inputs and cards.
   if(el.closest?.('[style*="display: none"],[style*="display:none"],[style*="visibility: hidden"],[style*="visibility:hidden"]'))return false;
@@ -518,24 +518,32 @@ function r3MiscNativeActions(root,s,tab){
 }
 // Diagnostic evidence only. DOM IDs/test IDs identify observations, never native calls.
 function r3ControlInventory(root,s,tab){
-  const selector='button,input,textarea,select,a[href],[role="button"],[role="checkbox"],[role="switch"],[role="spinbutton"],[role="combobox"],[role="radio"],[role="tab"],[contenteditable="true"]';
+  const selector='button,input,textarea,select,a[href],[role="button"],[role="checkbox"],[role="switch"],[role="spinbutton"],[role="combobox"],[role="radio"],[role="slider"],[role="tab"],[contenteditable="true"]';
   const nodes=root.querySelectorAll?.(selector)||[];
-  const count=Math.min(nodes.length,750);
+  const count=Math.min(nodes.length,12000);
   for(let i=0;i<count;i++){
     const el=nodes[i];if(!r3Shown(el))continue;
+    if(s.controls.length>=750){s.diagnostics.limits.push('750 visible interactive controls per view');break;}
     const tag=r3String(el.tagName,20).toLowerCase(),type=r3Attr(el,'type')||r3String(el.type,30),role=r3Attr(el,'role');
     // Never collect credentials, free text, current field values or link destinations.
     if(type==='password'||type==='file')continue;
     const label=r3String(r3Attr(el,'aria-label')||r3Attr(el,'title')||
-      r3Text(el.labels?.[0],100)||(tag==='button'||role==='button'?r3Text(el,100):''),100);
+      r3Text(el.labels?.[0],100)||(['button','a'].includes(tag)||['button','tab','radio'].includes(role)?r3Text(el,100):''),100);
     const identity={};
     for(const attr of ['id','name','data-testid','data-attribute']){
       const value=r3Attr(el,attr);if(value)identity[attr]=value;
     }
     const owner=Object.entries(R3_CATEGORIES).find(([,sel])=>el.closest?.(sel));
-    const category=owner?.[0]||'misc';
+    let category=owner?.[0]||'misc';
+    let ownerRow=owner?el.closest?.(owner[1]):null;
+    if(!ownerRow&&/^inventory$/i.test(tab)){
+      const row=el.closest?.('.item-row,[data-testid*="inventory-row"],[data-testid*="equipment-row"]');
+      if(row&&r3Name(row,'inventory')){ownerRow=row;category='inventory';}
+    }
+    const skill=R3_SKILLS.find(name=>label==='Roll a '+name+' check');
+    if(skill)category='skills';
     const kind=/checkbox|switch|radio/.test(type+' '+role)?'toggle':
-      type==='number'||role==='spinbutton'?'counter':
+      type==='number'||type==='range'||role==='spinbutton'||role==='slider'?'counter':
       tag==='select'||/combobox|tab/.test(role)?'selection':
       /^(input|textarea)$/.test(tag)||r3Attr(el,'contenteditable')==='true'?'field':
       tag==='button'||role==='button'?'action':'unsupported';
@@ -550,15 +558,20 @@ function r3ControlInventory(root,s,tab){
           'No verified native write adapter or authoritative revision guard':
           'No unambiguous explicit native action reference'};
     if(nativeActionRef)evidence.nativeActionRef=nativeActionRef;
+    if(ownerRow){
+      const name=r3Name(ownerRow,category),rowId=r3NativeObservedRowId(ownerRow);
+      if(name)evidence.owner={name,...(rowId?{nativeRowId:rowId}:{})};
+    }
     s.controls.push(evidence);
   }
-  if(nodes.length>750)s.diagnostics.limits.push('750 interactive controls per view');
+  if(nodes.length>12000)s.diagnostics.limits.push('12000 DOM candidates per view');
 }
 function r3MergeControlInventory(target,source){
   // Replace revisited tabs so removed controls and stale references cannot accumulate.
   const tabs=new Set(source.diagnostics?.tabs||[]);
   const controls=[...(target.controls||[]).filter(c=>!tabs.has(c.tab)),...(source.controls||[])];
   target.controls=controls.slice(0,1500);
+  target.diagnostics={...target.diagnostics,limits:[...(target.diagnostics?.limits||[])]};
   if(controls.length>1500&&!target.diagnostics.limits.includes('1500 interactive controls total'))
     target.diagnostics.limits.push('1500 interactive controls total');
 }
