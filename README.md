@@ -27,6 +27,27 @@ The Firefox battlefield HUD replaces the former six-button utility toolbar with 
 
 **Firefox v3.10.2 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
 
+## Firefox v3.10.3 background import (candidate; live QA pending)
+
+After selecting a linked character whose **Controlled By** permission can be verified,
+R20eb now uses the existing Roll20 character-model opener to start a private
+official-sheet reader **without requiring the Journal sidebar or a manual sheet
+open**. This reader automatically traverses rendered sheet tabs for the initial
+full import and periodically refreshes them. Only an R20eb-owned private reader
+can be navigated this way. The reader does not synthesize character values or
+edit the official sheet.
+
+Opening the character's original sheet from the Journal takes priority: it
+cancels in-flight private full-tab traversal and restores the original visible
+sheet. That ordinary manual action is no longer a permanent Auto-sync opt-out.
+Any visible player-owned sheet or popout is read on its **current tab only**,
+without automatic navigation. The explicit Debug choice to disable private
+readers stays in effect until you re-enable it.
+
+This is a source/automated-test milestone, not a guarantee of live Floorp
+behavior. Roll20 must expose a valid character model, official frame and
+rendered tab controls; virtualized/unmounted entries still cannot be inferred.
+
 ## How it works
 
 **Automatic character sync.** A selected, linked, player-controllable token can trigger character-scoped read-only synchronization; manual importing remains available when Roll20's protected sheet/Journal interfaces do not allow unattended reading. A different character should never inherit the previous character's values. An explicit sync Off is preserved. Real-game reliability varies with upstream Roll20 interfaces and remains under testing.
