@@ -81,7 +81,11 @@ function r3Results(){
       '<p><b>Rejected hidden/invalid:</b> '+r3Escape(d.rejected)+'</p>'+
       '<p><b>Unclassified controls:</b> '+r3Escape(d.unclassified)+'</p>'+
       '<p><b>Collection limits:</b> '+r3Escape(d.limits.join('; ')||'None reached')+'</p>'+
-      '<p><b>Notes:</b> '+r3Escape(d.notes.join('; ')||'Current rendered DOM only')+'</p>';
+      '<p><b>Notes:</b> '+r3Escape(d.notes.join('; ')||'Current rendered DOM only')+'</p>'+
+      '<h3>Interactive control inventory</h3><p class="muted">Read-only evidence from rendered views; no control listed here is enabled for execution.</p>'+
+      (snap.controls||[]).slice(0,1500).map(c=>r3InfoRow(
+        c.tab+' · '+c.category+' · '+c.kind+' · '+(c.label||'Unlabeled control'),
+        JSON.stringify({identity:c.identity,status:c.status,reason:c.reason,nativeActionRef:c.nativeActionRef}))).join('');
   }
   return '<p class="stamp">Imported from: <strong>'+r3Escape(snap.name)+'</strong> · '+r3Escape(snap.capturedAt)+'</p>'+
     '<div class="metrics">'+r3ReportCounts(snap)+'</div>'+nav+'<div class="results">'+content+'</div>';
@@ -371,3 +375,4 @@ function r3StartUI(){
   },true);
   window.addEventListener('focus',()=>{if(!R3_UI.busy)r3UIRefresh();});
 }
+

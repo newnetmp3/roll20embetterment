@@ -1,13 +1,13 @@
 # R20 Embetterment — current development handover
 
-**Updated:** 2026-10-21  
+**Updated:** 2026-10-22  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Default branch:** `main`  
 **Development workflow:** feature PR → `npm run check:firefox` → passing GitHub Actions → merge → separate Firefox signing/update-feed verification.
 
 ## Release and verification baseline
 
-- **Firefox:** v3.9.19 is Mozilla-signed and referenced by the published [updates.json](../extension/firefox/updates.json) on `main`; feed commit `8e08689`. [Signed v3.9.19 release](https://github.com/newnetmp3/roll20embetterment/releases/tag/firefox-v3.9.19). Chrome remains independent.
+- **Firefox:** v3.10.0 is published as Mozilla-signed and referenced by `extension/firefox/updates.json`. Release asset SHA-256 matches the feed: `43b167a4bada4540150e4e71645f078607b0e29b6704ac73a871f5041a667666`. Signature contents and live gameplay were not independently inspected in this step.
 - **Chrome and optional Tampermonkey distribution:** v3.4.0. The generated userscript is synchronized with v3 source and is *not* the Firefox version number.
 - **Latest merged functional milestone:** [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106) unified existing character-ability native mapping across attacks, spells, features, inventory, resources, skills, saving throws, and ability checks. **467/467 automated tests passed** in its branch and PR checks. This is not evidence of end-to-end Roll20 game validation.
 - **Latest merged hardening:** [PR #108](https://github.com/newnetmp3/roll20embetterment/pull/108) merged as `486f79a` after [Firefox CI run 39693899199](https://github.com/newnetmp3/roll20embetterment/actions/runs/39693899199) passed **470/470 automated tests**, including generated userscript parity. It tightened macro ownership, added conditional explicit repeating-row ID linking, and removed obsolete documentation. It was packaged into signed Firefox v3.9.19; live Floorp action verification is still separate.
@@ -103,7 +103,7 @@ These are **explicitly unimplemented**, not hidden behind disabled buttons and n
 - [PR #104](https://github.com/newnetmp3/roll20embetterment/pull/104): weapon-first grouping and conditional native ability linking.
 - [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106): shared native mapping across all imported player action categories.
 
-Current merged code baseline: `486f79a`, 470 passing tests. Signed Firefox release is v3.9.19; do not confuse it with the unmerged milestone candidate. Only the above current architecture and status should be treated as the active handover. Superseded v2/v3 patch-by-patch details belong to Git history, not the live engineering baseline.
+Resume baseline: `cc87fcd` on main; PR #110 merged and Firefox v3.10.0 published. Historical v3.9.19 packaging notes above are superseded. Only the above current architecture and status should be treated as the active handover. Superseded v2/v3 patch-by-patch details belong to Git history, not the live engineering baseline.
 
 ## 2026-10-21: Expanded full native mapping scope
 
@@ -114,3 +114,12 @@ Existing main has the shared R3_NATIVE_CATEGORIES ability registry spanning atta
 Architecture mandate: comprehensive source-grounded control inventory; classify each observed action as roll, action, toggle, counter, field, selection or unsupported; map exact source identity, current character, permissions and required arguments; use native Roll20 behavior, not fake equivalent cards. For state writes implement verified model ownership, stale-revision guards, authoritative re-read and failure reconciliation before enabling. Preserve normal sheet-closed execution where official actions allow it; do not hide manually opened sheets. Report unmapped controls and reasons, not an inert or misleading button. Put uncategorized controls in MISC.
 
 Execution order: (1) discover all source controls and their stable identities; (2) complete existing exact native action mapping for rolls, spells, skills, features, items; (3) typed writable inventory/HP/slot/resource/condition interfaces; (4) full per-control Floorp/Jum​pgate acceptance comparing official native sheet action/chat output/state with R20eb. Update this handover and ROADMAP for each verified milestone. This commit records an EXPANDED SCOPE, not a claim of full implementation. Signed Firefox v3.9.19 baseline remains unchanged; do not trigger a release for docs-only scope changes.
+
+
+## 2026-10-22: Interactive control evidence inventory
+
+Resumed from main `cc87fcd`; no open PRs at the start of this step. Added diagnostic-only enumeration of visible enabled rendered buttons, fields, counters, toggles, selections, links and ARIA controls. Records include bounded labels, tab/category, observed DOM attributes and explicit macro evidence when unambiguous. DOM IDs/test IDs are observations, never native action IDs. Every record stays observation-only with a missing adapter/validation reason. No clicks, free-text values, credential values, URLs or mutations are collected/executed by this pass.
+
+Bounded to 750 candidates per view and 1500 merged records; revisiting a tab replaces its old inventory. Exported snapshots and importer Diagnostics expose the inventory. Automatic sync signatures now include MISC and controls, and partial refreshes merge MISC rather than discarding it. Older snapshots remain supported.
+
+Validation: `npm run check:firefox` passes 479/479 tests locally, including three new evidence/privacy/merge-bound tests. CI, merge and release status for this step must be checked separately. No release requested. This is discovery infrastructure, not completion of native parity. Next: inspect real official 2024 control evidence, establish stable character-bound source identities, then implement validated native adapters and transactional writes. No new HUD features. Movement #73 and all previously listed write/parity gaps remain open.

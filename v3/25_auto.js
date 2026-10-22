@@ -269,7 +269,7 @@ function r3AutoRestoreDialog(){
 }
 function r3AutoSignature(s){
   return JSON.stringify([s.name,s.stats,s.abilities,s.modifiers,s.saves,s.skills,s.slots,
-    s.spells,s.attacks,s.inventory,s.features,s.resources]);
+    s.spells,s.attacks,s.inventory,s.features,s.resources,s.misc,s.controls]);
 }
 function r3AutoCombine(prev,current){
   if(!prev||r3String(prev.name).toLowerCase()!==r3String(current.name).toLowerCase())
@@ -286,7 +286,7 @@ function r3AutoCombine(prev,current){
     if(values&&typeof values==='object'&&!Array.isArray(values))
       merged.slots[level]={...(prev.slots?.[level]||{}),...values};
   }
-  for(const kind of ['resources','attacks','spells','inventory','features']){
+  for(const kind of ['resources','attacks','spells','inventory','features','misc']){
     const indexed=new Map((prev[kind]||[]).map(item=>[item._key||item.name,item]));
     for(const entry of current[kind]||[]){
       const key=entry._key||entry.name;
@@ -297,6 +297,7 @@ function r3AutoCombine(prev,current){
     }
     merged[kind]=[...indexed.values()];
   }
+  r3MergeControlInventory(merged,current);
   // Keep bounded observations from the last full import, not every poll.
   return r3Coverage(merged);
 }
@@ -461,3 +462,4 @@ function r3StartAuto(){
   if(R3_AUTO.healthTimer===null)R3_AUTO.healthTimer=setInterval(()=>{r3AutoHealthTick();},1000);
   if(R3_AUTO.enabled)setTimeout(()=>{r3AutoTick();},1600);
 }
+

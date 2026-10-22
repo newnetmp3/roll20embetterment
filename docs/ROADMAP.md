@@ -511,3 +511,10 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 **Workstreams:** (1) capture tab/section/source ID, label, control type, state, permissions and action reference for *all* exposed controls, deduplicated across sheet rerenders; (2) typed capability registry for roll/action/toggle/counter/field/selection/unsupported, with evidence and an unmapped reason; (3) shared native execution adapters that never guess source IDs; (4) grouped accessible submenus across all HUD sections, unclassified controls in MISC; (5) user-initiated, character-verified operations with revision checks, no double clicks, chat draft protection, authoritative refresh and safe failure reconciliation; (6) automated tests per control family and real Floorp Jumpgate comparison against the native sheet including resulting chat cards, prompts, and state changes.
 
 **Priority:** native interaction completeness before further HUD cosmetics. Coverage percentages must reflect truly verified exposed controls, not the number of categories. Preserve movement issue #73 until live verified. Previously existing category macro mappings are a foundation, NOT completion of this expanded milestone.
+
+
+## 2026-10-22 — Read-only interactive control inventory
+
+First discovery increment: bounded rendered control evidence with action/toggle/counter/field/selection/unsupported kinds, source DOM attributes, category/tab and explicit missing capability reasons. Importer Diagnostics and JSON export expose records; no record grants execution. Revisited tab inventories replace stale evidence. Automatic sync preserves MISC updates and includes control evidence in change detection. Local Firefox check: 479/479 tests passed. Published Firefox baseline is v3.10.0; this development increment is not released.
+
+Remaining: real-sheet stable identity validation, native adapter coverage, permission/revision-protected writable interactions, and full live Floorp acceptance. Rendered enabled controls only; unopened/virtualized content remains a known discovery gap. Do not report complete enumeration or native parity.
