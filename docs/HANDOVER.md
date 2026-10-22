@@ -7,11 +7,32 @@
 
 ## Release and verification baseline
 
-- **Firefox:** v3.9.18 is referenced by the published Firefox update manifest on `main`: [updates.json](../extension/firefox/updates.json) and [release](https://github.com/newnetmp3/roll20embetterment/releases/tag/firefox-v3.9.18). The update-feed commit is `46263ec`. Firefox build/release is independent of Chrome.
+- **Firefox:** v3.9.19 is Mozilla-signed and referenced by the published [updates.json](../extension/firefox/updates.json) on `main`; feed commit `8e08689`. [Signed v3.9.19 release](https://github.com/newnetmp3/roll20embetterment/releases/tag/firefox-v3.9.19). Chrome remains independent.
 - **Chrome and optional Tampermonkey distribution:** v3.4.0. The generated userscript is synchronized with v3 source and is *not* the Firefox version number.
 - **Latest merged functional milestone:** [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106) unified existing character-ability native mapping across attacks, spells, features, inventory, resources, skills, saving throws, and ability checks. **467/467 automated tests passed** in its branch and PR checks. This is not evidence of end-to-end Roll20 game validation.
-- **Latest merged hardening:** [PR #108](https://github.com/newnetmp3/roll20embetterment/pull/108) merged as `486f79a` after [Firefox CI run 39693899199](https://github.com/newnetmp3/roll20embetterment/actions/runs/39693899199) passed **470/470 automated tests**, including generated userscript parity. It tightened macro ownership, added conditional explicit repeating-row ID linking, and removed obsolete documentation. It is **not in signed Firefox v3.9.18**; a subsequent signed Firefox release and live Floorp action verification are separate steps.
+- **Latest merged hardening:** [PR #108](https://github.com/newnetmp3/roll20embetterment/pull/108) merged as `486f79a` after [Firefox CI run 39693899199](https://github.com/newnetmp3/roll20embetterment/actions/runs/39693899199) passed **470/470 automated tests**, including generated userscript parity. It tightened macro ownership, added conditional explicit repeating-row ID linking, and removed obsolete documentation. It was packaged into signed Firefox v3.9.19; live Floorp action verification is still separate.
 - **Outstanding live blocker:** [Jumpgate token movement issue #73](https://github.com/newnetmp3/roll20embetterment/issues/73) remains open. Automatic token selection/movement has not passed the required in-game forward/backtracking acceptance test.
+
+## Milestone Completion candidate — native coverage & professional HUD (PR #110)
+
+**Source validation:** [PR #110](https://github.com/newnetmp3/roll20embetterment/pull/110) Firefox CI [run 39696967588](https://github.com/newnetmp3/roll20embetterment/actions/runs/39696967588) passed **476/476 tests**, 0 failures, including generated userscript parity. Merge, Firefox signing, auto-update feed and live gameplay verification remain separate; no claim of full native parity. This milestone is NOT described as implementing every private Roll20 call: many undocumented source controls are not safe to invoke blindly.
+
+**Native capabilities added:**
+
+- Capture entire, single, explicitly supplied character-bound macro references on authenticated official sheet card attributes `data-roll20-macro` or `data-native-macro` (and their visible action buttons), only when valid and unambiguous. These attributes are **supported conditional inputs, not yet verified to exist in the live D&D 2024 sheet**; absence disables this path without changing gameplay. Source action identity and current Controlled By permission are rechecked on invocation. Reject compound scripts, cross-character/selection-dependent references, ambiguous references, and invented row IDs.
+- Use an exact observed macro directly when the official sheet exposes one, even without an existing token-bar ability. Previously mapped existing character abilities continue to work. The separate observed Dice action remains explicitly non-native.
+- Discover unclassified, exact, existing player-controlled Roll20 repeating-action abilities from current `window.Campaign.characters` (never other characters or arbitrary chat macros). Expose them in **MISC**. If the official sheet exposes a source action with no known section, also import into MISC; do not present unrecognized generic buttons as clickable.
+- Track `misc` through bounded capture/merge/coverage, importer diagnostics, snapshot/identity and HUD. No automatic action execution on scan or render.
+
+**UI consolidation:**
+
+- **Remove** the six-button bottom utility toolbar (More options, Debug, Show Sheet, Allow private reader, Reset layout, −). The turn strip has just one accessible **Debug** entry; the existing Debug window contains sync, show/reveal original sheet, allow private reader, reset HUD positions, hide HUD, importer, turn corrections, movement diagnostics and local copyable logs.
+- Keep categories ergonomic and add **MISC** to the action dock; maintain one deliberate action click for a verified native binding. Unknown/missing mappings show Native unmapped, not misleading active controls.
+- Recalculate HUD scale from CSS-pixel viewport size and live chat inset on browser resize. Keep panel drag/nudge saved positions clamped to the new viewport. Respect chat and manual sheet priority, reduce visual clutter and avoid obstructing the map. No new in-game popup tutorials.
+
+**Validation verified on PR:** `npm run check:firefox` and generated userscript consistency green, 476/476 tests. Responsive Debug/MISC static tests, direct source-action rejection, and original-sheet safety regressions passed. Then merge, package separate **Firefox v3.10.0 milestone candidate** with Mozilla-unlisted signing, inspect signed XPI and auto-update feed. **Live Floorp gameplay remains required** for: official 2024 action references actually exposed, chat/action card parity, resource effects, Jumpgate startup, 5 ft outbound + back and no original sheet/chat interference.
+
+**Unimplemented or intentionally disabled native interactions (do not overclaim):** Native write mappings for inventory quantity, equip/attune, HP and temporary HP, spell slots, resource trackers and conditions; custom API/multi-command macros; arbitrary buttons without a verified macro or existing owned ability; dynamic target-picking, GM turn order modification; unexposed D&D 2024 Advanced Tools internal identifiers; exact upstream game-native prompts, damage/crit/upcast parity not confirmed live; Jumpgate movement issue #73 remains OPEN. These require actual source and live evidence before safely enabling.
 
 ## Current runtime
 
@@ -82,4 +103,4 @@ These are **explicitly unimplemented**, not hidden behind disabled buttons and n
 - [PR #104](https://github.com/newnetmp3/roll20embetterment/pull/104): weapon-first grouping and conditional native ability linking.
 - [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106): shared native mapping across all imported player action categories.
 
-Current merged code baseline: `486f79a`, 470 passing tests. Signed Firefox release remains 3.9.18 until a separate release workflow updates it. Only the above current architecture and status should be treated as the active handover. Superseded v2/v3 patch-by-patch details belong to Git history, not the live engineering baseline.
+Current merged code baseline: `486f79a`, 470 passing tests. Signed Firefox release is v3.9.19; do not confuse it with the unmerged milestone candidate. Only the above current architecture and status should be treated as the active handover. Superseded v2/v3 patch-by-patch details belong to Git history, not the live engineering baseline.

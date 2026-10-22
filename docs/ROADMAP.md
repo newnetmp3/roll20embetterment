@@ -1,6 +1,23 @@
 # R20 Embetterment — Development Roadmap
 
-**Current baseline (2026-10-21):** Firefox v3.9.18 update feed published; Chrome and optional userscript remain independently versioned at v3.4.0. [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106) merged the shared native-action registry with **467/467** simulated tests. Real Floorp 2024 action-card parity and [movement #73](https://github.com/newnetmp3/roll20embetterment/issues/73) remain **unverified/open**. For authoritative active status, see [HANDOVER.md](HANDOVER.md). The historical log below records prior milestones and may mention superseded versions; it is not a release-status source.
+**Current baseline (2026-10-21):** Firefox v3.9.19 signed update feed published; Chrome and optional userscript remain independently versioned at v3.4.0. [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106) merged the shared native-action registry with **467/467** simulated tests. Real Floorp 2024 action-card parity and [movement #73](https://github.com/newnetmp3/roll20embetterment/issues/73) remain **unverified/open**. For authoritative active status, see [HANDOVER.md](HANDOVER.md). The historical log below records prior milestones and may mention superseded versions; it is not a release-status source.
+
+## 2026-10-21: Native Integration Milestone — PR #110
+
+**PR #110 test verified (476/476 automated tests, run 39696967588):** one safe mapped-command dispatcher, explicit officially observed macro references where available, dynamic MISC discovery of owned existing repeating abilities, a single Debug & tools window, adaptive HUD scaling to the current viewport and Roll20 chat inset, and source/packaging test gates. Retain old official sheet priority, no speculative private API or player-sheet writes, and no automatic roll dispatch. Code/CI/merge/Mozilla signing/live QA are separate completion states.
+
+| Acceptance item | Status |
+| --- | --- |
+| Existing native character-ability mapping across attack/spell/feature/item/resource/skill/save/check | Implemented in v3.9.19, live parity incomplete |
+| Explicit, complete official-sheet macro capture with exact current character ID | PR #110 CI 476/476 green; live sheet attribute availability unverified |
+| Unclassified existing controlled-character native abilities in MISC | PR #110 CI green; requires live QA |
+| Remove multi-button utility toolbar; consolidate Debug/turn corrections/sheet tools | Milestone branch, automated + visual QA required |
+| Size/position scaling across monitor viewport and Roll20 chat | Milestone branch; resize/HiDPI/live chat QA required |
+| Unknown Advanced Tools private IDs, type-safe editable state, authoritative save/re-read | **Not implemented** without source-grounded contracts |
+| Verified every native 2024 action card and special effect | **Not validated live** |
+| Firefox milestone 3.10.0 | Planned release **after** green PR and separate Mozilla signing |
+
+**Release discipline:** Do not call this “complete native parity” until source-verified Advanced Tools mapping and real game chat/side effects are accepted. Use milestone completion for the validated implemented slice, and keep remaining native calls as explicit backlog; do not hide them behind a release label.
 
 ## Priority: complete native-action integration before any new HUD features
 

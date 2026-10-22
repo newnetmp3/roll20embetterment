@@ -85,8 +85,38 @@ const R3_NATIVE_CATEGORIES={
   resources:{title:'Use',pattern:/repeating_(?:resource|feature|action)\s*(?:\(|_)/i},
   skills:{title:'Roll',pattern:/(?:\b(?:skill|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:skill|check)\b)/i},
   saves:{title:'Roll',pattern:/(?:\b(?:saving[_-]?throw|save)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:save|saving[_-]?throw)\b)/i},
-  modifiers:{title:'Roll',pattern:/(?:\b(?:ability[_-]?check|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:ability[_-]?check|check)\b)/i}
+  modifiers:{title:'Roll',pattern:/(?:\b(?:ability[_-]?check|check)[-_][a-z][\w-]*|[a-z][\w-]*[-_](?:ability[_-]?check|check)\b)/i},
+  misc:{title:'Use',pattern:/^repeating_[A-Za-z0-9_-]{3,240}(?:_|\()/i}
 };
+// Read existing player-owned character abilities that have a real exact
+// repeating sheet reference but do not belong to any known category. These
+// do not need a sheet read, a first-run setup wizard, or a guessed row ID.
+// Never surface an arbitrary macro, a duplicate or another player's action.
+function r3NativeMiscCatalog(snapshot=R3_UI.snapshot){
+  if(!snapshot?.name)return [];
+  const identity=r3NativeBgResolve(snapshot.name);
+  if(!identity.model||!r3TokenControls(identity.model))return [];
+  const existing=Array.isArray(snapshot.misc)?snapshot.misc:[];
+  const out=[],ids=new Set(),refs=new Set(existing.map(x=>x.nativeActionRef).filter(Boolean));
+  for(const model of r3NativeActionModels(identity.model)){
+    const id=r3String(model.id||r3TokenModelGet(model,'_id'),120);
+    const name=r3String(r3TokenModelGet(model,'name'),125);
+    const action=r3String(r3TokenModelGet(model,'action'),350);
+    if(!id||!/^[A-Za-z0-9_-]{4,120}$/.test(id)||!name||/[{}|\r\n]/.test(name)||ids.has(id))continue;
+    ids.add(id);
+    const inspected=r3NativeSheetReference('misc',action,identity.model);
+    if(!inspected.reference)continue;
+    const reference=inspected.reference;
+    if(Object.entries(R3_NATIVE_CATEGORIES).some(([kind,config])=>
+      kind!=='misc'&&config.pattern.test(reference)))continue;
+    if(refs.has(action))continue;
+    refs.add(action);
+    out.push({name,_key:'ability:'+id,nativeActionRef:action,tab:'Roll20 character abilities',
+      visible:'Existing controlled-character native action'});
+    if(out.length>=80)break;
+  }
+  return out;
+}
 function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
   if(!Object.prototype.hasOwnProperty.call(R3_NATIVE_CATEGORIES,kind)||!key||
     typeof key!=='string'||key.length>240)return {reason:'Unknown source category or action key.'};
@@ -97,7 +127,8 @@ function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
     return {name:key,key,value:source[key]};
   }
   const rows=Array.isArray(source)?source:[];
-  const found=rows.filter(row=>row?._key===key&&typeof row._key==='string');
+  const candidates=kind==='misc'?[...rows,...r3NativeMiscCatalog(snapshot)]:rows;
+  const found=candidates.filter(row=>row?._key===key&&typeof row._key==='string');
   if(found.length!==1)return {reason:'This imported action has no unique source identity.'};
   return found[0];
 }
@@ -106,7 +137,7 @@ function r3NativeMapSource(kind,key,snapshot=R3_UI.snapshot){
 // macro is not safe to run with the sheet closed: it can target a different PC.
 function r3NativeSheetReference(kind,action,character){
   const macro=String(action??'').trim();
-  const match=macro.match(/^%\{([A-Za-z0-9_-]{4,120})\|([^{}\r\n]{1,350})\}$/);
+  const match=macro.match(/^%\{([A-Za-z0-9_-]{4,120})\|([^{}|;!\r\n]{1,350})\}$/);
   if(!match)return {reason:'Roll20 ability does not contain one complete, safe sheet-action reference.'};
   const target=r3String(character?.id||r3TokenModelGet(character,'_id'),120);
   if(!target||match[1]!==target)
@@ -136,9 +167,22 @@ function r3NativeMapAbility(kind,entry,character,snapshot){
   const rowId=checks?'':r3String(entry?.nativeRowId,120);
   if(rowId&&!/^[A-Za-z0-9_-]{4,120}$/.test(rowId))
     return {reason:'Imported repeating row ID is invalid; no native action was linked.'};
-  if(!rowId&&sameName!==1)return {reason:kind==='attacks'?
+  const directRef=typeof entry?.nativeActionRef==='string'?entry.nativeActionRef:'';
+  const uniqueDirectRef=!!directRef&&rows.filter(x=>x?.nativeActionRef===directRef).length===1;
+  if(!rowId&&sameName!==1&&!uniqueDirectRef&&kind!=='misc')return {reason:kind==='attacks'?
     'Multiple same-named native attacks; no verified repeating row identity.':
     'Several source entries have this name; their native actions are ambiguous.'};
+  // The official authenticated sheet may explicitly expose an action macro
+  // even if the player has not added it to the Roll20 token bar. This path
+  // never guesses an ID and always revalidates ownership when clicked.
+  // MISC cannot fall back to a name-only character ability.
+  if(entry?.nativeActionRef){
+    const direct=r3NativeSheetReference(kind,entry.nativeActionRef,character);
+    if(!direct.reference)return {reason:direct.reason};
+    return {abilityName:name,command:String(entry.nativeActionRef).trim(),
+      source:'Exact authenticated official-sheet action reference'};
+  }
+  if(kind==='misc')return {reason:'No explicit native reference was observed for this MISC action.'};
   const matches=[];
   let rejectedReason='';
   for(const ability of r3NativeActionModels(character)){
@@ -209,7 +253,7 @@ function r3NativeInvoke(kind,key){
   }
   R3_NATIVE.busy=true;
   try{
-    const outcome=r3NativeChatSubmit('%{'+identity.id+'|'+mapped.abilityName+'}');
+    const outcome=r3NativeChatSubmit(mapped.command||'%{'+identity.id+'|'+mapped.abilityName+'}');
     if(!outcome.ok){r3NativeStatus(outcome.reason);return false;}
     r3NativeStatus('Invoked mapped Roll20 '+kind+' action: '+r3String(entry.name,80)+
       '. Verify its native result in chat.');
@@ -257,7 +301,7 @@ function r3NativeMappedAttack(key){
   if(!/^[\w-]{4,120}$/.test(identity.id)){
     r3NativeStatus('The native character ID is not a valid Roll20 reference.');return false;
   }
-  const command='%{'+identity.id+'|'+mapping.abilityName+'}';
+  const command=mapping.command||'%{'+identity.id+'|'+mapping.abilityName+'}';
   R3_NATIVE.busy=true;
   try{
     const result=r3NativeChatSubmit(command);

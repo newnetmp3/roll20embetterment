@@ -122,11 +122,6 @@ function r3BattlefieldSidebar(snapshot){
     '<button type="button" data-hud-flyout="resources" title="Browse imported resources">⌃</button></header>'+
     (resources||'<small>No official slots or resources imported yet.</small>')+
     '</section>'+r3BattlefieldNotes()+
-    (R3_BF.options?'<section class="r3-bf-section r3-bf-advanced" data-bf-panel="advanced">'+
-      ''+
-      '<header><strong>Turn corrections</strong>'+
-      '<button type="button" data-bf-action="options">×</button></header>'+
-      r3TurnMarkup(snapshot)+'</section>':'')+
     '</aside>';
 }
 function r3BattlefieldMarkup(snapshot){
@@ -162,6 +157,7 @@ function r3BattlefieldMarkup(snapshot){
     '<span><strong>'+r3Escape(phase)+'</strong><small>'+r3Escape(status)+'</small></span>'+
     '<button type="button" data-turn-action="start" title="Reset local turn counters; keep concentration">↻</button>'+
     '<button type="button" data-turn-action="end" title="Mark end of turn locally; does not advance Roll20">⏭</button>'+
+    '<button type="button" id="r3-hud-debug" class="r3-bf-debug-trigger" title="Debug, advanced controls and layout settings" aria-label="Open Debug window">⚙ Debug</button>'+
     '</div>'+
     (R3_BF.sidebar&&!R3_UI.shown?r3BattlefieldSidebar(snapshot):
       '<div class="r3-bf-show-profile-wrap" data-bf-panel="show-profile">'+
@@ -185,17 +181,8 @@ function r3BattlefieldMarkup(snapshot){
     r3BattlefieldControl('flame','Spells','spells')+
     r3BattlefieldControl('bag','Inventory','inventory')+
     r3BattlefieldControl('book','Skills','skills')+
+    r3BattlefieldControl('star','MISC','misc')+
     '</nav>'+
-    '<div class="r3-bf-mini-tools" data-bf-panel="tools">'+
-    ''+
-    '<button type="button" data-bf-action="options" title="Manual turn corrections and detailed counters">'+
-    (R3_BF.options?'Hide options':'More options')+'</button>'+
-    '<button type="button" id="r3-hud-debug" title="Open developer diagnostics and tooltip history">⚙ Debug</button>'+
-    '<button type="button" data-bf-action="show-roll20-sheet" title="Restore all original character sheets and stop hiding them while you play">Show Sheet</button>'+
-    (typeof R3_SHEET_VIS==='object'&&R3_SHEET_VIS.manualPriority?
-      '<button type="button" data-bf-action="allow-background" title="Allow optional background readers again">Allow private reader</button>':'')+
-    '<button type="button" data-bf-action="reset-layout" title="Reset all panel positions for this game">Reset layout</button>'+ 
-    '<button type="button" id="r3-hud-collapse" title="Hide HUD (Shift+A)">−</button></div>'+
     (R3_HUD.flyout||R3_HUD.chooser!==null?
       r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):'')+
     (R3_NATIVE.preview?
@@ -211,9 +198,11 @@ function r3BattlefieldStyles(){
     '#r3-hud{position:absolute!important;inset:0!important;bottom:auto!important;left:0!important;width:100vw!important;height:100vh!important;pointer-events:none!important;overflow:visible!important}',
     '#r3-hud .r3-bf-shell{position:relative;width:100%;height:100%;pointer-events:none;color:#f1f1ed;font:12px/1.25 system-ui,sans-serif}',
     '.r3-bf-shell button,.r3-bf-shell textarea{box-sizing:border-box;font:inherit;color:inherit}',
+    '.r3-bf-shell{font-size:calc(12px * var(--r3-bf-scale,1))!important}.r3-bf-shell button:focus-visible{outline:2px solid #e5bd6e!important;outline-offset:2px}',
+    '.r3-bf-debug-trigger{white-space:nowrap;color:#cfe6ff!important;font-weight:650!important;letter-spacing:.01em}',
     '.r3-bf-actions,.r3-bf-category-dock,.r3-bf-sidebar,.r3-bf-turnstrip,.r3-bf-mini-tools,.r3-bf-restore,.r3-bf-show-profile,.r3-bf-shell>.hud-flyout,.r3-bf-shell>.hud-native-status{pointer-events:auto}',
     '.r3-bf-actions,.r3-bf-category-dock,.r3-bf-section,.r3-bf-turnstrip{background:linear-gradient(145deg,#101b2aF7,#080f1df5);border:1px solid #475e78;border-radius:13px;box-shadow:0 5px 20px #000a}',
-    '.r3-bf-actions{position:absolute;bottom:12px;left:14px;width:min(530px,calc(50vw - 24px));height:102px;display:flex;align-items:stretch;gap:5px;padding:5px}',
+    '.r3-bf-actions{position:absolute;bottom:12px;left:14px;width:min(calc(570px * var(--r3-bf-scale,1)),calc((100vw - var(--r3-bf-chat-inset,0px) - 32px) * .52));height:calc(102px * var(--r3-bf-scale,1));display:flex;align-items:stretch;gap:5px;padding:5px}',
     '.r3-bf-rings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;min-width:0;flex:1}',
     '.r3-bf-ring{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;min-height:84px;padding:3px!important;border-radius:46%!important;border:2px solid var(--ring)!important;background:radial-gradient(ellipse at center,#1c2939,#090e19 80%)!important;box-shadow:inset 0 0 9px var(--glow),0 0 7px var(--glow);text-align:center}',
     '.r3-bf-ring:hover{filter:brightness(1.18)}.r3-bf-ring.is-spent{opacity:.56;filter:saturate(.6)}',
@@ -223,10 +212,10 @@ function r3BattlefieldStyles(){
     '.r3-bf-quick{flex:0 0 108px;min-width:0;display:flex;flex-direction:column;gap:3px}',
     '.r3-bf-quick button{min-height:27px;padding:2px 4px!important;background:#131e2e!important;border:1px solid #304960!important;border-radius:5px!important;display:flex;align-items:center;gap:5px;justify-content:flex-start;font-size:10px!important}',
     '.r3-bf-quick button svg{height:17px;width:17px;flex:none}.r3-bf-quick button:hover{background:#263e54!important}',
-    '.r3-bf-category-dock{position:absolute;right:14px;bottom:12px;width:min(470px,calc(50vw - 24px));height:88px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:6px}',
+    '.r3-bf-category-dock{position:absolute;right:14px;bottom:12px;width:min(calc(555px * var(--r3-bf-scale,1)),calc((100vw - var(--r3-bf-chat-inset,0px) - 32px) * .47));height:calc(88px * var(--r3-bf-scale,1));display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;padding:6px}',
     '.r3-bf-category{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:3px 1px!important;background:#152335!important;border:1px solid #253950!important;border-radius:8px!important;font-size:10px!important}',
     '.r3-bf-category svg{width:25px;height:25px;color:#f5f4f1}.r3-bf-category span{font-size:10px}.r3-bf-category b{display:none}',
-    '.r3-bf-category:hover,.r3-bf-category.selected{background:#2c4666!important;border-color:#6e9ed1!important}',
+    '.r3-bf-category:hover,.r3-bf-category.selected{background:#2c4666!important;border-color:#6e9ed1!important;box-shadow:inset 0 0 0 1px #5b8fba}',
     '.r3-bf-sidebar{position:absolute;right:14px;top:32px;width:258px;max-height:calc(100vh - 160px);overflow-y:auto;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;border:0;background:transparent;box-shadow:none}',
     '.r3-bf-section{padding:8px}.r3-bf-section header{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px}.r3-bf-section header strong{font:600 13px Georgia,serif}.r3-bf-section header span{color:#8fa3bb;font-size:8px}',
     '.r3-bf-character{display:flex;align-items:center;gap:8px}.r3-bf-avatar{flex:0 0 61px;width:61px;height:61px;border:1px solid #3878b9;border-radius:6px;display:grid;place-items:center;background:#223447;color:#e7dbbb;font:600 26px Georgia,serif;overflow:hidden}',
@@ -245,10 +234,9 @@ function r3BattlefieldStyles(){
     '.r3-bf-turn-icon svg{height:21px;width:21px;color:#72affd}.r3-bf-turnstrip>span:nth-child(2){flex:1;display:flex;flex-direction:column;gap:2px;white-space:nowrap}',
     '.r3-bf-turnstrip strong{color:#c7e7ff}.r3-bf-turnstrip small{color:#8fa9c7;font-size:9px}',
     '.r3-bf-turnstrip button{background:#1e324b!important;border:1px solid #355476!important;border-radius:4px!important;padding:3px 6px!important}',
-    '.r3-bf-mini-tools{position:absolute;bottom:111px;right:16px;display:flex;gap:4px}',
-    '.r3-bf-mini-tools button{background:#101b2aee!important;color:#c2d8eb!important;border:1px solid #405672!important;border-radius:5px!important;padding:3px 6px!important;font-size:10px!important}',
+    '.r3-bf-shell .r3-bf-turnstrip{max-width:min(360px,calc(100vw - var(--r3-bf-chat-inset,0px) - 30px))}',
     '.r3-bf-show-profile{position:absolute;right:14px;top:20px;background:#17273bdd!important;border:1px solid #436080!important;padding:6px 9px!important;border-radius:7px!important}',
-    '.r3-bf-shell>.hud-flyout{position:absolute!important;right:14px!important;left:auto!important;bottom:107px!important;width:min(510px,calc(100vw - 32px))!important;max-height:min(54vh,530px)!important;pointer-events:auto;border-radius:10px;background:linear-gradient(145deg,#15273d,#0b1421);border:1px solid #56789a}',
+    '.r3-bf-shell>.hud-flyout{position:absolute!important;right:14px!important;left:auto!important;bottom:107px!important;width:min(calc(600px * var(--r3-bf-scale,1)),calc(100vw - var(--r3-bf-chat-inset,0px) - 32px))!important;max-height:min(65dvh,690px)!important;pointer-events:auto;border-radius:12px;background:linear-gradient(145deg,#15273d,#0b1421);border:1px solid #56789a;box-shadow:0 18px 40px #000b}',
     '.r3-bf-shell>.hud-native-status{position:absolute;bottom:118px;right:14px;width:min(480px,calc(100vw - 32px));max-height:24vh;overflow:auto;border-radius:7px}',
     '.r3-bf-dismiss-status{position:absolute;top:2px;right:3px;z-index:4;background:#142b41!important;border:1px solid #678aa9!important;border-radius:5px!important;cursor:pointer!important}',
     '.r3-bf-advanced{max-height:37vh;overflow:auto}.r3-bf-advanced .hud-turn-flow{font-size:10px}.r3-bf-advanced .hud-turn-cards{grid-template-columns:repeat(2,minmax(0,1fr))}',

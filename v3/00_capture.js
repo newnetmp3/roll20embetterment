@@ -79,7 +79,7 @@ function r3Field(raw){
 }
 function r3Empty(){
   return {schema:3,name:'',capturedAt:new Date().toISOString(),stats:{},abilities:{},modifiers:{},saves:{},skills:{},
-    slots:{},spells:[],attacks:[],inventory:[],features:[],resources:[],observations:[],
+    slots:{},spells:[],attacks:[],inventory:[],features:[],resources:[],misc:[],observations:[],
     diagnostics:{tabs:[],rejected:0,unclassified:0,limits:[],notes:[]},provenance:{},coverage:{}};
 }
 function r3Push(s,kind,key,value,source,limit=400){
@@ -246,10 +246,25 @@ function r3NativeObservedRowId(card){
   if(ids.length!==1||!/^[A-Za-z0-9_-]{4,120}$/.test(ids[0]))return '';
   return ids[0];
 }
+// A directly callable reference is recognized only if the official rendered
+// card or its own visible button publishes an *entire* Roll20 macro. Captions,
+// data-testid strings and arbitrary UI click handlers are not executable IDs.
+function r3NativeObservedActionRef(card){
+  const own=['data-roll20-macro','data-native-macro'].map(key=>r3Attr(card,key));
+  const buttons=Array.from(card.querySelectorAll?.('button[data-roll20-macro],button[data-native-macro]')||[])
+    .slice(0,18).filter(r3Shown);
+  const refs=[...own,...buttons.flatMap(button=>['data-roll20-macro','data-native-macro']
+    .map(key=>r3Attr(button,key)))].filter(Boolean);
+  if(refs.length===0||new Set(refs).size!==1)return '';
+  const value=refs[0];
+  return /^%\{[A-Za-z0-9_-]{4,120}\|[^{}\r\n]{1,100}\}$/.test(value)?value:'';
+}
 function r3CardInfo(card,kind,name,tab){
   const info={name,tab,visible:r3Text(card,1100)};
   const nativeRowId=r3NativeObservedRowId(card);
   if(nativeRowId)info.nativeRowId=nativeRowId;
+  const nativeActionRef=r3NativeObservedActionRef(card);
+  if(nativeActionRef)info.nativeActionRef=nativeActionRef;
   const tag=r3Attr(card,'data-testid');if(tag)info.testId=tag;
   const buttons=Array.from(card.querySelectorAll?.('button')||[]).slice(0,18)
     .filter(r3Shown).map(b=>({label:r3String(r3Attr(b,'aria-label')||r3Attr(b,'title')||r3Text(b,70),70)}))
@@ -482,10 +497,30 @@ function r3Cards(root,s,tab){
   r3InventoryRows(root,s,tab);
   r3ResourceControls(root,s,tab);
 }
+// Capture otherwise unclassified *explicitly identified* native controls.
+// A button without an official macro remains only an observation; it cannot
+// become a synthetic Roll20 action just because it has a visible label.
+function r3MiscNativeActions(root,s,tab){
+  const candidates=Array.from(root.querySelectorAll?.(
+    'button[data-roll20-macro],button[data-native-macro]')||[]).slice(0,300);
+  const classified=Object.values(R3_CATEGORIES).join(',');
+  for(const button of candidates){
+    if(s.misc.length>=100)break;
+    if(!r3Shown(button)||button.closest?.(classified))continue;
+    const ref=r3NativeObservedActionRef(button);
+    const name=r3String(r3Attr(button,'aria-label')||r3Attr(button,'title')||
+      r3Text(button,100),125);
+    if(!ref||!name||/^(more|close|cancel|next|previous|settings|menu)$/i.test(name))continue;
+    const key='native:'+ref;
+    if(!s.misc.some(item=>item._key===key))
+      s.misc.push({name,_key:key,tab,visible:name,nativeActionRef:ref});
+  }
+}
 function r3Capture(root,tab='Current view'){
   const s=r3Empty();s.name=r3NameFromDocument(root);
   if(!root?.querySelectorAll){s.diagnostics.notes.push('No readable official sheet DOM');return s;}
   r3Inputs(root,s,tab);r3VisibleStats(root,s,tab);r3Cards(root,s,tab);
+  r3MiscNativeActions(root,s,tab);
   s.diagnostics.tabs.push(tab);r3Coverage(s);return s;
 }
 function r3NameFromDocument(root){
@@ -544,7 +579,7 @@ function r3Coverage(s){
     modifiers:Object.keys(s.modifiers).length,saves:Object.keys(s.saves).length,
     skills:Object.keys(s.skills).length,slots:Object.keys(s.slots).length,
     spells:s.spells.length,attacks:s.attacks.length,inventory:s.inventory.length,
-    features:s.features.length,resources:s.resources.length,observations:s.observations.length};
+    features:s.features.length,resources:s.resources.length,misc:(s.misc||[]).length,observations:s.observations.length};
   return s;
 }
 function r3Merge(target,source){
@@ -570,6 +605,11 @@ function r3Merge(target,source){
         target[kind].push(item);keys.add(item._key);
       }
     }
+  }
+  target.misc=Array.isArray(target.misc)?target.misc:[];
+  for(const item of source.misc||[]){
+    if(target.misc.length>=100)break;
+    if(!target.misc.some(old=>old._key===item._key))target.misc.push(item);
   }
   const obs=new Set(target.observations.map(o=>o.tab+'|'+o.label+'|'+o.value));
   for(const o of source.observations)if(target.observations.length<750&&!obs.has(o.tab+'|'+o.label+'|'+o.value)){
