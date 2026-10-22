@@ -186,6 +186,40 @@ test('category changes and explicit reimports restore scroll and expanded invent
   assert.equal(repainted.entries[0].open,true);
 });
 
+test('verified selected character auto-imports all tabs through a private reader without opening Journal',async()=>{
+  const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const auto=h.api.R3_AUTO;
+  auto.enabled=true;auto.name='NIER';auto.characterId='-verified-id';
+  const frame=h.api.r3Candidates()[0].frame;
+  const dialog={style:{position:'absolute',left:'40px',top:'50px'},
+    getAttribute(key){return key==='data-characterid'?'-verified-id':null;}};
+  frame.closest=()=>dialog;
+  let opened=false,journalLookups=0;
+  const originalQuery=h.document.querySelectorAll.bind(h.document);
+  h.document.querySelectorAll=selector=>{
+    if(selector==='iframe')return opened?[frame]:[];
+    if(selector.includes('#journal'))journalLookups++;
+    return originalQuery(selector);
+  };
+  h.context.r3NativeBgResolve=name=>({id:'-verified-id',name,model:{}});
+  h.context.r3NativeBgEnsure=async name=>{
+    opened=true;
+    Object.assign(h.api.R3_NATIVE_BG,{dialog,characterId:'-verified-id',name});
+    return h.api.r3Candidates()[0];
+  };
+  const pending=h.api.r3AutoTick();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(opened,true,'private reader opens from verified Roll20 character model');
+  assert.equal(journalLookups,0,'Journal is not needed for a controlled character');
+  assert.equal(h.sent.length,1);
+  assert.equal(h.sent[0].message.mode,'all','first background import traverses every mounted tab');
+  const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=84;
+  snap.inventory=[{name:'Rope',_key:'rope',quantity:1,tab:'Inventory'}];
+  h.respond(h.api.r3Coverage(snap));await pending;
+  assert.equal(h.api.R3_UI.snapshot.inventory[0].name,'Rope');
+  assert.ok(auto.lastFull>0,'subsequent full scans are periodically scheduled');
+});
+
 test('opt-in auto-sync sends a real current-view request without manually clicking Import',async()=>{
   const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
   const previous=h.api.r3Empty();
