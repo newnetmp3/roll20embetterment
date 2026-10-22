@@ -2,6 +2,23 @@
 
 **Current baseline (2026-10-22):** Firefox v3.10.2 signed and published (PR #114 merged as `5f2ce53`, signing run 39871351495, feed `8f15eab`). Firefox v3.10.2 adds native sheet-click attacks/skills and fixes hidden-node starvation in control discovery; local check passes **492/492 tests**. Current release/CI status is tracked in [HANDOVER.md](HANDOVER.md). Historical entries below may describe superseded limitations or versions.
 
+## 2026-10-22 — no-Journal private all-tab background import (Firefox v3.10.3 candidate)
+
+- Reuse the verified, controlled-character Roll20 model opener to mount
+  the official reader privately on auto-sync startup; do not require manual
+  Journal browsing. Scan all rendered tabs only when ownership is provable.
+- Keep a player-opened native dialog/popout visible and its current tab intact.
+  A trusted manual Journal action cancels private traversal and restores
+  owned dialog wrappers, with automatic retry after manual opening; an explicit
+  private-reader disable in Debug remains sticky.
+- Cover no-Journal controlled-character import, manual-priority grace and
+  cancellation mid-scan. The existing five-minute full-scan gate and read-only
+  changes-only updates remain. **CI/live Floorp evidence pending**; signed
+  publication is a separate gate.
+- Remaining acceptance: actual Floorp unattended startup, full view coverage,
+  manual open while private scan runs, close/reopen, second controlled
+  character, Roll20 singleton dialog fallback and unmounted/virtualized rows.
+
 ## 2026-10-22 — Native sheet-click attacks and skills
 
 - Source-observed attack-hit and standard skill buttons now have a native sheet adapter when no exact macro mapping exists. One user click probes and invokes one live control through the authenticated reader; macro mapping remains preferred.
