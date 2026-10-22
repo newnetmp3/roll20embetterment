@@ -2036,7 +2036,7 @@ async function r3NativeReaderHandle(peer,data){
 // request. An already-open player/GM sheet is never hidden, repositioned,
 // clicked through, reparented, closed or navigated by this helper.
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
-  original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,preOverlays:null,opening:null,sessions:new Map()};
+  original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,preOverlays:null,opening:null,sessions:new Map(),abortEpoch:0};
 function r3NativeBgResolve(name){
   const wanted=r3String(name,120).trim().toLowerCase();
   if(!wanted)return {reason:'No imported character name is available in the HUD.'};
@@ -2130,6 +2130,8 @@ function r3NativeBgRestore(){
 // HUD reader. Release all of our saved sessions and their modal shields.
 function r3NativeBgRestoreAll(){
   const bg=R3_NATIVE_BG;
+  // Invalidate a pending showDialog() before it can capture a player's sheet.
+  bg.abortEpoch++;
   const records=[...bg.sessions.values()];
   if(bg.dialog&&!records.some(record=>record.dialog===bg.dialog))
     records.push({characterId:bg.characterId,name:bg.name,dialog:bg.dialog,
@@ -2241,6 +2243,7 @@ async function r3NativeBgOpen(name){
   }
   if(bg.sessions.size>=6)
     throw new Error('Too many HUD-owned background sheets. Reload Roll20 to clear old sessions.');
+  const epoch=bg.abortEpoch;
   const before=new Set(existing),overlays=new Set(
     document.querySelectorAll('.ui-widget-overlay')||[]);
   bg.preOverlays=overlays;
@@ -2248,6 +2251,7 @@ async function r3NativeBgOpen(name){
   // including the common case where the character ID arrives after the shell.
   // Only a newly created dialog with this authorized character ID can be moved.
   const shield=()=>{
+    if(bg.abortEpoch!==epoch)return;
     if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return;
     if(!bg.dialog)r3NativeBgClaim(before,overlays,identity);
     if(bg.dialog&&bg.characterId===identity.id)r3NativeBgShieldOverlay(overlays);
@@ -2266,6 +2270,8 @@ async function r3NativeBgOpen(name){
     }
     shield(); // synchronous opening can create the dialog immediately
     for(let i=0;i<36;i++){
+      if(bg.abortEpoch!==epoch)
+        throw new Error('Player opened the original sheet while private reader was loading.');
       if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())
         throw new Error('Player requested the original character sheet. The hidden reader was released.');
       shield(); // fallback for browsers without MutationObserver
@@ -4338,8 +4344,13 @@ async function r3AutoTick(eventTriggered=false){
         // authenticated name is available; the next timer will retry it.
         if(!candidate)r3AutoDisplay('Waiting for the private character sheet to finish loading');
       }catch(e){
-        if(R3_AUTO.enabled&&generation===R3_AUTO.generation)
+        if(R3_AUTO.enabled&&generation===R3_AUTO.generation){
+          // A player-initiated reveal is a cancellation, not an opener fault:
+          // don't impose the full one-minute failure backoff after they close.
+          if(/Player opened the original sheet/i.test(String(e?.message||e)))
+            R3_AUTO.lastOpenAttempt=0;
           r3AutoDisplay('Background reader: '+r3String(e?.message||e,170));
+        }
       }finally{R3_AUTO.opening=false;}
     }else if(!identity.model){
       // Compatibility fallback for older editors lacking the model view:
