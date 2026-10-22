@@ -1,6 +1,7 @@
 // v3 authenticated cross-origin reader and explicit, bounded tab traversal.
 const R3_PENDING=new Map();
 const R3_POPOUTS=new Map();
+const R3_READER_ACTIVE=new Set(),R3_READER_CANCELLED=new Set();
 const R3_SESSION=(crypto.randomUUID?.()||('session-'+Date.now()+'-'+Math.random())).slice(0,100);
 let r3Counter=0,r3ListenerStarted=false,r3ReaderDirtyTimer=null;
 function r3SheetContext(){return location.origin===R3_ORIGIN&&/\/dnd2024byroll20(?:\/|$)/.test(location.pathname);}
@@ -28,7 +29,10 @@ function r3ResolveTab(key,label){
   return tabs.find(tab=>r3TabKey(tab)===key)||
     tabs.find(tab=>r3TabLabel(tab).toLowerCase()===label.toLowerCase())||null;
 }
-async function r3CollectAllTabs(progress){
+async function r3CollectAllTabs(progress,shouldCancel=()=>false){
+  const check=()=>{
+    if(shouldCancel())throw new Error('Private all-tab scan cancelled for manual sheet access');
+  };
   // Vue can replace every tab element after clicking a tab. Store labels
   // and stable tablist identities, NOT stale element references.
   const descriptors=()=>r3Tabs().map(tab=>({key:r3TabKey(tab),label:r3TabLabel(tab)}));
@@ -37,10 +41,12 @@ async function r3CollectAllTabs(progress){
   let visited=0;
   const primaryLabel=/^(combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
   const collect=label=>{
+    check();
     r3Merge(acc,r3Capture(document.body,label));visited++;
     progress?.(label,r3Coverage(acc));
   };
   const visit=async ({key,label})=>{
+    check();
     if(visited>=32||seen.has(key))return false;
     const tab=r3ResolveTab(key,label);
     if(!tab||!r3Shown(tab)){
@@ -49,12 +55,13 @@ async function r3CollectAllTabs(progress){
     }
     seen.add(key);
     if(!r3Active(tab)){
-      tab.click();await r3Pause(290);
+      tab.click();await r3Pause(290);check();
     }
     collect(label);
     return true;
   };
   try{
+    check();
     collect(r3CurrentTabLabel());
     const initial=descriptors();
     // The six main 2024 sheet panels must not be pushed out of the first
@@ -75,8 +82,9 @@ async function r3CollectAllTabs(progress){
       await visit(extra);
     }
   }finally{
-    // Restore by identity rather than trying to click detached old nodes.
-    for(const prior of original){
+    // A trusted manual-open cancelled this private traversal. Do not click
+    // through the now player-owned sheet's tabs while restoring the reader.
+    if(!shouldCancel())for(const prior of original){
       const tab=r3ResolveTab(prior.key,prior.label);
       if(tab&&!r3Active(tab)){tab.click();await r3Pause(130);}
     }
@@ -100,8 +108,8 @@ function r3CurrentTabLabel(){
   const active=r3Tabs().filter(r3Active);
   return active.map(r3TabLabel).find(name=>main.test(name))||'Current view';
 }
-async function r3ReaderScan(mode,sendProgress){
-  if(mode==='all')return r3CollectAllTabs(sendProgress);
+async function r3ReaderScan(mode,sendProgress,shouldCancel){
+  if(mode==='all')return r3CollectAllTabs(sendProgress,shouldCancel);
   if(mode==='hp')return r3CaptureHealth(document.body);
   return r3Capture(document.body,r3CurrentTabLabel());
 }
@@ -109,6 +117,11 @@ async function r3ReaderReceive(event){
   const peer=r3ReaderPeer();if(!peer||event.source!==peer||event.origin!==R3_EDITOR)return;
   const data=event.data;if(data?.protocol!==R3_PROTOCOL)return;
   if(data.type==='hello'){r3ReaderAnnounce();return;}
+  if(data.type==='cancel-scan'){
+    if(typeof data.id==='string'&&R3_READER_ACTIVE.has(data.id))
+      R3_READER_CANCELLED.add(data.id);
+    return;
+  }
   if(data.type==='native-probe'||data.type==='native-invoke'){
     void r3NativeReaderHandle(peer,data).catch(error=>{
       try{peer.postMessage(r3Msg('native-result',{
@@ -119,13 +132,19 @@ async function r3ReaderReceive(event){
   }
   if(data.type!=='scan'||typeof data.id!=='string'||!/^r3-[\w.-]{4,100}$/.test(data.id))return;
   if(!['current','all','hp'].includes(data.mode))return;
+  R3_READER_ACTIVE.add(data.id);
   try{
+    const cancelled=()=>R3_READER_CANCELLED.has(data.id);
     const snap=await r3ReaderScan(data.mode,(tab,coverage)=>{
-      peer.postMessage(r3Msg('progress',{id:data.id,tab,coverage}),R3_EDITOR);
-    });
+      if(!cancelled())peer.postMessage(r3Msg('progress',{id:data.id,tab,coverage}),R3_EDITOR);
+    },cancelled);
+    if(cancelled())throw new Error('Private scan cancelled for manual sheet access');
     peer.postMessage(r3Msg('result',{id:data.id,snapshot:snap,session:R3_SESSION}),R3_EDITOR);
   }catch(error){
     peer.postMessage(r3Msg('failure',{id:data.id,error:r3String(error?.message||error,250)}),R3_EDITOR);
+  }finally{
+    R3_READER_ACTIVE.delete(data.id);
+    R3_READER_CANCELLED.delete(data.id);
   }
 }
 function r3ReaderAnnounce(){
@@ -261,10 +280,18 @@ function r3SendScan(candidate,mode){
     const timeout=setTimeout(()=>{R3_PENDING.delete(id);reject(new Error(
       'Official sheet reader did not answer. Ensure the new userscript is active on the advanced-sheets.production.roll20preflight.net domain and reload the character sheet.'));},
       mode==='all'?40000:mode==='hp'?2500:12000);
-    R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout});
+    R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout,mode});
     try{candidate.window.postMessage(r3Msg('scan',{id,mode}),R3_ORIGIN);}
     catch(e){R3_PENDING.delete(id);clearTimeout(timeout);reject(e);}
   });
+}
+function r3CancelOwnedScans(){
+  for(const [id,pending] of R3_PENDING){
+    if(pending.mode!=='all')continue;
+    const owned=r3Candidates().some(c=>c.window===pending.window&&r3NativeIsOwned(c));
+    if(!owned)continue;
+    try{pending.window.postMessage(r3Msg('cancel-scan',{id}),R3_ORIGIN);}catch{}
+  }
 }
 function r3StartEditorBridge(){
   if(r3ListenerStarted)return;r3ListenerStarted=true;
