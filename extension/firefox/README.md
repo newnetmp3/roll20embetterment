@@ -1,7 +1,7 @@
 # R20eb — Firefox/Floorp installation and releases
 
-**Published Firefox update feed:** v3.9.18 as of October 21, 2026.  
-**Latest merged source:** PR #108 adds native-action ownership/identity hardening; it is **not part of v3.9.18** until a subsequent signed release is published.  
+**Last verified published Firefox update feed before milestone signing:** v3.9.19.  
+**Latest merged feature source:** PR #110 (native action catalog, MISC and consolidated Debug) is included in the requested **v3.10.0 Milestone Completion build**. Check the update feed for actual signed publication before installing.  
 **Chrome and optional userscript:** independently versioned v3.4.0.
 
 ## Install
