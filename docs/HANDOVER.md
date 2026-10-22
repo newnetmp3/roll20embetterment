@@ -123,3 +123,7 @@ Resumed from main `cc87fcd`; no open PRs at the start of this step. Added diagno
 Bounded to 750 candidates per view and 1500 merged records; revisiting a tab replaces its old inventory. Exported snapshots and importer Diagnostics expose the inventory. Automatic sync signatures now include MISC and controls, and partial refreshes merge MISC rather than discarding it. Older snapshots remain supported.
 
 Validation: `npm run check:firefox` passes 479/479 tests locally, including three new evidence/privacy/merge-bound tests. CI, merge and release status for this step must be checked separately. No release requested. This is discovery infrastructure, not completion of native parity. Next: inspect real official 2024 control evidence, establish stable character-bound source identities, then implement validated native adapters and transactional writes. No new HUD features. Movement #73 and all previously listed write/parity gaps remain open.
+
+## Firefox v3.10.1 signing request
+
+PR #113 merged as `7e0b558` after both Firefox CI runs passed, 479 tests. User explicitly requests merge and publication, and prefers a Mozilla-signed Firefox plugin on every update. Version 3.10.1 requests the established unlisted signing workflow; publication and feed verification remain separate until the workflow completes. No additional live gameplay claims.

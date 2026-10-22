@@ -518,3 +518,5 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 First discovery increment: bounded rendered control evidence with action/toggle/counter/field/selection/unsupported kinds, source DOM attributes, category/tab and explicit missing capability reasons. Importer Diagnostics and JSON export expose records; no record grants execution. Revisited tab inventories replace stale evidence. Automatic sync preserves MISC updates and includes control evidence in change detection. Local Firefox check: 479/479 tests passed. Published Firefox baseline is v3.10.0; this development increment is not released.
 
 Remaining: real-sheet stable identity validation, native adapter coverage, permission/revision-protected writable interactions, and full live Floorp acceptance. Rendered enabled controls only; unopened/virtualized content remains a known discovery gap. Do not report complete enumeration or native parity.
+
+**Firefox v3.10.1 packaging:** PR #113 merged as `7e0b558` with both CI runs green, 479 tests. User requests signed Firefox distribution for every update. Unlisted signing/publication requested; verify workflow, XPI and feed independently.
