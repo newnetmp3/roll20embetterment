@@ -5,6 +5,7 @@ const R3_AUTO={
   enabled:false,name:'',characterId:'',running:false,active:false,opened:false,openedAt:0,
   lastScan:0,lastFull:0,lastOpenAttempt:0,lastError:'',timer:null,healthTimer:null,
   healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,dirtyTimer:null,
+  opening:false,
   ownedDialog:null,ownedContainer:null,originalPosition:null,preOpenOverlays:null,
   ownedOverlay:null,originalOverlay:null,openObserver:null,
   explicitlyDisabled:false,origin:'manual'
@@ -104,6 +105,13 @@ function r3AutoCandidate(){
     r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===
       R3_AUTO.name.toLowerCase()).length>1;
   const safe=named.filter(c=>!duplicateName||r3AutoId(c)===R3_AUTO.characterId);
+  // Prefer our own character-bound private reader even when a player also
+  // has an official popout open. Never navigate that player's live tab.
+  const owned=safe.filter(c=>c.type==='iframe'&&r3NativeIsOwned(c));
+  if(owned.length===1&&
+     (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground()))
+    return owned[0];
+  if(owned.length>1)return null;
   const popouts=safe.filter(c=>c.type==='popout');
   if(popouts.length===1)return popouts[0];
   if(popouts.length>1)return null; // same-named popouts are ambiguous
@@ -345,20 +353,51 @@ function r3AutoQueueDirty(candidate){
   },ms);
 }
 async function r3AutoTick(eventTriggered=false){
-  if(!R3_AUTO.enabled||R3_AUTO.running||R3_UI.busy||R3_NATIVE.busy||!R3_AUTO.name)return;
+  if(!R3_AUTO.enabled||R3_AUTO.running||R3_AUTO.opening||
+     R3_UI.busy||R3_NATIVE.busy||!R3_AUTO.name)return;
   // Implicit sync cannot run against a stale saved PC before a verified
   // controlled token has been selected in this browser session.
   if(R3_AUTO.origin==='token'&&
      (R3_TOKEN.active?.characterId!==R3_AUTO.characterId||
        R3_TOKEN.active?.name!==R3_AUTO.name))return;
   const now=Date.now();
-  const candidate=r3AutoCandidate();
+  let candidate=r3AutoCandidate();
   if(!candidate){
-    r3AutoOpenFromJournal(now);
-    return;
+    // Use the same Roll20 character-scoped opener as native actions. This
+    // works without opening the Journal sidebar or manually viewing a tab.
+    // A verified Controlled By model and exact character ID are required.
+    const identity=r3NativeBgResolve(R3_AUTO.name);
+    if(identity.model&&(!R3_AUTO.characterId||
+       identity.id===R3_AUTO.characterId)&&
+       (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground())){
+      if(now-R3_AUTO.lastOpenAttempt<60000)return;
+      R3_AUTO.lastOpenAttempt=now;
+      const generation=R3_AUTO.generation;
+      R3_AUTO.opening=true;
+      try{
+        const opened=await r3NativeBgEnsure(R3_AUTO.name);
+        if(!R3_AUTO.enabled||generation!==R3_AUTO.generation)return;
+        if(r3AutoId(opened)!==identity.id)
+          throw new Error('Background reader did not match the controlled character ID');
+        candidate=r3AutoCandidate();
+        // Roll20's title may load after the frame. Never import before its
+        // authenticated name is available; the next timer will retry it.
+        if(!candidate)r3AutoDisplay('Waiting for the private character sheet to finish loading');
+      }catch(e){
+        if(R3_AUTO.enabled&&generation===R3_AUTO.generation)
+          r3AutoDisplay('Background reader: '+r3String(e?.message||e,170));
+      }finally{R3_AUTO.opening=false;}
+    }else if(!identity.model){
+      // Compatibility fallback for older editors lacking the model view:
+      // this still requires an exact Journal identity and script ownership.
+      r3AutoOpenFromJournal(now);
+    }else{
+      r3AutoDisplay('Background reader character identity disagrees with the selected token');
+    }
+    if(!candidate)return;
   }
   r3AutoRemember(candidate);
-  const background=r3AutoMoveOffscreen(candidate);
+  const background=r3NativeIsOwned(candidate)||r3AutoMoveOffscreen(candidate);
   // Only navigate sheet tabs when the script itself opened an offscreen
   // dialog. A player-opened visible sheet is read without changing tabs.
   const mode=background&&now-R3_AUTO.lastFull>300000?'all':'current';
