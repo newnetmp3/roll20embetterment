@@ -97,7 +97,7 @@ function r3Field(raw){
 }
 function r3Empty(){
   return {schema:3,name:'',capturedAt:new Date().toISOString(),stats:{},abilities:{},modifiers:{},saves:{},skills:{},
-    slots:{},spells:[],attacks:[],inventory:[],features:[],resources:[],misc:[],observations:[],
+    slots:{},spells:[],attacks:[],inventory:[],features:[],resources:[],misc:[],controls:[],observations:[],
     diagnostics:{tabs:[],rejected:0,unclassified:0,limits:[],notes:[]},provenance:{},coverage:{}};
 }
 function r3Push(s,kind,key,value,source,limit=400){
@@ -534,11 +534,57 @@ function r3MiscNativeActions(root,s,tab){
       s.misc.push({name,_key:key,tab,visible:name,nativeActionRef:ref});
   }
 }
+// Diagnostic evidence only. DOM IDs/test IDs identify observations, never native calls.
+function r3ControlInventory(root,s,tab){
+  const selector='button,input,textarea,select,a[href],[role="button"],[role="checkbox"],[role="switch"],[role="spinbutton"],[role="combobox"],[role="radio"],[role="tab"],[contenteditable="true"]';
+  const nodes=root.querySelectorAll?.(selector)||[];
+  const count=Math.min(nodes.length,750);
+  for(let i=0;i<count;i++){
+    const el=nodes[i];if(!r3Shown(el))continue;
+    const tag=r3String(el.tagName,20).toLowerCase(),type=r3Attr(el,'type')||r3String(el.type,30),role=r3Attr(el,'role');
+    // Never collect credentials, free text, current field values or link destinations.
+    if(type==='password'||type==='file')continue;
+    const label=r3String(r3Attr(el,'aria-label')||r3Attr(el,'title')||
+      r3Text(el.labels?.[0],100)||(tag==='button'||role==='button'?r3Text(el,100):''),100);
+    const identity={};
+    for(const attr of ['id','name','data-testid','data-attribute']){
+      const value=r3Attr(el,attr);if(value)identity[attr]=value;
+    }
+    const owner=Object.entries(R3_CATEGORIES).find(([,sel])=>el.closest?.(sel));
+    const category=owner?.[0]||'misc';
+    const kind=/checkbox|switch|radio/.test(type+' '+role)?'toggle':
+      type==='number'||role==='spinbutton'?'counter':
+      tag==='select'||/combobox|tab/.test(role)?'selection':
+      /^(input|textarea)$/.test(tag)||r3Attr(el,'contenteditable')==='true'?'field':
+      tag==='button'||role==='button'?'action':'unsupported';
+    // Inspect this control's own explicit attributes, not a sibling's action.
+    const refs=['data-roll20-macro','data-native-macro'].map(k=>r3Attr(el,k)).filter(Boolean);
+    const nativeActionRef=refs.length&&new Set(refs).size===1&&
+      /^%\{[A-Za-z0-9_-]{4,120}\|[^{}\r\n]{1,100}\}$/.test(refs[0])?refs[0]:'';
+    const evidence={tab,category,kind,label,element:tag,type,role,identity,
+      status:'observation-only',reason:nativeActionRef?
+        'Explicit reference observed; character permission, category and source identity still require invocation validation':
+        ['field','counter','toggle','selection'].includes(kind)?
+          'No verified native write adapter or authoritative revision guard':
+          'No unambiguous explicit native action reference'};
+    if(nativeActionRef)evidence.nativeActionRef=nativeActionRef;
+    s.controls.push(evidence);
+  }
+  if(nodes.length>750)s.diagnostics.limits.push('750 interactive controls per view');
+}
+function r3MergeControlInventory(target,source){
+  // Replace revisited tabs so removed controls and stale references cannot accumulate.
+  const tabs=new Set(source.diagnostics?.tabs||[]);
+  const controls=[...(target.controls||[]).filter(c=>!tabs.has(c.tab)),...(source.controls||[])];
+  target.controls=controls.slice(0,1500);
+  if(controls.length>1500&&!target.diagnostics.limits.includes('1500 interactive controls total'))
+    target.diagnostics.limits.push('1500 interactive controls total');
+}
 function r3Capture(root,tab='Current view'){
   const s=r3Empty();s.name=r3NameFromDocument(root);
   if(!root?.querySelectorAll){s.diagnostics.notes.push('No readable official sheet DOM');return s;}
   r3Inputs(root,s,tab);r3VisibleStats(root,s,tab);r3Cards(root,s,tab);
-  r3MiscNativeActions(root,s,tab);
+  r3MiscNativeActions(root,s,tab);r3ControlInventory(root,s,tab);
   s.diagnostics.tabs.push(tab);r3Coverage(s);return s;
 }
 function r3NameFromDocument(root){
@@ -629,6 +675,7 @@ function r3Merge(target,source){
     if(target.misc.length>=100)break;
     if(!target.misc.some(old=>old._key===item._key))target.misc.push(item);
   }
+  r3MergeControlInventory(target,source);
   const obs=new Set(target.observations.map(o=>o.tab+'|'+o.label+'|'+o.value));
   for(const o of source.observations)if(target.observations.length<750&&!obs.has(o.tab+'|'+o.label+'|'+o.value)){
     target.observations.push(o);obs.add(o.tab+'|'+o.label+'|'+o.value);
@@ -1032,7 +1079,11 @@ function r3Results(){
       '<p><b>Rejected hidden/invalid:</b> '+r3Escape(d.rejected)+'</p>'+
       '<p><b>Unclassified controls:</b> '+r3Escape(d.unclassified)+'</p>'+
       '<p><b>Collection limits:</b> '+r3Escape(d.limits.join('; ')||'None reached')+'</p>'+
-      '<p><b>Notes:</b> '+r3Escape(d.notes.join('; ')||'Current rendered DOM only')+'</p>';
+      '<p><b>Notes:</b> '+r3Escape(d.notes.join('; ')||'Current rendered DOM only')+'</p>'+
+      '<h3>Interactive control inventory</h3><p class="muted">Read-only evidence from rendered views; no control listed here is enabled for execution.</p>'+
+      (snap.controls||[]).slice(0,1500).map(c=>r3InfoRow(
+        c.tab+' · '+c.category+' · '+c.kind+' · '+(c.label||'Unlabeled control'),
+        JSON.stringify({identity:c.identity,status:c.status,reason:c.reason,nativeActionRef:c.nativeActionRef}))).join('');
   }
   return '<p class="stamp">Imported from: <strong>'+r3Escape(snap.name)+'</strong> · '+r3Escape(snap.capturedAt)+'</p>'+
     '<div class="metrics">'+r3ReportCounts(snap)+'</div>'+nav+'<div class="results">'+content+'</div>';
@@ -4016,7 +4067,7 @@ function r3AutoRestoreDialog(){
 }
 function r3AutoSignature(s){
   return JSON.stringify([s.name,s.stats,s.abilities,s.modifiers,s.saves,s.skills,s.slots,
-    s.spells,s.attacks,s.inventory,s.features,s.resources]);
+    s.spells,s.attacks,s.inventory,s.features,s.resources,s.misc,s.controls]);
 }
 function r3AutoCombine(prev,current){
   if(!prev||r3String(prev.name).toLowerCase()!==r3String(current.name).toLowerCase())
@@ -4033,7 +4084,7 @@ function r3AutoCombine(prev,current){
     if(values&&typeof values==='object'&&!Array.isArray(values))
       merged.slots[level]={...(prev.slots?.[level]||{}),...values};
   }
-  for(const kind of ['resources','attacks','spells','inventory','features']){
+  for(const kind of ['resources','attacks','spells','inventory','features','misc']){
     const indexed=new Map((prev[kind]||[]).map(item=>[item._key||item.name,item]));
     for(const entry of current[kind]||[]){
       const key=entry._key||entry.name;
@@ -4044,6 +4095,7 @@ function r3AutoCombine(prev,current){
     }
     merged[kind]=[...indexed.values()];
   }
+  r3MergeControlInventory(merged,current);
   // Keep bounded observations from the last full import, not every poll.
   return r3Coverage(merged);
 }
