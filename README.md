@@ -6,18 +6,18 @@ Player-focused D&D 2024 combat HUD and read-only Roll20 sheet companion. R20eb u
 
 | Distribution | Status |
 | --- | --- |
-| **Firefox / Floorp** | **v3.10.1** in the signed-release update feed; primary development target |
+| **Firefox / Floorp** | **v3.10.2** in the signed-release update feed; primary development target |
 | **Chrome / Chromium** | **v3.4.0**; independently versioned and not feature-parity guaranteed |
 | **Optional userscript** | **v3.4.0** metadata; built from `v3/` independently of Firefox releases |
 
-- [Firefox v3.10.1 XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.1/r20eb-firefox-v3.10.1.xpi)
+- [Firefox v3.10.2 XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.2/r20eb-firefox-v3.10.2.xpi)
 - [Firefox updates.json](extension/firefox/updates.json)
 - [Firefox installation and signing guide](extension/firefox/README.md)
 - [GitHub Actions](https://github.com/newnetmp3/roll20embetterment/actions)
 
 Disable any previous R20eb userscript or duplicate extension when using the signed Firefox add-on. Keep the native Roll20 chat panel accessible when running actions; R20eb does not overwrite an unsent chat draft.
 
-Firefox v3.10.1 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+Firefox v3.10.2 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
 
 ## Native-action and UI milestone (PR #110 — released in Firefox v3.10.0)
 
@@ -25,13 +25,13 @@ The **Milestone Completion** build extends native action discovery beyond existi
 
 The Firefox battlefield HUD replaces the former six-button utility toolbar with one **Debug** entry in the turn strip. Debug contains the manual turn corrections, original-sheet controls, private reader permissions, layout reset, HUD visibility, importer and movement logs. Panels remain movable and keyboard-nudgeable. The layout scales to browser/monitor viewport size and accounts for Roll20 chat/sidebar space.
 
-**Firefox v3.10.1 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
+**Firefox v3.10.2 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
 
 ## How it works
 
 **Automatic character sync.** A selected, linked, player-controllable token can trigger character-scoped read-only synchronization; manual importing remains available when Roll20's protected sheet/Journal interfaces do not allow unattended reading. A different character should never inherit the previous character's values. An explicit sync Off is preserved. Real-game reliability varies with upstream Roll20 interfaces and remains under testing.
 
-**Native sheet controls (v3.10.2 candidate).** When no verified character ability exists, imported attack-hit buttons and standard skill-check buttons can use the official sheet reader. The HUD shows **Native sheet**; clicking Attack or Roll rechecks ownership, source identity and a unique live control, then clicks that official button once. An eligible private reader can load on demand. Existing player-opened sheets retain their tab and visibility. Native prompts and resulting chat cards still require live acceptance.
+**Native sheet controls (v3.10.2).** When no verified character ability exists, imported attack-hit buttons and standard skill-check buttons can use the official sheet reader. The HUD shows **Native sheet**; clicking Attack or Roll rechecks ownership, source identity and a unique live control, then clicks that official button once. An eligible private reader can load on demand. Existing player-opened sheets retain their tab and visibility. Native prompts and resulting chat cards still require live acceptance.
 
 **Native action mapping.** For an imported action with a unique matching *existing* Roll20 character ability, R20eb invokes the character's own `%{CHARACTER_ID|ABILITY_NAME}` macro when clicked. This lets Roll20, rather than R20eb's dice formatter, handle the native sheet macro and its result. Supported mapping categories are attacks, spells, features, inventory/item use, resources, skills, saving throws and ability checks. **Native linked** indicates an identified existing ability; **Native unmapped** indicates that no safe linkage has been verified.
 

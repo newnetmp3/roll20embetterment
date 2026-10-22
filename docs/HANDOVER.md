@@ -7,8 +7,8 @@
 
 ## Verified baseline and current candidate
 
-- Published Firefox baseline: **v3.10.1**, Mozilla-signed, release/feed SHA-256 `c7af6ad22b510f3ee0b5ff537f3ed301e66da806f587c95715d424e8c766d9e6`. Signing run [39868484079](https://github.com/newnetmp3/roll20embetterment/actions/runs/39868484079) succeeded. PR #113 merged as `7e0b558`; resume main was `2a9ae6b`.
-- Current candidate: **Firefox v3.10.2**, native sheet-click attacks/skills and control-discovery fixes. Local `npm run check:firefox`: **492/492 tests passed**. PR CI, merge and signing are separate until verified below.
+- Published Firefox baseline: **v3.10.2**, Mozilla-signed; release/feed SHA-256 `e5af5d63fda9b00d1c2a576a15a0643bf3113e5351c3514aa966a0e61c1dec74`. Signing run [39871351495](https://github.com/newnetmp3/roll20embetterment/actions/runs/39871351495) succeeded. PR #114 merged as `5f2ce53`; feed commit `8f15eab`.
+- Current functionality: **Firefox v3.10.2**, native sheet-click attacks/skills and control-discovery fixes. Local Firefox check and both PR CI runs passed **492/492 tests**. Release validation, Mozilla signing, XPI publication and update-feed publication all succeeded; live gameplay acceptance remains pending.
 - Chrome and optional userscript metadata remain **v3.4.0**. Firefox version is independent.
 - User wants **signed Firefox builds on every update**, with merge/publication authorized in this workstream. Keep verifying each signed release and feed before handing it over.
 - [Movement issue #73](https://github.com/newnetmp3/roll20embetterment/issues/73) remains OPEN; no live forward/backtracking acceptance.
@@ -55,3 +55,7 @@ For the supplied export, **19/20 attack entries and 18/18 skills qualify as cand
 ## Next acceptance step
 
 Install the signed candidate, reload Roll20 and refresh the import. Compare an Attack and a skill Roll from the HUD against the corresponding official sheet clicks, including resulting chat cards. Test a second character and duplicate names; ensure each explicit click produces at most one roll. Verify closed-sheet/private-reader startup, manual sheet visibility and no unwanted tab changes. Export a new all-tab snapshot to confirm inventory control coverage after the hidden-node fix. Then extend source-grounded adapters to the remaining control families. Never describe unit/bridge mocks as live Floorp validation.
+
+## Release verification — v3.10.2
+
+[PR #114](https://github.com/newnetmp3/roll20embetterment/pull/114) merged after green CI runs 39871304886 and 39871279452. Release run 39871351495 completed successfully, including signed-XPI validation and feed publication. The [signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.2/r20eb-firefox-v3.10.2.xpi) URL, version and SHA-256 match `updates.json`. Next user check: compare a HUD attack and standard skill roll against the actual sheet results, then export all tabs to confirm Inventory discovery.

@@ -1,6 +1,6 @@
 # R20 Embetterment — Development Roadmap
 
-**Current baseline (2026-10-22):** Firefox v3.10.1 signed and published. Firefox v3.10.2 candidate adds native sheet-click attacks/skills and fixes hidden-node starvation in control discovery; local check passes **492/492 tests**. Current release/CI status is tracked in [HANDOVER.md](HANDOVER.md). Historical entries below may describe superseded limitations or versions.
+**Current baseline (2026-10-22):** Firefox v3.10.2 signed and published (PR #114 merged as `5f2ce53`, signing run 39871351495, feed `8f15eab`). Firefox v3.10.2 adds native sheet-click attacks/skills and fixes hidden-node starvation in control discovery; local check passes **492/492 tests**. Current release/CI status is tracked in [HANDOVER.md](HANDOVER.md). Historical entries below may describe superseded limitations or versions.
 
 ## 2026-10-22 — Native sheet-click attacks and skills
 
@@ -8,7 +8,7 @@
 - Recheck source metrics, unique control, character, ownership and session; suppress duplicate clicks and never retry invocation. Preserve manual sheet tabs/visibility. Pause automatic full scans during native requests.
 - Fix discovery stopping before visible Inventory controls because hidden DOM nodes exhausted the budget; retain row-owner evidence and classify skills/ranges correctly.
 - Export coverage: 19 of 20 attack entries and all 18 standard skills are supported candidates; no live roll claim. Other cast/use/write interactions and movement #73 remain incomplete.
-- Validation: **492/492 local tests**, including session/permission/selection changes, stale sources, duplicates, hidden-node coverage and no-retry behavior. Firefox v3.10.2 release request accompanies this PR; signing and live acceptance remain separate. User prefers signed Firefox updates.
+- Validation: **492/492 local tests**, including session/permission/selection changes, stale sources, duplicates, hidden-node coverage and no-retry behavior. Firefox v3.10.2 is Mozilla-signed and published; update-feed checksum verified. Live acceptance remains pending. User prefers signed Firefox updates.
 
 ## Historical milestones
 
