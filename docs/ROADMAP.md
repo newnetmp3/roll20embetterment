@@ -4,13 +4,13 @@
 
 ## 2026-10-21: Native Integration Milestone — PR #110
 
-**Scope in development:** one safe mapped-command dispatcher, explicit officially observed macro references where available, dynamic MISC discovery of owned existing repeating abilities, a single Debug & tools window, adaptive HUD scaling to the current viewport and Roll20 chat inset, and source/packaging test gates. Retain old official sheet priority, no speculative private API or player-sheet writes, and no automatic roll dispatch. Code/CI/merge/Mozilla signing/live QA are separate completion states.
+**PR #110 test verified (476/476 automated tests, run 39696967588):** one safe mapped-command dispatcher, explicit officially observed macro references where available, dynamic MISC discovery of owned existing repeating abilities, a single Debug & tools window, adaptive HUD scaling to the current viewport and Roll20 chat inset, and source/packaging test gates. Retain old official sheet priority, no speculative private API or player-sheet writes, and no automatic roll dispatch. Code/CI/merge/Mozilla signing/live QA are separate completion states.
 
 | Acceptance item | Status |
 | --- | --- |
 | Existing native character-ability mapping across attack/spell/feature/item/resource/skill/save/check | Implemented in v3.9.19, live parity incomplete |
-| Explicit, complete official-sheet macro capture with exact current character ID | Implemented conditionally in milestone branch, live sheet attribute availability unverified |
-| Unclassified existing controlled-character native abilities in MISC | Implemented conditionally in milestone branch, requires live QA |
+| Explicit, complete official-sheet macro capture with exact current character ID | PR #110 CI 476/476 green; live sheet attribute availability unverified |
+| Unclassified existing controlled-character native abilities in MISC | PR #110 CI green; requires live QA |
 | Remove multi-button utility toolbar; consolidate Debug/turn corrections/sheet tools | Milestone branch, automated + visual QA required |
 | Size/position scaling across monitor viewport and Roll20 chat | Milestone branch; resize/HiDPI/live chat QA required |
 | Unknown Advanced Tools private IDs, type-safe editable state, authoritative save/re-read | **Not implemented** without source-grounded contracts |
