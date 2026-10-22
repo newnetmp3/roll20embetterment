@@ -1018,3 +1018,73 @@ test('owned background reader retries but never uses damage as a hit-roll trigge
   assert.ok(waits>=2);
   assert.equal(x.clicks.length,0);
 });
+
+
+test('skill reader probes then clicks the exact native skill button once across character names',()=>{
+  for(const character of ['Elowen','Brom','Sora']){
+    const fixture=docFixture({name:character});let clicks=0;
+    const button={tagName:'BUTTON',getAttribute:k=>k==='aria-label'?'Roll a Athletics check':null,
+      getClientRects:()=>[{}],closest:()=>null,click(){clicks++;}};
+    const query=fixture.document.querySelectorAll;
+    fixture.document.querySelectorAll=sel=>sel==='button'?[button]:query(sel);
+    const {h}=harness(fixture),messages=[];
+    const peer={postMessage:m=>messages.push(m)};
+    const params={id:'r3-skill-test-0001',kind:'skills',characterName:character,
+      actionName:'Athletics',actionKey:'Athletics',actionText:''};
+    h.r3NativeReaderHandle(peer,{...params,type:'native-probe'});
+    assert.equal(messages.at(-1).status,'ready');assert.equal(clicks,0);
+    const token=messages.at(-1).token;
+    h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token});
+    assert.equal(messages.at(-1).status,'clicked');assert.equal(clicks,1);
+    h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token});
+    assert.equal(messages.at(-1).status,'blocked');assert.equal(clicks,1);
+  }
+});
+test('skill reader rejects duplicate buttons, hidden controls, changed skills and stale sessions',()=>{
+  const fixture=docFixture({name:'Elowen'});let clicks=0,buttons=[];
+  const button=label=>({tagName:'BUTTON',getAttribute:k=>k==='aria-label'?label:null,
+    getClientRects:()=>[{}],closest:()=>null,click(){clicks++;}});
+  const query=fixture.document.querySelectorAll;
+  fixture.document.querySelectorAll=sel=>sel==='button'?buttons:query(sel);
+  const {h}=harness(fixture),messages=[],peer={postMessage:m=>messages.push(m)};
+  const params={id:'r3-skill-test-0002',kind:'skills',characterName:'Elowen',
+    actionName:'Athletics',actionKey:'Athletics'};
+  const request=(type,extra={})=>{h.r3NativeReaderHandle(peer,{...params,type,...extra});return messages.at(-1);};
+  buttons=[button('Roll a Athletics check'),button('Roll a Athletics check')];
+  assert.equal(request('native-probe').status,'blocked');
+  buttons=[{...button('Roll a Athletics check'),hidden:true}];
+  assert.equal(request('native-probe').status,'blocked');
+  buttons=[button('Roll a Athletics check')];
+  assert.equal(request('native-probe',{readerSession:'old-session'}).status,'blocked');
+  const ready=request('native-probe');
+  assert.equal(request('native-invoke',{token:ready.token,kind:'attacks'}).status,'blocked');
+  assert.equal(request('native-invoke',{token:ready.token,actionName:'Stealth'}).status,'blocked');
+  buttons=[button('Roll a Stealth check')];
+  assert.equal(request('native-invoke',{token:ready.token}).status,'blocked');
+  assert.equal(clicks,0);
+});
+test('attack invocation refuses lost hit evidence and never switches a manual sheet tab',()=>{
+  const x=nativeAttackFixture('Elowen',[
+    {name:'Spear',visible:'Spear Melee +4 Attack 1d6+2',controls:['+4 Attack','1d6+2']}]);
+  const params={attackKey:'spear',attackText:'Spear Melee +4 Attack 1d6+2'};
+  const ready=x.request('native-probe',params);
+  x.rows[0].innerText='Spear';
+  assert.equal(x.request('native-invoke',{...params,token:ready.token}).status,'blocked');
+  assert.equal(x.clicks.length,0);
+  let navigations=0;
+  x.tab.click=()=>navigations++;
+  x.tab.getAttribute=k=>k==='aria-label'?'Inventory':k==='aria-selected'?'true':null;
+  assert.equal(x.request('native-invoke',{...params,token:ready.token,background:true}).status,'blocked');
+  assert.equal(navigations,0);
+});
+
+test('attack resolver inspects late rows and blocks duplicates beyond the old scan cap',()=>{
+  const filler=Array.from({length:310},(_,i)=>({name:'Other '+i,label:'Roll Attack'}));
+  const attack={name:'Spear',visible:'Spear Melee +4 Attack 1d6+2',controls:['+4 Attack','1d6+2']};
+  const x=nativeAttackFixture('Elowen',[...filler,attack]);
+  const params={attackName:'Spear',attackKey:'spear',attackText:attack.visible};
+  assert.equal(x.request('native-probe',params).status,'ready');
+  const duplicate=nativeAttackFixture('Elowen',[attack,...filler,attack]);
+  assert.equal(duplicate.request('native-probe',params).status,'blocked');
+  assert.equal(duplicate.clicks.length,0);
+});

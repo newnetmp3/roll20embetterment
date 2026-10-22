@@ -19,7 +19,7 @@ Disable any previous R20eb userscript or duplicate extension when using the sign
 
 Firefox v3.10.1 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
 
-## Native-action and UI milestone (PR #110 — released in Firefox v3.10.1)
+## Native-action and UI milestone (PR #110 — released in Firefox v3.10.0)
 
 The **Milestone Completion** build extends native action discovery beyond existing token-bar abilities: it can use whole, character-bound references explicitly published by authenticated official 2024 sheet controls, and discover safe **uncategorized** existing Roll20 character actions. Unclassified valid actions appear in a dedicated **MISC** menu. This is **conditional capability**, not a claim that every private 2024 button exposes a supported macro; unverified controls stay unmapped.
 
@@ -30,6 +30,8 @@ The Firefox battlefield HUD replaces the former six-button utility toolbar with 
 ## How it works
 
 **Automatic character sync.** A selected, linked, player-controllable token can trigger character-scoped read-only synchronization; manual importing remains available when Roll20's protected sheet/Journal interfaces do not allow unattended reading. A different character should never inherit the previous character's values. An explicit sync Off is preserved. Real-game reliability varies with upstream Roll20 interfaces and remains under testing.
+
+**Native sheet controls (v3.10.2 candidate).** When no verified character ability exists, imported attack-hit buttons and standard skill-check buttons can use the official sheet reader. The HUD shows **Native sheet**; clicking Attack or Roll rechecks ownership, source identity and a unique live control, then clicks that official button once. An eligible private reader can load on demand. Existing player-opened sheets retain their tab and visibility. Native prompts and resulting chat cards still require live acceptance.
 
 **Native action mapping.** For an imported action with a unique matching *existing* Roll20 character ability, R20eb invokes the character's own `%{CHARACTER_ID|ABILITY_NAME}` macro when clicked. This lets Roll20, rather than R20eb's dice formatter, handle the native sheet macro and its result. Supported mapping categories are attacks, spells, features, inventory/item use, resources, skills, saving throws and ability checks. **Native linked** indicates an identified existing ability; **Native unmapped** indicates that no safe linkage has been verified.
 
@@ -74,4 +76,6 @@ R20eb runs in the browser and uses local imported character data and Roll20's ex
 [Releases](https://github.com/newnetmp3/roll20embetterment/releases) · [Issues](https://github.com/newnetmp3/roll20embetterment/issues) · [Handover](docs/HANDOVER.md)
 
 
-The importer Diagnostics view includes a bounded, read-only interactive control inventory with observed source attributes, control kinds, categories and missing-capability reasons. These records never enable execution. Only rendered, visible, enabled controls are scanned; virtualized or unopened content is not guaranteed complete.
+The importer Diagnostics view includes a bounded, read-only interactive control inventory with observed source attributes, control kinds, categories and missing-capability reasons. These records do not authorize execution; supported attack/skill candidates are revalidated against the live sheet before a click. Only rendered, visible, enabled controls are scanned; virtualized or unopened content is not guaranteed complete.
+
+**Discovery fix:** the control inventory now budgets visible controls separately from hidden DOM nodes, retains named inventory owners, and recognizes skill controls and range counters. All-tab capture uses the actual initial tab to avoid duplicating it as “Current view.”

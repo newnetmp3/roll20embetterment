@@ -55,7 +55,7 @@ async function r3CollectAllTabs(progress){
     return true;
   };
   try{
-    collect('Current view');
+    collect(r3CurrentTabLabel());
     const initial=descriptors();
     // The six main 2024 sheet panels must not be pushed out of the first
     // 14 tabs by nested filter tabs (a previous source of false zeroes).
@@ -270,3 +270,4 @@ function r3StartEditorBridge(){
   if(r3ListenerStarted)return;r3ListenerStarted=true;
   window.addEventListener('message',r3Listen);
 }
+

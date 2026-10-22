@@ -345,7 +345,7 @@ function r3AutoQueueDirty(candidate){
   },ms);
 }
 async function r3AutoTick(eventTriggered=false){
-  if(!R3_AUTO.enabled||R3_AUTO.running||R3_UI.busy||!R3_AUTO.name)return;
+  if(!R3_AUTO.enabled||R3_AUTO.running||R3_UI.busy||R3_NATIVE.busy||!R3_AUTO.name)return;
   // Implicit sync cannot run against a stale saved PC before a verified
   // controlled token has been selected in this browser session.
   if(R3_AUTO.origin==='token'&&

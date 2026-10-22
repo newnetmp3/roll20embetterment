@@ -128,11 +128,11 @@ function r3HudNativeEntryControl(kind,key,name){
     return '<small class="hud-native-unmapped" title="The importer did not identify this source action">Native unmapped</small>';
   const map=typeof r3NativeMapPreview==='function'?
     r3NativeMapPreview(kind,key,R3_UI.snapshot):{reason:'No native mapping available'};
-  const linked=!!map.abilityName;
+  const linked=!!(map.abilityName||map.sheetAction);
   return '<span class="hud-native-link">'+
     '<small class="'+(linked?'hud-native-linked':'hud-native-unmapped')+'" title="'+
-      r3Escape(linked?'Matches an existing Roll20 '+kind+' action':map.reason||'No mapped native action')+'">'+
-      (linked?'Native linked':'Native unmapped')+'</small>'+
+      r3Escape(map.sheetAction?'Checks and clicks the exact official sheet control when requested':linked?'Matches an existing Roll20 '+kind+' action':map.reason||'No mapped native action')+'">'+
+      (map.sheetAction?'Native sheet':linked?'Native linked':'Native unmapped')+'</small>'+
     (linked?'<button type="button" class="hud-native-action" data-hud-native-kind="'+r3Escape(kind)+
       '" data-hud-native-key="'+r3Escape(key)+'" aria-label="'+
       r3Escape((R3_NATIVE_CATEGORIES[kind]?.title||'Use')+' '+name+' via Roll20')+'">'+
@@ -399,7 +399,7 @@ function r3HudAttackOption(entry,base){
     r3NativeSelectAttack(key,R3_UI.snapshot)===item;
   const mapped=unique&&typeof r3NativeMappedPreview==='function'?
     r3NativeMappedPreview(key,R3_UI.snapshot):{reason:'No unique imported action key'};
-  const native=unique&&!!mapped.abilityName;
+  const native=unique&&!!(mapped.abilityName||mapped.sheetAction);
   const metrics=typeof r3NativeAttackMetric==='function'?
     r3NativeAttackMetric(item.visible||''):{bonus:'',damage:''};
   const meta=[metrics.bonus?'Hit '+metrics.bonus:'',
@@ -409,8 +409,8 @@ function r3HudAttackOption(entry,base){
     '<div class="hud-weapon-option-label"><strong>'+r3Escape(name)+'</strong>'+
     (meta.length?'<small>'+r3Escape(meta.join(' · '))+'</small>':'')+
     '<small class="'+(native?'hud-weapon-native':'hud-weapon-unmapped')+'" title="'+
-      r3Escape(native?'Source-verified Roll20 repeating attack action':mapped.reason||'No matching official action')+'">'+
-      (native?'Native linked':'Native unmapped')+'</small></div>'+
+      r3Escape(mapped.sheetAction?'Checks the source row and clicks its official Attack button':native?'Source-verified Roll20 repeating attack action':mapped.reason||'No matching official action')+'">'+
+      (mapped.sheetAction?'Native sheet':native?'Native linked':'Native unmapped')+'</small></div>'+
     (native?'<button type="button" class="hud-attack-button" data-hud-attack-key="'+
       r3Escape(key)+'" aria-label="Native attack '+label+'">Attack</button>':
       '<button type="button" class="hud-dice-button"'+
@@ -828,3 +828,4 @@ function r3HudStyles(){
 
   ].join('');
 }
+

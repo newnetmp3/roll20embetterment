@@ -2463,3 +2463,103 @@ test('Firefox manual sheet priority persists across extension startup and blocks
   vm.runInContext('globalThis.tryAutoOpen=r3AutoOpenFromJournal;',h.context);
   assert.equal(h.context.tryAutoOpen(Date.now()),false);
 });
+
+
+function nativeDomActionRig(kind='skills'){
+  const x=backgroundNativeRig(),h=x.h,received=[];
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.skills={Athletics:4};
+  snap.controls=[{kind:'action',element:'button',label:'Roll a Athletics check'}];
+  snap.attacks=[{name:'Quarterstaff',_key:'staff',visible:'Quarterstaff Melee +4 Attack 1d6+2',
+    actions:[{label:'+4 Attack'},{label:'1d6+2'}]}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  const character=h.context.window.Campaign.characters.get('char-elf');
+  const open=character.view.showDialog;
+  x.afterProbe=()=>{};x.beforeInvoke=()=>{};
+  character.view.showDialog=function(){
+    open.call(this);
+    const w=x.frames.at(-1).contentWindow;
+    w.postMessage=msg=>{
+      received.push(msg);
+      if(msg.type==='native-invoke')x.beforeInvoke(msg);
+      if(msg.type==='native-probe')x.afterProbe(msg);
+      const data=msg.type==='hello'?{type:'ready',name:'Elowen',session:'dom-reader-session',mode:'iframe'}:
+        {type:'native-result',id:msg.id,session:'dom-reader-session',
+          status:msg.type==='native-probe'?'ready':'clicked',token:'dom-once-token',
+          message:'Clicked the official Roll20 roll button once; check chat for the result.'};
+      queueMicrotask(()=>h.windowListeners.get('message')({origin:'https://advanced-sheets.production.roll20preflight.net',
+        source:w,data:{protocol:'r20eb:import:v3',...data}}));
+    };
+  };
+  h.context.setTimeout=(fn,ms)=>{if(ms<4000)queueMicrotask(fn);return 1;};
+  x.invoke=()=>kind==='skills'?h.api.r3NativeInvoke('skills','Athletics'):h.api.r3NativeMappedAttack('staff');
+  return Object.assign(x,{received,character});
+}
+test('source-observed attacks and skills expose native sheet controls without macro abilities or automatic rolls',async()=>{
+  for(const kind of ['attacks','skills']){
+    const x=nativeDomActionRig(kind),h=x.h;
+    const mapped=h.api.r3NativeMapPreview(kind,kind==='skills'?'Athletics':'staff');
+    assert.equal(mapped.sheetAction,true);
+    h.api.r3HudRender();
+    assert.equal(x.received.length,0,'rendering must never roll');
+    const run=x.invoke();
+    assert.equal(x.invoke(),false,'second click is suppressed while first is pending');
+    assert.equal(await run,true,h.api.R3_NATIVE.status);
+    assert.equal(x.received.filter(m=>m.type==='native-probe').length,1);
+    const invokes=x.received.filter(m=>m.type==='native-invoke');
+    assert.equal(invokes.length,1);
+    assert.equal(invokes[0].kind,kind);
+    assert.equal(invokes[0].readerSession,'dom-reader-session');
+    assert.equal(x.log.filter(l=>l.kind==='show').length,1);
+  }
+});
+test('native sheet action cancels when permissions, source data, selected character or session changes during probe',async()=>{
+  for(const change of ['permission','source','selection','session']){
+    const x=nativeDomActionRig(),h=x.h;
+    x.afterProbe=()=>{
+      if(change==='permission')x.character.attributes.controlledby='someone-else';
+      if(change==='source')h.api.R3_UI.snapshot.skills.Athletics=9;
+      if(change==='selection')h.api.R3_TOKEN.active={name:'Brom',characterId:'char-dwarf'};
+      if(change==='session')h.api.R3_NATIVE.readers.get(x.frames.at(-1).contentWindow).session='reloaded-session';
+    };
+    assert.equal(await x.invoke(),false,change);
+    assert.equal(x.received.filter(m=>m.type==='native-invoke').length,0,change);
+  }
+});
+test('native sheet invocation is never retried after transport failure',async()=>{
+  const x=nativeDomActionRig();
+  x.beforeInvoke=()=>{throw new Error('Connection lost after click request');};
+  assert.equal(await x.invoke(),false);
+  assert.equal(x.received.filter(m=>m.type==='native-invoke').length,1);
+  assert.match(x.h.api.R3_NATIVE.status,/Check chat before retrying/);
+});
+test('duplicate indistinguishable source attacks never enable a native sheet action',()=>{
+  const x=nativeDomActionRig('attacks'),h=x.h;
+  const first=h.api.R3_UI.snapshot.attacks[0];
+  h.api.R3_UI.snapshot.attacks.push({...first,_key:'duplicate'});
+  assert.equal(h.api.r3NativeMappedPreview('staff').sheetAction,undefined);
+  assert.equal(h.api.r3NativeMappedAttack('staff'),false);
+  assert.equal(x.received.length,0);
+});
+
+test('native sheet roll stops if a private reader becomes player-owned during preparation',async()=>{
+  const x=nativeDomActionRig(),h=x.h;
+  x.afterProbe=()=>{
+    h.api.R3_NATIVE_BG.dialog=null;h.api.R3_NATIVE_BG.frame=null;
+    h.api.R3_NATIVE_BG.sessions.clear();
+  };
+  assert.equal(await x.invoke(),false);
+  assert.equal(x.received.filter(m=>m.type==='native-invoke').length,0);
+});
+test('native sheet request ignores results from an old reader session',async()=>{
+  const x=nativeDomActionRig(),h=x.h;
+  x.afterProbe=msg=>{
+    const w=x.frames.at(-1).contentWindow;
+    h.windowListeners.get('message')({origin:'https://advanced-sheets.production.roll20preflight.net',source:w,
+      data:{protocol:'r20eb:import:v3',type:'native-result',id:msg.id,status:'ready',
+        token:'stale-token',session:'old-reader-session'}});
+    assert.equal(h.api.R3_NATIVE.pending.has(msg.id),true);
+  };
+  assert.equal(await x.invoke(),true);
+  assert.equal(x.received.find(m=>m.type==='native-invoke').token,'dom-once-token');
+});
