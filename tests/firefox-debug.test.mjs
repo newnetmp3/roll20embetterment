@@ -111,6 +111,29 @@ test('Debug window CSS is a compact self-contained movable panel',()=>{
   const h=harness(),style=h.api.r3DebugStyles();
   assert.match(style,/\.r3-debug-window\{position:absolute/);
   assert.match(style,/pointer-events:auto/);
-  assert.match(style,/max-height:min\(65vh/);
+  assert.match(style,/max-height:min\(83dvh/);
+  assert.match(style,/r3-debug-operations/);
   assert.doesNotMatch(style,/position:fixed!important;inset:0/);
+});
+
+
+test('one Debug window owns former toolbar operations without changing character state',()=>{
+  const h=harness(),operations=[];
+  h.ctx.R3_AUTO={enabled:false};
+  h.ctx.R3_HUD={collapsed:false,flyout:'actions',chooser:null};
+  h.ctx.R3_SHEET_VIS={manualPriority:true};
+  h.ctx.r3ToggleAuto=()=>{h.ctx.R3_AUTO.enabled=!h.ctx.R3_AUTO.enabled;operations.push('sync');};
+  h.ctx.r3SheetRevealAll=()=>operations.push('show-sheet');
+  h.ctx.r3SheetAllowPrivateReaders=()=>operations.push('allow-private');
+  h.ctx.r3BattlefieldResetPositions=()=>operations.push('reset-layout');
+  h.ctx.r3HudSave=()=>operations.push('save');
+  h.api.r3DebugToggle();
+  const html=h.api.r3DebugMarkup();
+  for(const key of ['sync','show-sheet','allow-private','reset-layout','toggle-hud'])
+    assert.match(html,new RegExp('data-r3-debug="'+key+'"'));
+  for(const action of ['sync','show-sheet','allow-private','reset-layout','toggle-hud'])
+    assert.equal(h.api.r3DebugAction({dataset:{r3Debug:action}}),true);
+  assert.equal(h.ctx.R3_AUTO.enabled,true);
+  assert.equal(h.ctx.R3_HUD.collapsed,true);
+  assert.deepEqual(operations,['sync','show-sheet','allow-private','reset-layout','save']);
 });
