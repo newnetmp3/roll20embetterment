@@ -6,26 +6,26 @@ Player-focused D&D 2024 combat HUD and read-only Roll20 sheet companion. R20eb u
 
 | Distribution | Status |
 | --- | --- |
-| **Firefox / Floorp** | **v3.10.0** in the signed-release update feed; primary development target |
+| **Firefox / Floorp** | **v3.10.1** in the signed-release update feed; primary development target |
 | **Chrome / Chromium** | **v3.4.0**; independently versioned and not feature-parity guaranteed |
 | **Optional userscript** | **v3.4.0** metadata; built from `v3/` independently of Firefox releases |
 
-- [Firefox v3.10.0 XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.0/r20eb-firefox-v3.10.0.xpi)
+- [Firefox v3.10.1 XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.1/r20eb-firefox-v3.10.1.xpi)
 - [Firefox updates.json](extension/firefox/updates.json)
 - [Firefox installation and signing guide](extension/firefox/README.md)
 - [GitHub Actions](https://github.com/newnetmp3/roll20embetterment/actions)
 
 Disable any previous R20eb userscript or duplicate extension when using the signed Firefox add-on. Keep the native Roll20 chat panel accessible when running actions; R20eb does not overwrite an unsent chat draft.
 
-Firefox v3.10.0 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+Firefox v3.10.1 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
 
-## Native-action and UI milestone (PR #110 — released in Firefox v3.10.0)
+## Native-action and UI milestone (PR #110 — released in Firefox v3.10.1)
 
 The **Milestone Completion** build extends native action discovery beyond existing token-bar abilities: it can use whole, character-bound references explicitly published by authenticated official 2024 sheet controls, and discover safe **uncategorized** existing Roll20 character actions. Unclassified valid actions appear in a dedicated **MISC** menu. This is **conditional capability**, not a claim that every private 2024 button exposes a supported macro; unverified controls stay unmapped.
 
 The Firefox battlefield HUD replaces the former six-button utility toolbar with one **Debug** entry in the turn strip. Debug contains the manual turn corrections, original-sheet controls, private reader permissions, layout reset, HUD visibility, importer and movement logs. Panels remain movable and keyboard-nudgeable. The layout scales to browser/monitor viewport size and accounts for Roll20 chat/sidebar space.
 
-**Firefox v3.10.0 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
+**Firefox v3.10.1 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
 
 ## How it works
 

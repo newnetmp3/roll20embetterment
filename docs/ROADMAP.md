@@ -520,3 +520,5 @@ First discovery increment: bounded rendered control evidence with action/toggle/
 Remaining: real-sheet stable identity validation, native adapter coverage, permission/revision-protected writable interactions, and full live Floorp acceptance. Rendered enabled controls only; unopened/virtualized content remains a known discovery gap. Do not report complete enumeration or native parity.
 
 **Firefox v3.10.1 packaging:** PR #113 merged as `7e0b558` with both CI runs green, 479 tests. User requests signed Firefox distribution for every update. Unlisted signing/publication requested; verify workflow, XPI and feed independently.
+
+**Firefox v3.10.1 published:** Mozilla signing run 39868484079 succeeded; signed XPI and update feed published, SHA-256 matched to release asset. PR #113 diagnostics and MISC sync fix now available in signed Firefox. Live acceptance remains outstanding.

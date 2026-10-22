@@ -7,7 +7,7 @@
 
 ## Release and verification baseline
 
-- **Firefox:** v3.10.0 is published as Mozilla-signed and referenced by `extension/firefox/updates.json`. Release asset SHA-256 matches the feed: `43b167a4bada4540150e4e71645f078607b0e29b6704ac73a871f5041a667666`. Signature contents and live gameplay were not independently inspected in this step.
+- **Firefox:** v3.10.1 is published as Mozilla-signed and referenced by `extension/firefox/updates.json`. Release asset SHA-256 matches the feed: `c7af6ad22b510f3ee0b5ff537f3ed301e66da806f587c95715d424e8c766d9e6`. Signature contents and live gameplay were not independently inspected in this step.
 - **Chrome and optional Tampermonkey distribution:** v3.4.0. The generated userscript is synchronized with v3 source and is *not* the Firefox version number.
 - **Latest merged functional milestone:** [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106) unified existing character-ability native mapping across attacks, spells, features, inventory, resources, skills, saving throws, and ability checks. **467/467 automated tests passed** in its branch and PR checks. This is not evidence of end-to-end Roll20 game validation.
 - **Latest merged hardening:** [PR #108](https://github.com/newnetmp3/roll20embetterment/pull/108) merged as `486f79a` after [Firefox CI run 39693899199](https://github.com/newnetmp3/roll20embetterment/actions/runs/39693899199) passed **470/470 automated tests**, including generated userscript parity. It tightened macro ownership, added conditional explicit repeating-row ID linking, and removed obsolete documentation. It was packaged into signed Firefox v3.9.19; live Floorp action verification is still separate.
@@ -127,3 +127,7 @@ Validation: `npm run check:firefox` passes 479/479 tests locally, including thre
 ## Firefox v3.10.1 signing request
 
 PR #113 merged as `7e0b558` after both Firefox CI runs passed, 479 tests. User explicitly requests merge and publication, and prefers a Mozilla-signed Firefox plugin on every update. Version 3.10.1 requests the established unlisted signing workflow; publication and feed verification remain separate until the workflow completes. No additional live gameplay claims.
+
+## Firefox v3.10.1 published — verified 2026-10-22
+
+PR #113 is merged (`7e0b558`). Signing/release run [39868484079](https://github.com/newnetmp3/roll20embetterment/actions/runs/39868484079) completed successfully, including Mozilla unlisted signing, signature-entry verification, GitHub publication and update-feed push. Release CI passed 479 tests. [Signed v3.10.1 XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.1/r20eb-firefox-v3.10.1.xpi) is published; `updates.json` advertises 3.10.1 and its SHA-256 matches the release asset digest: `c7af6ad22b510f3ee0b5ff537f3ed301e66da806f587c95715d424e8c766d9e6`. This supersedes the pending-signing notes above. User prefers signed Firefox distribution on every update. Live gameplay acceptance is still required.
