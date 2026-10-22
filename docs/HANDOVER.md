@@ -104,3 +104,13 @@ These are **explicitly unimplemented**, not hidden behind disabled buttons and n
 - [PR #106](https://github.com/newnetmp3/roll20embetterment/pull/106): shared native mapping across all imported player action categories.
 
 Current merged code baseline: `486f79a`, 470 passing tests. Signed Firefox release is v3.9.19; do not confuse it with the unmerged milestone candidate. Only the above current architecture and status should be treated as the active handover. Superseded v2/v3 patch-by-patch details belong to Git history, not the live engineering baseline.
+
+## 2026-10-21: Expanded full native mapping scope
+
+User explicitly requests mapping EVERY interactable element exposed by the Roll20 D&D 2024 character sheet, not just attack rolls, across Spells, Features, Inventory, Skills, Saves, Checks, Resources, HP, equipment, slots, conditions and MISC.
+
+Existing main has the shared R3_NATIVE_CATEGORIES ability registry spanning attacks, spells, features, inventory, resources, skills, saves, modifiers and misc (latest 470-test baseline). This only covers a subset of existing verifiable native character actions; source-button enumeration, unexposed Advanced Tools identifiers, duplicated native action IDs, and state-mutating controls are NOT solved by the registry.
+
+Architecture mandate: comprehensive source-grounded control inventory; classify each observed action as roll, action, toggle, counter, field, selection or unsupported; map exact source identity, current character, permissions and required arguments; use native Roll20 behavior, not fake equivalent cards. For state writes implement verified model ownership, stale-revision guards, authoritative re-read and failure reconciliation before enabling. Preserve normal sheet-closed execution where official actions allow it; do not hide manually opened sheets. Report unmapped controls and reasons, not an inert or misleading button. Put uncategorized controls in MISC.
+
+Execution order: (1) discover all source controls and their stable identities; (2) complete existing exact native action mapping for rolls, spells, skills, features, items; (3) typed writable inventory/HP/slot/resource/condition interfaces; (4) full per-control Floorp/Jum​pgate acceptance comparing official native sheet action/chat output/state with R20eb. Update this handover and ROADMAP for each verified milestone. This commit records an EXPANDED SCOPE, not a claim of full implementation. Signed Firefox v3.9.19 baseline remains unchanged; do not trigger a release for docs-only scope changes.
