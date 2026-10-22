@@ -211,7 +211,9 @@ test('verified selected character auto-imports all tabs through a private reader
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(opened,true,'private reader opens from verified Roll20 character model');
   assert.equal(journalLookups,0,'Journal is not needed for a controlled character');
-  assert.equal(h.sent.length,1);
+  assert.equal(h.sent.length,1,'Auto status: '+auto.lastError+'; candidate: '+
+    String(h.api.r3AutoCandidate()?.name)+'; owned: '+
+    String(h.api.R3_NATIVE_BG.dialog===dialog));
   assert.equal(h.sent[0].message.mode,'all','first background import traverses every mounted tab');
   const snap=h.api.r3Empty();snap.name='NIER';snap.stats.hp=84;
   snap.inventory=[{name:'Rope',_key:'rope',quantity:1,tab:'Inventory'}];
@@ -2477,8 +2479,10 @@ test('Firefox manual Journal open restores hidden Auto-sync-owned sheet before R
   registered({type:'pointerdown',isTrusted:false,target:{
     closest(sel){return sel.startsWith('#journal')?{}:null;}
   }});
-  assert.equal(h.context.sheetApi.R3_SHEET_VIS.manualPriority,true,
-    'synthetic R20eb Journal opener never overrides manual priority');
+  assert.equal(h.context.sheetApi.R3_SHEET_VIS.manualPriority,false,
+    'trusted Journal access is temporary; synthetic events never add a sticky opt-out');
+  assert.equal(h.context.sheetApi.r3SheetAllowsBackground(),false,
+    'the manual sheet is still in its opening grace period');
 });
 test('Firefox manual sheet priority persists across extension startup and blocks new hidden openers',()=>{
   const h=panelHarness('Aria');
@@ -2486,7 +2490,7 @@ test('Firefox manual sheet priority persists across extension startup and blocks
   h.document.addEventListener=(type,fn)=>installed.push(type);
   vm.runInContext(readFileSync(join(root,'extension/firefox/sheet-visibility.js'),'utf8')+
     '\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,R3_SHEET_VIS,r3SheetVisibilityKey};',h.context);
-  h.context.sheetApi.r3SheetRevealAll(true);
+  h.context.sheetApi.r3SheetRevealAll(); // explicit Debug restore remains sticky
   const key=h.context.sheetApi.r3SheetVisibilityKey();
   assert.equal(h.store.get(key),'true');
   h.context.sheetApi.R3_SHEET_VIS.manualPriority=false;
