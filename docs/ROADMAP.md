@@ -4,7 +4,7 @@
 
 ## 2026-10-21: Native Integration Milestone — PR #110
 
-**PR #110 test verified (476/476 automated tests, run 39696967588):** one safe mapped-command dispatcher, explicit officially observed macro references where available, dynamic MISC discovery of owned existing repeating abilities, a single Debug & tools window, adaptive HUD scaling to the current viewport and Roll20 chat inset, and source/packaging test gates. Retain old official sheet priority, no speculative private API or player-sheet writes, and no automatic roll dispatch. Code/CI/merge/Mozilla signing/live QA are separate completion states.
+**PR #110 merged as `ce0b533` after 476/476 passing tests (run 39697156820):** one safe mapped-command dispatcher, explicit officially observed macro references where available, dynamic MISC discovery of owned existing repeating abilities, a single Debug & tools window, adaptive HUD scaling to the current viewport and Roll20 chat inset, and source/packaging test gates. Retain old official sheet priority, no speculative private API or player-sheet writes, and no automatic roll dispatch. Code/CI/merge/Mozilla signing/live QA are separate completion states.
 
 | Acceptance item | Status |
 | --- | --- |
@@ -15,7 +15,7 @@
 | Size/position scaling across monitor viewport and Roll20 chat | Milestone branch; resize/HiDPI/live chat QA required |
 | Unknown Advanced Tools private IDs, type-safe editable state, authoritative save/re-read | **Not implemented** without source-grounded contracts |
 | Verified every native 2024 action card and special effect | **Not validated live** |
-| Firefox milestone 3.10.0 | Planned release **after** green PR and separate Mozilla signing |
+| Firefox milestone 3.10.0 | PR #110 merged and green; Mozilla signing/update feed and in-game validation separate |
 
 **Release discipline:** Do not call this “complete native parity” until source-verified Advanced Tools mapping and real game chat/side effects are accepted. Use milestone completion for the validated implemented slice, and keep remaining native calls as explicit backlog; do not hide them behind a release label.
 
