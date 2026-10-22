@@ -1,6 +1,6 @@
 {
-  "version": "3.9.19",
+  "version": "3.10.0",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Native-action identity hardening: require single same-character sheet macro, reject unsafe selected/compound references, bind official explicit repeating-row IDs when exposed, and refresh current handover and README; 470 passing tests. Live Roll20 2024 parity and movement QA still pending."
+  "reason": "Milestone Completion: consolidated Debug operations, MISC for unclassified native 2024 actions, explicit controlled-character macro mapping, viewport-aware professional HUD scaling; 476/476 Firefox CI tests. Live Roll20 native sheet prompts, state writes and movement #73 require separate QA."
 }
