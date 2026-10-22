@@ -384,8 +384,13 @@ async function r3AutoTick(eventTriggered=false){
         // authenticated name is available; the next timer will retry it.
         if(!candidate)r3AutoDisplay('Waiting for the private character sheet to finish loading');
       }catch(e){
-        if(R3_AUTO.enabled&&generation===R3_AUTO.generation)
+        if(R3_AUTO.enabled&&generation===R3_AUTO.generation){
+          // A player-initiated reveal is a cancellation, not an opener fault:
+          // don't impose the full one-minute failure backoff after they close.
+          if(/Player opened the original sheet/i.test(String(e?.message||e)))
+            R3_AUTO.lastOpenAttempt=0;
           r3AutoDisplay('Background reader: '+r3String(e?.message||e,170));
+        }
       }finally{R3_AUTO.opening=false;}
     }else if(!identity.model){
       // Compatibility fallback for older editors lacking the model view:
