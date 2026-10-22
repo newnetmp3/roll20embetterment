@@ -493,3 +493,21 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 **PR #106 verified:** shared cross-category native mapping passes 467/467 CI checks (runs 39690219543, 39690224342). Full interactive inventory state write mapping and 2024 Advanced Tools stable identifier discovery remain unimplemented and must not be presented as native-linked UI buttons yet.
 
 **Firefox v3.9.18 signed packaging request:** PR #106 merged CI-green with 467 tests. Native mapping now covers Spells, Features, Inventory, Resources, Skills, Saves and Ability Checks in addition to Attacks for existing uniquely matchable Roll20 actions. Native 2024 Advanced Tools exact IDs, full source control catalog, editable field reconciliation and live game validation remain open. Sign/publish XPI and update feed independently before treating the version as downloadable.
+
+## 2026-10-21: Full native interactive-element mapping (expanded scope)
+
+**Definition of done:** enumerate every exposed interactive control in the active D&D 2024 Roll20 sheet and bind it to an equivalent R20eb HUD control using a verified native identity; otherwise display Unsupported / Native unmapped with the reason. A visible caption is never proof of a callable action ID. No guessed repeating IDs, silent generic-roll substitution, automatic gameplay actions or writable mutations without permission checks.
+
+| Surface | Interactive coverage requirement | Current gap |
+|---|---|---|
+| Attacks | each weapon mode, variant, attack and damage actions, crit/advantage prompts and special effects | existing abilities conditionally linked; native action IDs and live parity incomplete |
+| Spells | cast, attack/save, target, upcast, ritual/concentration, slot spend | mapped macros conditional; prompts and state writes unverified |
+| Features | class/race/feat actions, toggles, use counters, rests and recovery | roll-like actions conditional; editable controls unsupported |
+| Inventory | use, equip, attune, quantities, charges, consumables, ammunition | use macros conditional; data mutations unsupported |
+| Skills / Saves / Checks | individual actions and exposed conditional controls | ability mapping conditional; exact actions and prompts incomplete |
+| HP / Slots / Resources / Conditions | health/temp HP, death saves, spell slots, counters, checkboxes, conditions, rest actions | observations exist; native transactional writes unimplemented |
+| MISC | any remaining exposed interactive controls including sheet-specific actions | enumeration and safe adapters incomplete |
+
+**Workstreams:** (1) capture tab/section/source ID, label, control type, state, permissions and action reference for *all* exposed controls, deduplicated across sheet rerenders; (2) typed capability registry for roll/action/toggle/counter/field/selection/unsupported, with evidence and an unmapped reason; (3) shared native execution adapters that never guess source IDs; (4) grouped accessible submenus across all HUD sections, unclassified controls in MISC; (5) user-initiated, character-verified operations with revision checks, no double clicks, chat draft protection, authoritative refresh and safe failure reconciliation; (6) automated tests per control family and real Floorp Jumpgate comparison against the native sheet including resulting chat cards, prompts, and state changes.
+
+**Priority:** native interaction completeness before further HUD cosmetics. Coverage percentages must reflect truly verified exposed controls, not the number of categories. Preserve movement issue #73 until live verified. Previously existing category macro mappings are a foundation, NOT completion of this expanded milestone.
