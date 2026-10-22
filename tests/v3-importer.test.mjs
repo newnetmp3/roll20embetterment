@@ -248,6 +248,33 @@ test('Import all tabs reacquires Vue-replaced tab nodes and reaches inventory af
   assert.equal(scan.coverage.inventory,1);
   assert.equal(scan.coverage.resources,1);
 });
+test('official reader cancels a private full import immediately after manual sheet open',async()=>{
+  const {h,context}=harness(docFixture());
+  const sent=[],editor={postMessage(message){sent.push(message);}};
+  context.window.parent=editor;
+  let active='Combat',unblock=null,clicks=0;
+  const tabs=['Combat','Inventory','Spells'];
+  context.document.querySelectorAll=sel=>sel.startsWith('[role="tab"]')?tabs.map(name=>({
+    disabled:false,getClientRects:()=>[{}],
+    getAttribute:key=>key==='aria-label'?name:key==='aria-selected'?String(name===active):null,
+    closest:()=>null,
+    click(){active=name;clicks++;}
+  })):[];
+  context.setTimeout=callback=>{unblock=callback;return 1;};
+  const id='r3-cancel-background-100';
+  const request={protocol:'r20eb:import:v3',type:'scan',mode:'all',id};
+  const pending=h.r3ReaderReceive({source:editor,origin:'https://app.roll20.net',data:request});
+  assert.equal(active,'Inventory');
+  assert.equal(typeof unblock,'function');
+  await h.r3ReaderReceive({source:editor,origin:'https://app.roll20.net',
+    data:{protocol:'r20eb:import:v3',type:'cancel-scan',id}});
+  unblock();await pending;
+  assert.equal(sent.at(-1).type,'failure');
+  assert.match(sent.at(-1).error,/cancelled for manual sheet access/i);
+  assert.equal(clicks,1,'cancelled reader never switches another sheet tab');
+  assert.equal(active,'Inventory','cancel does not navigate the manually opened sheet');
+});
+
 test('multiple scans merge distinct categories and deduplicate repeated card names',()=>{
   const {h,fixture}=harness(docFixture({cards:{spells:[card('spells','Fire Bolt','Fire Bolt Cantrip')]}}));
   const a=h.r3Capture(fixture.body,'Spells');
