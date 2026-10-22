@@ -1,13 +1,17 @@
 // Firefox-only: original Roll20 sheets always win over invisible HUD readers.
 // A player request restores *all* reader sessions, including Auto-sync-owned
 // wrappers; active private-reader requests then stop before claiming new DOM.
-const R3_SHEET_VIS={installed:false,manualPriority:false};
+const R3_SHEET_VIS={installed:false,manualPriority:false,manualUntil:0};
 function r3SheetVisibilityKey(){return r3StorageKey()+':manual-sheet-priority:v1';}
 function r3SheetVisibilityLoad(){
   try{R3_SHEET_VIS.manualPriority=
     localStorage.getItem(r3SheetVisibilityKey())==='true';}catch{}
 }
-function r3SheetAllowsBackground(){return !R3_SHEET_VIS.manualPriority;}
+function r3SheetAllowsBackground(){
+  // A trusted player Journal action gets a short automatic-open grace period,
+  // not a permanent opt-out. Explicit Debug 'restore' remains sticky.
+  return !R3_SHEET_VIS.manualPriority&&Date.now()>=R3_SHEET_VIS.manualUntil;
+}
 function r3SheetVisibilitySave(){
   try{localStorage.setItem(r3SheetVisibilityKey(),
     R3_SHEET_VIS.manualPriority?'true':'false');}catch{}
@@ -34,8 +38,14 @@ function r3SheetRecoverMarkedDialogs(){
   }
 }
 function r3SheetRevealAll(quiet=false){
-  R3_SHEET_VIS.manualPriority=true;
-  r3SheetVisibilitySave();
+  if(quiet)R3_SHEET_VIS.manualUntil=Date.now()+3000;
+  else{
+    R3_SHEET_VIS.manualPriority=true;
+    r3SheetVisibilitySave();
+  }
+  // Stop cross-origin full-tab traversal before showing a sheet. The reader
+  // must not continue switching its tabs under a player's manual control.
+  if(typeof r3CancelOwnedScans==='function')r3CancelOwnedScans();
   // Invalidate any pending auto scan; no new background opener is allowed
   // until the player explicitly re-enables it.
   if(typeof R3_AUTO==='object'){
@@ -50,6 +60,7 @@ function r3SheetRevealAll(quiet=false){
 }
 function r3SheetAllowPrivateReaders(){
   R3_SHEET_VIS.manualPriority=false;
+  R3_SHEET_VIS.manualUntil=0;
   r3SheetVisibilitySave();
   r3NativeStatus('Private readers allowed again on your next Find/Auto-sync. Your currently visible Roll20 sheet will not be moved.');
   r3HudRender();
