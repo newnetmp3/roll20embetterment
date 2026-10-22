@@ -15,7 +15,7 @@
 
 ## Milestone Completion candidate — native coverage & professional HUD (PR #110)
 
-**Source status:** Feature branch `feature/native-milestone-professional-hud`; Firefox version/signing and live acceptance separate from this code change. This milestone is NOT described as implementing every private Roll20 call: many undocumented source controls are not safe to invoke blindly.
+**Source validation:** [PR #110](https://github.com/newnetmp3/roll20embetterment/pull/110) Firefox CI [run 39696967588](https://github.com/newnetmp3/roll20embetterment/actions/runs/39696967588) passed **476/476 tests**, 0 failures, including generated userscript parity. Merge, Firefox signing, auto-update feed and live gameplay verification remain separate; no claim of full native parity. This milestone is NOT described as implementing every private Roll20 call: many undocumented source controls are not safe to invoke blindly.
 
 **Native capabilities added:**
 
@@ -30,7 +30,7 @@
 - Keep categories ergonomic and add **MISC** to the action dock; maintain one deliberate action click for a verified native binding. Unknown/missing mappings show Native unmapped, not misleading active controls.
 - Recalculate HUD scale from CSS-pixel viewport size and live chat inset on browser resize. Keep panel drag/nudge saved positions clamped to the new viewport. Respect chat and manual sheet priority, reduce visual clutter and avoid obstructing the map. No new in-game popup tutorials.
 
-**Validation required before declaring source milestone merged:** `npm run check:firefox` on PR, userscript consistency, responsive Debug/MISC static regression and direct source/action rejection tests; green GitHub Actions. Then merge, package separate **Firefox v3.10.0 milestone candidate** with Mozilla-unlisted signing, inspect signed XPI and auto-update feed. **Live Floorp gameplay remains required** for: official 2024 action references actually exposed, chat/action card parity, resource effects, Jumpgate startup, 5 ft outbound + back and no original sheet/chat interference.
+**Validation verified on PR:** `npm run check:firefox` and generated userscript consistency green, 476/476 tests. Responsive Debug/MISC static tests, direct source-action rejection, and original-sheet safety regressions passed. Then merge, package separate **Firefox v3.10.0 milestone candidate** with Mozilla-unlisted signing, inspect signed XPI and auto-update feed. **Live Floorp gameplay remains required** for: official 2024 action references actually exposed, chat/action card parity, resource effects, Jumpgate startup, 5 ft outbound + back and no original sheet/chat interference.
 
 **Unimplemented or intentionally disabled native interactions (do not overclaim):** Native write mappings for inventory quantity, equip/attune, HP and temporary HP, spell slots, resource trackers and conditions; custom API/multi-command macros; arbitrary buttons without a verified macro or existing owned ability; dynamic target-picking, GM turn order modification; unexposed D&D 2024 Advanced Tools internal identifiers; exact upstream game-native prompts, damage/crit/upcast parity not confirmed live; Jumpgate movement issue #73 remains OPEN. These require actual source and live evidence before safely enabling.
 
