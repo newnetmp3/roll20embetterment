@@ -738,6 +738,7 @@ function r3CaptureHealth(root=document.body){
 // v3 authenticated cross-origin reader and explicit, bounded tab traversal.
 const R3_PENDING=new Map();
 const R3_POPOUTS=new Map();
+const R3_READER_ACTIVE=new Set(),R3_READER_CANCELLED=new Set();
 const R3_SESSION=(crypto.randomUUID?.()||('session-'+Date.now()+'-'+Math.random())).slice(0,100);
 let r3Counter=0,r3ListenerStarted=false,r3ReaderDirtyTimer=null;
 function r3SheetContext(){return location.origin===R3_ORIGIN&&/\/dnd2024byroll20(?:\/|$)/.test(location.pathname);}
@@ -765,7 +766,10 @@ function r3ResolveTab(key,label){
   return tabs.find(tab=>r3TabKey(tab)===key)||
     tabs.find(tab=>r3TabLabel(tab).toLowerCase()===label.toLowerCase())||null;
 }
-async function r3CollectAllTabs(progress){
+async function r3CollectAllTabs(progress,shouldCancel=()=>false){
+  const check=()=>{
+    if(shouldCancel())throw new Error('Private all-tab scan cancelled for manual sheet access');
+  };
   // Vue can replace every tab element after clicking a tab. Store labels
   // and stable tablist identities, NOT stale element references.
   const descriptors=()=>r3Tabs().map(tab=>({key:r3TabKey(tab),label:r3TabLabel(tab)}));
@@ -774,10 +778,12 @@ async function r3CollectAllTabs(progress){
   let visited=0;
   const primaryLabel=/^(combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
   const collect=label=>{
+    check();
     r3Merge(acc,r3Capture(document.body,label));visited++;
     progress?.(label,r3Coverage(acc));
   };
   const visit=async ({key,label})=>{
+    check();
     if(visited>=32||seen.has(key))return false;
     const tab=r3ResolveTab(key,label);
     if(!tab||!r3Shown(tab)){
@@ -786,12 +792,13 @@ async function r3CollectAllTabs(progress){
     }
     seen.add(key);
     if(!r3Active(tab)){
-      tab.click();await r3Pause(290);
+      tab.click();await r3Pause(290);check();
     }
     collect(label);
     return true;
   };
   try{
+    check();
     collect(r3CurrentTabLabel());
     const initial=descriptors();
     // The six main 2024 sheet panels must not be pushed out of the first
@@ -812,8 +819,9 @@ async function r3CollectAllTabs(progress){
       await visit(extra);
     }
   }finally{
-    // Restore by identity rather than trying to click detached old nodes.
-    for(const prior of original){
+    // A trusted manual-open cancelled this private traversal. Do not click
+    // through the now player-owned sheet's tabs while restoring the reader.
+    if(!shouldCancel())for(const prior of original){
       const tab=r3ResolveTab(prior.key,prior.label);
       if(tab&&!r3Active(tab)){tab.click();await r3Pause(130);}
     }
@@ -837,8 +845,8 @@ function r3CurrentTabLabel(){
   const active=r3Tabs().filter(r3Active);
   return active.map(r3TabLabel).find(name=>main.test(name))||'Current view';
 }
-async function r3ReaderScan(mode,sendProgress){
-  if(mode==='all')return r3CollectAllTabs(sendProgress);
+async function r3ReaderScan(mode,sendProgress,shouldCancel){
+  if(mode==='all')return r3CollectAllTabs(sendProgress,shouldCancel);
   if(mode==='hp')return r3CaptureHealth(document.body);
   return r3Capture(document.body,r3CurrentTabLabel());
 }
@@ -846,6 +854,11 @@ async function r3ReaderReceive(event){
   const peer=r3ReaderPeer();if(!peer||event.source!==peer||event.origin!==R3_EDITOR)return;
   const data=event.data;if(data?.protocol!==R3_PROTOCOL)return;
   if(data.type==='hello'){r3ReaderAnnounce();return;}
+  if(data.type==='cancel-scan'){
+    if(typeof data.id==='string'&&R3_READER_ACTIVE.has(data.id))
+      R3_READER_CANCELLED.add(data.id);
+    return;
+  }
   if(data.type==='native-probe'||data.type==='native-invoke'){
     void r3NativeReaderHandle(peer,data).catch(error=>{
       try{peer.postMessage(r3Msg('native-result',{
@@ -856,13 +869,19 @@ async function r3ReaderReceive(event){
   }
   if(data.type!=='scan'||typeof data.id!=='string'||!/^r3-[\w.-]{4,100}$/.test(data.id))return;
   if(!['current','all','hp'].includes(data.mode))return;
+  R3_READER_ACTIVE.add(data.id);
   try{
+    const cancelled=()=>R3_READER_CANCELLED.has(data.id);
     const snap=await r3ReaderScan(data.mode,(tab,coverage)=>{
-      peer.postMessage(r3Msg('progress',{id:data.id,tab,coverage}),R3_EDITOR);
-    });
+      if(!cancelled())peer.postMessage(r3Msg('progress',{id:data.id,tab,coverage}),R3_EDITOR);
+    },cancelled);
+    if(cancelled())throw new Error('Private scan cancelled for manual sheet access');
     peer.postMessage(r3Msg('result',{id:data.id,snapshot:snap,session:R3_SESSION}),R3_EDITOR);
   }catch(error){
     peer.postMessage(r3Msg('failure',{id:data.id,error:r3String(error?.message||error,250)}),R3_EDITOR);
+  }finally{
+    R3_READER_ACTIVE.delete(data.id);
+    R3_READER_CANCELLED.delete(data.id);
   }
 }
 function r3ReaderAnnounce(){
@@ -998,10 +1017,18 @@ function r3SendScan(candidate,mode){
     const timeout=setTimeout(()=>{R3_PENDING.delete(id);reject(new Error(
       'Official sheet reader did not answer. Ensure the new userscript is active on the advanced-sheets.production.roll20preflight.net domain and reload the character sheet.'));},
       mode==='all'?40000:mode==='hp'?2500:12000);
-    R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout});
+    R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout,mode});
     try{candidate.window.postMessage(r3Msg('scan',{id,mode}),R3_ORIGIN);}
     catch(e){R3_PENDING.delete(id);clearTimeout(timeout);reject(e);}
   });
+}
+function r3CancelOwnedScans(){
+  for(const [id,pending] of R3_PENDING){
+    if(pending.mode!=='all')continue;
+    const owned=r3Candidates().some(c=>c.window===pending.window&&r3NativeIsOwned(c));
+    if(!owned)continue;
+    try{pending.window.postMessage(r3Msg('cancel-scan',{id}),R3_ORIGIN);}catch{}
+  }
 }
 function r3StartEditorBridge(){
   if(r3ListenerStarted)return;r3ListenerStarted=true;
@@ -2009,7 +2036,7 @@ async function r3NativeReaderHandle(peer,data){
 // request. An already-open player/GM sheet is never hidden, repositioned,
 // clicked through, reparented, closed or navigated by this helper.
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
-  original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,preOverlays:null,opening:null,sessions:new Map()};
+  original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,preOverlays:null,opening:null,sessions:new Map(),abortEpoch:0};
 function r3NativeBgResolve(name){
   const wanted=r3String(name,120).trim().toLowerCase();
   if(!wanted)return {reason:'No imported character name is available in the HUD.'};
@@ -2103,6 +2130,8 @@ function r3NativeBgRestore(){
 // HUD reader. Release all of our saved sessions and their modal shields.
 function r3NativeBgRestoreAll(){
   const bg=R3_NATIVE_BG;
+  // Invalidate a pending showDialog() before it can capture a player's sheet.
+  bg.abortEpoch++;
   const records=[...bg.sessions.values()];
   if(bg.dialog&&!records.some(record=>record.dialog===bg.dialog))
     records.push({characterId:bg.characterId,name:bg.name,dialog:bg.dialog,
@@ -2214,6 +2243,7 @@ async function r3NativeBgOpen(name){
   }
   if(bg.sessions.size>=6)
     throw new Error('Too many HUD-owned background sheets. Reload Roll20 to clear old sessions.');
+  const epoch=bg.abortEpoch;
   const before=new Set(existing),overlays=new Set(
     document.querySelectorAll('.ui-widget-overlay')||[]);
   bg.preOverlays=overlays;
@@ -2221,6 +2251,7 @@ async function r3NativeBgOpen(name){
   // including the common case where the character ID arrives after the shell.
   // Only a newly created dialog with this authorized character ID can be moved.
   const shield=()=>{
+    if(bg.abortEpoch!==epoch)return;
     if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return;
     if(!bg.dialog)r3NativeBgClaim(before,overlays,identity);
     if(bg.dialog&&bg.characterId===identity.id)r3NativeBgShieldOverlay(overlays);
@@ -2239,6 +2270,8 @@ async function r3NativeBgOpen(name){
     }
     shield(); // synchronous opening can create the dialog immediately
     for(let i=0;i<36;i++){
+      if(bg.abortEpoch!==epoch)
+        throw new Error('Player opened the original sheet while private reader was loading.');
       if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())
         throw new Error('Player requested the original character sheet. The hidden reader was released.');
       shield(); // fallback for browsers without MutationObserver
@@ -3932,6 +3965,7 @@ const R3_AUTO={
   enabled:false,name:'',characterId:'',running:false,active:false,opened:false,openedAt:0,
   lastScan:0,lastFull:0,lastOpenAttempt:0,lastError:'',timer:null,healthTimer:null,
   healthRunning:false,lastHealth:0,generation:0,preOpenDialogs:null,dirtyTimer:null,
+  opening:false,
   ownedDialog:null,ownedContainer:null,originalPosition:null,preOpenOverlays:null,
   ownedOverlay:null,originalOverlay:null,openObserver:null,
   explicitlyDisabled:false,origin:'manual'
@@ -4031,6 +4065,13 @@ function r3AutoCandidate(){
     r3String(r3TokenModelGet(model,'name'),120).toLowerCase()===
       R3_AUTO.name.toLowerCase()).length>1;
   const safe=named.filter(c=>!duplicateName||r3AutoId(c)===R3_AUTO.characterId);
+  // Prefer our own character-bound private reader even when a player also
+  // has an official popout open. Never navigate that player's live tab.
+  const owned=safe.filter(c=>c.type==='iframe'&&r3NativeIsOwned(c));
+  if(owned.length===1&&
+     (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground()))
+    return owned[0];
+  if(owned.length>1)return null;
   const popouts=safe.filter(c=>c.type==='popout');
   if(popouts.length===1)return popouts[0];
   if(popouts.length>1)return null; // same-named popouts are ambiguous
@@ -4272,20 +4313,56 @@ function r3AutoQueueDirty(candidate){
   },ms);
 }
 async function r3AutoTick(eventTriggered=false){
-  if(!R3_AUTO.enabled||R3_AUTO.running||R3_UI.busy||R3_NATIVE.busy||!R3_AUTO.name)return;
+  if(!R3_AUTO.enabled||R3_AUTO.running||R3_AUTO.opening||
+     R3_UI.busy||R3_NATIVE.busy||!R3_AUTO.name)return;
   // Implicit sync cannot run against a stale saved PC before a verified
   // controlled token has been selected in this browser session.
   if(R3_AUTO.origin==='token'&&
      (R3_TOKEN.active?.characterId!==R3_AUTO.characterId||
        R3_TOKEN.active?.name!==R3_AUTO.name))return;
   const now=Date.now();
-  const candidate=r3AutoCandidate();
+  let candidate=r3AutoCandidate();
   if(!candidate){
-    r3AutoOpenFromJournal(now);
-    return;
+    // Use the same Roll20 character-scoped opener as native actions. This
+    // works without opening the Journal sidebar or manually viewing a tab.
+    // A verified Controlled By model and exact character ID are required.
+    const identity=r3NativeBgResolve(R3_AUTO.name);
+    if(identity.model&&(!R3_AUTO.characterId||
+       identity.id===R3_AUTO.characterId)&&
+       (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground())){
+      if(now-R3_AUTO.lastOpenAttempt<60000)return;
+      R3_AUTO.lastOpenAttempt=now;
+      const generation=R3_AUTO.generation;
+      R3_AUTO.opening=true;
+      try{
+        const opened=await r3NativeBgEnsure(R3_AUTO.name);
+        if(!R3_AUTO.enabled||generation!==R3_AUTO.generation)return;
+        if(r3AutoId(opened)!==identity.id)
+          throw new Error('Background reader did not match the controlled character ID');
+        candidate=r3AutoCandidate();
+        // Roll20's title may load after the frame. Never import before its
+        // authenticated name is available; the next timer will retry it.
+        if(!candidate)r3AutoDisplay('Waiting for the private character sheet to finish loading');
+      }catch(e){
+        if(R3_AUTO.enabled&&generation===R3_AUTO.generation){
+          // A player-initiated reveal is a cancellation, not an opener fault:
+          // don't impose the full one-minute failure backoff after they close.
+          if(/Player opened the original sheet/i.test(String(e?.message||e)))
+            R3_AUTO.lastOpenAttempt=0;
+          r3AutoDisplay('Background reader: '+r3String(e?.message||e,170));
+        }
+      }finally{R3_AUTO.opening=false;}
+    }else if(!identity.model){
+      // Compatibility fallback for older editors lacking the model view:
+      // this still requires an exact Journal identity and script ownership.
+      r3AutoOpenFromJournal(now);
+    }else{
+      r3AutoDisplay('Background reader character identity disagrees with the selected token');
+    }
+    if(!candidate)return;
   }
   r3AutoRemember(candidate);
-  const background=r3AutoMoveOffscreen(candidate);
+  const background=r3NativeIsOwned(candidate)||r3AutoMoveOffscreen(candidate);
   // Only navigate sheet tabs when the script itself opened an offscreen
   // dialog. A player-opened visible sheet is read without changing tabs.
   const mode=background&&now-R3_AUTO.lastFull>300000?'all':'current';

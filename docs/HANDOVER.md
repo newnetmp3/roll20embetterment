@@ -5,6 +5,34 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-22 — automatic private all-tab import (Firefox v3.10.3 candidate)
+
+- User requirement: import the official D&D 2024 tabs automatically in the
+  background, without requiring manual sheet opening or disturbing normal
+  Roll20 sheet controls.
+- A selected, verified **Controlled By** character now reuses the existing
+  Roll20 model `showDialog` / exact Journal fallback from the native-action
+  background opener. It creates a separately owned private reader rather than
+  relying on the sidebar's Journal DOM. After identity checks, the initial
+  private scan uses `all` and subsequent full scans retain a five-minute gate.
+- Auto-sync prefers its own private reader over a player popout; it **never**
+  changes the active tab of a player-opened dialog or popped-out sheet. Manual
+  sheets continue current-tab/HP reads. Existing ownership, identity,
+  generation and read-only guards remain.
+- A trusted user Journal opening sends `cancel-scan` to any owned in-flight
+  all-tab reader before releasing its dialog/overlay. It introduces a short
+  grace period for manual opening, not a permanent opt-out; explicitly chosen
+  Debug restore/private-reader restrictions still remain sticky.
+- Source tests added for the no-Journal initial full scan, cancellation during
+  tab traversal and manual-priority lifecycle. **CI and live Floorp QA pending**
+  at branch creation; version 3.10.3 requested for signed publication only
+  after green PR CI and merge. Verify the signed XPI/feed separately.
+- Known Roll20 constraint: if Roll20 reuses the same singleton dialog instead
+  of creating an independent one, R20eb refuses to claim player-owned DOM and
+  cannot force a separate private session. Virtualized/unmounted rows remain
+  outside guaranteed coverage. Export after live testing, and never equate a
+  raw 750-control limit with all native calls discovered.
+
 ## Verified baseline and current candidate
 
 - Published Firefox baseline: **v3.10.2**, Mozilla-signed; release/feed SHA-256 `e5af5d63fda9b00d1c2a576a15a0643bf3113e5351c3514aa966a0e61c1dec74`. Signing run [39871351495](https://github.com/newnetmp3/roll20embetterment/actions/runs/39871351495) succeeded. PR #114 merged as `5f2ce53`; feed commit `8f15eab`.
