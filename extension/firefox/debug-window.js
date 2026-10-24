@@ -77,11 +77,9 @@ function r3DebugMarkup(){
     '<div class="r3-debug-ops">'+
     '<button type="button" data-r3-debug="sync">'+(typeof R3_AUTO==='object'&&R3_AUTO.enabled?'Turn sync off':'Turn sync on')+'</button>'+
     '<button type="button" data-r3-debug="show-sheet">Show original Roll20 sheet</button>'+
-    (typeof R3_SHEET_VIS==='object'&&R3_SHEET_VIS.manualPriority?
-      '<button type="button" data-r3-debug="allow-private">Allow private reader</button>':'')+
     '<button type="button" data-r3-debug="reset-layout">Reset HUD layout</button>'+
     '<button type="button" data-r3-debug="toggle-hud">'+(typeof R3_HUD==='object'&&R3_HUD.collapsed?'Restore HUD':'Hide HUD')+'</button>'+
-    '</div><small>Sheet visibility and privacy take priority over automatic imports. No action above modifies character statistics.</small></details>'+
+    '</div><small>Private readers run automatically. Opening an original sheet always restores its visibility and pauses private access briefly. No action above modifies character statistics.</small></details>'+
     '<details class="r3-debug-movement"><summary>Manual turn corrections</summary>'+
     (typeof r3TurnMarkup==='function'?r3TurnMarkup(R3_UI.snapshot):'<p>Turn tracker unavailable.</p>')+
     '</details>'+
@@ -136,10 +134,6 @@ function r3DebugAction(target){
     case 'show-sheet':
       if(typeof r3SheetRevealAll==='function')r3SheetRevealAll();
       else r3DebugNotice('Native sheet visibility controls unavailable.');
-      break;
-    case 'allow-private':
-      if(typeof r3SheetAllowPrivateReaders==='function')r3SheetAllowPrivateReaders();
-      else r3DebugNotice('Private reader controls unavailable.');
       break;
     case 'reset-layout':
       if(typeof r3BattlefieldResetPositions==='function')r3BattlefieldResetPositions();
