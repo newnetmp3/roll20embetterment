@@ -1,6 +1,6 @@
 {
-  "version": "3.10.3",
+  "version": "3.10.4",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Automatically traverse all mounted D&D 2024 tabs in a private, controlled-character reader without Journal setup; never navigate player-owned sheets; cancel private traversal on native sheet opening. CI and live Floorp acceptance are separate."
+  "reason": "Source-verified official Cast/Use card controls for spells, features and items; explicit unique player click only; non-action and changed rows rejected. Pending native live parity checks."
 }

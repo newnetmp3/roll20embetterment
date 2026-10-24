@@ -48,6 +48,22 @@ This is a source/automated-test milestone, not a guarantee of live Floorp
 behavior. Roll20 must expose a valid character model, official frame and
 rendered tab controls; virtualized/unmounted entries still cannot be inferred.
 
+## Firefox v3.10.4 Cast/Use card adapter (candidate; live QA pending)
+
+The existing native sheet-click adapter now recognizes a **single explicitly
+observed Cast, Use, or Activate button** on a uniquely named official spell,
+feature or inventory card, and re-verifies the live row, tab, identity and
+button before clicking once. Existing official Roll20 macro mappings take
+precedence. A player-opened sheet is **never switched to another tab**; only
+an R20eb-owned private reader may navigate to the correct one.
+
+This does **not** make Show More, damage, equipment toggles or quantity
+controls callable. In the latest source export, spells exposed expansion
+buttons rather than verified Cast buttons, so **native spell casting is not
+yet demonstrated**. Slots, HP, charges and inventory mutations remain
+read-only. This milestone requires green CI, a signed release, and separate
+in-game parity checks.
+
 ## How it works
 
 **Automatic character sync.** A selected, linked, player-controllable token can trigger character-scoped read-only synchronization; manual importing remains available when Roll20's protected sheet/Journal interfaces do not allow unattended reading. A different character should never inherit the previous character's values. An explicit sync Off is preserved. Real-game reliability varies with upstream Roll20 interfaces and remains under testing.

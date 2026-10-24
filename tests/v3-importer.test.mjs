@@ -1116,3 +1116,86 @@ test('attack resolver inspects late rows and blocks duplicates beyond the old sc
   assert.equal(duplicate.request('native-probe',params).status,'blocked');
   assert.equal(duplicate.clicks.length,0);
 });
+
+test('native Cast/Use card reader executes only a unique observed official control',()=>{
+  for(const {kind,tab,name,label} of [
+    {kind:'spells',tab:'Spells',name:'Druidcraft',label:'Cast Spell'},
+    {kind:'features',tab:'Features & Traits',name:'Second Wind',label:'Use Feature'},
+    {kind:'inventory',tab:'Inventory',name:'Healing Potion',label:'Use Item'}
+  ]){
+    let clicks=0;
+    const button={tagName:'BUTTON',getClientRects:()=>[{}],
+      getAttribute:key=>key==='aria-label'?label:null,click(){clicks++;}};
+    const visible=name+' · ready to use';
+    const row=card(kind,name,visible,[button]);
+    const tabNode={getClientRects:()=>[{}],className:'',
+      getAttribute:key=>key==='aria-label'?tab:key==='aria-selected'?'true':null};
+    const fixture=docFixture({name:'Elowen',tabs:[tabNode]});
+    const original=fixture.document.querySelectorAll;
+    fixture.document.querySelectorAll=selector=>selector.startsWith(
+      kind==='spells'?'.spell-item,':kind==='features'?'.feature-item,':'.inventory-item,'
+    )?[row]:original(selector);
+    const {h}=harness(fixture),messages=[],peer={postMessage:message=>messages.push(message)};
+    const params={id:'r3-card-valid-100',kind,characterName:'Elowen',
+      actionName:name,actionKey:'source-card-1',actionText:visible,actionLabel:label};
+    h.r3NativeReaderHandle(peer,{...params,type:'native-probe'});
+    assert.equal(messages.at(-1).status,'ready',kind+' native probe');
+    assert.equal(clicks,0);
+    const token=messages.at(-1).token;
+    h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token});
+    assert.equal(messages.at(-1).status,'clicked',kind+' native invoke');
+    assert.equal(clicks,1);
+    h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token});
+    assert.equal(messages.at(-1).status,'blocked');
+    assert.equal(clicks,1);
+  }
+});
+test('native Cast/Use reader rejects descriptions, disabled or duplicated buttons and changed source cards',()=>{
+  const name='Detect Magic',label='Cast Spell';
+  let clicks=0,buttons=[];
+  const button=(caption,disabled=false)=>({tagName:'BUTTON',disabled,getClientRects:()=>[{}],
+    getAttribute:key=>key==='aria-label'?caption:null,click(){clicks++;}});
+  const row=card('spells',name,'Detect Magic · 1 action',buttons);
+  row.querySelectorAll=selector=>selector==='button'?buttons:[];
+  const tabNode={getClientRects:()=>[{}],getAttribute:key=>
+    key==='aria-label'?'Spells':key==='aria-selected'?'true':null};
+  const fixture=docFixture({name:'Elowen',tabs:[tabNode]});
+  const original=fixture.document.querySelectorAll;
+  fixture.document.querySelectorAll=selector=>selector.startsWith('.spell-item,')?[row]:original(selector);
+  const {h}=harness(fixture),messages=[],peer={postMessage:message=>messages.push(message)};
+  const params={id:'r3-card-valid-200',kind:'spells',characterName:'Elowen',
+    actionName:name,actionKey:'spell-row-1',actionText:row.innerText,actionLabel:label};
+  const request=(type,extra={})=>{h.r3NativeReaderHandle(peer,{...params,type,...extra});return messages.at(-1);};
+  buttons=[button('Show More')];
+  assert.equal(request('native-probe',{actionLabel:'Show More'}).status,'blocked');
+  buttons=[button(label,true)];
+  assert.equal(request('native-probe').status,'blocked');
+  buttons=[button(label),button(label)];
+  assert.equal(request('native-probe').status,'blocked');
+  buttons=[button(label)];
+  const ready=request('native-probe');
+  assert.equal(ready.status,'ready');
+  row.innerText='Detect Magic · resource changed';
+  assert.equal(request('native-invoke',{token:ready.token}).status,'blocked');
+  row.innerText=params.actionText;
+  const next=request('native-probe');
+  assert.equal(next.status,'ready');
+  assert.equal(request('native-invoke',{token:next.token,actionLabel:'Use Item'}).status,'blocked');
+  assert.equal(clicks,0);
+});
+test('native Cast/Use reader does not navigate a manually opened sheet',()=>{
+  const name='Healing Potion',visible='Healing Potion · ready',label='Use Item';
+  const row=card('inventory',name,visible,[]);
+  const manualTab={getClientRects:()=>[{}],getAttribute:key=>
+    key==='aria-label'?'Combat':key==='aria-selected'?'true':null};
+  const fixture=docFixture({name:'Elowen',tabs:[manualTab]});
+  const original=fixture.document.querySelectorAll;
+  fixture.document.querySelectorAll=selector=>selector.startsWith('.inventory-item,')?[row]:original(selector);
+  const {h}=harness(fixture),messages=[],peer={postMessage:message=>messages.push(message)};
+  let switches=0;manualTab.click=()=>switches++;
+  h.r3NativeReaderHandle(peer,{type:'native-probe',id:'r3-card-valid-300',
+    kind:'inventory',characterName:'Elowen',actionName:name,actionKey:'item-1',
+    actionText:visible,actionLabel:label,background:false});
+  assert.equal(messages.at(-1).status,'blocked');
+  assert.equal(switches,0);
+});

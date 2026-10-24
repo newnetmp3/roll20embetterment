@@ -5,6 +5,14 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-24 — source-observed Cast/Use card adapter (Firefox v3.10.4 candidate)
+
+- Add a strictly conditional official-sheet click path for **Spells / Cast**, **Features / Use or Activate**, and **Inventory / Use or Activate** when an imported named card itself exposes one explicit matching button. Generic `Show More`, damage, equip and quantity controls are **not** action mappings.
+- Source evidence must have one explicit eligible card control and an unambiguous imported card name. The authenticated live reader rechecks character name, tab, named row, optional stable repeating-row ID, bounded source card text, exact visible enabled button, and a single-use session-bound token. Changed/duplicate/disappearing rows fail closed; no retry after click.
+- Only R20eb-owned private readers may switch tabs to find the recorded action. Player-opened dialogs/popouts remain on their current tab, and other-character source actions never execute. Existing safe macro mapping continues to take precedence.
+- Source/reader regression tests cover one click across three card families and rejection of details, disabled/duplicate controls, changed rows and manual-tab navigation. **CI and live Floorp QA remain separate.** The prior user export showed spell details/Show More only, so it does **not** verify any castable spell; this adapter makes no claim of observed cast/use coverage for that export.
+- Firefox 3.10.3 signed feed already published (commit `e81e0fb`, update hash `8814e2781c3c779f9ef3203aa13b515aace80cbd2f9f701481ddd6ef2f09e1dc`). Firefox 3.10.4 is a candidate until CI, merge, Mozilla signing and update-feed verification finish. Chrome/userscript versions remain separately 3.4.0.
+
 ## 2026-10-22 — automatic private all-tab import (Firefox v3.10.3 candidate)
 
 - User requirement: import the official D&D 2024 tabs automatically in the
