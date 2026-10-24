@@ -89,6 +89,25 @@ test('real importer panel initializes and both scan buttons become enabled when 
   assert.equal(h.nodes.get('r3-scan').disabled,false);
   assert.equal(h.nodes.get('r3-all').disabled,false);
 });
+
+test('disabled private reader offers a visible opt-in directly inside the Attack panel',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  h.context.R3_SHEET_VIS={manualPriority:true,manualUntil:0};
+  let enabled=0;
+  h.context.r3SheetAllowPrivateReaders=()=>{
+    enabled++;h.context.R3_SHEET_VIS.manualPriority=false;
+  };
+  const snapshot=h.api.r3Empty();snapshot.name='Elowen';
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
+  h.api.R3_HUD.flyout='actions';
+  h.api.r3HudRender();
+  assert.match(h.nodes.get('r3-hud').innerHTML,/Enable private sheet reader/);
+  assert.equal(enabled,0,'display must not change permissions');
+  h.click('r3-hud-native-allow-reader');
+  assert.equal(enabled,1,'only an explicit click re-enables private reader');
+  assert.equal(h.context.R3_SHEET_VIS.manualPriority,false);
+});
+
 test('Refresh and Hide/Show execute without leaving the panel in a broken state',()=>{
   const h=panelHarness();h.api.r3StartUI();
   h.click('r3-refresh');
