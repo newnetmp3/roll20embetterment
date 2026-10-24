@@ -56,7 +56,10 @@ function r3DebugMovementRows(){
     ['Token source',state.positionSource],['Page identified',state.pageResolved?'Yes':'No'],
     ['Page ID',state.pageId],['Page scale',state.pageScale],
     ['Scale units',state.pageUnit],['Grid increment',state.gridIncrement],
-    ['Feet per pixel',state.mapFeetPerPixel],
+    ['Feet per pixel (diagnostic)',state.mapFeetPerPixel],
+    ['Native ruler sample',state.rulerSample],
+    ['Measurement source',state.measurementSource],
+    ['Grid diagonal rule',state.diagonalRule],
     ['Token position',state.tokenCoordinate],['Used this turn (ft)',state.movementUsed]]
     .map(([key,value])=>'<div><dt>'+r3Escape(key)+'</dt><dd>'+
       r3Escape(value??'—')+'</dd></div>').join('');
@@ -83,7 +86,7 @@ function r3DebugMarkup(){
     (typeof r3TurnMarkup==='function'?r3TurnMarkup(R3_UI.snapshot):'<p>Turn tracker unavailable.</p>')+
     '</details>'+
     '<details class="r3-debug-movement"><summary>Movement tracking diagnostics</summary>'+
-    '<dl id="r3-debug-movement-values">'+r3DebugMovementRows()+'</dl><small>Move your token while Your Turn is active. First-render observer status indicates whether the safe Jumpgate startup barrier completed; it does not prove token movement works. If the source, scale or position is unavailable, its reason appears above.</small></details>'+
+    '<dl id="r3-debug-movement-values">'+r3DebugMovementRows()+'</dl><small>Move your token while Your Turn is active. Roll20 ruler feet are used when an accessible display label is available; canvas-only measurements fall back to whole map squares and the configured diagonal rule. The measurement source is shown above. Live Jumpgate parity still needs verification.</small></details>'+
     '<div class="r3-debug-toolbar"><label for="r3-debug-filter">Messages</label>'+
     '<select id="r3-debug-filter" aria-label="Filter Debug messages">'+
       ['All','Movement','Native','Importer','Help','System'].map(k=>
