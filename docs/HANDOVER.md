@@ -5,6 +5,14 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-24 — Roll20 ruler-based movement (Firefox v3.10.5 candidate)
+
+- User prefers the **feet displayed by Roll20 while dragging a token** instead of continuously summing over-precise pixel-coordinate changes. Jumpgate offers `Always measure token movement` and Roll20's ruler can use grid-specific diagonals.
+- The Firefox tracker now collects a **single exact feet readout** when Roll20 exposes an identifiable visible measurement label, carries it through the drag, and applies it at token-drop/confirmed model change once. It does not sum intermediate ruler previews; it still follows only the currently verified controlled token and respects the active turn.
+- **Important renderer limitation:** Jumpgate may draw the distance text inside Babylon/WebGL canvas, not DOM. A canvas-only label cannot safely be read this way; when absent, the tracker uses **whole page-grid squares and Roll20's configured diagonal rule** (5E/foure, Manhattan, 3.5E alternate, Euclidean) rather than an unrounded pixel distance. A gridless/unresolved page does not invent a distance. This fallback is explicitly labeled `Roll20 grid-rule estimate` in Debug, not a native measurement.
+- Waypoints and backtracking count as separate path legs; 5-ft grid jitter is not overcounted; a drag is committed once and current allowance can still go negative. Manual +/-5-ft corrections remain.
+- Automated regression tests cover display priority, ambiguity/hidden measurements, diagonal modes, movement preview/drop, replay, gridless rejection, token changes, no double-counting and existing safety. **CI, Mozilla signing and live Roll20 Jumpgate acceptance are pending** until released. The exact DOM form of Jumpgate's ruler still requires a real drag capture. Do not claim the native ruler value is always obtainable or movement issue #73 resolved.
+
 ## 2026-10-24 — verified signed Firefox v3.10.4 release
 
 - **PR #116 merged** as `e159dfe` after successful push and PR Firefox CI; **500/500 tests passed** and generated-userscript parity was clean.
