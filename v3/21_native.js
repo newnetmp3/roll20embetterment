@@ -405,7 +405,7 @@ function r3NativeCardVerb(kind,label,name){
     (kind!=='spells'&&value==='activate '+item);
 }
 function r3NativeCardTab(kind){
-  return {spells:/^spells$/i,features:/^features\\s*(?:&|and)\\s*traits$/i,
+  return {spells:/^spells$/i,features:/^features\s*(?:&|and)\s*traits$/i,
     inventory:/^inventory$/i,attacks:/^combat$/i}[kind]||/^$/;
 }
 function r3NativeCardControl(kind,name,source={}){
