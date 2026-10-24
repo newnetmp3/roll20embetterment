@@ -9,7 +9,8 @@ const tracker=readFileSync(join(root,'extension/firefox/movement-tracker.js'),'u
 function rig(options={}){
   const store=new Map(),renders={count:0},chars=new Map(),listeners=new Map();
   const pageAttrs={scale_number:options.scale??5,
-    snapping_increment:options.grid??1,scale_units:options.units??'ft'};
+    snapping_increment:options.grid??1,scale_units:options.units??'ft',
+    diagonaltype:options.diagonal??'foure'};
   const page={id:'page-one',get(k){return pageAttrs[k];}};
   const campaign={activePage(){return page;},get(k){return k==='turnorder'?'[]':null;}};
   function make(id,characterId='char-elf',left=140,top=210){
@@ -45,7 +46,7 @@ function rig(options={}){
       setItem(k,v){store.set(k,v);}}
   };
   vm.createContext(ctx);
-  vm.runInContext(economy+'\n'+tracker+'\nglobalThis.api={R3_MOVE,R3_TURN,r3MovePoll,r3MoveRebase,r3MoveScale,r3MoveWaypointLength,r3MoveFind,r3MoveDiagnostics,r3TurnLoad,r3TurnStart,r3TurnApply,r3TurnMarkup,r3TurnDistance};',ctx);
+  vm.runInContext(economy+'\n'+tracker+'\nglobalThis.api={R3_MOVE,R3_TURN,r3MovePoll,r3MoveRebase,r3MoveScale,r3MoveWaypointLength,r3MoveFind,r3MoveReadNative,r3MoveGridDistance,r3MoveDiagnostics,r3TurnLoad,r3TurnStart,r3TurnApply,r3TurnMarkup,r3TurnDistance};',ctx);
   const api=ctx.api;api.r3TurnLoad();
   return {api,ctx,elf,make,store,renders,pageAttrs,page,listeners};
 }
@@ -134,12 +135,81 @@ test('no map token and scrolling/zooming alone never changes total distance',()=
   h.api.r3MovePoll(); // first sample only
   assert.equal(h.api.R3_TURN.movementUsed,0);
 });
-test('sub-square token movements preserve fractional feet and load safely',()=>{
+test('sub-square coordinate jitter no longer spends fractional feet',()=>{
   const h=rig();h.api.r3TurnStart();h.api.r3MovePoll();
   h.elf.move(147,210);
-  assert.equal(h.api.R3_TURN.movementUsed,0.5);
+  assert.equal(h.api.R3_TURN.movementUsed,0);
+  h.elf.move(210,210);
+  assert.equal(h.api.R3_TURN.movementUsed,5);
   h.api.r3TurnLoad();
-  assert.equal(h.api.R3_TURN.movementUsed,0.5);
+  assert.equal(h.api.R3_TURN.movementUsed,5);
+});
+
+
+test('5E, Manhattan and alternating 3.5E Roll20 diagonal rules replace Euclidean pixel distance',()=>{
+  for(const [rule,expected] of [['foure',5],['manhattan',10],
+    ['threefive',5],['pythagorean',Math.round(Math.SQRT2*5*100)/100]]){
+    const h=rig({diagonal:rule});h.api.r3TurnStart();
+    h.elf.move(210,280);
+    assert.equal(h.api.R3_TURN.movementUsed,expected,rule);
+    assert.equal(h.api.R3_MOVE.measurementSource,'Roll20 grid-rule estimate');
+  }
+  const h=rig({diagonal:'threefive'});h.api.r3TurnStart();
+  h.elf.move(280,350,'140,210,210,280');
+  assert.equal(h.api.R3_TURN.movementUsed,15,'two 3.5E diagonals cost 5 + 10');
+});
+test('native Roll20 ruler readout has priority over grid estimate',()=>{
+  const h=rig();h.api.r3TurnStart();let value='20 ft';
+  h.ctx.document={querySelectorAll(selector){
+    assert.match(selector,/ruler-distance/);
+    return [{textContent:value,getClientRects:()=>[{}],getAttribute:()=>null}];
+  }};
+  h.elf.move(210,210);
+  assert.equal(h.api.R3_TURN.movementUsed,20,'exact on-screen readout, not 5ft coordinate estimate');
+  assert.equal(h.api.R3_MOVE.measurementSource,'Roll20 ruler');
+  value='15 feet';h.elf.move(280,210);
+  assert.equal(h.api.R3_TURN.movementUsed,35,'each committed move counted once');
+});
+test('native distance readout rejects hidden, unrelated, ambiguous and non-foot labels',()=>{
+  const h=rig();h.api.r3TurnStart();
+  const label=(value,hidden=false)=>({textContent:value,hidden,
+    getClientRects:()=>[{}],getAttribute:()=>null});
+  let labels=[label('Range: 60 feet')];
+  h.ctx.document={querySelectorAll(){return labels;}};
+  h.elf.move(210,210);
+  assert.equal(h.api.R3_TURN.movementUsed,5);
+  labels=[label('30 ft'),label('20 ft')];
+  h.elf.move(280,210);
+  assert.equal(h.api.R3_TURN.movementUsed,10,'ambiguous ruler labels do not override grid');
+  labels=[label('90 ft',true)];
+  h.elf.move(350,210);
+  assert.equal(h.api.R3_TURN.movementUsed,15,'hidden labels not used');
+});
+test('native ruler is sampled while dragging and committed only on drop, not each frame',()=>{
+  const h=rig(),events={};
+  h.elf.object.on=(type,fn)=>{events[type]=fn;};
+  h.elf.object.off=(type)=>{delete events[type];};
+  const readout={textContent:'15 ft',getClientRects:()=>[{}],getAttribute:()=>null};
+  h.ctx.document={querySelectorAll(){return [readout];}};
+  h.api.r3TurnStart();h.api.r3MovePoll();
+  h.elf.object.left=210;h.elf.object.top=210;
+  events.moving();
+  readout.textContent='25 ft';
+  h.elf.object.left=280;events.moving();
+  assert.equal(h.api.R3_TURN.movementUsed,0,'do not count preview frames');
+  h.elf.move(280,210);
+  assert.equal(h.api.R3_TURN.movementUsed,0,'model changes during Fabric drag do not finalize');
+  events.modified();
+  assert.equal(h.api.R3_TURN.movementUsed,25);
+  events.modified();
+  assert.equal(h.api.R3_TURN.movementUsed,25,'second modified event does not replay the same move');
+});
+test('missing readable ruler on a gridless page reports unsupported rather than invented feet',()=>{
+  const h=rig({grid:0});h.api.r3TurnStart();
+  h.elf.move(210,210);
+  assert.equal(h.api.R3_TURN.movementUsed,0);
+  assert.equal(h.api.R3_MOVE.measurementSource,'unavailable');
+  assert.match(h.api.R3_MOVE.status,/measurement unavailable/i);
 });
 
 test('fallback canvas._objects discovers token when getObjects is unavailable',()=>{
