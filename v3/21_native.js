@@ -890,7 +890,7 @@ function r3NativeBgJournal(identity){
 async function r3NativeBgOpen(name){
   const bg=R3_NATIVE_BG;
   if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())
-    throw new Error('Your original Roll20 character sheet takes priority. Open it from the Journal or use its popout; R20eb will read it without hiding it.');
+    throw new Error('The original Roll20 sheet is being opened. Background reading resumes automatically after manual sheet access settles.');
   const resolution=r3NativeBgResolve(name);
   if(!resolution.model)throw new Error(resolution.reason||
     'Unable to verify a player-controlled character for the background sheet.');
@@ -1198,13 +1198,9 @@ function r3NativeBgReveal(){
   r3NativeStatus('Your Roll20 character sheets are visible again and can be closed normally.');
 }
 function r3NativeMarkup(){
-  const privateDisabled=typeof R3_SHEET_VIS==='object'&&
-    R3_SHEET_VIS.manualPriority===true;
-  if(!R3_NATIVE.status&&!R3_NATIVE.preview&&!R3_NATIVE_BG.dialog&&!privateDisabled)return '';
+  if(!R3_NATIVE.status&&!R3_NATIVE.preview&&!R3_NATIVE_BG.dialog)return '';
   return '<section class="hud-native-status" role="status">'+
     (R3_NATIVE.status?'<span>'+r3Escape(R3_NATIVE.status)+'</span>':'')+
-    (privateDisabled?'<span>Private native-sheet readers are disabled. A visible Roll20 sheet on Combat can still roll; otherwise enable private readers to allow HUD Attack to locate the official sheet.</span>'+
-      '<button type="button" id="r3-hud-native-allow-reader">Enable private sheet reader</button>':'')+
     (R3_NATIVE.preview?'<button type="button" id="r3-hud-native-confirm">Confirm native roll</button>'+
       '<button type="button" id="r3-hud-native-cancel">Cancel</button>':'')+
     (R3_NATIVE_BG.dialog?'<button type="button" id="r3-hud-native-reveal">Show original sheet</button>':'')+
