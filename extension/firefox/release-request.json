@@ -1,6 +1,6 @@
 {
-  "version": "3.10.4",
+  "version": "3.10.5",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Source-verified official Cast/Use card controls for spells, features and items; explicit unique player click only; non-action and changed rows rejected. Pending native live parity checks."
+  "reason": "Prefer native Roll20 ruler feet on token drop when readable; otherwise use clearly identified whole-grid distance and Roll20 diagonal rule instead of fractional pixel movement. Retain movement and manual correction safety."
 }
