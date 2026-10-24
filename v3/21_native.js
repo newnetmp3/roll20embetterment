@@ -375,7 +375,68 @@ function r3NativeDomEvidence(kind,entry,snapshot){
     if((snapshot?.controls||[]).some(c=>c.kind==='action'&&c.element==='button'&&c.label===label))
       return {sheetAction:true,source:'Observed official skill-check button'};
   }
+  if(['spells','features','inventory'].includes(kind)){
+    if(!r3NativeCardTab(kind).test(entry?.tab||''))return null;
+    const items=Array.isArray(snapshot?.[kind])?snapshot[kind]:[];
+    if(items.filter(item=>r3String(item.name,125).toLowerCase()===
+      r3String(entry.name,125).toLowerCase()).length!==1)return null;
+    const labels=(Array.isArray(entry.actions)?entry.actions:[])
+      .map(action=>r3String(action.label,70))
+      .filter(label=>r3NativeCardVerb(kind,label,entry.name));
+    if(labels.length!==1||!r3String(entry.visible,550))return null;
+    return {sheetAction:true,source:'Observed official '+kind+' '+labels[0]+' button'};
+  }
   return null;
+}
+// Never treat Show More, damage, quantity adjustment, equip or detail buttons
+// as an executable Cast/Use action. These exact labels are opt-in evidence
+// from the source card, not fabricated Advanced Tools command identifiers.
+function r3NativeCardVerb(kind,label,name){
+  const value=r3String(label,70).toLowerCase();
+  const item=r3String(name,125).toLowerCase();
+  if(!item||!value)return false;
+  const base={
+    spells:['cast','cast spell'],
+    features:['use','use feature','activate','activate feature'],
+    inventory:['use','use item','activate','activate item']
+  }[kind]||[];
+  const prefix=kind==='spells'?'cast ':kind==='features'?'use ':'use ';
+  return base.includes(value)||value===prefix+item||
+    (kind!=='spells'&&value==='activate '+item);
+}
+function r3NativeCardTab(kind){
+  return {spells:/^spells$/i,features:/^features\\s*(?:&|and)\\s*traits$/i,
+    inventory:/^inventory$/i,attacks:/^combat$/i}[kind]||/^$/;
+}
+function r3NativeCardControl(kind,name,source={}){
+  const target=r3NativeCardTab(kind),tab=r3CurrentTabLabel();
+  if(!target.test(tab))return {error:'Open the '+kind+' tab on the official sheet (currently '+r3String(tab,35)+').'};
+  const label=r3String(source.actionLabel,70),wanted=r3String(name,125).toLowerCase();
+  if(!r3NativeCardVerb(kind,label,name)||!r3String(source.visible,550))
+    return {error:'No exact, observed '+kind+' Cast/Use button was authorized.'};
+  const selector=R3_CATEGORIES[kind]+(kind==='inventory'?',.item-row':'');
+  const all=document.querySelectorAll(selector)||[];
+  if(all.length>12000)return {error:'Too many source rows to verify a unique '+kind+' action.'};
+  const rows=Array.from(all).filter(row=>r3Shown(row)&&
+    r3Name(row,kind).toLowerCase()===wanted);
+  // Reject nested copies and duplicates rather than choosing a first match.
+  const matches=rows.filter(row=>!rows.some(other=>other!==row&&other.contains?.(row)));
+  if(matches.length!==1)return {error:'No unique matching official '+kind+' row for '+r3String(name,60)+'.'};
+  const row=matches[0],rowId=r3String(source.nativeRowId,120);
+  if(rowId&&r3NativeObservedRowId(row)!==rowId)
+    return {error:'Official repeating row identity changed since import.'};
+  const actual=r3Text(row,550);
+  if(actual!==r3String(source.visible,550))
+    return {error:'Official '+kind+' card changed since import. Refresh before using it.'};
+  const controls=row.querySelectorAll?.('button')||[];
+  if(controls.length>200)return {error:'Too many card buttons to verify one native action.'};
+  const found=Array.from(controls).filter(button=>r3Shown(button)&&
+    r3String(r3Attr(button,'aria-label')||r3Attr(button,'title')||r3Text(button,70),70)===label);
+  if(found.length!==1)return {error:found.length?
+    'Multiple matching official '+kind+' action buttons; no click.':
+    'No enabled, visible official '+kind+' button matching '+label+'.'};
+  return {button:found[0],label,fingerprint:JSON.stringify(
+    [kind,wanted,rowId,actual,label])};
 }
 function r3NativeSkillControl(name){
   if(!R3_SKILLS.includes(name))return {error:'No supported standard skill was selected.'};
@@ -425,8 +486,12 @@ async function r3NativeDomInvoke(kind,key){
     const readerSession=R3_NATIVE.readers.get(candidate.window)?.session;
     if(!readerSession)throw new Error('No authenticated official sheet reader session.');
     const background=r3NativeIsOwned(candidate);
+    const observed=(initial.entry.actions||[]).map(action=>r3String(action.label,70))
+      .filter(label=>r3NativeCardVerb(kind,label,initial.entry.name));
     const params={kind,characterName:initial.name,actionName:initial.entry.name,
-      actionKey:key,actionText:r3String(initial.entry.visible,550),background,readerSession};
+      actionKey:key,actionText:r3String(initial.entry.visible,550),
+      actionLabel:observed.length===1?observed[0]:'',
+      actionRowId:r3String(initial.entry.nativeRowId,120),background,readerSession};
     const ready=await r3NativeRequest(candidate,'native-probe',params);
     if(ready.status!=='ready'||typeof ready.token!=='string'){
       r3NativeStatus(ready.message||'No unique official sheet control was found.');return false;
@@ -539,34 +604,42 @@ async function r3NativeReaderHandle(peer,data){
   const attackName=r3String(data.actionName??data.attackName,125);
   const attackKey=r3String(data.actionKey??data.attackKey,240);
   const attackText=r3String(data.actionText??data.attackText,550);
+  const actionLabel=r3String(data.actionLabel,70),actionRowId=r3String(data.actionRowId,120);
   if(data.readerSession&&data.readerSession!==R3_SESSION){
     respond('blocked','Official reader session changed. Refresh the sheet connection.');return;
   }
   const findControl=()=>kind==='skills'?r3NativeSkillControl(attackName):
-    r3NativeAttackControl(attackName,{visible:attackText});
+    kind==='attacks'?r3NativeAttackControl(attackName,{visible:attackText}):
+    r3NativeCardControl(kind,attackName,{visible:attackText,
+      actionLabel,nativeRowId:actionRowId});
   // The character identity and attack name are intentionally separate.
   // Characters across games do not share a fixed name or fixed attack list.
-  if(!['attacks','skills'].includes(kind)||!characterName||!attackName||
+  if(!['attacks','skills','spells','features','inventory'].includes(kind)||!characterName||!attackName||
     characterName.toLowerCase()!==r3NameFromDocument(document).toLowerCase()){
     respond('blocked','This action does not belong to the open character sheet.');return;
   }
   // Only HUD-owned or Auto-sync-owned hidden sheets may have their tabs
   // switched automatically. A player-opened sheet is never navigated.
-  if(kind==='attacks'&&data.type==='native-probe'&&data.background===true&&!/^combat$/i.test(r3CurrentTabLabel())){
-    // The private Vue sheet may not have mounted its Combat tab yet.
-    let combat=null;
-    for(let attempt=0;attempt<7&&!combat;attempt++){
-      combat=r3Tabs().find(tab=>/^combat$/i.test(r3TabLabel(tab)));
-      if(!combat&&attempt<6)await r3Pause(200);
+  const targetTab=kind==='skills'?null:r3NativeCardTab(kind);
+  const targetName={attacks:'Combat',spells:'Spells',features:'Features & Traits',
+    inventory:'Inventory'}[kind];
+  if(targetTab&&data.type==='native-probe'&&data.background===true&&
+      !targetTab.test(r3CurrentTabLabel())){
+    // Only the privately owned reader may navigate. A player's open sheet
+    // stays untouched even when it is on a different tab.
+    let selected=null;
+    for(let attempt=0;attempt<7&&!selected;attempt++){
+      selected=r3Tabs().find(tab=>targetTab.test(r3TabLabel(tab)));
+      if(!selected&&attempt<6)await r3Pause(200);
     }
-    if(!combat||!r3Shown(combat)){
-      respond('blocked','Background sheet did not expose Combat after rechecking.');return;
+    if(!selected||!r3Shown(selected)){
+      respond('blocked','Background sheet did not expose '+targetName+' after rechecking.');return;
     }
-    combat.click();
-    for(let attempt=0;attempt<7&&!/^combat$/i.test(r3CurrentTabLabel());attempt++)
+    selected.click();
+    for(let attempt=0;attempt<7&&!targetTab.test(r3CurrentTabLabel());attempt++)
       await r3Pause(200);
-    if(!/^combat$/i.test(r3CurrentTabLabel())){
-      respond('blocked','Background Combat tab did not activate after rechecking.');return;
+    if(!targetTab.test(r3CurrentTabLabel())){
+      respond('blocked','Background '+targetName+' tab did not activate after rechecking.');return;
     }
   }
   if(characterName.toLowerCase()!==r3NameFromDocument(document).toLowerCase()){
@@ -590,7 +663,8 @@ async function r3NativeReaderHandle(peer,data){
     if(R3_NATIVE.tokens.size>=8)R3_NATIVE.tokens.clear();
     const token=(crypto.randomUUID?.()||('native-'+Date.now()+'-'+Math.random())).slice(0,100);
     R3_NATIVE.tokens.set(token,{kind,characterName,attackName,attackKey,attackText,
-      label:found.label,fingerprint:found.fingerprint,peer,until:Date.now()+15000});
+      actionLabel,actionRowId,label:found.label,fingerprint:found.fingerprint,
+      peer,until:Date.now()+15000});
     respond('ready','A single native roll control was found. Confirm to click it once.',
       {token,label:found.label});return;
   }
@@ -598,7 +672,8 @@ async function r3NativeReaderHandle(peer,data){
   if(!record||record.kind!==kind||record.peer!==peer||record.until<Date.now()||
      record.characterName.toLowerCase()!==characterName.toLowerCase()||
      record.attackName.toLowerCase()!==attackName.toLowerCase()||
-     record.attackKey!==attackKey||record.attackText!==attackText){
+     record.attackKey!==attackKey||record.attackText!==attackText||
+     record.actionLabel!==actionLabel||record.actionRowId!==actionRowId){
     respond('blocked','Native action confirmation expired. Inspect the roll again.');return;
   }
   R3_NATIVE.tokens.delete(token);
