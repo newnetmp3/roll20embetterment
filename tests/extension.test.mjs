@@ -120,7 +120,7 @@ test('milestone: one Debug entry replaces toolbar, MISC exists and screen scalin
   assert.match(battlefield,/r3BattlefieldControl\('star','MISC','misc'\)/);
   assert.match(battlefield,/id="r3-hud-debug"/);
   assert.match(debug,/data-r3-debug="show-sheet"/);
-  assert.match(debug,/data-r3-debug="allow-private"/);
+  assert.doesNotMatch(debug,/data-r3-debug="allow-private"/);
   assert.match(debug,/data-r3-debug="reset-layout"/);
   assert.match(debug,/data-r3-debug="toggle-hud"/);
   assert.match(debug,/data-r3-debug="sync"/);
