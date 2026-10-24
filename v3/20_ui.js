@@ -222,11 +222,6 @@ function r3UIEvent(event){
     r3HudSave();r3HudRender();
   }
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
-  else if(target?.id==='r3-hud-native-allow-reader'){
-    // Explicit opt-in. Never silently undo a user's previous Debug choice.
-    return typeof r3SheetAllowPrivateReaders==='function'?
-      r3SheetAllowPrivateReaders():r3NativeStatus('Private-reader permissions are unavailable in this build.');
-  }
   else if(target?.id==='r3-hud-native-confirm')return r3NativeConfirm();
   else if(target?.id==='r3-hud-native-cancel')return r3NativeCancel();
   else if(target?.id==='r3-hud-native-reveal')return r3NativeBgReveal();
