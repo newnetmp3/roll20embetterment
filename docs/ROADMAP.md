@@ -2,6 +2,12 @@
 
 **Current baseline (2026-10-24):** Firefox **v3.10.4** is Mozilla signed and published. [PR #116](https://github.com/newnetmp3/roll20embetterment/pull/116) merged as `e159dfe` with **500/500 tests passing**. [Release run 40069003914](https://github.com/newnetmp3/roll20embetterment/actions/runs/40069003914) succeeded; published XPI SHA-256 `b18b09d2c5141b58cf11cf82c593f7b3f8fe07a69affd3ee298f0a4e008a57c4` matches the update feed. Native Cast/Use adapters remain conditional on source-observed controls and have no live action-parity verification. See [HANDOVER.md](HANDOVER.md).
 
+## 2026-10-24 — movement tracking correction (Firefox v3.10.5 candidate)
+
+- Prioritize the **actual Roll20 ruler feet** on each completed move when an accessible label is exposed; do not accumulate preview frames or precise pixel jitter.
+- If Jumpgate renders the ruler only inside WebGL/Babylon canvas, use a clearly labeled **grid-rule estimate** based on page scale and diagonal settings, including multi-waypoint movement; never call the fallback an observed native measurement.
+- Regression coverage: ruler label precedence/ambiguity, grid diagonals, drop-only accounting, backtracking and no fabricated movement on gridless pages. Actual Jumpgate ruler DOM/accessibility and token drop events still need live verification; issue #73 stays open.
+
 ## 2026-10-24 — source-observed native Cast/Use adapter (Firefox v3.10.4 released; live QA pending)
 
 - Add direct official-sheet card-button execution for Spells, Features and Inventory when an exact unique **Cast / Use / Activate** control is present in source observations and the authenticated live card; existing macros stay preferred. This does **not** imply the current import exposes castable spells.
