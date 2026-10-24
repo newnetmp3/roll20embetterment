@@ -5,6 +5,14 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-24 — verified signed Firefox v3.10.4 release
+
+- **PR #116 merged** as `e159dfe` after successful push and PR Firefox CI; **500/500 tests passed** and generated-userscript parity was clean.
+- [Firefox v3.10.4 XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.4/r20eb-firefox-v3.10.4.xpi) published as Mozilla-signed; [release run 40069003914](https://github.com/newnetmp3/roll20embetterment/actions/runs/40069003914) succeeded.
+- Release asset and [update feed](../extension/firefox/updates.json) both advertise SHA-256 `b18b09d2c5141b58cf11cf82c593f7b3f8fe07a69affd3ee298f0a4e008a57c4`; version and URL agree. Firefox v3.10.4 is the current signed baseline. Chrome and optional userscript remain v3.4.0.
+- Actual Roll20 2024 Cast/Use button exposure, gameplay prompts, side effects and two-character behavior still need **live Floorp verification**. The October 22 import does not contain Cast/Use control evidence and cannot prove gameplay parity.
+- Next: refresh an all-tab export on v3.10.4, compare native sheet and HUD attack/skill clicks; identify true Cast/Use controls and versioned save/tool/action contracts before wiring any state mutations. Jumpgate movement #73 stays unresolved.
+
 ## 2026-10-24 — source-observed Cast/Use card adapter (Firefox v3.10.4 candidate)
 
 - Add a strictly conditional official-sheet click path for **Spells / Cast**, **Features / Use or Activate**, and **Inventory / Use or Activate** when an imported named card itself exposes one explicit matching button. Generic `Show More`, damage, equip and quantity controls are **not** action mappings.
@@ -43,7 +51,7 @@
 
 ## Verified baseline and current candidate
 
-- Published Firefox baseline: **v3.10.2**, Mozilla-signed; release/feed SHA-256 `e5af5d63fda9b00d1c2a576a15a0643bf3113e5351c3514aa966a0e61c1dec74`. Signing run [39871351495](https://github.com/newnetmp3/roll20embetterment/actions/runs/39871351495) succeeded. PR #114 merged as `5f2ce53`; feed commit `8f15eab`.
+- Historical baseline for this handover slice: **v3.10.2**, Mozilla-signed; release/feed SHA-256 `e5af5d63fda9b00d1c2a576a15a0643bf3113e5351c3514aa966a0e61c1dec74`. Signing run [39871351495](https://github.com/newnetmp3/roll20embetterment/actions/runs/39871351495) succeeded. PR #114 merged as `5f2ce53`; feed commit `8f15eab`.
 - Current functionality: **Firefox v3.10.2**, native sheet-click attacks/skills and control-discovery fixes. Local Firefox check and both PR CI runs passed **492/492 tests**. Release validation, Mozilla signing, XPI publication and update-feed publication all succeeded; live gameplay acceptance remains pending.
 - Chrome and optional userscript metadata remain **v3.4.0**. Firefox version is independent.
 - User wants **signed Firefox builds on every update**, with merge/publication authorized in this workstream. Keep verifying each signed release and feed before handing it over.
