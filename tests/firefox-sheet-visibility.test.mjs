@@ -11,7 +11,8 @@ function harness(){
   const context={
     Date,console,localStorage:{
       getItem:key=>storage.get(key)||null,
-      setItem:(key,value)=>storage.set(key,value)
+      setItem:(key,value)=>storage.set(key,value),
+      removeItem:key=>storage.delete(key)
     },
     document:{querySelectorAll:()=>[],addEventListener(){}},
     r3StorageKey:()=> 'game-test',
@@ -23,7 +24,7 @@ function harness(){
   };
   vm.createContext(context);
   vm.runInContext(source+'\nglobalThis.sheetApi={R3_SHEET_VIS,'+
-    'r3SheetRevealAll,r3SheetAllowsBackground,r3SheetAllowPrivateReaders,'+
+    'r3SheetRevealAll,r3SheetAllowsBackground,'+
     'r3SheetOnPlayerJournal,r3SheetVisibilityInstall};',context);
   return {api:context.sheetApi,operations,storage,context};
 }
@@ -31,21 +32,28 @@ test('manual Journal access cancels background traversal but is not a sticky aut
   const h=harness();
   h.api.r3SheetRevealAll(true);
   assert.deepEqual(h.operations,['cancel-scan','restore-auto','restore-native']);
-  assert.equal(h.api.R3_SHEET_VIS.manualPriority,false);
+  assert.equal('manualPriority' in h.api.R3_SHEET_VIS,false);
   assert.equal(h.api.r3SheetAllowsBackground(),false,'allow the manual sheet to open first');
   assert.equal(h.storage.size,0,'normal player-open never writes a permanent preference');
   h.api.R3_SHEET_VIS.manualUntil=0;
   assert.equal(h.api.r3SheetAllowsBackground(),true,'private sync resumes after manual grace');
 });
-test('explicit Debug restore remains sticky until player re-enables private readers',()=>{
+test('Show Sheet restores the original and automatically resumes private readers',()=>{
   const h=harness();
   h.api.r3SheetRevealAll();
-  assert.equal(h.api.R3_SHEET_VIS.manualPriority,true);
-  assert.equal(h.api.r3SheetAllowsBackground(),false);
-  assert.equal(h.storage.get('game-test:manual-sheet-priority:v1'),'true');
-  h.api.r3SheetAllowPrivateReaders();
+  assert.deepEqual(h.operations,['cancel-scan','restore-auto','restore-native']);
+  assert.equal(h.api.r3SheetAllowsBackground(),false,'temporary 3-second priority');
+  assert.equal(h.storage.size,0,'no persistent reader disable setting');
+  h.api.R3_SHEET_VIS.manualUntil=0;
+  assert.equal(h.api.r3SheetAllowsBackground(),true,'no click or toggle required');
+});
+test('old saved private-reader opt-out is migrated on startup',()=>{
+  const h=harness();
+  const key='game-test:manual-sheet-priority:v1';
+  h.storage.set(key,'true');
+  h.api.r3SheetVisibilityInstall();
+  assert.equal(h.storage.has(key),false);
   assert.equal(h.api.r3SheetAllowsBackground(),true);
-  assert.equal(h.storage.get('game-test:manual-sheet-priority:v1'),'false');
 });
 test('only real trusted Roll20 Journal actions interrupt an automatic scan',()=>{
   const h=harness(),row={closest:()=>({})};
