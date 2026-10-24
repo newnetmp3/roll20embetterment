@@ -64,6 +64,12 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Firefox v3.10.6 native Attack recovery (candidate)
+
+If Roll20 does not expose an active Combat tab marker, R20eb can now verify an imported attack against an exact live official hit-roll button in the unclassified view. It never substitutes a damage button or a fabricated dice roll. If you previously disabled private readers to keep your original Roll20 sheet visible, the Attack flyout now offers an explicit **Enable private sheet reader** control. Enabling it does not hide a player-opened sheet; a separate background session is used only if Roll20 permits one.
+
+These changes do not prove full in-game Roll20 action parity. Verify each native attack, particularly duplicate-weapon variants, against the actual Roll20 chat result.
+
 ## How it works
 
 **Automatic character sync.** A selected, linked, player-controllable token can trigger character-scoped read-only synchronization; manual importing remains available when Roll20's protected sheet/Journal interfaces do not allow unattended reading. A different character should never inherit the previous character's values. An explicit sync Off is preserved. Real-game reliability varies with upstream Roll20 interfaces and remains under testing.
