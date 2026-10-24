@@ -2,5 +2,5 @@
   "version": "3.10.6",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Fix source-verified HUD attacks when Jumpgate exposes matching Combat hit controls under an unclassified active tab; add explicit reader opt-in when previous manual-sheet protection blocks native execution. Tests/CI and live sheet parity are separate."
+  "reason": "Repair source-verified native attacks under unclassified Jumpgate Combat views; private official-sheet readers are always enabled with no user toggles. Old sticky opt-out is migrated; original sheets retain priority with automatic resume after manual-open grace. Pending live Roll20 parity testing."
 }
