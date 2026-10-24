@@ -6,18 +6,18 @@ Player-focused D&D 2024 combat HUD and read-only Roll20 sheet companion. R20eb u
 
 | Distribution | Status |
 | --- | --- |
-| **Firefox / Floorp** | **v3.10.2** in the signed-release update feed; primary development target |
+| **Firefox / Floorp** | **v3.10.4** in the signed-release update feed; primary development target |
 | **Chrome / Chromium** | **v3.4.0**; independently versioned and not feature-parity guaranteed |
 | **Optional userscript** | **v3.4.0** metadata; built from `v3/` independently of Firefox releases |
 
-- [Firefox v3.10.2 XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.2/r20eb-firefox-v3.10.2.xpi)
+- [Firefox v3.10.4 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.4/r20eb-firefox-v3.10.4.xpi)
 - [Firefox updates.json](extension/firefox/updates.json)
 - [Firefox installation and signing guide](extension/firefox/README.md)
 - [GitHub Actions](https://github.com/newnetmp3/roll20embetterment/actions)
 
 Disable any previous R20eb userscript or duplicate extension when using the signed Firefox add-on. Keep the native Roll20 chat panel accessible when running actions; R20eb does not overwrite an unsent chat draft.
 
-Firefox v3.10.2 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+Firefox v3.10.4 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
 
 ## Native-action and UI milestone (PR #110 — released in Firefox v3.10.0)
 
@@ -25,9 +25,9 @@ The **Milestone Completion** build extends native action discovery beyond existi
 
 The Firefox battlefield HUD replaces the former six-button utility toolbar with one **Debug** entry in the turn strip. Debug contains the manual turn corrections, original-sheet controls, private reader permissions, layout reset, HUD visibility, importer and movement logs. Panels remain movable and keyboard-nudgeable. The layout scales to browser/monitor viewport size and accounts for Roll20 chat/sidebar space.
 
-**Firefox v3.10.2 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
+**Firefox v3.10.4 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
 
-## Firefox v3.10.3 background import (candidate; live QA pending)
+## Firefox v3.10.3 background import (signed; live QA pending)
 
 After selecting a linked character whose **Controlled By** permission can be verified,
 R20eb now uses the existing Roll20 character-model opener to start a private
@@ -48,7 +48,7 @@ This is a source/automated-test milestone, not a guarantee of live Floorp
 behavior. Roll20 must expose a valid character model, official frame and
 rendered tab controls; virtualized/unmounted entries still cannot be inferred.
 
-## Firefox v3.10.4 Cast/Use card adapter (candidate; live QA pending)
+## Firefox v3.10.4 Cast/Use card adapter (signed; live QA pending)
 
 The existing native sheet-click adapter now recognizes a **single explicitly
 observed Cast, Use, or Activate button** on a uniquely named official spell,
