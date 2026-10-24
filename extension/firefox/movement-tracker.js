@@ -306,7 +306,8 @@ function r3MoveMeasure(signal='poll'){
   if(oldScale!==signature||!previous){
     tracker.last=sample;tracker.lastMove=lastMove;
     tracker.pending=null;tracker.nativeReadout=null;tracker.dragging=false;
-    r3MoveReport('Map scale updated','Movement baseline refreshed');
+    r3MoveReport(scale?'Map scale updated':'Map scale unavailable',
+      scale?'Movement baseline refreshed':'Roll20 page scale in feet is not exposed');
     return;
   }
   if(R3_TURN.phase!=='active'){
