@@ -1,20 +1,17 @@
-// Firefox-only: original Roll20 sheets always win over invisible HUD readers.
-// A player request restores *all* reader sessions, including Auto-sync-owned
-// wrappers; active private-reader requests then stop before claiming new DOM.
-const R3_SHEET_VIS={installed:false,manualPriority:false,manualUntil:0};
+// Private readers are enabled by default and require no permission toggle.
+// A trusted Journal open temporarily gives the manual sheet precedence; never
+// hide, navigate or claim player-owned dialogs/popouts as extension-owned.
+const R3_SHEET_VIS={installed:false,manualUntil:0};
 function r3SheetVisibilityKey(){return r3StorageKey()+':manual-sheet-priority:v1';}
 function r3SheetVisibilityLoad(){
-  try{R3_SHEET_VIS.manualPriority=
-    localStorage.getItem(r3SheetVisibilityKey())==='true';}catch{}
+  // Migrate the old sticky "Show Sheet" setting. The player's ability to
+  // open/show the original sheet is still protected on every Journal event.
+  try{localStorage.removeItem?.(r3SheetVisibilityKey());}catch{}
 }
 function r3SheetAllowsBackground(){
-  // A trusted player Journal action gets a short automatic-open grace period,
-  // not a permanent opt-out. Explicit Debug 'restore' remains sticky.
-  return !R3_SHEET_VIS.manualPriority&&Date.now()>=R3_SHEET_VIS.manualUntil;
-}
-function r3SheetVisibilitySave(){
-  try{localStorage.setItem(r3SheetVisibilityKey(),
-    R3_SHEET_VIS.manualPriority?'true':'false');}catch{}
+  // This transient grace protects Roll20's modal opener, not a user setting.
+  // Independently owned private readers resume automatically after it.
+  return Date.now()>=R3_SHEET_VIS.manualUntil;
 }
 function r3SheetRecoverMarkedDialogs(){
   // These markers are exclusively R20eb's, and might outlive an obsolete
@@ -38,16 +35,14 @@ function r3SheetRecoverMarkedDialogs(){
   }
 }
 function r3SheetRevealAll(quiet=false){
-  if(quiet)R3_SHEET_VIS.manualUntil=Date.now()+3000;
-  else{
-    R3_SHEET_VIS.manualPriority=true;
-    r3SheetVisibilitySave();
-  }
+  // Showing the original sheet never permanently disables private readers.
+  // Release owned sessions before the player can interact with their sheet.
+  R3_SHEET_VIS.manualUntil=Date.now()+3000;
   // Stop cross-origin full-tab traversal before showing a sheet. The reader
   // must not continue switching its tabs under a player's manual control.
   if(typeof r3CancelOwnedScans==='function')r3CancelOwnedScans();
-  // Invalidate any pending auto scan; no new background opener is allowed
-  // until the player explicitly re-enables it.
+  // Invalidate scans that could navigate the now player-owned sheet.
+  // New private readers can start automatically after the brief grace period.
   if(typeof R3_AUTO==='object'){
     R3_AUTO.generation++;
     r3AutoRestoreDialog();
@@ -55,15 +50,8 @@ function r3SheetRevealAll(quiet=false){
   if(typeof r3NativeBgRestoreAll==='function')r3NativeBgRestoreAll();
   r3SheetRecoverMarkedDialogs();
   if(!quiet&&typeof r3NativeStatus==='function')
-    r3NativeStatus('Original Roll20 sheets restored. R20eb will use visible sheets or popouts and will not hide them. You can re-enable background readers from the HUD.');
+    r3NativeStatus('Original Roll20 sheets restored. Private reading resumes automatically without changing this sheet.');
   if(!quiet)r3HudRender();
-}
-function r3SheetAllowPrivateReaders(){
-  R3_SHEET_VIS.manualPriority=false;
-  R3_SHEET_VIS.manualUntil=0;
-  r3SheetVisibilitySave();
-  r3NativeStatus('Private readers allowed again on your next Find/Auto-sync. Your currently visible Roll20 sheet will not be moved.');
-  r3HudRender();
 }
 function r3SheetIsJournalIntent(target){
   if(typeof target?.closest!=='function')return false;
@@ -86,12 +74,11 @@ function r3SheetVisibilityInstall(){
   if(R3_SHEET_VIS.installed)return;
   R3_SHEET_VIS.installed=true;
   r3SheetVisibilityLoad();
-  // On a prior user choice, rescue any orphaned marks immediately.
-  if(R3_SHEET_VIS.manualPriority){
-    r3NativeBgRestoreAll();
-    r3AutoRestoreDialog();
-    r3SheetRecoverMarkedDialogs();
-  }
+  // An earlier R20eb build may have persisted a sticky disable or left
+  // hidden-sheet markers after a crash. Recover those safely on startup.
+  r3NativeBgRestoreAll();
+  r3AutoRestoreDialog();
+  r3SheetRecoverMarkedDialogs();
   document.addEventListener('pointerdown',r3SheetOnPlayerJournal,true);
   document.addEventListener('dblclick',r3SheetOnPlayerJournal,true);
   document.addEventListener('keydown',r3SheetOnPlayerJournal,true);
