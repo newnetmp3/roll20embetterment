@@ -2,6 +2,13 @@
 
 **Current baseline (2026-10-22):** Firefox v3.10.2 signed and published (PR #114 merged as `5f2ce53`, signing run 39871351495, feed `8f15eab`). Firefox v3.10.2 adds native sheet-click attacks/skills and fixes hidden-node starvation in control discovery; local check passes **492/492 tests**. Current release/CI status is tracked in [HANDOVER.md](HANDOVER.md). Historical entries below may describe superseded limitations or versions.
 
+## 2026-10-24 — source-observed native Cast/Use adapter (Firefox v3.10.4 candidate)
+
+- Add direct official-sheet card-button execution for Spells, Features and Inventory when an exact unique **Cast / Use / Activate** control is present in source observations and the authenticated live card; existing macros stay preferred. This does **not** imply the current import exposes castable spells.
+- Keep single-use source/session/permission checks, no retry, no player-owned tab navigation, no implicit resource/quantity edits, and fail-closed behavior on stale or duplicate cards.
+- Tests: source-observed card families, one click only, stale card, disabled/duplicate/non-action controls and manual-tab protection. CI, signing and real 2024 play parity remain separate gates.
+- Still pending: source-observed saving throws, ability checks, spell prompts, item side effects, slot/resource/HP writes, Jumpgate movement #73 and virtualized card discovery.
+
 ## 2026-10-22 — no-Journal private all-tab background import (Firefox v3.10.3 candidate)
 
 - Reuse the verified, controlled-character Roll20 model opener to mount
