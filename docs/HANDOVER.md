@@ -11,8 +11,8 @@
 - The previous user export contains 20 attacks including Dagger variants, all with `tab: Current view`, source-verified numeric hit buttons, and no explicit native macro references. Old `r3NativeAttackControl` rejected every such action if the live Jumpgate sheet also lacked an active `Combat` tab marker.
 - With an unclassified **Current view**, now permit an attack only when the unique mounted source row has the exact imported name, bonus, damage and a matching numeric `+N Attack` hit button. Explicit non-Combat tabs, stale metrics, duplicate rows, generic Roll Attack captions, and damage buttons remain blocked.
 - Background readers no longer attempt to change tabs if this exact attack control is already verifiably mounted. Player-opened sheets are never navigated.
-- A sticky, previously chosen disable of private readers remains respected. The attacks flyout now offers **Enable private sheet reader** as an explicit opt-in; it does not silently reverse the user's Debug preference or send a roll.
-- New regression tests cover exact mounted native attack on an unclassified tab, mismatched/importless evidence rejection, no damage-button substitution and explicit reader opt-in. **CI, signed release and actual game parity are separate verification gates.** Request Firefox 3.10.6 signed only after PR CI succeeds. Verify the release/feed hash afterward.
+- Follow-up requirement: **private readers are always enabled without user toggles**. The prior sticky `manual-sheet-priority:v1` setting is discarded at startup. The Attack flyout, Debug window and battlefield remove the "enable private reader" action. Visible player-owned sheets remain untouched; trusted Journal opening cancels private traversals and briefly defers fresh private opens (three seconds) before automatic resumption.
+- New regression tests cover exact mounted native attack on an unclassified tab, mismatched/importless evidence rejection, no damage-button substitution, automatic reader access and restoring original sheets without persistent opt-out. **CI, signed release and actual game parity are separate verification gates.** Request Firefox 3.10.6 signed only after PR CI succeeds. Verify the release/feed hash afterward.
 
 ## 2026-10-24 — Roll20 ruler-based movement (Firefox v3.10.5 candidate)
 
@@ -55,7 +55,7 @@
 - A trusted user Journal opening sends `cancel-scan` to any owned in-flight
   all-tab reader before releasing its dialog/overlay. It introduces a short
   grace period for manual opening, not a permanent opt-out; explicitly chosen
-  Debug restore/private-reader restrictions still remain sticky.
+  Debug Show Sheet now only restores visibility and briefly defers new private sessions; it never creates a sticky private-reader opt-out.
 - Source tests added for the no-Journal initial full scan, cancellation during
   tab traversal and manual-priority lifecycle. **CI and live Floorp QA pending**
   at branch creation; version 3.10.3 requested for signed publication only
@@ -87,7 +87,7 @@ The global scanner capped raw candidates before filtering hidden nodes. That sta
 3. Attack matching requires the exact source name and observed hit/damage metrics, one live matching row and one attack-hit control. Duplicate indistinguishable rows are blocked. Damage buttons never satisfy attack-hit matching. Missing or changed metrics invalidate the request.
 4. Skill matching requires one of the 18 standard skills and the exact observed `Roll a <skill> check` button. The live reader must find exactly one visible enabled button. No generic caption is converted into a macro or private action ID.
 5. Character selection, Controlled By permission, source data, reader session and ownership are rechecked after asynchronous preparation. No invocation retry occurs after a missing response or transport failure. A changed session's response cannot resolve the pending request.
-6. A private reader may load when the sheet is closed, using the existing controlled-character opener. A player-opened sheet is never hidden or navigated. If it is on another tab, an attack may require the player to return to Combat. Manual sheet priority still blocks private loading until explicitly re-enabled in Debug. Automatic full scans pause during native requests.
+6. A private reader may load when the sheet is closed, using the existing controlled-character opener. A player-opened sheet is never hidden or navigated. If it is on another tab, an attack may require the player to return to Combat. Original-sheet access temporarily defers new private loading, then it resumes automatically without a toggle. Automatic full scans pause during native requests.
 
 For the supplied export, **19/20 attack entries and 18/18 skills qualify as candidates**. This is source-evidence coverage, not successful gameplay verification. The remaining attack entry exposes a saving-throw effect rather than a hit-roll button. Spell observations show details/expansion controls, which do not establish a cast action.
 
