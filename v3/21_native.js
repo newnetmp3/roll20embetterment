@@ -514,8 +514,17 @@ async function r3NativeDomInvoke(kind,key){
 
 function r3NativeAttackControl(name,source={}){
   const tab=r3CurrentTabLabel();
-  if(!/^combat$/i.test(tab))
+  // Jumpgate sometimes exposes its Combat rows without marking a primary
+  // tab aria-selected. An unclassified current view is NOT proof that Combat
+  // is absent: require exact source-observed hit metrics and a unique live
+  // hit button before accepting such a view. Explicit non-Combat tabs stay
+  // blocked and cannot be silently navigated on a player-owned sheet.
+  const unknownTab=tab==='Current view';
+  if(!/^combat$/i.test(tab)&&!unknownTab)
     return {error:'Open Combat on the official sheet (currently '+r3String(tab,35)+').'};
+  const expected=r3NativeAttackMetric(source.visible||'');
+  if(unknownTab&&(!expected.bonus||!r3String(source.visible,550)))
+    return {error:'No confirmed Combat tab or imported hit-roll evidence. Refresh the official Combat import.'};
   const wanted=r3String(name,125).toLowerCase();
   if(!wanted)return {error:'A named attack is required.'};
   const rowNodes=document.querySelectorAll(
@@ -536,7 +545,6 @@ function r3NativeAttackControl(name,source={}){
   // Keep the highest complete single-title row, never a nested copy.
   let candidates=found.filter(row=>!found.some(other=>other!==row&&
     other.contains?.(row)));
-  const expected=r3NativeAttackMetric(source.visible||'');
   if(candidates.length>1){
     // A same-name row without explicit differentiating evidence is unsafe.
     if(!expected.bonus&&!expected.damage)
@@ -587,6 +595,12 @@ function r3NativeAttackControl(name,source={}){
       (labels.join(', ')||'(unlabeled)')+'.'};
   }
   const label=roll[0].label||'Native attack roll';
+  if(unknownTab){
+    const bonus=r3String(label,70).replace(/\u2212/g,'-');
+    if(!/^[+-]\d{1,3}\s*Attack$/i.test(bonus)||
+       bonus.split(/\s+/)[0]!==expected.bonus)
+      return {error:'Combat tab identity is unavailable and the exact imported hit-roll button was not confirmed.'};
+  }
   // Use the row's observed metrics to bind probe and later confirmation,
   // preventing a same-name attack switching to a different roll mid-request.
   const fingerprint=wanted+'|'+actual.bonus+'|'+actual.damage+'|'+label;
@@ -621,10 +635,13 @@ async function r3NativeReaderHandle(peer,data){
   // Only HUD-owned or Auto-sync-owned hidden sheets may have their tabs
   // switched automatically. A player-opened sheet is never navigated.
   const targetTab=kind==='skills'?null:r3NativeCardTab(kind);
+  // Prefer a verified mounted attack control even when Jumpgate exposes no
+  // active Combat tab marker. Never switch a player's sheet on this basis.
+  const mountedAttack=kind==='attacks'?findControl():null;
   const targetName={attacks:'Combat',spells:'Spells',features:'Features & Traits',
     inventory:'Inventory'}[kind];
   if(targetTab&&data.type==='native-probe'&&data.background===true&&
-      !targetTab.test(r3CurrentTabLabel())){
+      !targetTab.test(r3CurrentTabLabel())&&!mountedAttack?.button){
     // Only the privately owned reader may navigate. A player's open sheet
     // stays untouched even when it is on a different tab.
     let selected=null;
@@ -873,7 +890,7 @@ function r3NativeBgJournal(identity){
 async function r3NativeBgOpen(name){
   const bg=R3_NATIVE_BG;
   if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())
-    throw new Error('Your original Roll20 character sheet takes priority. Open it from the Journal or use its popout; R20eb will read it without hiding it.');
+    throw new Error('The original Roll20 sheet is being opened. Background reading resumes automatically after manual sheet access settles.');
   const resolution=r3NativeBgResolve(name);
   if(!resolution.model)throw new Error(resolution.reason||
     'Unable to verify a player-controlled character for the background sheet.');
@@ -1183,7 +1200,7 @@ function r3NativeBgReveal(){
 function r3NativeMarkup(){
   if(!R3_NATIVE.status&&!R3_NATIVE.preview&&!R3_NATIVE_BG.dialog)return '';
   return '<section class="hud-native-status" role="status">'+
-    '<span>'+r3Escape(R3_NATIVE.status)+'</span>'+
+    (R3_NATIVE.status?'<span>'+r3Escape(R3_NATIVE.status)+'</span>':'')+
     (R3_NATIVE.preview?'<button type="button" id="r3-hud-native-confirm">Confirm native roll</button>'+
       '<button type="button" id="r3-hud-native-cancel">Cancel</button>':'')+
     (R3_NATIVE_BG.dialog?'<button type="button" id="r3-hud-native-reveal">Show original sheet</button>':'')+

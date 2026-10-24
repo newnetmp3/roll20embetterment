@@ -2,6 +2,13 @@
 
 **Current baseline (2026-10-24):** Firefox **v3.10.4** is Mozilla signed and published. [PR #116](https://github.com/newnetmp3/roll20embetterment/pull/116) merged as `e159dfe` with **500/500 tests passing**. [Release run 40069003914](https://github.com/newnetmp3/roll20embetterment/actions/runs/40069003914) succeeded; published XPI SHA-256 `b18b09d2c5141b58cf11cf82c593f7b3f8fe07a69affd3ee298f0a4e008a57c4` matches the update feed. Native Cast/Use adapters remain conditional on source-observed controls and have no live action-parity verification. See [HANDOVER.md](HANDOVER.md).
 
+## 2026-10-24 — native Attack click execution repair (Firefox v3.10.6 candidate)
+
+- A screenshot revealed **Native sheet** attack buttons that were available in the HUD but could not execute. Their imported source `tab` was `Current view`, not `Combat`, and a sticky explicit original-sheet priority prevented hidden reader startup.
+- Accept an unclassified Jumpgate active tab only with a unique exact current official attack row, observed numeric hit button and matching imported bonus/damage; never infer a roll from a title or click a damage control.
+- **Follow-up requirement implemented:** private readers stay automatically enabled; remove opt-in/opt-out controls, ignore and clear old stored sticky disables, preserve original-sheet priority using only a short manual-open grace period and ownership checks.
+- Tests and signed Firefox publication required. Live gameplay chat parity (attack cards, variants, character changes and manual-sheet behavior) is still pending.
+
 ## 2026-10-24 — movement tracking correction (Firefox v3.10.5 candidate)
 
 - Prioritize the **actual Roll20 ruler feet** on each completed move when an accessible label is exposed; do not accumulate preview frames or precise pixel jitter.
@@ -23,7 +30,7 @@
 - Keep a player-opened native dialog/popout visible and its current tab intact.
   A trusted manual Journal action cancels private traversal and restores
   owned dialog wrappers, with automatic retry after manual opening; an explicit
-  private-reader disable in Debug remains sticky.
+  private-reader disable in Debug is superseded by the always-on reader milestone; Show Sheet restores original visibility with automatic private-reader resumption.
 - Cover no-Journal controlled-character import, manual-priority grace and
   cancellation mid-scan. The existing five-minute full-scan gate and read-only
   changes-only updates remain. **CI/live Floorp evidence pending**; signed
@@ -350,7 +357,7 @@ Reference: `https://wiki.theripper93.com/free/enhancedcombathud`. Main source `t
 - [x] Implement full cleanup of all HUD native hidden-reader sessions and Auto-sync-owned dialogs and exclusive overlays, not only the currently selected character.
 - [x] Make real Journal player-open events release private readers before Roll20 reopens a reused dialog.
 - [x] Add always-available **Show Sheet** recovery button in the movable Firefox HUD; no question popups.
-- [x] Persist per-game player-managed-sheet priority and block new hidden readers in that mode; allow explicit re-enable.
+- [x] Historical: persist managed-sheet priority and permit re-enable (superseded by the automatic always-on private-reader policy, which never claims manual sheets).
 - [x] Continue authenticated import/native Find through player-opened official sheets/popouts without changing manual sheet tabs or positions.
 - [x] Regression tests for multi-session restoration, original sheet visibility, trusted-vs-synthetic Journal requests, persisted preference and re-hide prevention.
 - [x] Firefox/Chrome PR CI green; PR #63 merged; 380 Firefox tests passed; Mozilla unlisted signing run 39151570823 published v3.7.1 XPI and SHA-256 update feed.

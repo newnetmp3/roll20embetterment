@@ -848,6 +848,38 @@ test('native token cannot switch attacks or character during confirm',()=>{
   assert.equal(x.request('native-invoke',{token:ready.token,characterName:'Someone Else'}).status,'blocked');
   assert.equal(x.clicks.length,0);
 });
+test('Jumpgate Current view permits only a unique matching source-observed hit roll',()=>{
+  const x=nativeAttackFixture('Elowen',[{
+    name:'Dagger',visible:'Dagger Melee 5 ft. +7 Attack 1d4+4',
+    controls:['+7 Attack','1d4+4']}]);
+  x.tab.getAttribute=key=>key==='aria-label'?'Miscellaneous':
+    key==='aria-selected'?'false':null;
+  const params={attackText:'Dagger Melee 5 ft. +7 Attack 1d4+4',attackKey:'dagger'};
+  const ready=x.request('native-probe',params);
+  assert.equal(ready.status,'ready',ready.message);
+  assert.equal(x.clicks.length,0);
+  assert.equal(x.request('native-invoke',{...params,token:ready.token}).status,'clicked');
+  assert.deepEqual(x.clickedControls,['+7 Attack'],'damage is never clicked');
+  assert.equal(x.request('native-invoke',{...params,token:ready.token}).status,'blocked');
+});
+test('Jumpgate unknown tab rejects missing, changed, and nonmatching hit evidence',()=>{
+  const x=nativeAttackFixture('Elowen',[{
+    name:'Dagger',visible:'Dagger Melee +7 Attack 1d4+4',
+    controls:['+7 Attack','1d4+4']}]);
+  x.tab.getAttribute=key=>key==='aria-label'?'Miscellaneous':
+    key==='aria-selected'?'false':null;
+  assert.equal(x.request('native-probe',{attackText:''}).status,'blocked');
+  assert.equal(x.request('native-probe',{attackText:'Dagger Melee +5 Attack 1d4+2'}).status,'blocked');
+  assert.equal(x.clicks.length,0);
+  const unverified=nativeAttackFixture('Elowen',[{
+    name:'Dagger',visible:'Dagger Melee +7 Attack 1d4+4',
+    controls:['Roll Attack','1d4+4']}]);
+  unverified.tab.getAttribute=key=>key==='aria-label'?'Miscellaneous':
+    key==='aria-selected'?'false':null;
+  assert.equal(unverified.request('native-probe',
+    {attackText:'Dagger Melee +7 Attack 1d4+4'}).status,'blocked',
+    'generic caption cannot override unknown tab identity');
+});
 test('native action refused when official sheet is not on Combat tab',()=>{
   const x=nativeAttackFixture('Azura',[{name:'Staff',label:'Roll Attack'}]);
   x.tab.getAttribute=key=>key==='aria-label'?'Inventory':

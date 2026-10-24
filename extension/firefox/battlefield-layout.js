@@ -39,9 +39,6 @@ function r3BattlefieldClick(target){
     case 'show-roll20-sheet':
       if(typeof r3SheetRevealAll==='function')r3SheetRevealAll();
       return true;
-    case 'allow-background':
-      if(typeof r3SheetAllowPrivateReaders==='function')r3SheetAllowPrivateReaders();
-      return true;
     case 'reset-layout':
       if(typeof r3BattlefieldResetPositions==='function')r3BattlefieldResetPositions();
       return true;
