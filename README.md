@@ -23,7 +23,7 @@ Firefox v3.10.4 is published as Mozilla-signed and referenced by the update feed
 
 The **Milestone Completion** build extends native action discovery beyond existing token-bar abilities: it can use whole, character-bound references explicitly published by authenticated official 2024 sheet controls, and discover safe **uncategorized** existing Roll20 character actions. Unclassified valid actions appear in a dedicated **MISC** menu. This is **conditional capability**, not a claim that every private 2024 button exposes a supported macro; unverified controls stay unmapped.
 
-The Firefox battlefield HUD replaces the former six-button utility toolbar with one **Debug** entry in the turn strip. Debug contains the manual turn corrections, original-sheet controls, private reader permissions, layout reset, HUD visibility, importer and movement logs. Panels remain movable and keyboard-nudgeable. The layout scales to browser/monitor viewport size and accounts for Roll20 chat/sidebar space.
+The Firefox battlefield HUD replaces the former six-button utility toolbar with one **Debug** entry in the turn strip. Debug contains the manual turn corrections, original-sheet controls, automatic private reader status, layout reset, HUD visibility, importer and movement logs. Panels remain movable and keyboard-nudgeable. The layout scales to browser/monitor viewport size and accounts for Roll20 chat/sidebar space.
 
 **Firefox v3.10.4 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
 
@@ -41,8 +41,9 @@ Opening the character's original sheet from the Journal takes priority: it
 cancels in-flight private full-tab traversal and restores the original visible
 sheet. That ordinary manual action is no longer a permanent Auto-sync opt-out.
 Any visible player-owned sheet or popout is read on its **current tab only**,
-without automatic navigation. The explicit Debug choice to disable private
-readers stays in effect until you re-enable it.
+without automatic navigation. Private readers are **always enabled**; opening the
+original Roll20 sheet restores it and briefly pauses background access,
+which resumes on its own without an enable/disable toggle.
 
 This is a source/automated-test milestone, not a guarantee of live Floorp
 behavior. Roll20 must expose a valid character model, official frame and
@@ -66,7 +67,7 @@ in-game parity checks.
 
 ## Firefox v3.10.6 native Attack recovery (candidate)
 
-If Roll20 does not expose an active Combat tab marker, R20eb can now verify an imported attack against an exact live official hit-roll button in the unclassified view. It never substitutes a damage button or a fabricated dice roll. If you previously disabled private readers to keep your original Roll20 sheet visible, the Attack flyout now offers an explicit **Enable private sheet reader** control. Enabling it does not hide a player-opened sheet; a separate background session is used only if Roll20 permits one.
+If Roll20 does not expose an active Combat tab marker, R20eb can verify an imported attack against an exact live official hit-roll button in the unclassified view. It never substitutes a damage button or a fabricated dice roll. **Private official-sheet reading is automatic and always enabled—there is no private-reader toggle.** Prior saved private-reader opt-outs are discarded. Opening the player's original Roll20 sheet restores it and safely interrupts private navigation; any separate private session resumes automatically after that manual opening settles. A player-opened sheet is never hidden, reparented or switched to another tab.
 
 These changes do not prove full in-game Roll20 action parity. Verify each native attack, particularly duplicate-weapon variants, against the actual Roll20 chat result.
 
