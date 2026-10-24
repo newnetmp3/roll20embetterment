@@ -46,7 +46,7 @@ function rig(options={}){
       setItem(k,v){store.set(k,v);}}
   };
   vm.createContext(ctx);
-  vm.runInContext(economy+'\n'+tracker+'\nglobalThis.api={R3_MOVE,R3_TURN,r3MovePoll,r3MoveRebase,r3MoveScale,r3MoveWaypointLength,r3MoveFind,r3MoveReadNative,r3MoveGridDistance,r3MoveDiagnostics,r3TurnLoad,r3TurnStart,r3TurnApply,r3TurnMarkup,r3TurnDistance};',ctx);
+  vm.runInContext(economy+'\n'+tracker+'\nglobalThis.api={R3_MOVE,R3_TURN,r3MovePoll,r3MoveMeasure,r3MoveRebase,r3MoveScale,r3MoveWaypointLength,r3MoveFind,r3MoveReadNative,r3MoveGridDistance,r3MoveDiagnostics,r3TurnLoad,r3TurnStart,r3TurnApply,r3TurnMarkup,r3TurnDistance};',ctx);
   const api=ctx.api;api.r3TurnLoad();
   return {api,ctx,elf,make,store,renders,pageAttrs,page,listeners};
 }
@@ -240,12 +240,14 @@ test('page lookup resolves playerpageid and missing optional snapping_increment'
   assert.equal(h.api.R3_TURN.movementUsed,5);
   assert.equal(h.api.r3MoveScale(h.page).feetPerPixel,5/70);
 });
-test('live Fabric object coordinates can update before stale model coordinates',()=>{
+test('live Fabric coordinates may preview movement but only commit on drop',()=>{
   const h=rig();
   h.elf.object.left=140;h.elf.object.top=210;
   h.api.r3TurnStart();
   h.elf.object.left=210;
   h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,0,'no premature accounting while Fabric is dragging');
+  h.api.r3MoveMeasure('modified');
   assert.equal(h.api.R3_TURN.movementUsed,5);
 });
 test('movement diagnostics report missing graphics and scale, rather than silently staying zero',()=>{
