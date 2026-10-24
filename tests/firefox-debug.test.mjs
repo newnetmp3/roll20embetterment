@@ -121,19 +121,19 @@ test('one Debug window owns former toolbar operations without changing character
   const h=harness(),operations=[];
   h.ctx.R3_AUTO={enabled:false};
   h.ctx.R3_HUD={collapsed:false,flyout:'actions',chooser:null};
-  h.ctx.R3_SHEET_VIS={manualPriority:true};
+  h.ctx.R3_SHEET_VIS={manualUntil:0};
   h.ctx.r3ToggleAuto=()=>{h.ctx.R3_AUTO.enabled=!h.ctx.R3_AUTO.enabled;operations.push('sync');};
   h.ctx.r3SheetRevealAll=()=>operations.push('show-sheet');
-  h.ctx.r3SheetAllowPrivateReaders=()=>operations.push('allow-private');
   h.ctx.r3BattlefieldResetPositions=()=>operations.push('reset-layout');
   h.ctx.r3HudSave=()=>operations.push('save');
   h.api.r3DebugToggle();
   const html=h.api.r3DebugMarkup();
-  for(const key of ['sync','show-sheet','allow-private','reset-layout','toggle-hud'])
+  for(const key of ['sync','show-sheet','reset-layout','toggle-hud'])
     assert.match(html,new RegExp('data-r3-debug="'+key+'"'));
-  for(const action of ['sync','show-sheet','allow-private','reset-layout','toggle-hud'])
+  assert.doesNotMatch(html,/data-r3-debug="allow-private"/);
+  for(const action of ['sync','show-sheet','reset-layout','toggle-hud'])
     assert.equal(h.api.r3DebugAction({dataset:{r3Debug:action}}),true);
   assert.equal(h.ctx.R3_AUTO.enabled,true);
   assert.equal(h.ctx.R3_HUD.collapsed,true);
-  assert.deepEqual(operations,['sync','show-sheet','allow-private','reset-layout','save']);
+  assert.deepEqual(operations,['sync','show-sheet','reset-layout','save']);
 });
