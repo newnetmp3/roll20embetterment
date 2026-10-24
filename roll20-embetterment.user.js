@@ -1260,6 +1260,11 @@ function r3UIEvent(event){
     r3HudSave();r3HudRender();
   }
   else if(target?.id==='r3-hud-auto'){r3ToggleAuto();r3HudRender();}
+  else if(target?.id==='r3-hud-native-allow-reader'){
+    // Explicit opt-in. Never silently undo a user's previous Debug choice.
+    return typeof r3SheetAllowPrivateReaders==='function'?
+      r3SheetAllowPrivateReaders():r3NativeStatus('Private-reader permissions are unavailable in this build.');
+  }
   else if(target?.id==='r3-hud-native-confirm')return r3NativeConfirm();
   else if(target?.id==='r3-hud-native-cancel')return r3NativeCancel();
   else if(target?.id==='r3-hud-native-reveal')return r3NativeBgReveal();
@@ -1931,8 +1936,17 @@ async function r3NativeDomInvoke(kind,key){
 
 function r3NativeAttackControl(name,source={}){
   const tab=r3CurrentTabLabel();
-  if(!/^combat$/i.test(tab))
+  // Jumpgate sometimes exposes its Combat rows without marking a primary
+  // tab aria-selected. An unclassified current view is NOT proof that Combat
+  // is absent: require exact source-observed hit metrics and a unique live
+  // hit button before accepting such a view. Explicit non-Combat tabs stay
+  // blocked and cannot be silently navigated on a player-owned sheet.
+  const unknownTab=tab==='Current view';
+  if(!/^combat$/i.test(tab)&&!unknownTab)
     return {error:'Open Combat on the official sheet (currently '+r3String(tab,35)+').'};
+  const expected=r3NativeAttackMetric(source.visible||'');
+  if(unknownTab&&(!expected.bonus||!r3String(source.visible,550)))
+    return {error:'No confirmed Combat tab or imported hit-roll evidence. Refresh the official Combat import.'};
   const wanted=r3String(name,125).toLowerCase();
   if(!wanted)return {error:'A named attack is required.'};
   const rowNodes=document.querySelectorAll(
@@ -1953,7 +1967,6 @@ function r3NativeAttackControl(name,source={}){
   // Keep the highest complete single-title row, never a nested copy.
   let candidates=found.filter(row=>!found.some(other=>other!==row&&
     other.contains?.(row)));
-  const expected=r3NativeAttackMetric(source.visible||'');
   if(candidates.length>1){
     // A same-name row without explicit differentiating evidence is unsafe.
     if(!expected.bonus&&!expected.damage)
@@ -2004,6 +2017,12 @@ function r3NativeAttackControl(name,source={}){
       (labels.join(', ')||'(unlabeled)')+'.'};
   }
   const label=roll[0].label||'Native attack roll';
+  if(unknownTab){
+    const bonus=r3String(label,70).replace(/\u2212/g,'-');
+    if(!/^[+-]\d{1,3}\s*Attack$/i.test(bonus)||
+       bonus.split(/\s+/)[0]!==expected.bonus)
+      return {error:'Combat tab identity is unavailable and the exact imported hit-roll button was not confirmed.'};
+  }
   // Use the row's observed metrics to bind probe and later confirmation,
   // preventing a same-name attack switching to a different roll mid-request.
   const fingerprint=wanted+'|'+actual.bonus+'|'+actual.damage+'|'+label;
@@ -2038,10 +2057,13 @@ async function r3NativeReaderHandle(peer,data){
   // Only HUD-owned or Auto-sync-owned hidden sheets may have their tabs
   // switched automatically. A player-opened sheet is never navigated.
   const targetTab=kind==='skills'?null:r3NativeCardTab(kind);
+  // Prefer a verified mounted attack control even when Jumpgate exposes no
+  // active Combat tab marker. Never switch a player's sheet on this basis.
+  const mountedAttack=kind==='attacks'?findControl():null;
   const targetName={attacks:'Combat',spells:'Spells',features:'Features & Traits',
     inventory:'Inventory'}[kind];
   if(targetTab&&data.type==='native-probe'&&data.background===true&&
-      !targetTab.test(r3CurrentTabLabel())){
+      !targetTab.test(r3CurrentTabLabel())&&!mountedAttack?.button){
     // Only the privately owned reader may navigate. A player's open sheet
     // stays untouched even when it is on a different tab.
     let selected=null;
@@ -2598,9 +2620,13 @@ function r3NativeBgReveal(){
   r3NativeStatus('Your Roll20 character sheets are visible again and can be closed normally.');
 }
 function r3NativeMarkup(){
-  if(!R3_NATIVE.status&&!R3_NATIVE.preview&&!R3_NATIVE_BG.dialog)return '';
+  const privateDisabled=typeof R3_SHEET_VIS==='object'&&
+    R3_SHEET_VIS.manualPriority===true;
+  if(!R3_NATIVE.status&&!R3_NATIVE.preview&&!R3_NATIVE_BG.dialog&&!privateDisabled)return '';
   return '<section class="hud-native-status" role="status">'+
-    '<span>'+r3Escape(R3_NATIVE.status)+'</span>'+
+    (R3_NATIVE.status?'<span>'+r3Escape(R3_NATIVE.status)+'</span>':'')+
+    (privateDisabled?'<span>Private native-sheet readers are disabled. A visible Roll20 sheet on Combat can still roll; otherwise enable private readers to allow HUD Attack to locate the official sheet.</span>'+
+      '<button type="button" id="r3-hud-native-allow-reader">Enable private sheet reader</button>':'')+
     (R3_NATIVE.preview?'<button type="button" id="r3-hud-native-confirm">Confirm native roll</button>'+
       '<button type="button" id="r3-hud-native-cancel">Cancel</button>':'')+
     (R3_NATIVE_BG.dialog?'<button type="button" id="r3-hud-native-reveal">Show original sheet</button>':'')+
