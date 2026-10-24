@@ -5,6 +5,15 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-24 — native Attack execution repair (Firefox v3.10.6 candidate)
+
+- Screenshot shows all **Native sheet** attack buttons displayed but not executing. The exact visible failure string is `Your original Roll20 character sheet takes priority`, originating from the private-reader guard in `r3NativeBgOpen`; this means a reader cannot be opened under existing manual-sheet priority, not that a sheet click succeeded.
+- The previous user export contains 20 attacks including Dagger variants, all with `tab: Current view`, source-verified numeric hit buttons, and no explicit native macro references. Old `r3NativeAttackControl` rejected every such action if the live Jumpgate sheet also lacked an active `Combat` tab marker.
+- With an unclassified **Current view**, now permit an attack only when the unique mounted source row has the exact imported name, bonus, damage and a matching numeric `+N Attack` hit button. Explicit non-Combat tabs, stale metrics, duplicate rows, generic Roll Attack captions, and damage buttons remain blocked.
+- Background readers no longer attempt to change tabs if this exact attack control is already verifiably mounted. Player-opened sheets are never navigated.
+- A sticky, previously chosen disable of private readers remains respected. The attacks flyout now offers **Enable private sheet reader** as an explicit opt-in; it does not silently reverse the user's Debug preference or send a roll.
+- New regression tests cover exact mounted native attack on an unclassified tab, mismatched/importless evidence rejection, no damage-button substitution and explicit reader opt-in. **CI, signed release and actual game parity are separate verification gates.** Request Firefox 3.10.6 signed only after PR CI succeeds. Verify the release/feed hash afterward.
+
 ## 2026-10-24 — Roll20 ruler-based movement (Firefox v3.10.5 candidate)
 
 - User prefers the **feet displayed by Roll20 while dragging a token** instead of continuously summing over-precise pixel-coordinate changes. Jumpgate offers `Always measure token movement` and Roll20's ruler can use grid-specific diagonals.
