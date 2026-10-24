@@ -2,7 +2,7 @@
 
 **Current baseline (2026-10-22):** Firefox v3.10.2 signed and published (PR #114 merged as `5f2ce53`, signing run 39871351495, feed `8f15eab`). Firefox v3.10.2 adds native sheet-click attacks/skills and fixes hidden-node starvation in control discovery; local check passes **492/492 tests**. Current release/CI status is tracked in [HANDOVER.md](HANDOVER.md). Historical entries below may describe superseded limitations or versions.
 
-## 2026-10-24 — source-observed native Cast/Use adapter (Firefox v3.10.4 candidate)
+## 2026-10-24 — source-observed native Cast/Use adapter (Firefox v3.10.4 released; live QA pending)
 
 - Add direct official-sheet card-button execution for Spells, Features and Inventory when an exact unique **Cast / Use / Activate** control is present in source observations and the authenticated live card; existing macros stay preferred. This does **not** imply the current import exposes castable spells.
 - Keep single-use source/session/permission checks, no retry, no player-owned tab navigation, no implicit resource/quantity edits, and fail-closed behavior on stale or duplicate cards.
