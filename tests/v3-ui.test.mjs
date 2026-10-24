@@ -2501,7 +2501,7 @@ test('Firefox migrates legacy opt-out and automatically resumes private access',
   const h=panelHarness('Aria'),installed=[];
   h.document.addEventListener=(type,fn)=>installed.push(type);
   vm.runInContext(readFileSync(join(root,'extension/firefox/sheet-visibility.js'),'utf8')+
-    '\\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,R3_SHEET_VIS,r3SheetVisibilityKey};',h.context);
+    '\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,R3_SHEET_VIS,r3SheetVisibilityKey};',h.context);
   const api=h.context.sheetApi,key=api.r3SheetVisibilityKey();
   h.store.set(key,'true'); // sticky disable from an earlier signed build
   api.r3SheetVisibilityInstall();
