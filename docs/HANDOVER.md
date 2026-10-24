@@ -1,6 +1,6 @@
 # R20 Embetterment — development handover
 
-**Updated:** 2026-10-22  
+**Updated:** 2026-10-24  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
@@ -13,7 +13,7 @@
 - Actual Roll20 2024 Cast/Use button exposure, gameplay prompts, side effects and two-character behavior still need **live Floorp verification**. The October 22 import does not contain Cast/Use control evidence and cannot prove gameplay parity.
 - Next: refresh an all-tab export on v3.10.4, compare native sheet and HUD attack/skill clicks; identify true Cast/Use controls and versioned save/tool/action contracts before wiring any state mutations. Jumpgate movement #73 stays unresolved.
 
-## 2026-10-24 — source-observed Cast/Use card adapter (Firefox v3.10.4 candidate)
+## 2026-10-24 — source-observed Cast/Use card adapter (Firefox v3.10.4 signed; live QA pending)
 
 - Add a strictly conditional official-sheet click path for **Spells / Cast**, **Features / Use or Activate**, and **Inventory / Use or Activate** when an imported named card itself exposes one explicit matching button. Generic `Show More`, damage, equip and quantity controls are **not** action mappings.
 - Source evidence must have one explicit eligible card control and an unambiguous imported card name. The authenticated live reader rechecks character name, tab, named row, optional stable repeating-row ID, bounded source card text, exact visible enabled button, and a single-use session-bound token. Changed/duplicate/disappearing rows fail closed; no retry after click.
