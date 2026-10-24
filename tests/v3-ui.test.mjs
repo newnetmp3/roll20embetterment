@@ -61,7 +61,8 @@ function panelHarness(character='NIER'){
     window:{addEventListener(type,fn){windowListeners.set(type,fn);}},
     setInterval(fn,ms){intervals.push(ms);return intervals.length;},clearInterval(){},
     setTimeout(fn,ms){const id=timeouts.size+1;timeouts.set(id,{fn,ms});return id;},clearTimeout(id){timeouts.delete(id);},
-    localStorage:{getItem(key){return store.get(key)||null;},setItem(key,value){store.set(key,value);}}
+    localStorage:{getItem(key){return store.get(key)||null;},
+      setItem(key,value){store.set(key,value);},removeItem(key){store.delete(key);}}
   };
   vm.createContext(context);
   vm.runInContext(files.map(f=>readFileSync(join(root,'v3',f),'utf8')).join('\n')+
@@ -90,24 +91,17 @@ test('real importer panel initializes and both scan buttons become enabled when 
   assert.equal(h.nodes.get('r3-all').disabled,false);
 });
 
-test('disabled private reader offers a visible opt-in directly inside the Attack panel',()=>{
+test('Attack flyout requires no private-reader toggle or permission warning',()=>{
   const h=panelHarness();h.api.r3StartUI();
-  h.context.R3_SHEET_VIS={manualPriority:true,manualUntil:0};
-  let enabled=0;
-  h.context.r3SheetAllowPrivateReaders=()=>{
-    enabled++;h.context.R3_SHEET_VIS.manualPriority=false;
-  };
   const snapshot=h.api.r3Empty();snapshot.name='Elowen';
   h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
   h.api.R3_HUD.flyout='actions';
   h.api.r3HudRender();
-  assert.match(h.nodes.get('r3-hud').innerHTML,/Enable private sheet reader/);
-  assert.equal(enabled,0,'display must not change permissions');
-  h.click('r3-hud-native-allow-reader');
-  assert.equal(enabled,1,'only an explicit click re-enables private reader');
-  assert.equal(h.context.R3_SHEET_VIS.manualPriority,false);
+  const markup=h.nodes.get('r3-hud').innerHTML;
+  assert.doesNotMatch(markup,/Enable private sheet reader|Allow private reader/);
+  assert.doesNotMatch(markup,/Private native-sheet readers are disabled/);
+  assert.equal(h.nodes.has('r3-hud-native-allow-reader'),false);
 });
-
 test('Refresh and Hide/Show execute without leaving the panel in a broken state',()=>{
   const h=panelHarness();h.api.r3StartUI();
   h.click('r3-refresh');
@@ -2457,7 +2451,7 @@ test('Firefox Show Sheet rescues every native background session, not just the a
   assert.equal(x.dialogs[0].style.left,'-20000px');
   assert.equal(x.dialogs[1].style.left,'-20000px');
   vm.runInContext(readFileSync(join(root,'extension/firefox/sheet-visibility.js'),'utf8')+
-    '\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,r3SheetOnPlayerJournal,r3SheetAllowPrivateReaders,R3_SHEET_VIS};',h.context);
+    '\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,r3SheetOnPlayerJournal,R3_SHEET_VIS};',h.context);
   const api=h.context.sheetApi;
   api.r3SheetRevealAll(true);
   assert.equal(x.dialogs[0].style.left,'30px');
@@ -2465,10 +2459,10 @@ test('Firefox Show Sheet rescues every native background session, not just the a
   assert.equal(h.api.R3_NATIVE_BG.sessions.size,0);
   assert.equal(h.api.R3_NATIVE_BG.dialog,null);
   assert.equal(api.r3SheetAllowsBackground(),false);
-  await assert.rejects(h.api.r3NativeBgEnsure('Elowen'),/original Roll20 character sheet takes priority/);
+  await assert.rejects(h.api.r3NativeBgEnsure('Elowen'),/original Roll20 sheet is being opened/);
   assert.equal(x.log.filter(a=>a.kind==='show').length,2,'rescue must not open another invisible sheet');
-  api.r3SheetAllowPrivateReaders();
-  assert.equal(api.r3SheetAllowsBackground(),true,'explicit user choice can reenable private readers');
+  api.R3_SHEET_VIS.manualUntil=0;
+  assert.equal(api.r3SheetAllowsBackground(),true,'automatic resume needs no toggle');
 });
 test('Firefox manual Journal open restores hidden Auto-sync-owned sheet before Roll20 handles click',()=>{
   const h=panelHarness('Aria'),auto=h.api.R3_AUTO;
@@ -2498,29 +2492,28 @@ test('Firefox manual Journal open restores hidden Auto-sync-owned sheet before R
   registered({type:'pointerdown',isTrusted:false,target:{
     closest(sel){return sel.startsWith('#journal')?{}:null;}
   }});
-  assert.equal(h.context.sheetApi.R3_SHEET_VIS.manualPriority,false,
-    'trusted Journal access is temporary; synthetic events never add a sticky opt-out');
+  assert.equal('manualPriority' in h.context.sheetApi.R3_SHEET_VIS,false,
+    'neither trusted nor synthetic events can disable readers persistently');
   assert.equal(h.context.sheetApi.r3SheetAllowsBackground(),false,
     'the manual sheet is still in its opening grace period');
 });
-test('Firefox manual sheet priority persists across extension startup and blocks new hidden openers',()=>{
-  const h=panelHarness('Aria');
-  let installed=[];
+test('Firefox migrates legacy opt-out and automatically resumes private access',()=>{
+  const h=panelHarness('Aria'),installed=[];
   h.document.addEventListener=(type,fn)=>installed.push(type);
   vm.runInContext(readFileSync(join(root,'extension/firefox/sheet-visibility.js'),'utf8')+
-    '\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,R3_SHEET_VIS,r3SheetVisibilityKey};',h.context);
-  h.context.sheetApi.r3SheetRevealAll(); // explicit Debug restore remains sticky
-  const key=h.context.sheetApi.r3SheetVisibilityKey();
-  assert.equal(h.store.get(key),'true');
-  h.context.sheetApi.R3_SHEET_VIS.manualPriority=false;
-  h.context.sheetApi.r3SheetVisibilityInstall();
-  assert.equal(h.context.sheetApi.r3SheetAllowsBackground(),false);
+    '\\nglobalThis.sheetApi={r3SheetRevealAll,r3SheetAllowsBackground,r3SheetVisibilityInstall,R3_SHEET_VIS,r3SheetVisibilityKey};',h.context);
+  const api=h.context.sheetApi,key=api.r3SheetVisibilityKey();
+  h.store.set(key,'true'); // sticky disable from an earlier signed build
+  api.r3SheetVisibilityInstall();
+  assert.equal(h.store.has(key),false,'obsolete opt-out removed at startup');
+  assert.equal(api.r3SheetAllowsBackground(),true);
   assert.deepEqual(installed,['pointerdown','dblclick','keydown']);
-  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='Aria';
-  vm.runInContext('globalThis.tryAutoOpen=r3AutoOpenFromJournal;',h.context);
-  assert.equal(h.context.tryAutoOpen(Date.now()),false);
+  api.r3SheetRevealAll(); // Show Sheet restores dialogs rather than disabling
+  assert.equal(api.r3SheetAllowsBackground(),false,'brief manual access grace');
+  assert.equal(h.store.has(key),false,'Show Sheet never persists a disable');
+  api.R3_SHEET_VIS.manualUntil=0;
+  assert.equal(api.r3SheetAllowsBackground(),true,'automatic resume without user input');
 });
-
 
 function nativeDomActionRig(kind='skills'){
   const x=backgroundNativeRig(),h=x.h,received=[];
