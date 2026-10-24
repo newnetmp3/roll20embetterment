@@ -3,6 +3,7 @@
 // expose a precise reason in Debug rather than silently leaving movement at 0.
 const R3_MOVE={tokenId:'',characterId:'',pageId:'',model:null,object:null,
   last:null,scale:null,lastMove:'',handler:null,objectHandler:null,
+  objectModifiedHandler:null,dragging:false,
   pending:null,nativeReadout:null,measurementSource:'none',
   status:'Waiting for a controlled token',source:'',details:''};
 function r3MoveReport(status,details=''){
@@ -142,13 +143,16 @@ function r3MoveDisconnect(){
   if(t.model&&t.handler&&typeof t.model.off==='function')
     try{t.model.off('change',t.handler);}catch{}
   if(t.object&&t.objectHandler&&t.object!==t.model&&typeof t.object.off==='function')
-    try{t.object.off('moving',t.objectHandler);t.object.off('modified',t.objectHandler);}catch{}
+    try{t.object.off('moving',t.objectHandler);
+      t.object.off('modified',t.objectModifiedHandler);}catch{}
   t.model=null;t.object=null;t.handler=null;t.objectHandler=null;
+  t.objectModifiedHandler=null;t.dragging=false;
 }
 function r3MoveRebase(){
   r3MoveDisconnect();
   Object.assign(R3_MOVE,{tokenId:'',characterId:'',pageId:'',last:null,
     scale:null,lastMove:'',source:'',pending:null,nativeReadout:null,
+    dragging:false,
     measurementSource:'none'});
   r3MovePoll();
 }
@@ -280,15 +284,16 @@ function r3MoveMeasure(signal='poll'){
     Object.assign(tracker,{tokenId:info.tokenId,characterId:info.characterId,
       pageId:info.pageId,model:info.model,object:info.object,last:sample,
       scale:signature,lastMove:r3MoveGet(info.model,'lastmove')||'',
-      source:info.source,pending:null,nativeReadout:null,measurementSource:'none'});
+      source:info.source,pending:null,nativeReadout:null,measurementSource:'none',dragging:false});
     if(typeof info.model.on==='function'){
       tracker.handler=()=>r3MoveMeasure('change');
       try{info.model.on('change',tracker.handler);}catch{tracker.handler=null;}
     }
     if(info.object!==info.model&&typeof info.object?.on==='function'){
-      tracker.objectHandler=event=>r3MoveMeasure(event?.type==='modified'?'modified':'moving');
+      tracker.objectHandler=()=>r3MoveMeasure('moving');
+      tracker.objectModifiedHandler=()=>r3MoveMeasure('modified');
       try{info.object.on('moving',tracker.objectHandler);
-        info.object.on('modified',tracker.objectHandler);
+        info.object.on('modified',tracker.objectModifiedHandler);
       }catch{tracker.objectHandler=null;}
     }
     r3MoveReport('Movement tracker connected',
@@ -300,13 +305,13 @@ function r3MoveMeasure(signal='poll'){
   const lastMove=r3MoveGet(info.model,'lastmove')||'';
   if(oldScale!==signature||!previous){
     tracker.last=sample;tracker.lastMove=lastMove;
-    tracker.pending=null;tracker.nativeReadout=null;
+    tracker.pending=null;tracker.nativeReadout=null;tracker.dragging=false;
     r3MoveReport('Map scale updated','Movement baseline refreshed');
     return;
   }
   if(R3_TURN.phase!=='active'){
     tracker.last=sample;tracker.lastMove=lastMove;
-    tracker.pending=null;tracker.nativeReadout=null;
+    tracker.pending=null;tracker.nativeReadout=null;tracker.dragging=false;
     r3MoveReport('Waiting for your turn','Select Start Turn to count token movement');
     return;
   }
@@ -316,9 +321,13 @@ function r3MoveMeasure(signal='poll'){
   // Capture the *latest* displayed total, never sum intermediate frames.
   // A moving/visual poll does not spend movement until the model commits,
   // or a Fabric modified event confirms token drop.
+  if(signal==='moving')tracker.dragging=true;
   const readout=r3MoveReadNative();
   if(readout&&tracker.pending)tracker.nativeReadout=readout;
-  if(signal!=='change'&&signal!=='modified'){
+  // Backbone change events may fire DURING a Fabric drag. Count only the
+  // matching modified/drop notification once that dragging was observed.
+  if((signal!=='change'&&signal!=='modified')||
+    (tracker.dragging&&signal!=='modified')){
     if(tracker.pending)r3MoveReport('Watching Roll20 movement',
       tracker.nativeReadout?'Native ruler currently '+tracker.nativeReadout.label:
         'Waiting for token drop; no readable ruler label yet');
@@ -330,6 +339,7 @@ function r3MoveMeasure(signal='poll'){
   }
   const {start,end}=tracker.pending;
   tracker.pending=null;
+  tracker.dragging=false;
   tracker.last=sample;
   const changed=Math.hypot(start.x-end.x,start.y-end.y)>=0.05;
   if(!changed){tracker.nativeReadout=null;tracker.lastMove=lastMove;return;}
