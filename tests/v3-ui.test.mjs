@@ -1419,6 +1419,22 @@ test('HUD maps observed Second Wind dice control as native Roll, but Show More i
   assert.equal(h.api.r3NativeMapPreview('spells','detect-magic').sheetAction,undefined);
   assert.equal(x.sent.length,0,'render and preview never roll');
 });
+test('official observed saving throw and ability check controls are native; labels cannot be invented',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.saves={Strength:5,Constitution:3};
+  snap.modifiers={Dexterity:2};
+  snap.controls=[
+    {kind:'action',element:'button',label:'Roll a Strength saving throw'},
+    {kind:'action',element:'button',label:'Roll a Dexterity ability check'}
+  ];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  assert.equal(h.api.r3NativeMapPreview('saves','Strength').sheetAction,true);
+  assert.equal(h.api.r3NativeMapPreview('modifiers','Dexterity').sheetAction,true);
+  assert.equal(h.api.r3NativeMapPreview('saves','Constitution').sheetAction,undefined,
+    'value alone never invents a Roll20 button');
+  assert.equal(x.sent.length,0);
+});
 test('native registry rejects ambiguous, stale, cross-kind, unverified and unmanaged controls',()=>{
   const x=observedChatRig('Elowen'),h=x.h;
   const snap=h.api.r3Empty();snap.name='Elowen';
