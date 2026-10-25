@@ -2,6 +2,14 @@
 
 **Current baseline (2026-10-24):** Firefox **v3.10.4** is Mozilla signed and published. [PR #116](https://github.com/newnetmp3/roll20embetterment/pull/116) merged as `e159dfe` with **500/500 tests passing**. [Release run 40069003914](https://github.com/newnetmp3/roll20embetterment/actions/runs/40069003914) succeeded; published XPI SHA-256 `b18b09d2c5141b58cf11cf82c593f7b3f8fe07a69affd3ee298f0a4e008a57c4` matches the update feed. Native Cast/Use adapters remain conditional on source-observed controls and have no live action-parity verification. See [HANDOVER.md](HANDOVER.md).
 
+## 2026-10-24 — Windows 95/98 interface + native action expansion (Firefox v3.10.7 candidate)
+
+- [x] Apply system-wide compact Windows 9x palette, classic raised bevels, navy title bars, white inset lists, square buttons, and consistent Tahoma fonts across draggable HUD, weapon submenus, importer, Debug, cards and settings.
+- [x] Native official card click for uniquely observed numeric **feature roll** buttons, including Combat/`Current view` cards, preserving one-shot session/identity checks. Explicitly label **Roll** rather than promising feature/resource spending.
+- [x] Add conditional native **saving throw** and **ability check** button support where the original authenticated sheet advertises an exact name-bound caption; reject absent/ambiguous evidence. Skills and attacks retain previous source-verified path.
+- [ ] Native live 2024 acceptance for Dagger variant outputs, feature dice prompts/resource state, saves, checks and popouts on Firefox/Floorp. Unit tests are not proof of live game parity.
+- [ ] Identify real Cast controls (current export shows only `Show More`), Action Surge / Manifest Echo activation, action economy/slot/resource changes, and virtualized sheet actions from a newer authenticated export; no fabricated calls.
+
 ## 2026-10-24 — native Attack click execution repair (Firefox v3.10.6 candidate)
 
 - A screenshot revealed **Native sheet** attack buttons that were available in the HUD but could not execute. Their imported source `tab` was `Current view`, not `Combat`, and a sticky explicit original-sheet priority prevented hidden reader startup.
