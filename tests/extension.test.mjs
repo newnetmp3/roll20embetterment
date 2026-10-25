@@ -110,6 +110,20 @@ test('Firefox ZIP are valid root-manifest packages',()=>{
 });
 
 
+test('Firefox UI uses consistent Windows 9x bevels, navy titlebars and inset lists',()=>{
+  const {source}=pack('firefox');
+  const theme=source.split('// ===== extension/firefox/battlefield-layout.js =====')[1]
+    .split('// ===== extension/firefox/panel-drag.js =====')[0];
+  assert.match(theme,/function r3Win9xStyles\(\)/);
+  for(const expected of ['#000080','#c0c0c0','Tahoma','MS Sans Serif',
+    'border-color:#fff #404040 #404040 #fff',
+    'hud-flyout>header','r3-debug-header','r3-bf-turnstrip',
+    'hud-weapon-submenu','r3-debug-entries','#r3-wrap'])
+    assert.ok(theme.includes(expected),'Missing Windows 9x theme selector/value: '+expected);
+  assert.match(source,/r3Win9xStyles\(\)/);
+  assert.match(theme,/prefers-reduced-motion/);
+  assert.doesNotMatch(theme,/document\.body\.style|roll20\.net.*css/i);
+});
 test('milestone: one Debug entry replaces toolbar, MISC exists and screen scaling respects chat',()=>{
   const {source}=pack('firefox');
   const battlefield=source.split('// ===== extension/firefox/battlefield-layout.js =====')[1]
