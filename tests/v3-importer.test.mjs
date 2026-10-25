@@ -1100,6 +1100,32 @@ test('skill reader probes then clicks the exact native skill button once across 
     assert.equal(messages.at(-1).status,'blocked');assert.equal(clicks,1);
   }
 });
+test('observed saving throws and ability checks click their real sheet button only once',()=>{
+  for(const [kind,name,label] of [
+    ['saves','Strength','Roll a Strength saving throw'],
+    ['modifiers','Dexterity','Roll a Dexterity ability check']
+  ]){
+    const fixture=docFixture({name:'Elowen'});
+    let clicks=0;
+    const button={tagName:'BUTTON',getAttribute:k=>k==='aria-label'?label:null,
+      getClientRects:()=>[{}],closest:()=>null,click(){clicks++;}};
+    const query=fixture.document.querySelectorAll;
+    fixture.document.querySelectorAll=sel=>sel==='button'?[button]:query(sel);
+    const {h}=harness(fixture),messages=[],peer={postMessage:m=>messages.push(m)};
+    const params={id:'r3-check-2024-0001',kind,characterName:'Elowen',
+      actionName:name,actionKey:name,actionLabel:label};
+    h.r3NativeReaderHandle(peer,{...params,type:'native-probe'});
+    const ready=messages.at(-1);
+    assert.equal(ready.status,'ready',ready.message);
+    assert.equal(clicks,0);
+    h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token:ready.token});
+    assert.equal(messages.at(-1).status,'clicked');assert.equal(clicks,1);
+    h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token:ready.token});
+    assert.equal(messages.at(-1).status,'blocked');assert.equal(clicks,1);
+    h.r3NativeReaderHandle(peer,{...params,type:'native-probe',actionLabel:'Roll a '+name+' check'});
+    assert.equal(messages.at(-1).status,'blocked','wrong type cannot impersonate verified source');
+  }
+});
 test('skill reader rejects duplicate buttons, hidden controls, changed skills and stale sessions',()=>{
   const fixture=docFixture({name:'Elowen'});let clicks=0,buttons=[];
   const button=label=>({tagName:'BUTTON',getAttribute:k=>k==='aria-label'?label:null,
