@@ -396,7 +396,7 @@ function r3NativeCardSourceTab(kind,tab){
   // Current view is accepted only with one unambiguous named source control
   // reverified on the actual, character-bound official sheet at click time.
   return r3NativeCardTab(kind).test(tab)||
-    (kind==='features'&&/^current view$/i.test(tab));
+    (kind==='features'&&/^(?:current view|combat)$/i.test(tab));
 }
 function r3NativeCardVerb(kind,label,name){
   const value=r3String(label,70).toLowerCase();
@@ -423,7 +423,7 @@ function r3NativeCardTab(kind){
 function r3NativeCardControl(kind,name,source={}){
   const target=r3NativeCardTab(kind),tab=r3CurrentTabLabel();
   const featureCombat=kind==='features'&&
-    /^current view$/i.test(r3String(source.tab,60))&&
+    /^(?:current view|combat)$/i.test(r3String(source.tab,60))&&
     /^(?:combat|current view)$/i.test(tab);
   if(!target.test(tab)&&!featureCombat)
     return {error:'Open the '+kind+' tab on the official sheet (currently '+r3String(tab,35)+').'};
@@ -654,7 +654,7 @@ async function r3NativeReaderHandle(peer,data){
   // Only HUD-owned or Auto-sync-owned hidden sheets may have their tabs
   // switched automatically. A player-opened sheet is never navigated.
   const targetTab=kind==='skills'?null:
-    kind==='features'&&/^current view$/i.test(actionTab)?
+    kind==='features'&&/^(?:current view|combat)$/i.test(actionTab)?
       /^(?:combat|features\s*(?:&|and)\s*traits)$/i:r3NativeCardTab(kind);
   const mountedCard=['features','inventory','spells'].includes(kind)?findControl():null;
   // Prefer a verified mounted attack control even when Jumpgate exposes no
