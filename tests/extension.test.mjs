@@ -122,6 +122,9 @@ test('Firefox UI uses consistent Windows 9x bevels, navy titlebars and inset lis
     assert.ok(theme.includes(expected),'Missing Windows 9x theme selector/value: '+expected);
   assert.match(source,/r3Win9xStyles\(\)/);
   assert.match(theme,/prefers-reduced-motion/);
+  for(const panel of ['hud-card-body','hud-skill-row','r3-bf-stats .hud-stat',
+    'hud-portrait-stats .hud-stat','hud-hp-label','hud-bar-art','r3-bf-resource-panel'])
+    assert.ok(theme.includes(panel),'No legibility override for '+panel);
   assert.doesNotMatch(theme,/document\.body\.style|roll20\.net.*css/i);
 });
 test('milestone: one Debug entry replaces toolbar, MISC exists and screen scaling respects chat',()=>{

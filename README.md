@@ -65,6 +65,10 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Firefox v3.10.8 — Win9x contrast polish (candidate)
+
+The Windows 9x visual system uses readable light surfaces for expanded cards, character HP and stats, class resource panels and the full-screen action dock. The original Roll20 UI remains unaffected. Native sheet-action behavior is unchanged from v3.10.7; in-game parity verification remains necessary.
+
 ## Firefox v3.10.7 — Windows 95/98 desktop styling and native actions (candidate)
 
 The entire Firefox HUD, original-sheet controls, flyouts, weapon variant menus, Debug and importer now use a unified Windows 9x-inspired design: navy caption bars, classic gray beveled buttons and windows, inset white lists, compact Tahoma-style text and keyboard focus outlines. Panels remain individually draggable and respect the chat area.
