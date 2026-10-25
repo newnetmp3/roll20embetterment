@@ -355,6 +355,20 @@ function r3NativeChatAttack(key){
 // This adapter invokes real sheet controls, not reconstructed chat commands.
 // Imported evidence makes a button available; live DOM verification authorizes
 // the single click. Only observed attack-hit and standard skill controls qualify.
+// Use only exact labels already observed from the authenticated sheet.
+// This supports saving throws and ability checks on builds that expose
+// corresponding native buttons; names or arithmetic alone grant no access.
+function r3NativeCheckLabels(kind,name,snapshot){
+  if(!['skills','saves','modifiers'].includes(kind)||
+     !r3String(name,80)||!snapshot?.[kind]||
+     !Object.prototype.hasOwnProperty.call(snapshot[kind],name))return [];
+  const suffix=kind==='skills'?['check']:
+    kind==='saves'?['saving throw','save']:['ability check','check'];
+  const wanted=new Set(suffix.map(x=>'Roll a '+name+' '+x));
+  return [...new Set((snapshot.controls||[]).filter(c=>
+    c.kind==='action'&&c.element==='button'&&wanted.has(c.label))
+    .map(c=>c.label))];
+}
 function r3NativeDomEvidence(kind,entry,snapshot){
   if(kind==='attacks'){
     const metric=r3NativeAttackMetric(entry?.visible||'');
@@ -370,10 +384,10 @@ function r3NativeDomEvidence(kind,entry,snapshot){
     if(matches.length!==1)return null;
     return {sheetAction:true,source:'Observed official attack-hit button'};
   }
-  if(kind==='skills'&&R3_SKILLS.includes(entry?.name)){
-    const label='Roll a '+entry.name+' check';
-    if((snapshot?.controls||[]).some(c=>c.kind==='action'&&c.element==='button'&&c.label===label))
-      return {sheetAction:true,source:'Observed official skill-check button'};
+  if(['skills','saves','modifiers'].includes(kind)){
+    const observed=r3NativeCheckLabels(kind,entry?.name,snapshot);
+    if(observed.length===1)
+      return {sheetAction:true,source:'Observed official '+kind+' '+observed[0]+' button'};
   }
   if(['spells','features','inventory'].includes(kind)){
     if(!r3NativeCardSourceTab(kind,entry?.tab||''))return null;
@@ -455,9 +469,15 @@ function r3NativeCardControl(kind,name,source={}){
   return {button:found[0],label,fingerprint:JSON.stringify(
     [kind,wanted,rowId,actual,label])};
 }
-function r3NativeSkillControl(name){
-  if(!R3_SKILLS.includes(name))return {error:'No supported standard skill was selected.'};
-  const label='Roll a '+name+' check';
+function r3NativeCheckControl(kind,name,observedLabel){
+  if(!['skills','saves','modifiers'].includes(kind))
+    return {error:'Unsupported native check category.'};
+  const label=r3String(observedLabel,100)||
+    (kind==='skills'&&R3_SKILLS.includes(name)?'Roll a '+name+' check':'');
+  const suffix=kind==='skills'?['check']:
+    kind==='saves'?['saving throw','save']:['ability check','check'];
+  if(!label||!suffix.some(x=>label==='Roll a '+name+' '+x))
+    return {error:'No exact source-observed native '+kind+' button for '+name+'.'};
   const nodes=document.querySelectorAll('button')||[];
   if(nodes.length>12000)return {error:'Too many sheet controls to verify a unique skill button.'};
   const matches=Array.from(nodes).filter(button=>r3Shown(button)&&
@@ -465,7 +485,7 @@ function r3NativeSkillControl(name){
   if(matches.length!==1)return {error:matches.length?
     'Multiple matching skill controls; no native click.':'No visible official skill-check button for '+name+'.'};
   const button=matches[0];
-  return {button,label,fingerprint:JSON.stringify(['skills',name,label,
+  return {button,label,fingerprint:JSON.stringify([kind,name,label,
     r3Text(button.closest?.('.skill'),180)])};
 }
 function r3NativeDomContext(kind,key){
@@ -503,8 +523,10 @@ async function r3NativeDomInvoke(kind,key){
     const readerSession=R3_NATIVE.readers.get(candidate.window)?.session;
     if(!readerSession)throw new Error('No authenticated official sheet reader session.');
     const background=r3NativeIsOwned(candidate);
-    const observed=(initial.entry.actions||[]).map(action=>r3String(action.label,70))
-      .filter(label=>r3NativeCardVerb(kind,label,initial.entry.name));
+    const observed=['skills','saves','modifiers'].includes(kind)?
+      r3NativeCheckLabels(kind,initial.entry.name,R3_UI.snapshot):
+      (initial.entry.actions||[]).map(action=>r3String(action.label,70))
+        .filter(label=>r3NativeCardVerb(kind,label,initial.entry.name));
     const params={kind,characterName:initial.name,actionName:initial.entry.name,
       actionKey:key,actionText:r3String(initial.entry.visible,550),
       actionLabel:observed.length===1?observed[0]:'',
@@ -641,19 +663,20 @@ async function r3NativeReaderHandle(peer,data){
   if(data.readerSession&&data.readerSession!==R3_SESSION){
     respond('blocked','Official reader session changed. Refresh the sheet connection.');return;
   }
-  const findControl=()=>kind==='skills'?r3NativeSkillControl(attackName):
+  const findControl=()=>['skills','saves','modifiers'].includes(kind)?
+      r3NativeCheckControl(kind,attackName,actionLabel):
     kind==='attacks'?r3NativeAttackControl(attackName,{visible:attackText}):
     r3NativeCardControl(kind,attackName,{visible:attackText,
       actionLabel,nativeRowId:actionRowId,tab:actionTab});
   // The character identity and attack name are intentionally separate.
   // Characters across games do not share a fixed name or fixed attack list.
-  if(!['attacks','skills','spells','features','inventory'].includes(kind)||!characterName||!attackName||
+  if(!['attacks','skills','saves','modifiers','spells','features','inventory'].includes(kind)||!characterName||!attackName||
     characterName.toLowerCase()!==r3NameFromDocument(document).toLowerCase()){
     respond('blocked','This action does not belong to the open character sheet.');return;
   }
   // Only HUD-owned or Auto-sync-owned hidden sheets may have their tabs
   // switched automatically. A player-opened sheet is never navigated.
-  const targetTab=kind==='skills'?null:
+  const targetTab=['skills','saves','modifiers'].includes(kind)?null:
     kind==='features'&&/^(?:current view|combat)$/i.test(actionTab)?
       /^(?:combat|features\s*(?:&|and)\s*traits)$/i:r3NativeCardTab(kind);
   const mountedCard=['features','inventory','spells'].includes(kind)?findControl():null;
