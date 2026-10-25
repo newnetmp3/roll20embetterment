@@ -1401,6 +1401,24 @@ test('generic native controls dispatch original macro and never synthetic dice o
   assert.equal(h.sent.length,0);
   assert.match(h.api.R3_NATIVE.status,/Invoked mapped Roll20 spells action/);
 });
+test('HUD maps observed Second Wind dice control as native Roll, but Show More is not spellcasting',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.features=[{name:'Second Wind',_key:'second-wind',tab:'Current view',
+    visible:'Second Wind Bonus Action 1d10+5 available',
+    actions:[{label:'1d10+5'}]}];
+  snap.spells=[{name:'Detect Magic',_key:'detect-magic',tab:'SPELLS',
+    visible:'Detect Magic 30 ft, 1 action',actions:[{label:'Show More'}]}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.api.R3_HUD.flyout='features';h.api.r3HudRender();
+  const feature=h.api.r3NativeMapPreview('features','second-wind');
+  assert.equal(feature.sheetAction,true,'exact observed feature dice button');
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/data-hud-native-kind="features"/);
+  assert.match(html,/>Roll<\/button>/,'do not present healing dice roll as charge spending');
+  assert.equal(h.api.r3NativeMapPreview('spells','detect-magic').sheetAction,undefined);
+  assert.equal(x.sent.length,0,'render and preview never roll');
+});
 test('native registry rejects ambiguous, stale, cross-kind, unverified and unmanaged controls',()=>{
   const x=observedChatRig('Elowen'),h=x.h;
   const snap=h.api.r3Empty();snap.name='Elowen';
