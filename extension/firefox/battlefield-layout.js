@@ -244,3 +244,81 @@ function r3BattlefieldStyles(){
     '@media(prefers-reduced-motion:reduce){.r3-bf-shell *{transition:none!important}}'
   ].join('');
 }
+
+
+// Windows 95/98 visual system. All selectors remain inside R20eb's Shadow DOM;
+// nothing changes Roll20's own editor, sheet, chat or controls.
+function r3Win9xStyles(){
+  return [
+    ':host{color-scheme:light!important;font-family:Tahoma,"MS Sans Serif",Arial,sans-serif!important}',
+    '#r3-hud .r3-bf-shell,#r3-wrap,.hud-shell,.r3-debug-window{font-family:Tahoma,"MS Sans Serif",Arial,sans-serif!important;color:#111!important;text-shadow:none!important}',
+    '#r3-hud .r3-bf-shell{font-size:calc(11px * var(--r3-bf-scale,1))!important}',
+    // Silver desktop windows with raised 3D edges and no translucent glow.
+    '.r3-bf-actions,.r3-bf-category-dock,.r3-bf-sidebar .r3-bf-section,.r3-bf-turnstrip,.hud-flyout,.r3-debug-window,.hud-native-status,#r3-wrap{background:#c0c0c0!important;color:#111!important;border:2px solid!important;border-color:#fff #404040 #404040 #fff!important;border-radius:0!important;box-shadow:inset 1px 1px #dfdfdf,inset -1px -1px #808080,2px 2px 0 #0008!important;backdrop-filter:none!important}',
+    '.r3-bf-sidebar{border:0!important;box-shadow:none!important;background:transparent!important}',
+    '.hud-flyout{color:#111!important;background:#c0c0c0!important;max-height:min(68vh,630px)!important;min-width:275px;scrollbar-color:#808080 #dfdfdf}',
+    // Classic non-resizable blue titlebars: the panels remain freely draggable.
+    '.hud-flyout>header,.r3-debug-header,#r3-toggle,.r3-bf-turnstrip,.hud-toolbar{background:linear-gradient(90deg,#000080,#1084bd)!important;color:#fff!important;border-radius:0!important;border-bottom:1px solid #808080!important;box-shadow:none!important}',
+    '.hud-flyout>header{min-height:29px;padding:3px 5px!important}',
+    '.hud-flyout>header strong,.r3-debug-header strong{font-size:12px!important;letter-spacing:0!important;color:#fff!important;font-weight:700!important}',
+    '.hud-flyout>header small,.r3-debug-header span{color:#f5f5f5!important;opacity:1!important}',
+    '.r3-bf-turnstrip strong,.r3-bf-turnstrip small,.hud-toolbar>span,.hud-toolbar small{color:#fff!important;letter-spacing:0!important}',
+    '.hud-weapon-heading,.hud-segment-caption,.hud-flyout-caption{background:#d4d0c8!important;color:#111!important;border-radius:0!important}',
+    // Raised button bevel; pressed and selected controls use sunken bevel.
+    '#r3-wrap button,.r3-bf-shell button,.r3-debug-window button,.hud-shell button{background:#c0c0c0!important;background-image:none!important;color:#111!important;border:2px solid!important;border-color:#fff #404040 #404040 #fff!important;border-radius:0!important;box-shadow:inset 1px 1px #dfdfdf,inset -1px -1px #808080!important;text-shadow:none!important;filter:none!important;letter-spacing:0!important}',
+    '#r3-wrap button:hover:not(:disabled),.r3-bf-shell button:hover:not(:disabled),.r3-debug-window button:hover:not(:disabled){background:#d4d0c8!important;filter:none!important}',
+    '#r3-wrap button:active:not(:disabled),.r3-bf-shell button:active:not(:disabled),.r3-bf-shell button.selected,.r3-bf-shell button.active,.r3-bf-shell button[aria-pressed=true],.r3-debug-window button:active:not(:disabled){border-color:#404040 #fff #fff #404040!important;box-shadow:inset 1px 1px #808080!important;background:#b2b2b2!important}',
+    '.r3-bf-shell button:disabled,.hud-shell button:disabled{color:#808080!important;text-shadow:1px 1px #fff!important;opacity:1!important}',
+    '#r3-wrap button:focus-visible,.r3-bf-shell button:focus-visible,.r3-debug-window button:focus-visible{outline:1px dotted #111!important;outline-offset:-5px!important}',
+    // Titlebar X and debug restore should look like 95-era caption buttons.
+    '.hud-flyout>header button,.r3-debug-header button{flex:0 0 auto;min-height:19px!important;min-width:21px!important;padding:0 4px!important;line-height:16px!important;font-size:14px!important}',
+    '.r3-bf-debug-trigger{font-size:11px!important;min-height:24px!important;color:#111!important}',
+    '.r3-bf-ring{border-radius:0!important;background:#c0c0c0!important;box-shadow:inset 1px 1px #fff,inset -1px -1px #808080!important;gap:2px!important}',
+    '.r3-bf-ring svg,.r3-bf-category svg,.hud-bar-art svg{color:#000080!important;filter:none!important}',
+    '.r3-bf-ring-name,.r3-bf-ring-sub,.r3-bf-ring strong{color:#111!important;font-weight:700!important}',
+    '.r3-bf-movement-meter{border:1px solid #808080!important;border-radius:0!important;background:#fff!important;height:8px!important}',
+    '.r3-bf-movement-meter>span{background:#000080!important}',
+    '.r3-bf-actions{gap:3px!important;padding:4px!important}',
+    '.r3-bf-category-dock{gap:3px!important;padding:4px!important}',
+    '.r3-bf-quick button,.r3-bf-category{border-radius:0!important}',
+    '.r3-bf-category.selected{background:#000080!important;color:#fff!important}',
+    '.r3-bf-category.selected svg,.r3-bf-category.selected span{color:#fff!important}',
+    '.r3-bf-section{padding:6px!important}',
+    '.r3-bf-section header strong,.r3-bf-profile strong{font-family:Tahoma,Arial,sans-serif!important;color:#111!important}',
+    '.r3-bf-section header span,.r3-bf-character-text small,.hud-card-note{color:#505050!important}',
+    '.r3-bf-section textarea,.r3-debug-window select,#r3-wrap select,#r3-wrap input,#r3-wrap textarea{background:#fff!important;color:#111!important;border:2px solid!important;border-color:#808080 #fff #fff #808080!important;border-radius:0!important;box-shadow:inset 1px 1px #404040!important}',
+    // Explorer-style inset content panes, row highlights and tree details.
+    '.hud-flyout-cards,.hud-weapon-submenu,.hud-choice-list,.r3-debug-entries,.r3-debug-movement dl,#r3-results{background:#fff!important;color:#111!important;border:2px solid!important;border-color:#808080 #fff #fff #808080!important;border-radius:0!important;box-shadow:inset 1px 1px #404040!important}',
+    '.hud-card,.hud-weapon-group,.hud-skill-group,.r3-debug-operations,.r3-debug-movement{background:#c0c0c0!important;color:#111!important;border-radius:0!important;border:1px solid #808080!important;box-shadow:none!important}',
+    '.hud-card summary,.hud-weapon-heading,.hud-skill-row{color:#111!important;background:#d4d0c8!important}',
+    '.hud-weapon-option,.hud-card-body,.hud-skill-row{color:#111!important;border-color:#b7b7b7!important}',
+    '.hud-weapon-option-label small,.hud-card-tags span,.hud-flyout .hud-hint,.hud-card-field{color:#333!important}',
+    '.hud-weapon-native,.hud-native-linked{color:#006600!important;font-weight:700!important}',
+    '.hud-weapon-unmapped,.hud-native-unmapped{color:#7c3030!important}',
+    '.hud-attack-button,.hud-native-action,.hud-dice-button{min-height:28px!important;min-width:66px!important;font-weight:700!important}',
+    '.hud-spell-levels button.active,.hud-attack-categories button.selected{background:#000080!important;color:#fff!important}',
+    '.hud-spell-levels button.active small,.hud-attack-categories button.selected small{color:#fff!important}',
+    '.hud-flyout-caption{font-weight:700!important;padding:5px 7px!important}',
+    '.hud-native-status,.hud-empty{color:#111!important;background:#e0e0e0!important}',
+    '.hud-native-status span{color:#111!important}',
+    '.r3-debug-window{font-size:11px!important;box-shadow:2px 2px 0 #0008!important}',
+    '.r3-debug-header{padding:3px 5px!important;min-height:29px!important}',
+    '.r3-debug-body{background:#c0c0c0!important;color:#111!important;padding:7px!important}',
+    '.r3-debug-operations p,.r3-debug-movement small,.r3-debug-note,.r3-debug-empty{color:#333!important}',
+    '.r3-debug-entry,.r3-debug-entry:nth-child(even){background:#fff!important;color:#111!important;border-bottom:1px dotted #aaa!important}',
+    '.r3-debug-entry strong,.r3-debug-entry time{color:#000080!important}',
+    '.r3-debug-entry.warning span{color:#804000!important}.r3-debug-entry.error span{color:#a00000!important}',
+    '.r3-debug-movement dt,.r3-debug-movement dd{color:#111!important}',
+    '#r3-wrap{background:#c0c0c0!important;color:#111!important}',
+    '#r3-toggle{font-size:12px!important;font-weight:700!important;padding:5px 9px!important}',
+    '#r3-content{background:#c0c0c0!important;color:#111!important}',
+    '#r3-content .notice,#r3-content .muted,#r3-status{color:#222!important}',
+    '#r3-content .entry,#r3-content .kv{color:#111!important;border-color:#808080!important}',
+    '#r3-content .entrybody{color:#111!important}',
+    '.hud-hp-track{background:#fff!important;border:1px solid #808080!important;border-radius:0!important}',
+    '.hud-hp-fill{background:#008000!important}',
+    // Keep the compact layout useful at laptop widths.
+    '@media(max-width:780px){.hud-flyout{min-width:0!important;max-width:calc(100vw - 18px)!important}.r3-debug-window{max-width:calc(100vw - 24px)!important}.r3-bf-ring{padding:2px!important}}',
+    '@media(prefers-reduced-motion:reduce){.r3-bf-shell *,.hud-flyout *{transition:none!important;animation:none!important}}'
+  ].join('');
+}
