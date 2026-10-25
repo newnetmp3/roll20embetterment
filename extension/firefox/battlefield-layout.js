@@ -317,6 +317,25 @@ function r3Win9xStyles(){
     '#r3-content .entrybody{color:#111!important}',
     '.hud-hp-track{background:#fff!important;border:1px solid #808080!important;border-radius:0!important}',
     '.hud-hp-fill{background:#008000!important}',
+    // Expanded bodies and compact stat/shortcut areas inherited several
+    // dark 2024 HUD backgrounds. Always pair black text with an opaque
+    // light surface, including high contrast in open cards.
+    '.hud-card-body,.hud-card[open] .hud-card-body,.hud-card-tags span,.hud-skill-group b,.hud-skill-row,.hud-weapon-option,.hud-weapon-direct{background:#fff!important;color:#111!important}',
+    '.hud-card-body{border-top:1px solid #808080!important}',
+    '.hud-card-tags span{border:1px solid #808080!important;background:#eee!important}',
+    '.hud-card-mark{background:#000080!important;color:#fff!important;font-family:Tahoma,Arial,sans-serif!important}',
+    '.hud-card-title,.hud-card-title small,.hud-card-count,.hud-card-caret,.hud-skill-row strong,.hud-skill-value,.hud-weapon-heading small,.hud-weapon-single{color:#111!important}',
+    '.hud-skill-group b{background:#d4d0c8!important;color:#111!important;border-bottom:1px solid #808080!important}',
+    '.hud-hp-label,.hud-hp-label span,.hud-hp-label strong{color:#111!important}',
+    '.r3-bf-stats .hud-stat,.hud-portrait-stats .hud-stat,.hud-res-chip,.r3-bf-resource-panel .hud-res-chip{background:#fff!important;color:#111!important;border:1px solid #808080!important;border-radius:0!important}',
+    '.r3-bf-stats .hud-stat strong,.r3-bf-stats .hud-stat span,.hud-portrait-stats .hud-stat span,.hud-portrait-stats .hud-stat strong{color:#111!important}',
+    '.r3-bf-resource-panel small,.r3-bf-concentration small,.hud-portrait-name{color:#111!important}',
+    '.r3-bf-avatar,.hud-avatar,.hud-avatar-pane{background:#d4d0c8!important;color:#111!important;border-radius:0!important}',
+    '.hud-bar-art,.hud-color-spells .hud-bar-art,.hud-color-bonus .hud-bar-art,.hud-color-free .hud-bar-art,.hud-color-reaction .hud-bar-art,.hud-color-pass .hud-bar-art{background:#dfdfdf!important;color:#000080!important}',
+    '.hud-bar-label,.hud-portrait-shortcuts,.hud-segment-caption{background:#c0c0c0!important;color:#111!important}',
+    '.hud-weapon-option-label strong,.hud-weapon-option-label small{color:#111!important}',
+    '.r3-bf-turn-icon svg{color:#fff!important}',
+    '#r3-content .kv strong,#r3-content .entry small{color:#111!important}',
     // Keep the compact layout useful at laptop widths.
     '@media(max-width:780px){.hud-flyout{min-width:0!important;max-width:calc(100vw - 18px)!important}.r3-debug-window{max-width:calc(100vw - 24px)!important}.r3-bf-ring{padding:2px!important}}',
     '@media(prefers-reduced-motion:reduce){.r3-bf-shell *,.hud-flyout *{transition:none!important;animation:none!important}}'
