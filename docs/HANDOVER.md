@@ -5,6 +5,11 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-24 — Windows 9x contrast polish (Firefox v3.10.8 candidate)
+
+- Expanded native action cards, resource chips and status tiles inherited dark styles behind new black text. Add explicit light backgrounds and black text to expanded card bodies, title/subtitle, skill rows, feature/spell tags, portraits, HP values, class/resource panels and bar icons. Preserve navy caption contrast and chat-safe placement.
+- Regression check now requires the affected panel overrides. No Roll20 action logic changes beyond v3.10.7. Firefox v3.10.8 must still pass CI, get Mozilla signature and update feed/hash verification; real-game visual QA remains open.
+
 ## 2026-10-24 — Windows 9x usability and native sheet-action expansion (Firefox v3.10.7 candidate)
 
 - **Request:** deliver a usable, compact Windows 95/98-style UI and map interactive actions to the exact official Roll20 sheet controls, ideally before October 25. Implemented a uniform **silver #c0c0c0 bevel / navy #000080 titlebar / Tahoma system font / white inset list** theme over HUD rings, combat categories, flyouts, weapon submenu, cards, Debug, importer and original-sheet controls, retaining drag/layout/monitor/chat inset and reduced-motion settings.
