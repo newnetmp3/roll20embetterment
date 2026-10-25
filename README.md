@@ -65,6 +65,14 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Firefox v3.10.7 — Windows 95/98 desktop styling and native actions (candidate)
+
+The entire Firefox HUD, original-sheet controls, flyouts, weapon variant menus, Debug and importer now use a unified Windows 9x-inspired design: navy caption bars, classic gray beveled buttons and windows, inset white lists, compact Tahoma-style text and keyboard focus outlines. Panels remain individually draggable and respect the chat area.
+
+Native attacks still use the original Roll20 action rather than silently rolling reconstructed dice. This release also recognizes a **unique explicitly observed feature dice button** (for example, Second Wind `1d10+5`) and clicks that same native button with a single-use source/session check. The HUD labels these **Roll**; it does not assert that Roll20 spent a class-feature use or that a resource was changed. Saving throws and ability checks similarly become native actions **only if** their actual exact control was captured from the official 2024 sheet.
+
+**Remaining limitations:** some features are explanatory text without an executable button; the supplied spells exposed `Show More` but no verified Cast control. Those remain `Native unmapped`, not fake actions. Code tests do not replace an in-game chat-roll comparison.
+
 ## Firefox v3.10.6 native Attack recovery (candidate)
 
 If Roll20 does not expose an active Combat tab marker, R20eb can verify an imported attack against an exact live official hit-roll button in the unclassified view. It never substitutes a damage button or a fabricated dice roll. **Private official-sheet reading is automatic and always enabled—there is no private-reader toggle.** Prior saved private-reader opt-outs are discarded. Opening the player's original Roll20 sheet restores it and safely interrupts private navigation; any separate private session resumes automatically after that manual opening settles. A player-opened sheet is never hidden, reparented or switched to another tab.
