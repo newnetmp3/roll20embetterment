@@ -355,6 +355,20 @@ function r3NativeChatAttack(key){
 // This adapter invokes real sheet controls, not reconstructed chat commands.
 // Imported evidence makes a button available; live DOM verification authorizes
 // the single click. Only observed attack-hit and standard skill controls qualify.
+// Use only exact labels already observed from the authenticated sheet.
+// This supports saving throws and ability checks on builds that expose
+// corresponding native buttons; names or arithmetic alone grant no access.
+function r3NativeCheckLabels(kind,name,snapshot){
+  if(!['skills','saves','modifiers'].includes(kind)||
+     !r3String(name,80)||!snapshot?.[kind]||
+     !Object.prototype.hasOwnProperty.call(snapshot[kind],name))return [];
+  const suffix=kind==='skills'?['check']:
+    kind==='saves'?['saving throw','save']:['ability check','check'];
+  const wanted=new Set(suffix.map(x=>'Roll a '+name+' '+x));
+  return [...new Set((snapshot.controls||[]).filter(c=>
+    c.kind==='action'&&c.element==='button'&&wanted.has(c.label))
+    .map(c=>c.label))];
+}
 function r3NativeDomEvidence(kind,entry,snapshot){
   if(kind==='attacks'){
     const metric=r3NativeAttackMetric(entry?.visible||'');
@@ -370,13 +384,13 @@ function r3NativeDomEvidence(kind,entry,snapshot){
     if(matches.length!==1)return null;
     return {sheetAction:true,source:'Observed official attack-hit button'};
   }
-  if(kind==='skills'&&R3_SKILLS.includes(entry?.name)){
-    const label='Roll a '+entry.name+' check';
-    if((snapshot?.controls||[]).some(c=>c.kind==='action'&&c.element==='button'&&c.label===label))
-      return {sheetAction:true,source:'Observed official skill-check button'};
+  if(['skills','saves','modifiers'].includes(kind)){
+    const observed=r3NativeCheckLabels(kind,entry?.name,snapshot);
+    if(observed.length===1)
+      return {sheetAction:true,source:'Observed official '+kind+' '+observed[0]+' button'};
   }
   if(['spells','features','inventory'].includes(kind)){
-    if(!r3NativeCardTab(kind).test(entry?.tab||''))return null;
+    if(!r3NativeCardSourceTab(kind,entry?.tab||''))return null;
     const items=Array.isArray(snapshot?.[kind])?snapshot[kind]:[];
     if(items.filter(item=>r3String(item.name,125).toLowerCase()===
       r3String(entry.name,125).toLowerCase()).length!==1)return null;
@@ -391,6 +405,13 @@ function r3NativeDomEvidence(kind,entry,snapshot){
 // Never treat Show More, damage, quantity adjustment, equip or detail buttons
 // as an executable Cast/Use action. These exact labels are opt-in evidence
 // from the source card, not fabricated Advanced Tools command identifiers.
+function r3NativeCardSourceTab(kind,tab){
+  // Actions/bonus features are also embedded in the official Combat view.
+  // Current view is accepted only with one unambiguous named source control
+  // reverified on the actual, character-bound official sheet at click time.
+  return r3NativeCardTab(kind).test(tab)||
+    (kind==='features'&&/^(?:current view|combat)$/i.test(tab));
+}
 function r3NativeCardVerb(kind,label,name){
   const value=r3String(label,70).toLowerCase();
   const item=r3String(name,125).toLowerCase();
@@ -402,7 +423,12 @@ function r3NativeCardVerb(kind,label,name){
   }[kind]||[];
   const prefix=kind==='spells'?'cast ':kind==='features'?'use ':'use ';
   return base.includes(value)||value===prefix+item||
-    (kind!=='spells'&&value==='activate '+item);
+    (kind!=='spells'&&value==='activate '+item)||
+    // D&D 2024 feature cards often expose a direct recovery/damage roll
+    // such as Second Wind "1d10+5" rather than a button saying "Use".
+    // Clicking that button is the sheet's native ROLL, but does not prove
+    // Roll20 also spent a charge, turn action, or inventory resource.
+    (kind==='features'&&/^\d{1,2}d\d{1,3}(?:[+-]\d{1,3})?$/i.test(value));
 }
 function r3NativeCardTab(kind){
   return {spells:/^spells$/i,features:/^features\s*(?:&|and)\s*traits$/i,
@@ -410,7 +436,11 @@ function r3NativeCardTab(kind){
 }
 function r3NativeCardControl(kind,name,source={}){
   const target=r3NativeCardTab(kind),tab=r3CurrentTabLabel();
-  if(!target.test(tab))return {error:'Open the '+kind+' tab on the official sheet (currently '+r3String(tab,35)+').'};
+  const featureCombat=kind==='features'&&
+    /^(?:current view|combat)$/i.test(r3String(source.tab,60))&&
+    /^(?:combat|current view)$/i.test(tab);
+  if(!target.test(tab)&&!featureCombat)
+    return {error:'Open the '+kind+' tab on the official sheet (currently '+r3String(tab,35)+').'};
   const label=r3String(source.actionLabel,70),wanted=r3String(name,125).toLowerCase();
   if(!r3NativeCardVerb(kind,label,name)||!r3String(source.visible,550))
     return {error:'No exact, observed '+kind+' Cast/Use button was authorized.'};
@@ -430,7 +460,8 @@ function r3NativeCardControl(kind,name,source={}){
     return {error:'Official '+kind+' card changed since import. Refresh before using it.'};
   const controls=row.querySelectorAll?.('button')||[];
   if(controls.length>200)return {error:'Too many card buttons to verify one native action.'};
-  const found=Array.from(controls).filter(button=>r3Shown(button)&&
+  const found=Array.from(controls).filter(button=>r3Shown(button)&&!button.disabled&&
+    button.getAttribute?.('aria-disabled')!=='true'&&
     r3String(r3Attr(button,'aria-label')||r3Attr(button,'title')||r3Text(button,70),70)===label);
   if(found.length!==1)return {error:found.length?
     'Multiple matching official '+kind+' action buttons; no click.':
@@ -438,9 +469,15 @@ function r3NativeCardControl(kind,name,source={}){
   return {button:found[0],label,fingerprint:JSON.stringify(
     [kind,wanted,rowId,actual,label])};
 }
-function r3NativeSkillControl(name){
-  if(!R3_SKILLS.includes(name))return {error:'No supported standard skill was selected.'};
-  const label='Roll a '+name+' check';
+function r3NativeCheckControl(kind,name,observedLabel){
+  if(!['skills','saves','modifiers'].includes(kind))
+    return {error:'Unsupported native check category.'};
+  const label=r3String(observedLabel,100)||
+    (kind==='skills'&&R3_SKILLS.includes(name)?'Roll a '+name+' check':'');
+  const suffix=kind==='skills'?['check']:
+    kind==='saves'?['saving throw','save']:['ability check','check'];
+  if(!label||!suffix.some(x=>label==='Roll a '+name+' '+x))
+    return {error:'No exact source-observed native '+kind+' button for '+name+'.'};
   const nodes=document.querySelectorAll('button')||[];
   if(nodes.length>12000)return {error:'Too many sheet controls to verify a unique skill button.'};
   const matches=Array.from(nodes).filter(button=>r3Shown(button)&&
@@ -448,7 +485,7 @@ function r3NativeSkillControl(name){
   if(matches.length!==1)return {error:matches.length?
     'Multiple matching skill controls; no native click.':'No visible official skill-check button for '+name+'.'};
   const button=matches[0];
-  return {button,label,fingerprint:JSON.stringify(['skills',name,label,
+  return {button,label,fingerprint:JSON.stringify([kind,name,label,
     r3Text(button.closest?.('.skill'),180)])};
 }
 function r3NativeDomContext(kind,key){
@@ -486,12 +523,15 @@ async function r3NativeDomInvoke(kind,key){
     const readerSession=R3_NATIVE.readers.get(candidate.window)?.session;
     if(!readerSession)throw new Error('No authenticated official sheet reader session.');
     const background=r3NativeIsOwned(candidate);
-    const observed=(initial.entry.actions||[]).map(action=>r3String(action.label,70))
-      .filter(label=>r3NativeCardVerb(kind,label,initial.entry.name));
+    const observed=['skills','saves','modifiers'].includes(kind)?
+      r3NativeCheckLabels(kind,initial.entry.name,R3_UI.snapshot):
+      (initial.entry.actions||[]).map(action=>r3String(action.label,70))
+        .filter(label=>r3NativeCardVerb(kind,label,initial.entry.name));
     const params={kind,characterName:initial.name,actionName:initial.entry.name,
       actionKey:key,actionText:r3String(initial.entry.visible,550),
       actionLabel:observed.length===1?observed[0]:'',
-      actionRowId:r3String(initial.entry.nativeRowId,120),background,readerSession};
+      actionRowId:r3String(initial.entry.nativeRowId,120),
+      actionTab:r3String(initial.entry.tab,60),background,readerSession};
     const ready=await r3NativeRequest(candidate,'native-probe',params);
     if(ready.status!=='ready'||typeof ready.token!=='string'){
       r3NativeStatus(ready.message||'No unique official sheet control was found.');return false;
@@ -619,29 +659,34 @@ async function r3NativeReaderHandle(peer,data){
   const attackKey=r3String(data.actionKey??data.attackKey,240);
   const attackText=r3String(data.actionText??data.attackText,550);
   const actionLabel=r3String(data.actionLabel,70),actionRowId=r3String(data.actionRowId,120);
+  const actionTab=r3String(data.actionTab,60);
   if(data.readerSession&&data.readerSession!==R3_SESSION){
     respond('blocked','Official reader session changed. Refresh the sheet connection.');return;
   }
-  const findControl=()=>kind==='skills'?r3NativeSkillControl(attackName):
+  const findControl=()=>['skills','saves','modifiers'].includes(kind)?
+      r3NativeCheckControl(kind,attackName,actionLabel):
     kind==='attacks'?r3NativeAttackControl(attackName,{visible:attackText}):
     r3NativeCardControl(kind,attackName,{visible:attackText,
-      actionLabel,nativeRowId:actionRowId});
+      actionLabel,nativeRowId:actionRowId,tab:actionTab});
   // The character identity and attack name are intentionally separate.
   // Characters across games do not share a fixed name or fixed attack list.
-  if(!['attacks','skills','spells','features','inventory'].includes(kind)||!characterName||!attackName||
+  if(!['attacks','skills','saves','modifiers','spells','features','inventory'].includes(kind)||!characterName||!attackName||
     characterName.toLowerCase()!==r3NameFromDocument(document).toLowerCase()){
     respond('blocked','This action does not belong to the open character sheet.');return;
   }
   // Only HUD-owned or Auto-sync-owned hidden sheets may have their tabs
   // switched automatically. A player-opened sheet is never navigated.
-  const targetTab=kind==='skills'?null:r3NativeCardTab(kind);
+  const targetTab=['skills','saves','modifiers'].includes(kind)?null:
+    kind==='features'&&/^(?:current view|combat)$/i.test(actionTab)?
+      /^(?:combat|features\s*(?:&|and)\s*traits)$/i:r3NativeCardTab(kind);
+  const mountedCard=['features','inventory','spells'].includes(kind)?findControl():null;
   // Prefer a verified mounted attack control even when Jumpgate exposes no
   // active Combat tab marker. Never switch a player's sheet on this basis.
   const mountedAttack=kind==='attacks'?findControl():null;
   const targetName={attacks:'Combat',spells:'Spells',features:'Features & Traits',
     inventory:'Inventory'}[kind];
   if(targetTab&&data.type==='native-probe'&&data.background===true&&
-      !targetTab.test(r3CurrentTabLabel())&&!mountedAttack?.button){
+      !targetTab.test(r3CurrentTabLabel())&&!mountedAttack?.button&&!mountedCard?.button){
     // Only the privately owned reader may navigate. A player's open sheet
     // stays untouched even when it is on a different tab.
     let selected=null;
@@ -680,7 +725,7 @@ async function r3NativeReaderHandle(peer,data){
     if(R3_NATIVE.tokens.size>=8)R3_NATIVE.tokens.clear();
     const token=(crypto.randomUUID?.()||('native-'+Date.now()+'-'+Math.random())).slice(0,100);
     R3_NATIVE.tokens.set(token,{kind,characterName,attackName,attackKey,attackText,
-      actionLabel,actionRowId,label:found.label,fingerprint:found.fingerprint,
+      actionLabel,actionRowId,actionTab,label:found.label,fingerprint:found.fingerprint,
       peer,until:Date.now()+15000});
     respond('ready','A single native roll control was found. Confirm to click it once.',
       {token,label:found.label});return;
@@ -690,7 +735,8 @@ async function r3NativeReaderHandle(peer,data){
      record.characterName.toLowerCase()!==characterName.toLowerCase()||
      record.attackName.toLowerCase()!==attackName.toLowerCase()||
      record.attackKey!==attackKey||record.attackText!==attackText||
-     record.actionLabel!==actionLabel||record.actionRowId!==actionRowId){
+     record.actionLabel!==actionLabel||record.actionRowId!==actionRowId||
+     record.actionTab!==actionTab){
     respond('blocked','Native action confirmation expired. Inspect the roll again.');return;
   }
   R3_NATIVE.tokens.delete(token);

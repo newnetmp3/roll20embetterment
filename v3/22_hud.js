@@ -129,14 +129,20 @@ function r3HudNativeEntryControl(kind,key,name){
   const map=typeof r3NativeMapPreview==='function'?
     r3NativeMapPreview(kind,key,R3_UI.snapshot):{reason:'No native mapping available'};
   const linked=!!(map.abilityName||map.sheetAction);
+  const entry=typeof r3NativeMapSource==='function'?r3NativeMapSource(kind,key,R3_UI.snapshot):null;
+  const featureRoll=kind==='features'&&map.sheetAction&&
+    Array.isArray(entry?.actions)&&entry.actions.some(action=>
+      /^\d{1,2}d\d{1,3}(?:[+-]\d{1,3})?$/i.test(r3String(action.label,70)));
+  const verb=featureRoll?'Roll':R3_NATIVE_CATEGORIES[kind]?.title||'Use';
   return '<span class="hud-native-link">'+
     '<small class="'+(linked?'hud-native-linked':'hud-native-unmapped')+'" title="'+
       r3Escape(map.sheetAction?'Checks and clicks the exact official sheet control when requested':linked?'Matches an existing Roll20 '+kind+' action':map.reason||'No mapped native action')+'">'+
       (map.sheetAction?'Native sheet':linked?'Native linked':'Native unmapped')+'</small>'+
     (linked?'<button type="button" class="hud-native-action" data-hud-native-kind="'+r3Escape(kind)+
       '" data-hud-native-key="'+r3Escape(key)+'" aria-label="'+
-      r3Escape((R3_NATIVE_CATEGORIES[kind]?.title||'Use')+' '+name+' via Roll20')+'">'+
-      r3Escape(R3_NATIVE_CATEGORIES[kind]?.title||'Use')+'</button>':'')+
+      r3Escape(verb+' '+name+' via Roll20')+'" title="'+
+      r3Escape(featureRoll?'Click exactly the official feature dice button. Resource use is not automatically confirmed.':'Execute exactly the mapped Roll20 sheet action')+'">'+
+      r3Escape(verb)+'</button>':'')+
     '</span>';
 }
 function r3HudSourceKind(item){
@@ -824,7 +830,8 @@ function r3HudStyles(){
     typeof r3TurnStyles==='function'?r3TurnStyles():'',
     typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():'',
     typeof r3BattlefieldDragStyles==='function'?r3BattlefieldDragStyles():'',
-    typeof r3DebugStyles==='function'?r3DebugStyles():''
+    typeof r3DebugStyles==='function'?r3DebugStyles():'',
+    typeof r3Win9xStyles==='function'?r3Win9xStyles():''
 
   ].join('');
 }

@@ -1,6 +1,6 @@
 {
-  "version": "3.10.6",
+  "version": "3.10.7",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Repair source-verified native attacks under unclassified Jumpgate Combat views; private official-sheet readers are always enabled with no user toggles. Old sticky opt-out is migrated; original sheets retain priority with automatic resume after manual-open grace. Pending live Roll20 parity testing."
+  "reason": "Windows 95/98 compact beveled HUD/Debug/importer UI plus source-verified official 2024 feature dice rolls (Second Wind), saving throws and ability checks where uniquely exposed. Attack and skill native bridge retained; unsupported spell Cast still unmapped; automatic private reader and manual-sheet safety preserved. Live Roll20 chat parity pending."
 }

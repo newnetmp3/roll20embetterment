@@ -1100,6 +1100,32 @@ test('skill reader probes then clicks the exact native skill button once across 
     assert.equal(messages.at(-1).status,'blocked');assert.equal(clicks,1);
   }
 });
+test('observed saving throws and ability checks click their real sheet button only once',()=>{
+  for(const [kind,name,label] of [
+    ['saves','Strength','Roll a Strength saving throw'],
+    ['modifiers','Dexterity','Roll a Dexterity ability check']
+  ]){
+    const fixture=docFixture({name:'Elowen'});
+    let clicks=0;
+    const button={tagName:'BUTTON',getAttribute:k=>k==='aria-label'?label:null,
+      getClientRects:()=>[{}],closest:()=>null,click(){clicks++;}};
+    const query=fixture.document.querySelectorAll;
+    fixture.document.querySelectorAll=sel=>sel==='button'?[button]:query(sel);
+    const {h}=harness(fixture),messages=[],peer={postMessage:m=>messages.push(m)};
+    const params={id:'r3-check-2024-0001',kind,characterName:'Elowen',
+      actionName:name,actionKey:name,actionLabel:label};
+    h.r3NativeReaderHandle(peer,{...params,type:'native-probe'});
+    const ready=messages.at(-1);
+    assert.equal(ready.status,'ready',ready.message);
+    assert.equal(clicks,0);
+    h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token:ready.token});
+    assert.equal(messages.at(-1).status,'clicked');assert.equal(clicks,1);
+    h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token:ready.token});
+    assert.equal(messages.at(-1).status,'blocked');assert.equal(clicks,1);
+    h.r3NativeReaderHandle(peer,{...params,type:'native-probe',actionLabel:'Roll a '+name+' check'});
+    assert.equal(messages.at(-1).status,'blocked','wrong type cannot impersonate verified source');
+  }
+});
 test('skill reader rejects duplicate buttons, hidden controls, changed skills and stale sessions',()=>{
   const fixture=docFixture({name:'Elowen'});let clicks=0,buttons=[];
   const button=label=>({tagName:'BUTTON',getAttribute:k=>k==='aria-label'?label:null,
@@ -1181,6 +1207,62 @@ test('native Cast/Use card reader executes only a unique observed official contr
     assert.equal(messages.at(-1).status,'blocked');
     assert.equal(clicks,1);
   }
+});
+test('Second Wind feature uses the exact official feature dice button once from Combat',()=>{
+  let clicked=[];
+  const nativeButton=(label,disabled=false)=>({
+    tagName:'BUTTON',disabled,getClientRects:()=>[{}],
+    getAttribute:key=>key==='aria-label'?label:null,
+    click(){clicked.push(label);}
+  });
+  const buttons=[nativeButton('1d10+5'),nativeButton('Show More')];
+  const visible='Second Wind Bonus Action 1d10+5 available';
+  const row=card('features','Second Wind',visible,buttons);
+  const tab={getClientRects:()=>[{}],className:'',
+    getAttribute:key=>key==='aria-label'?'Combat':key==='aria-selected'?'true':null};
+  const fixture=docFixture({name:'Elowen',tabs:[tab]});
+  const original=fixture.document.querySelectorAll;
+  fixture.document.querySelectorAll=selector=>
+    selector.startsWith('.feature-item,')?[row]:original(selector);
+  const {h}=harness(fixture),messages=[],peer={postMessage:msg=>messages.push(msg)};
+  const params={id:'r3-feature-2024-1',kind:'features',characterName:'Elowen',
+    actionName:'Second Wind',actionKey:'second-wind',actionText:visible,
+    actionLabel:'1d10+5',actionTab:'Current view'};
+  h.r3NativeReaderHandle(peer,{...params,type:'native-probe'});
+  assert.equal(messages.at(-1).status,'ready',messages.at(-1).message);
+  const token=messages.at(-1).token;
+  h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token});
+  assert.equal(messages.at(-1).status,'clicked');
+  assert.deepEqual(clicked,['1d10+5'],'the original official button, never Show More');
+  h.r3NativeReaderHandle(peer,{...params,type:'native-invoke',token});
+  assert.equal(messages.at(-1).status,'blocked','single-use token cannot replay');
+});
+test('feature mapping cannot treat arbitrary damage controls or descriptions as a native use',()=>{
+  const tab={getClientRects:()=>[{}],getAttribute:k=>
+    k==='aria-label'?'Combat':k==='aria-selected'?'true':null};
+  let controls=[],clicks=0;
+  const button=label=>({tagName:'BUTTON',getClientRects:()=>[{}],
+    getAttribute:k=>k==='aria-label'?label:null,click(){clicks++;}});
+  const row=card('features','Second Wind','Second Wind 1d10+5',controls);
+  row.querySelectorAll=selector=>selector==='button'?controls:[];
+  const fixture=docFixture({name:'Elowen',tabs:[tab]});
+  const original=fixture.document.querySelectorAll;
+  fixture.document.querySelectorAll=selector=>
+    selector.startsWith('.feature-item,')?[row]:original(selector);
+  const {h}=harness(fixture),messages=[],peer={postMessage:msg=>messages.push(msg)};
+  const params={id:'r3-feature-2024-2',kind:'features',characterName:'Elowen',
+    actionName:'Second Wind',actionKey:'second-wind',actionText:row.innerText,
+    actionLabel:'1d10+5',actionTab:'Current view'};
+  const request=(extra={})=>{h.r3NativeReaderHandle(peer,{...params,type:'native-probe',...extra});return messages.at(-1);};
+  controls=[button('Show More')];
+  assert.equal(request({actionLabel:'Show More'}).status,'blocked');
+  controls=[button('1d10+5'),button('1d10+5')];
+  assert.equal(request().status,'blocked','ambiguous equal dice buttons');
+  controls=[{...button('1d10+5'),disabled:true}];
+  assert.equal(request().status,'blocked','disabled official button');
+  controls=[button('1d10+5')];
+  assert.equal(request({actionTab:'Inventory'}).status,'blocked','wrong imported tab');
+  assert.equal(clicks,0);
 });
 test('native Cast/Use reader rejects descriptions, disabled or duplicated buttons and changed source cards',()=>{
   const name='Detect Magic',label='Cast Spell';
