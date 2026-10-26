@@ -40,8 +40,9 @@ jobs:
           test "$version" = "1.0.1"
           test "$id" = "pornhex-video-saver@local.addon"
           unzip -Z -1 "$file" | grep -q '^META-INF/'
-          cp "$file" signed/pview-pornhex-video-saver-v1.0.1-signed.xpi
-          if [ "$file" != "signed/pview-pornhex-video-saver-v1.0.1-signed.xpi" ]; then rm "$file"; fi
+          if [ "$file" != "signed/pview-pornhex-video-saver-v1.0.1-signed.xpi" ]; then
+            mv "$file" signed/pview-pornhex-video-saver-v1.0.1-signed.xpi
+          fi
           sha256sum signed/pview-pornhex-video-saver-v1.0.1-signed.xpi
 
       - name: Publish temporary signed staging asset for PView release
