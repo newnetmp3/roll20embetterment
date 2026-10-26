@@ -1832,27 +1832,24 @@ test('uncontrolled and unlinked selections never enable background auto-sync',()
   assert.equal(h.api.R3_AUTO.enabled,false);
   assert.equal(h.store.has('roll20-embetterment-v3:123:auto'),false);
 });
-test('explicit Auto-sync Off is sticky across token changes and restart',()=>{
+test('selected token automatically resumes private sheet sync despite an old Off setting',()=>{
   const x=multiTokenRig(),h=x.h;
+  const key='roll20-embetterment-v3:123:auto';
+  h.store.set(key,JSON.stringify({enabled:false,name:'Earlier Character'}));
   h.api.r3StartAuto();
+  assert.equal(h.api.R3_AUTO.explicitlyDisabled,true,'legacy preference read');
   x.selections.push(x.a);h.api.r3TokenPoll();
-  assert.equal(h.api.R3_AUTO.enabled,true);
-  h.api.r3ToggleAuto();
-  assert.equal(h.api.R3_AUTO.enabled,false);
-  assert.equal(h.api.R3_AUTO.explicitlyDisabled,true);
-  x.selections.push(x.b);h.api.r3TokenPoll();
-  assert.equal(h.api.R3_AUTO.enabled,false);
-  const priorGen=h.api.R3_AUTO.generation;
-  h.api.R3_AUTO.explicitlyDisabled=false;
-  h.api.R3_AUTO.name='';h.api.R3_AUTO.characterId='';
-  vm.runInContext('r3AutoLoad()',h.context);
-  assert.equal(h.api.R3_AUTO.explicitlyDisabled,true,
-    'read-back of Off survives a reload');
-  assert.equal(h.api.R3_AUTO.generation,priorGen);
-  h.api.r3ToggleAuto();
+  assert.equal(h.api.R3_AUTO.enabled,true,'authorized selection enables sync');
   assert.equal(h.api.R3_AUTO.explicitlyDisabled,false);
-  assert.equal(h.api.R3_AUTO.characterId,'char-dwarf',
-    're-enabling prefers current verified controlled token');
+  assert.equal(h.api.R3_AUTO.characterId,'char-elf');
+  assert.match(h.store.get(key),/"enabled":true/,'legacy Off migrated');
+  h.api.r3ToggleAuto();
+  assert.equal(h.api.R3_AUTO.enabled,true,'no UI toggle can strand an active PC');
+  x.selections.push(x.b);h.api.r3TokenPoll();
+  assert.equal(h.api.R3_AUTO.enabled,true);
+  assert.equal(h.api.R3_AUTO.characterId,'char-dwarf');
+  assert.equal(h.api.R3_AUTO.lastFull,0,'new PC schedules a complete sheet import');
+  assert.equal(h.api.R3_AUTO.name,'Brom Stonebeard');
 });
 test('token-mode auto-sync refuses to open a saved character before live token selection',async()=>{
   const x=multiTokenRig(),h=x.h;
@@ -2640,6 +2637,29 @@ test('source-observed attacks and skills expose native sheet controls without ma
     assert.equal(invokes[0].readerSession,'dom-reader-session');
     assert.equal(x.log.filter(l=>l.kind==='show').length,1);
   }
+});
+test('Attack click waits behind a hidden all-tab import then clicks only the official control',async()=>{
+  const x=nativeDomActionRig('attacks'),h=x.h;
+  h.api.R3_AUTO.running=true;
+  const promise=x.invoke();
+  assert.equal(h.api.R3_NATIVE.busy,true);
+  assert.match(h.api.R3_NATIVE.status,/Finishing private sheet import/);
+  assert.equal(x.received.filter(m=>m.type==='native-invoke').length,0);
+  h.api.R3_AUTO.running=false;
+  assert.equal(await promise,true,h.api.R3_NATIVE.status);
+  assert.equal(x.received.filter(m=>m.type==='native-probe').length,1);
+  assert.equal(x.received.filter(m=>m.type==='native-invoke').length,1);
+  assert.equal(x.log.filter(l=>l.kind==='show').length,1,
+    'one selected-character private dialog reused for the attack');
+});
+test('Private attack does not send any click if token identity changes while waiting for import',async()=>{
+  const x=nativeDomActionRig('attacks'),h=x.h;
+  h.api.R3_AUTO.running=true;
+  const request=x.invoke();
+  h.api.R3_TOKEN.active={characterId:'char-dwarf',name:'Brom'};
+  h.api.R3_AUTO.running=false;
+  assert.equal(await request,false);
+  assert.equal(x.received.filter(m=>m.type==='native-invoke').length,0);
 });
 test('native sheet action cancels when permissions, source data, selected character or session changes during probe',async()=>{
   for(const change of ['permission','source','selection','session']){
