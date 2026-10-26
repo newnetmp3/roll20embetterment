@@ -504,10 +504,22 @@ function r3NativeDomContext(kind,key){
 }
 async function r3NativeDomInvoke(kind,key){
   if(R3_NATIVE.busy)return false;
-  const initial=r3NativeDomContext(kind,key);
+  let initial=r3NativeDomContext(kind,key);
   if(!initial.entry){r3NativeStatus(initial.reason);return false;}
   if(R3_UI.busy){r3NativeStatus('Manual import is running. No roll sent.');return false;}
-  const stillCurrent=()=>r3NativeDomContext(kind,key).signature===initial.signature;
+  // The next full-tab import can legitimately refresh observed row text
+  // while a player is clicking. Preserve the selected identity and key until
+  // it completes, then use the newly imported evidence to inspect the sheet.
+  // Never transfer a click to another selected token/character.
+  const expectedId=initial.id,expectedName=initial.name;
+  const stillSelected=()=>{
+    const active=R3_TOKEN.active;
+    if(active&&(active.characterId!==expectedId||
+      active.name?.toLowerCase()!==expectedName.toLowerCase()))return false;
+    return r3NativeBgResolve(expectedName)?.id===expectedId;
+  };
+  const stillCurrent=()=>stillSelected()&&
+    r3NativeDomContext(kind,key).signature===initial.signature;
   const matchesCharacter=candidate=>{
     const id=r3AutoId(candidate);
     return candidate?.window&&r3NativeCandidate(initial.name)?.window===candidate.window&&
@@ -519,14 +531,21 @@ async function r3NativeDomInvoke(kind,key){
     // Finish an active private full-tab import before clicking its controls.
     // A single user click is preserved; no native invocation is repeated.
     for(let i=0;(R3_AUTO.running||R3_AUTO.healthRunning)&&i<184;i++){
-      if(!stillCurrent())throw new Error('Selected token changed during private import.');
+      if(!stillSelected())throw new Error('Selected token changed during private import.');
       if(i===0)r3NativeStatus('Finishing private sheet import before '+kind+'…');
       await r3Pause(250);
     }
     if(R3_AUTO.running||R3_AUTO.healthRunning)
       throw new Error('Private import did not complete. No roll sent.');
-    if(!stillCurrent()||R3_UI.busy)
-      throw new Error('Source action changed during import. No roll sent.');
+    if(!stillSelected()||R3_UI.busy)
+      throw new Error('Selected token changed or manual import started. No roll sent.');
+    // Rebind to the just-imported exact source entry before sending any
+    // probe. A stale cached row label is never passed to the real sheet.
+    const refreshed=r3NativeDomContext(kind,key);
+    if(!refreshed.entry||refreshed.id!==expectedId||
+       refreshed.name!==expectedName)
+      throw new Error('Attack identity changed during import. No roll sent.');
+    initial=refreshed;
     let candidate=r3NativeCandidate(initial.name);
     if(!candidate)candidate=await r3NativeBgEnsure(initial.name);
     if(!stillCurrent()||!matchesCharacter(candidate))throw new Error('Character identity changed while locating the sheet. No roll sent.');
