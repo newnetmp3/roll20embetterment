@@ -4075,7 +4075,7 @@ function r3TokenSnapshotFor(info){
   }
   // Never show a previous PC's HP, spells or attacks while a new sheet loads.
   const blank=r3Empty();blank.name=info.name;
-  blank.diagnostics.notes.push('Loading the selected token's private Roll20 sheet and importing available tabs automatically.');
+  blank.diagnostics.notes.push('Loading the selected token private Roll20 sheet and importing available tabs automatically.');
   return r3Coverage(blank);
 }
 function r3TokenSwitch(info){
