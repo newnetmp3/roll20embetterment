@@ -1,6 +1,6 @@
 {
-  "version": "3.10.8",
+  "version": "3.10.9",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Windows 9x contrast follow-up for the v3.10.7 native-action release: ensure white/light readable expanded feature, spell, item, stats, portrait and resource surfaces under the navy/silver shell. No native control behavior changes."
+  "reason": "Restore Baldur's Gate 3 as default while preserving Windows 9x as a selectable theme. Add instant persisted global Theme Manager in Debug with Tokyo Night Storm matching official Oh My Posh palette and curated Catppuccin Mocha, Dracula, Gruvbox and Nord presets. Isolated Shadow DOM CSS; no new setup or native-sheet changes. CI and live Floorp checks separate."
 }
