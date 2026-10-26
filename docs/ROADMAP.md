@@ -1,3 +1,10 @@
+## 2026-10-25 — Stable attack-list scrolling (Firefox v3.10.10 candidate)
+
+- [x] Preserve Firefox `.hud-flyout` horizontal and vertical viewport through native Attack clicks and repeated official-sheet status rerenders.
+- [x] Render attack operation messages after the weapon list to avoid inserting content above scrolled weapon rows.
+- [x] Preserve intentional category navigation; add mock UI regression on the real HUD Attack click path.
+- [ ] Live in-game check after signed v3.10.10 installation; native gameplay parity remains separately unverified.
+
 ## 2026-10-25 — Multi-theme HUD (Firefox v3.10.9 candidate)
 
 - [x] Restore BG3 dark-leather-and-gold as default; keep Windows 9x selectable.
