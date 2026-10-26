@@ -10,7 +10,7 @@ const root=resolve(import.meta.dirname,'../..');
 const {version}=JSON.parse(readFileSync(join(root,'extension',browser,'package.json'),'utf8'));
 const names=readdirSync(join(root,'v3')).filter(s=>/^\d{2}_.*\.js$/.test(s)).sort();
 if(names.length!==8)throw Error('Expected all eight v3 modules');
-const files=browser==='firefox'?names.flatMap(n=>n==='30_boot.js'?['firefox-turn','firefox-movement','firefox-debug','firefox-battlefield','firefox-drag','firefox-sheet-visibility',n]:[n]):names;
+const files=browser==='firefox'?names.flatMap(n=>n==='30_boot.js'?['firefox-turn','firefox-movement','firefox-theme','firefox-debug','firefox-battlefield','firefox-drag','firefox-sheet-visibility',n]:[n]):names;
 const code='// R20 Embetterment '+version+' page-world runtime\n(()=>{\n'+
   files.map(n=>n==='firefox-turn'?
     '// ===== extension/firefox/turn-economy.js =====\n'+
@@ -18,6 +18,9 @@ const code='// R20 Embetterment '+version+' page-world runtime\n(()=>{\n'+
     n==='firefox-movement'?
     '// ===== extension/firefox/movement-tracker.js =====\n'+
     readFileSync(join(root,'extension/firefox/movement-tracker.js'),'utf8').trim():
+    n==='firefox-theme'?
+    '// ===== extension/firefox/theme-manager.js =====\n'+
+    readFileSync(join(root,'extension/firefox/theme-manager.js'),'utf8').trim():
     n==='firefox-debug'?
     '// ===== extension/firefox/debug-window.js =====\n'+
     readFileSync(join(root,'extension/firefox/debug-window.js'),'utf8').trim():
