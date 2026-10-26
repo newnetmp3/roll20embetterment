@@ -1,6 +1,6 @@
 {
-  "version": "3.10.12",
+  "version": "3.10.13",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Resolve owned hidden sheet by authenticated character ID instead of generic iframe title. Rebind Attack to refreshed source after private import, pause background health polling during pending native actions, and show progress/failure in fixed-height Attack header without changing scroll. Roll20 chat parity remains live QA."
+  "reason": "Progressively map source-observed Combat attacks, Features resources, Inventory and Spells as authenticated hidden sheet tabs arrive instead of waiting for the full 32-view scan. Scan actionable tabs before secondary filters, streamline ready handshake and scheduler cadence; preserve exact selected character, manually opened sheets, and single-click native actions."
 }
