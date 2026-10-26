@@ -1,3 +1,11 @@
+## 2026-10-26 — native Attack reliability v3.10.12
+
+- [x] Resolve hidden reader using selected controlled-character ID even with a generic Roll20 iframe title; reject authenticated name mismatch.
+- [x] Rebind queued native attack requests to the latest imported source after background all-tab reads; preserve one-shot click semantics.
+- [x] Pause health scans during pending Attack, display native status in the stable flyout titlebar without scrolling the list.
+- [ ] Verify in live Jumpgate on Firefox: import actually populates from hidden character sheet, and clicking Dagger Standard/Finesse/Off-Hand emits the same official chat cards as sheet controls.
+- [ ] Expand source evidence based on real Debug export if private reader still cannot locate a specific attack control; do not fabricate an attack roll.
+
 ## 2026-10-25 — selected-token hidden sheet + reliable actions (v3.10.11)
 
 - [x] Follow the selected verified controllable token without a prior Auto-sync preference.

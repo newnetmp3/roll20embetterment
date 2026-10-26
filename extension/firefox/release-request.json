@@ -1,6 +1,6 @@
 {
-  "version": "3.10.11",
+  "version": "3.10.12",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Selected controlled token automatically opens its own retained background character sheet and imports available tabs; native roll requests wait for private import and probe mounted official buttons. Original manually opened sheets stay untouched."
+  "reason": "Resolve owned hidden sheet by authenticated character ID instead of generic iframe title. Rebind Attack to refreshed source after private import, pause background health polling during pending native actions, and show progress/failure in fixed-height Attack header without changing scroll. Roll20 chat parity remains live QA."
 }

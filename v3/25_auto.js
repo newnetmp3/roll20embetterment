@@ -95,6 +95,25 @@ function r3AutoCandidate(){
   // A player-popped-out official sheet is a valid authenticated reader.
   // It has no parent dialog with a character ID, so require a unique exact
   // name. Prefer the popout when the same sheet also has an embedded frame.
+  // Roll20 frequently assigns a generic iframe title until Vue finishes
+  // mounting. Our private dialog has an authoritative character ID, and the
+  // reader announces its actual name through the authenticated message
+  // bridge. Never require a stale iframe title for a script-owned session.
+  const owned=typeof r3NativeBgCandidate==='function'?r3NativeBgCandidate():null;
+  if(owned&&R3_AUTO.characterId&&
+    r3AutoId(owned)===R3_AUTO.characterId&&
+    R3_NATIVE_BG.name?.toLowerCase()===R3_AUTO.name.toLowerCase()&&
+    (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground())){
+    const announced=R3_NATIVE.readers.get(owned.window);
+    if(!announced?.name||
+       announced.name.toLowerCase()===R3_AUTO.name.toLowerCase()||
+       /^(?:unnamed sheet|official sheet popout|2024 character sheet)/i.test(announced.name)){
+      // Keep this candidate bound to the original frame/window, not a new
+      // iframe clone or a nameless manually opened sheet.
+      return {...owned,name:R3_AUTO.name,characterId:R3_AUTO.characterId};
+    }
+    return null; // Authenticated reader contradicts the owned character.
+  }
   const choices=r3Candidates().filter(c=>c.visible&&c.window&&
     (c.type==='iframe'||c.type==='popout'));
   // Never allow an explicit, conflicting character ID to be rescued by a
@@ -112,11 +131,11 @@ function r3AutoCandidate(){
   const safe=named.filter(c=>!duplicateName||r3AutoId(c)===R3_AUTO.characterId);
   // Prefer our own character-bound private reader even when a player also
   // has an official popout open. Never navigate that player's live tab.
-  const owned=safe.filter(c=>c.type==='iframe'&&r3NativeIsOwned(c));
-  if(owned.length===1&&
+  const namedOwned=safe.filter(c=>c.type==='iframe'&&r3NativeIsOwned(c));
+  if(namedOwned.length===1&&
      (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground()))
-    return owned[0];
-  if(owned.length>1)return null;
+    return namedOwned[0];
+  if(namedOwned.length>1)return null;
   const popouts=safe.filter(c=>c.type==='popout');
   if(popouts.length===1)return popouts[0];
   if(popouts.length>1)return null; // same-named popouts are ambiguous
@@ -460,7 +479,8 @@ function r3AutoStoreHealth(snapshot){
   return true;
 }
 async function r3AutoHealthTick(){
-  if(!R3_AUTO.enabled||!R3_AUTO.name||R3_AUTO.healthRunning||R3_AUTO.running||R3_UI.busy)return;
+  if(!R3_AUTO.enabled||!R3_AUTO.name||R3_AUTO.healthRunning||R3_AUTO.running||
+     R3_NATIVE.busy||R3_UI.busy)return;
   const candidate=r3AutoCandidate();
   if(!candidate)return;
   const generation=R3_AUTO.generation;

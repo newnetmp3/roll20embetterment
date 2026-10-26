@@ -1236,6 +1236,18 @@ test('attack menu groups exactly observed variants by weapon and mode with Throw
   assert.match(html,/Molotov Cocktail/);
   assert.equal(h.sent.length,0,'menu exploration cannot roll');
 });
+test('Attack-native status is visible at the top without adding rows before weapons',()=>{
+  const h=panelHarness('Elowen');h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.attacks=[{name:'Dagger',_key:'dagger',visible:'Dagger +7 Attack 1d4+4'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);h.api.R3_HUD.flyout='actions';
+  vm.runInContext('r3NativeStatus("Official Combat button not yet available")',h.context);
+  const html=h.nodes.get('r3-hud').innerHTML;
+  assert.match(html,/hud-attack-live-status/);
+  assert.match(html,/<small class="hud-attack-live-status" role="status" title="Official Combat button not yet available">/);
+  assert.ok(html.indexOf('hud-attack-live-status')<html.indexOf('hud-attack-list'),
+    'status must appear in stable titlebar, before scrollable content');
+});
 test('clicking Attack keeps the same scrolled weapon visible through native status rerenders',()=>{
   const h=panelHarness('Independent Hero');
   h.api.r3StartEditorBridge();h.api.r3StartUI();
@@ -2133,6 +2145,26 @@ test('no controller permission and duplicate names block creating background cha
   await assert.rejects(x.h.api.r3NativeBgEnsure('Elowen'),/Multiple Roll20 characters share this name/);
   assert.equal(x.log.length,0);
 });
+test('selected hidden reader imports from exact character ID despite a generic iframe title',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const privateSheet=await h.api.r3NativeBgEnsure('Elowen');
+  const frame=x.frames.at(-1);
+  frame.getAttribute=k=>k==='title'?'2024 Character Sheet':null;
+  h.api.R3_AUTO.enabled=true;
+  h.api.R3_AUTO.name='Elowen';h.api.R3_AUTO.characterId='char-elf';
+  const privateSession=h.api.r3AutoCandidate();
+  assert.ok(privateSession,'ID-bound private sheet must not require a title carrying the character name');
+  assert.equal(privateSession.window,privateSheet.window);
+  assert.equal(privateSession.name,'Elowen');
+  assert.equal(privateSession.characterId,'char-elf');
+  assert.equal(h.api.r3NativeIsOwned(privateSession),true);
+  h.api.R3_NATIVE.readers.set(privateSession.window,{name:'Brom',session:'wrong-session'});
+  assert.equal(h.api.r3AutoCandidate(),null,
+    'contradictory authenticated reader name is rejected, not silently imported');
+  h.api.R3_NATIVE.readers.set(privateSession.window,{name:'Elowen',session:'right-session'});
+  assert.equal(h.api.r3AutoCandidate().window,privateSession.window);
+  assert.equal(x.dialogs[0].style.left,'-20000px');
+});
 test('two owned background readers are isolated and reusable when switching selected characters',async()=>{
   const x=backgroundNativeRig();
   const first=await x.h.api.r3NativeBgEnsure('Elowen');
@@ -2637,6 +2669,19 @@ test('source-observed attacks and skills expose native sheet controls without ma
     assert.equal(invokes[0].readerSession,'dom-reader-session');
     assert.equal(x.log.filter(l=>l.kind==='show').length,1);
   }
+});
+test('Attack rebinds to a refreshed authorized source row after hidden import',async()=>{
+  const x=nativeDomActionRig('attacks'),h=x.h;
+  h.api.R3_AUTO.running=true;
+  const pending=x.invoke();
+  assert.equal(h.api.R3_NATIVE.busy,true);
+  const item=h.api.R3_UI.snapshot.attacks[0];
+  item.visible='Quarterstaff Melee +4 Attack 1d6+2 magic';
+  h.api.R3_AUTO.running=false;
+  assert.equal(await pending,true,h.api.R3_NATIVE.status);
+  assert.equal(x.received.find(m=>m.type==='native-probe')?.actionText,item.visible,
+    'probe must inspect the newly imported exact entry, not old stale row text');
+  assert.equal(x.received.filter(m=>m.type==='native-invoke').length,1);
 });
 test('Attack click waits behind a hidden all-tab import then clicks only the official control',async()=>{
   const x=nativeDomActionRig('attacks'),h=x.h;
