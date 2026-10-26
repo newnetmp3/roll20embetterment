@@ -537,7 +537,10 @@ function r3HudFlyoutMarkup(snapshot){
     '<small>'+(flyout==='actions'?'Native Attack when mapped · Dice fallback is not the sheet action':
       'Native actions run only for verified links; other sheet controls remain read-only')+'</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
-    (flyout==='actions'?r3NativeMarkup()+content:content+r3NativeMarkup())+'</section>';
+    // Native status changes repeatedly while a sheet click is prepared.
+    // Keep it after the attack rows so messages do not push weapon entries
+    // away from the player's current viewport while rolling.
+    content+r3NativeMarkup()+'</section>';
 }
 function r3HudSegment(label,kind,buttons){
   const tracks=kind==='action'||kind==='bonus'||kind==='reaction';
@@ -643,6 +646,18 @@ function r3HudRender(){
     R3_HUD.renderedDebugWindow===(typeof R3_DEBUG==='object'?R3_DEBUG.open:false)&&
     R3_HUD.renderedDebug===R3_UI.shown&&
     R3_HUD.renderedSync===R3_AUTO.enabled)return;
+  // Firefox's attack list scrolls on .hud-flyout (not .hud-body).
+  // Each native status update rebuilds the overlay. Restore this viewport
+  // only if the user stayed in the same flyout/weapon group; intentionally
+  // navigating to another category or weapon view starts a fresh position.
+  const sameFlyout=R3_HUD.renderedFlyout===R3_HUD.flyout&&
+    R3_HUD.renderedChooser===R3_HUD.chooser&&
+    R3_HUD.renderedAttackMode===R3_HUD.attackMode&&
+    R3_HUD.renderedAttackGroup===R3_HUD.attackGroup;
+  const existingFlyout=sameFlyout?el.querySelector?.('.hud-flyout'):null;
+  const flyoutScroll=existingFlyout?{
+    top:existingFlyout.scrollTop,left:existingFlyout.scrollLeft
+  }:null;
   const oldBody=el.querySelector?.('.hud-body');
   if(oldBody){
     R3_HUD.scrollTop=oldBody.scrollTop;
@@ -694,6 +709,13 @@ function r3HudRender(){
   const expanded=new Set(R3_HUD.openKeys);
   for(const card of el.querySelectorAll?.('details.hud-card')||[])
     if(expanded.has(card.getAttribute('data-hud-card')))card.open=true;
+  // Apply after expanding cards and re-positioning draggable panels so
+  // their layout changes cannot reset the restored scroll position.
+  const nextFlyout=flyoutScroll?el.querySelector?.('.hud-flyout'):null;
+  if(nextFlyout){
+    nextFlyout.scrollTop=flyoutScroll.top;
+    nextFlyout.scrollLeft=flyoutScroll.left;
+  }
 }
 function r3HudStyles(){
   return [
