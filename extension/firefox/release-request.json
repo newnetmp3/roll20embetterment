@@ -1,6 +1,6 @@
 {
-  "version": "3.10.10",
+  "version": "3.10.11",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Preserve the exact attack-flyout scroll offsets across direct Attack button clicks and every official-sheet native status rerender. Keep progress text below weapon rows to avoid moving the displayed attack; leave explicit weapon category navigation behavior unchanged."
+  "reason": "Selected controlled token automatically opens its own retained background character sheet and imports available tabs; native roll requests wait for private import and probe mounted official buttons. Original manually opened sheets stay untouched."
 }

@@ -506,7 +506,7 @@ async function r3NativeDomInvoke(kind,key){
   if(R3_NATIVE.busy)return false;
   const initial=r3NativeDomContext(kind,key);
   if(!initial.entry){r3NativeStatus(initial.reason);return false;}
-  if(R3_AUTO.running||R3_UI.busy){r3NativeStatus('Character import is running. Retry the roll after it finishes.');return false;}
+  if(R3_UI.busy){r3NativeStatus('Manual import is running. No roll sent.');return false;}
   const stillCurrent=()=>r3NativeDomContext(kind,key).signature===initial.signature;
   const matchesCharacter=candidate=>{
     const id=r3AutoId(candidate);
@@ -516,6 +516,17 @@ async function r3NativeDomInvoke(kind,key){
   R3_NATIVE.busy=true;R3_NATIVE.preview=null;
   r3NativeStatus('Checking the official '+kind+' control…');
   try{
+    // Finish an active private full-tab import before clicking its controls.
+    // A single user click is preserved; no native invocation is repeated.
+    for(let i=0;(R3_AUTO.running||R3_AUTO.healthRunning)&&i<184;i++){
+      if(!stillCurrent())throw new Error('Selected token changed during private import.');
+      if(i===0)r3NativeStatus('Finishing private sheet import before '+kind+'…');
+      await r3Pause(250);
+    }
+    if(R3_AUTO.running||R3_AUTO.healthRunning)
+      throw new Error('Private import did not complete. No roll sent.');
+    if(!stillCurrent()||R3_UI.busy)
+      throw new Error('Source action changed during import. No roll sent.');
     let candidate=r3NativeCandidate(initial.name);
     if(!candidate)candidate=await r3NativeBgEnsure(initial.name);
     if(!stillCurrent()||!matchesCharacter(candidate))throw new Error('Character identity changed while locating the sheet. No roll sent.');
@@ -532,13 +543,14 @@ async function r3NativeDomInvoke(kind,key){
       actionLabel:observed.length===1?observed[0]:'',
       actionRowId:r3String(initial.entry.nativeRowId,120),
       actionTab:r3String(initial.entry.tab,60),background,readerSession};
-    const ready=await r3NativeRequest(candidate,'native-probe',params);
+    const ready=await r3NativeProbeReady(candidate,params,stillCurrent);
     if(ready.status!=='ready'||typeof ready.token!=='string'){
       r3NativeStatus(ready.message||'No unique official sheet control was found.');return false;
     }
     // Every await above can outlive a token selection, permission change,
     // sheet reload or manual opening. Recheck all before sending one invoke.
-    if(!stillCurrent()||!matchesCharacter(candidate)||R3_AUTO.running||R3_UI.busy||
+    if(!stillCurrent()||!matchesCharacter(candidate)||R3_AUTO.running||
+      R3_AUTO.healthRunning||R3_UI.busy||
       R3_NATIVE.readers.get(candidate.window)?.session!==readerSession||
       (background&&!r3NativeIsOwned(candidate)))
       throw new Error('Character, source action or sheet ownership changed. No roll sent.');
@@ -1117,7 +1129,7 @@ async function r3NativeProbeReady(candidate,params,stillCurrent=()=>true){
       continue;
     }
     if(latest.status==='ready'||!params.background)return latest;
-    if(!/^(?:No unique matching |Matched the attack row but found no verified|Background sheet did not expose Combat|Background Combat tab did not activate)/.test(latest.message||''))
+    if(!/^(?:No unique matching |Matched the attack row but found no verified|Background sheet did not expose |Background Combat tab did not activate)/.test(latest.message||''))
       return latest;
     if(attempt<5){
       r3NativeStatus('Waiting for the official Combat attack button to mount…');

@@ -35,11 +35,16 @@ function r3AutoSave(){
 // character and the current player's Controlled By permission. No name-only
 // auto-adoption and no need to visit Debug or import a sheet first.
 function r3AutoFollowToken(info){
-  if(!info?.tokenId||!info?.characterId||!info?.name||
-     R3_AUTO.explicitlyDisabled)return false;
+  if(!info?.tokenId||!info?.characterId||!info?.name)return false;
+  // Selected, player-controlled character sheets always synchronize without
+  // setup. A legacy saved "Auto-sync Off" must not strand native attacks.
+  R3_AUTO.explicitlyDisabled=false;
   const changed=R3_AUTO.characterId!==info.characterId||
     R3_AUTO.name!==info.name;
-  if(!changed&&R3_AUTO.enabled)return true;
+  if(!changed&&R3_AUTO.enabled){
+    r3AutoSave(); // migrate any old sticky disabled preference
+    return true;
+  }
   // Invalidates requests from another character before a late iframe result
   // can write its data to this character's visible HUD.
   R3_AUTO.generation++;
@@ -370,7 +375,7 @@ async function r3AutoTick(eventTriggered=false){
     if(identity.model&&(!R3_AUTO.characterId||
        identity.id===R3_AUTO.characterId)&&
        (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground())){
-      if(now-R3_AUTO.lastOpenAttempt<60000)return;
+      if(now-R3_AUTO.lastOpenAttempt<12000)return;
       R3_AUTO.lastOpenAttempt=now;
       const generation=R3_AUTO.generation;
       R3_AUTO.opening=true;
@@ -380,6 +385,9 @@ async function r3AutoTick(eventTriggered=false){
         if(r3AutoId(opened)!==identity.id)
           throw new Error('Background reader did not match the controlled character ID');
         candidate=r3AutoCandidate();
+        // A new private dialog may need one extra Vue render to expose its
+        // official title. Don't impose the old 60-second retry backoff.
+        if(!candidate)R3_AUTO.lastOpenAttempt=0;
         // Roll20's title may load after the frame. Never import before its
         // authenticated name is available; the next timer will retry it.
         if(!candidate)r3AutoDisplay('Waiting for the private character sheet to finish loading');
@@ -387,8 +395,8 @@ async function r3AutoTick(eventTriggered=false){
         if(R3_AUTO.enabled&&generation===R3_AUTO.generation){
           // A player-initiated reveal is a cancellation, not an opener fault:
           // don't impose the full one-minute failure backoff after they close.
-          if(/Player opened the original sheet/i.test(String(e?.message||e)))
-            R3_AUTO.lastOpenAttempt=0;
+          if(/Player opened the original sheet|original Roll20 sheet is being opened/i.test(
+            String(e?.message||e)))R3_AUTO.lastOpenAttempt=0;
           r3AutoDisplay('Background reader: '+r3String(e?.message||e,170));
         }
       }finally{R3_AUTO.opening=false;}
@@ -470,6 +478,15 @@ async function r3AutoHealthTick(){
 }
 
 function r3ToggleAuto(){
+  // A verified selection uses the native sheet for the user's requested
+  // Attacks/Features without a manual settings switch. Do not let an old
+  // Debug "sync off" action suspend the selected token's private importer.
+  const activeToken=R3_TOKEN.active;
+  if(activeToken?.tokenId&&activeToken?.characterId&&activeToken?.name){
+    r3AutoFollowToken(activeToken);
+    r3AutoDisplay('Selected-token private sheet sync is automatic');
+    return;
+  }
   if(R3_AUTO.enabled){
     R3_AUTO.enabled=false;R3_AUTO.explicitlyDisabled=true;
     R3_AUTO.generation++;

@@ -5,6 +5,14 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-25 — selected-token private sheet and native Attack reliability (v3.10.11)
+
+- Selected controlled token now automatically enables ID-pinned private full-tab import even if an older setting stored Auto-sync Off. No setup toggle is required for normal Attack use.
+- Keep extension-created character dialog offscreen and reuse its authenticated reader; periodically rescan and refresh stats, attacks, features, spells and inventory.
+- A native Attack clicked during full-sheet import waits for that import, rechecks character/source identity, and retries only read-only inspection while the official Vue button mounts. The actual native Roll20 button is clicked once, never retried on an uncertain acknowledgement.
+- Preserve strict manual-sheet boundaries: never hide, reposition, switch tabs on, or take ownership of a player-opened character sheet. A same-character manual dialog may prevent Roll20 from creating a second one; use its current view without changing tabs and surface missing native controls clearly.
+- Automated tests cover stale Off migration, token changes while waiting, queued attacks, and the existing private reader safety conditions. Real Roll20 chat parity remains a live acceptance check.
+
 ## 2026-10-25 — attack button must preserve weapon-list scroll (Firefox v3.10.10 candidate)
 
 - User report: clicking an **Attack** button while scrolled down the attack menu moves the list to another position. Cause: `r3NativeStatus` increments HUD revision and calls `r3HudRender`, replacing the Firefox `.hud-flyout` DOM, but the old HUD scroll preservation only handled `.hud-body` (legacy renderer). The native status was also prepended before attack rows and shifted their visible position.
