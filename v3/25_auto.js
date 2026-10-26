@@ -441,7 +441,25 @@ async function r3AutoTick(eventTriggered=false){
   const generation=R3_AUTO.generation;
   r3UIRefresh();
   try{
-    const snapshot=await r3SendScan(candidate,mode);
+    // Populate confirmed actions/resources progressively rather than
+    // withholding every mapped button until the final secondary tab finishes.
+    // Only the exact reader for this character/generation may contribute.
+    const quickTabs=/^(?:Current view|Combat|Features\s*(?:&|and)\s*Traits|Inventory|Spells)$/i;
+    const published=new Set();
+    const onProgress=mode==='all'&&background?(partial,tab)=>{
+      if(!quickTabs.test(tab)||published.has(tab.toLowerCase()))return;
+      if(!R3_AUTO.enabled||generation!==R3_AUTO.generation||
+         R3_AUTO.characterId!==r3AutoId(candidate)||
+         R3_AUTO.name.toLowerCase()!==r3String(partial?.name,120).toLowerCase()||
+         R3_TOKEN.active?.characterId!==R3_AUTO.characterId||
+         R3_UI.busy||!r3NativeIsOwned(candidate))return;
+      try{
+        r3AutoStoreSnapshot(partial,'current');
+        published.add(tab.toLowerCase());
+        r3AutoDisplay('Mapped '+tab+'; continuing remaining tabs');
+      }catch{/* Unpopulated Vue panel: await next verified primary tab. */}
+    }:null;
+    const snapshot=await r3SendScan(candidate,mode,onProgress);
     // A disabled auto-sync must never publish a late response.
     if(!R3_AUTO.enabled||R3_AUTO.generation!==generation)return;
     r3AutoStoreSnapshot(snapshot,mode);
@@ -539,8 +557,8 @@ function r3ToggleAuto(){
 function r3StartAuto(){
   r3AutoLoad();
   r3AutoDisplay();
-  if(R3_AUTO.timer===null)R3_AUTO.timer=setInterval(()=>{r3AutoTick();},8000);
+  if(R3_AUTO.timer===null)R3_AUTO.timer=setInterval(()=>{r3AutoTick();},3000);
   if(R3_AUTO.healthTimer===null)R3_AUTO.healthTimer=setInterval(()=>{r3AutoHealthTick();},1000);
-  if(R3_AUTO.enabled)setTimeout(()=>{r3AutoTick();},1600);
+  if(R3_AUTO.enabled)setTimeout(()=>{r3AutoTick();},180);
 }
 
