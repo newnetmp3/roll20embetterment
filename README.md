@@ -65,6 +65,10 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Firefox v3.10.10 — Attack list scroll stability (candidate)
+
+Clicking an **Attack** button no longer resets the weapon-list scroll position while R20eb locates or invokes the official sheet control. Native status updates retain the same horizontal and vertical viewport; switching attack categories still opens a new view intentionally. All themes, HUD panel placements, original-sheet visibility and native mapping are otherwise unchanged.
+
 ## Theme Manager — BG3, Tokyo Night and Oh My Posh-inspired palettes (Firefox v3.10.9 candidate)
 
 Open **R20eb Debug → Theme Manager** to change the entire HUD appearance instantly without moving panels or reloading Roll20. The theme is saved across characters and games. **Baldur's Gate 3** (dark fantasy, leather and gold) is the default. Windows 95/98 remains available as a selectable retro skin.
