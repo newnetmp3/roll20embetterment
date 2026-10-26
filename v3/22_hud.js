@@ -534,7 +534,10 @@ function r3HudFlyoutMarkup(snapshot){
   }
   return '<section class="hud-flyout" aria-label="Combat '+r3Escape(titles[flyout]||flyout)+' flyout">'+
     '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
-    '<small>'+(flyout==='actions'?'Native Attack when mapped · Dice fallback is not the sheet action':
+    '<small'+(flyout==='actions'?' class="hud-attack-live-status" role="status" title="'+
+      r3Escape(R3_NATIVE.status||'Native Attack when mapped · Dice fallback is not the sheet action')+'"':'')+'>'+
+      (flyout==='actions'&&R3_NATIVE.status?r3Escape(R3_NATIVE.status):
+      flyout==='actions'?'Native Attack when mapped · Dice fallback is not the sheet action':
       'Native actions run only for verified links; other sheet controls remain read-only')+'</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
     // Native status changes repeatedly while a sheet click is prepared.
@@ -719,6 +722,7 @@ function r3HudRender(){
 }
 function r3HudStyles(){
   return [
+    '.hud-attack-live-status{flex:1;min-width:0;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;line-height:1.35}',
     '#r3-hud{position:absolute;bottom:10px;left:12px;width:min(1250px,calc(100vw - 325px));pointer-events:auto;font:12px/1.25 system-ui,sans-serif}',
     '.hud-shell{position:relative;color:#f0f2f3;isolation:isolate;font-family:system-ui,sans-serif}',
     '.hud-shell button{color:inherit;font:inherit;border-radius:0;cursor:pointer;box-sizing:border-box}',
