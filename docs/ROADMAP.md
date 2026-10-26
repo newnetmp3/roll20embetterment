@@ -1,3 +1,11 @@
+## 2026-10-25 — Multi-theme HUD (Firefox v3.10.9 candidate)
+
+- [x] Restore BG3 dark-leather-and-gold as default; keep Windows 9x selectable.
+- [x] Add Theme Manager inside Debug with seven persistent instant-switch choices: BG3, Tokyo Night Storm from the official Oh My Posh palette, Catppuccin Mocha, Dracula, Gruvbox Dark, Nord Frost and Windows 9x.
+- [x] Theme only the R20eb Shadow DOM using built-in validated palettes and one swap-only stylesheet. Preserve HUD placements, imported character data, notes, native action calls and combat states. No remote assets or setup requirements.
+- [ ] Live Floorp QA for readability, minimized HUD, collapsed Debug, resizing and Roll20 sidebar spacing. CI, signed XPI and update-feed checksum required.
+- [ ] Native gameplay parity still unresolved for some 2024 Cast, Use and sheet actions; these are deliberately **not** replaced with simulated dice.
+
 # R20 Embetterment — Development Roadmap
 
 **Current baseline (2026-10-24):** Firefox **v3.10.4** is Mozilla signed and published. [PR #116](https://github.com/newnetmp3/roll20embetterment/pull/116) merged as `e159dfe` with **500/500 tests passing**. [Release run 40069003914](https://github.com/newnetmp3/roll20embetterment/actions/runs/40069003914) succeeded; published XPI SHA-256 `b18b09d2c5141b58cf11cf82c593f7b3f8fe07a69affd3ee298f0a4e008a57c4` matches the update feed. Native Cast/Use adapters remain conditional on source-observed controls and have no live action-parity verification. See [HANDOVER.md](HANDOVER.md).
