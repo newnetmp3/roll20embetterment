@@ -1239,6 +1239,7 @@ function r3UIEvent(event){
   const diceAttack=field('hudDiceKey','[data-hud-dice-key]');
   const nativeProbe=field('hudProbeKey','[data-hud-probe-key]')??
     field('hudProbe','[data-hud-probe]');
+  if(typeof r3ThemeAction==='function'&&r3ThemeAction(target))return;
   if(typeof r3DebugAction==='function'&&r3DebugAction(target))return;
   if(typeof r3BattlefieldClick==='function'&&r3BattlefieldClick(target))return;
   if(typeof r3TurnClick==='function'&&r3TurnClick(target))return;
@@ -1332,6 +1333,7 @@ function r3UIEvent(event){
 function r3StartUI(){
   if(document.getElementById('r20eb-v3-root'))return;
   r3Load();r3TokenLoad();r3HudLoad();
+  if(typeof r3ThemeLoad==='function')r3ThemeLoad();
   const host=document.createElement('div');host.id='r20eb-v3-root';
   host.style.cssText='position:fixed;inset:0;z-index:2147483000;pointer-events:none';
   const root=host.attachShadow({mode:'open'});R3_UI.host=host;R3_UI.root=root;
@@ -1356,7 +1358,7 @@ function r3StartUI(){
     '#r3-status{font-size:12px;color:#f1d39d;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}',
     '.notice{font-size:11px;color:#b8c5d8;line-height:1.4}label{font-weight:650}'
   ].join('')+r3HudStyles();
-  root.innerHTML='<style>'+style+'</style><div id="r3-hud"></div><div id="r3-wrap"><button id="r3-toggle">Hide importer</button>'+
+  root.innerHTML='<style>'+style+'</style><style id="r3-theme-style"></style><div id="r3-hud"></div><div id="r3-wrap"><button id="r3-toggle">Hide importer</button>'+
     '<div id="r3-content"><label for="r3-choices">Official character sheet</label>'+
     '<select id="r3-choices"></select><div class="actions"><button id="r3-refresh">Refresh list</button>'+
     '<button id="r3-scan">Read current tab</button><button id="r3-all">Import all tabs</button>'+
@@ -1367,6 +1369,7 @@ function r3StartUI(){
     'Auto-sync is optional and remembered per game. It uses the official Roll20 journal to open the chosen character in the background when available; if not, open the Journal sidebar once or use a visible sheet. Full background import visits tabs and restores the original selection. Visible player-opened sheets are read without switching tabs.</div>'+
     '<div id="r3-status" role="status" aria-live="polite"></div>'+
     '<div id="r3-results"></div></div></div>';
+  if(typeof r3ThemeApply==='function')r3ThemeApply();
   // Surface handler errors in the panel instead of leaving apparently inert buttons.
   root.addEventListener('click',event=>{
     try{
@@ -3504,7 +3507,7 @@ function r3HudStyles(){
     typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():'',
     typeof r3BattlefieldDragStyles==='function'?r3BattlefieldDragStyles():'',
     typeof r3DebugStyles==='function'?r3DebugStyles():'',
-    typeof r3Win9xStyles==='function'?r3Win9xStyles():''
+    typeof r3ThemeManagerStyles==='function'?r3ThemeManagerStyles():''
 
   ].join('');
 }
