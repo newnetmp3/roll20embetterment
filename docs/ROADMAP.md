@@ -1,3 +1,11 @@
+## 2026-10-25 — selected-token hidden sheet + reliable actions (v3.10.11)
+
+- [x] Follow the selected verified controllable token without a prior Auto-sync preference.
+- [x] Use a retained, character-bound background official sheet to import available tabs and call native controls.
+- [x] Queue Attack behind a full-sheet import; retry read-only button probes during Vue mounting, never a click.
+- [x] Preserve manually opened Roll20 sheet visibility, tabs and ownership.
+- [ ] Live check signed XPI against official Roll20 chat cards, including several attack variants.
+
 ## 2026-10-25 — Stable attack-list scrolling (Firefox v3.10.10 candidate)
 
 - [x] Preserve Firefox `.hud-flyout` horizontal and vertical viewport through native Attack clicks and repeated official-sheet status rerenders.
