@@ -5,6 +5,13 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-25 — attack button must preserve weapon-list scroll (Firefox v3.10.10 candidate)
+
+- User report: clicking an **Attack** button while scrolled down the attack menu moves the list to another position. Cause: `r3NativeStatus` increments HUD revision and calls `r3HudRender`, replacing the Firefox `.hud-flyout` DOM, but the old HUD scroll preservation only handled `.hud-body` (legacy renderer). The native status was also prepended before attack rows and shifted their visible position.
+- Fix: record `.hud-flyout.scrollTop` and `.scrollLeft` before replacing markup when flyout/chooser/weapon mode/group have not changed; restore after drag positioning and expanded-card state. Put native attack progress/status **after** the attack list rather than ahead of the weapon cards. Every native operation status update now keeps the same viewport; deliberate category/weapon changes open a fresh viewport.
+- Regression test uses the actual `data-hud-attack-key` click path, repeated `r3NativeStatus` updates, left/top viewport preservation, stable attack-list ordering, and intentional mode-switch reset. This is a UI-only fix: sheet action mapping, reader permissions, automatic private reader, chosen Theme Manager theme and original Roll20 remain unchanged.
+- Candidate needs green Firefox CI, Mozilla signing and XPI/feed checksum verification. Live Roll20 player test required: scroll to a lower weapon, click Attack, confirm list does not jump while native control resolves or after chat roll.
+
 ## 2026-10-25 — BG3 restored + Oh My Posh-inspired Theme Manager (Firefox v3.10.9 candidate)
 
 - **Request:** restore Baldur's Gate 3 fantasy look while keeping the recent Windows 9x styling selectable, and build a Theme Manager from Oh My Posh palettes with special attention to Tokyo Night.
