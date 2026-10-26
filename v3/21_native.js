@@ -1129,7 +1129,7 @@ async function r3NativeProbeReady(candidate,params,stillCurrent=()=>true){
       continue;
     }
     if(latest.status==='ready'||!params.background)return latest;
-    if(!/^(?:No unique matching |Matched the attack row but found no verified|Background sheet did not expose Combat|Background Combat tab did not activate)/.test(latest.message||''))
+    if(!/^(?:No unique matching |Matched the attack row but found no verified|Background sheet did not expose |Background Combat tab did not activate)/.test(latest.message||''))
       return latest;
     if(attempt<5){
       r3NativeStatus('Waiting for the official Combat attack button to mount…');
