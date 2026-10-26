@@ -5,6 +5,15 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-26 — fast progressive sheet imports (Firefox v3.10.13 candidate)
+
+- User goal: after selecting a controlled token, attacks, features, spells, inventory and resources should appear and map to *verified* native sheet controls as quickly as Roll20 exposes them, instead of waiting for a long all-tab traversal. **Near-instant is a perception target, not a guaranteed latency**: Roll20 iframe/Vue startup and network latency remain external.
+- Reader now visits **Combat → Features & Traits → Inventory → Spells → Skills & Tools** ahead of numerous nested filters. It captures the initially active view first, reports each primary tab, defers secondary views until after primary content is available, and restores the original private-sheet tab. No manually opened sheet receives automatic tab clicks.
+- Adds a source-authenticated, request-ID/window-bound `progress.snapshot` for at most the useful primary tabs; avoids repeatedly serializing accumulated inventories/controls for every secondary filter. The editor accepts it only for a matching pending **all** scan and exact existing frame. The auto importer validates selected controlled character ID, authenticated private ownership, generation, and snapshot character name, then uses non-destructive `r3AutoStoreSnapshot(...,'current')` to publish Combat and resource actions early without erasing fields from other tabs. End-of-scan full replacement and inventory zero/prune semantics are preserved.
+- First private reader ready announcements change from 1500ms to 500ms; the auto scheduler changes from 8000ms to 3000ms (one-second HP watch unchanged), with startup retry from 1600ms to 180ms. Token selection already schedules an immediate guarded `r3AutoTick`.
+- Progressive updates do not execute or invent actions, alter Roll20 resources, change saved character identity, or claim full-import success before the final scan. Native actions still require real observed controls and session-scoped one-shot verification. Queued early clicks continue waiting for the reader's active tab traversal to finish to avoid clicking a moving DOM.
+- New regression tests for primary tab priority, early resource visibility, restored original view, spoofed cross-origin/window progress rejection, stale post-result rejection, partial-then-final import and selected-character identity protection. **Live Firefox/Jumpgate timings and attack chat parity still require verification.**
+
 ## 2026-10-26 — native Attack nonresponse follow-up (Firefox v3.10.12)
 
 - User screenshot: imported Nier attack cards correctly render real **Attack** buttons and label **Native sheet**, yet clicks produce no visible Roll20 attack. Previous build had automatic hidden-reader ownership but did not guarantee that the all-tab importer could recognize its candidate; `r3AutoCandidate` demanded a matching iframe title, which may remain generic even after the script creates an exact-ID private dialog.
