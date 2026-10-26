@@ -156,9 +156,17 @@ async function r3ReaderReceive(event){
   try{
     const cancelled=()=>R3_READER_CANCELLED.has(data.id);
     const snap=await r3ReaderScan(data.mode,(tab,coverage)=>{
-      if(!cancelled())peer.postMessage(r3Msg('progress',{
-        id:data.id,tab,coverage,snapshot:coverage?.schema===3?coverage:undefined
-      }),R3_EDITOR);
+      if(!cancelled()){
+        // Detailed snapshots for only the high-value panels. Sending large
+        // inventory/control arrays for 20+ secondary filters on every visit
+        // needlessly congests the main-thread postMessage channel.
+        const priority=/^(?:Current view|Combat|Features\s*(?:&|and)\s*Traits|Inventory|Spells)$/i;
+        const fast=priority.test(tab)&&coverage?.schema===3;
+        peer.postMessage(r3Msg('progress',{
+          id:data.id,tab,coverage:fast?coverage.coverage:undefined,
+          snapshot:fast?coverage:undefined
+        }),R3_EDITOR);
+      }
     },cancelled);
     if(cancelled())throw new Error('Private scan cancelled for manual sheet access');
     peer.postMessage(r3Msg('result',{id:data.id,snapshot:snap,session:R3_SESSION}),R3_EDITOR);
@@ -212,7 +220,10 @@ function r3StartReader(){
     document.addEventListener(type,r3ReaderChanged,true);
   r3ReaderAnnounce();
   let attempts=0;
-  const timer=setInterval(()=>{if(++attempts>=24)clearInterval(timer);else r3ReaderAnnounce();},1500);
+  // The private frame often mounts before Vue exposes its character name.
+  // A quicker ready announcement removes a needless ~1.5s gap while the
+  // authenticated editor waits for the exact selected character identity.
+  const timer=setInterval(()=>{if(++attempts>=32)clearInterval(timer);else r3ReaderAnnounce();},500);
   window.addEventListener('focus',r3ReaderAnnounce);
 }
 function r3FrameList(){
