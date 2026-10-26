@@ -65,6 +65,12 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Firefox v3.10.12 — Attack button visibility and hidden-reader repair
+
+A private Roll20 character sheet can use a generic iframe title even when its owning dialog has the correct character ID. The Auto-sync importer now locates that owned reader by ID and authenticated name rather than treating the generic title as a different character. Pending Attack clicks use the freshly imported official control evidence after an in-progress all-tab scan; unrelated HP polling is deferred while the action resolves. The Attack window shows native progress or errors in its compact titlebar without scrolling your weapon list.
+
+Only authenticated, player-controlled sheets and exact source-observed Roll20 controls may be invoked. A native status saying the button was clicked is not yet proof of a matching chat result; the live Roll20 interface must be tested separately.
+
 ## Firefox v3.10.11 — Selected-token private sheet (candidate)
 
 Selecting your controlled token automatically opens and retains a script-owned official character sheet offscreen, imports its available tabs, and uses that authenticated sheet for native Attack/feature actions. There is no manual importer setup. If an Attack is clicked during a full import, R20eb waits for the reader and checks for the native roll button before clicking once. It never silently retries an uncertain native roll.
