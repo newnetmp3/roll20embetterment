@@ -1926,7 +1926,7 @@ async function r3NativeDomInvoke(kind,key){
   if(R3_NATIVE.busy)return false;
   const initial=r3NativeDomContext(kind,key);
   if(!initial.entry){r3NativeStatus(initial.reason);return false;}
-  if(R3_AUTO.running||R3_UI.busy){r3NativeStatus('Character import is running. Retry the roll after it finishes.');return false;}
+  if(R3_UI.busy){r3NativeStatus('Manual import is running. No roll sent.');return false;}
   const stillCurrent=()=>r3NativeDomContext(kind,key).signature===initial.signature;
   const matchesCharacter=candidate=>{
     const id=r3AutoId(candidate);
@@ -1936,6 +1936,17 @@ async function r3NativeDomInvoke(kind,key){
   R3_NATIVE.busy=true;R3_NATIVE.preview=null;
   r3NativeStatus('Checking the official '+kind+' control…');
   try{
+    // Finish an active private full-tab import before clicking its controls.
+    // A single user click is preserved; no native invocation is repeated.
+    for(let i=0;(R3_AUTO.running||R3_AUTO.healthRunning)&&i<184;i++){
+      if(!stillCurrent())throw new Error('Selected token changed during private import.');
+      if(i===0)r3NativeStatus('Finishing private sheet import before '+kind+'…');
+      await r3Pause(250);
+    }
+    if(R3_AUTO.running||R3_AUTO.healthRunning)
+      throw new Error('Private import did not complete. No roll sent.');
+    if(!stillCurrent()||R3_UI.busy)
+      throw new Error('Source action changed during import. No roll sent.');
     let candidate=r3NativeCandidate(initial.name);
     if(!candidate)candidate=await r3NativeBgEnsure(initial.name);
     if(!stillCurrent()||!matchesCharacter(candidate))throw new Error('Character identity changed while locating the sheet. No roll sent.');
@@ -1952,13 +1963,14 @@ async function r3NativeDomInvoke(kind,key){
       actionLabel:observed.length===1?observed[0]:'',
       actionRowId:r3String(initial.entry.nativeRowId,120),
       actionTab:r3String(initial.entry.tab,60),background,readerSession};
-    const ready=await r3NativeRequest(candidate,'native-probe',params);
+    const ready=await r3NativeProbeReady(candidate,params,stillCurrent);
     if(ready.status!=='ready'||typeof ready.token!=='string'){
       r3NativeStatus(ready.message||'No unique official sheet control was found.');return false;
     }
     // Every await above can outlive a token selection, permission change,
     // sheet reload or manual opening. Recheck all before sending one invoke.
-    if(!stillCurrent()||!matchesCharacter(candidate)||R3_AUTO.running||R3_UI.busy||
+    if(!stillCurrent()||!matchesCharacter(candidate)||R3_AUTO.running||
+      R3_AUTO.healthRunning||R3_UI.busy||
       R3_NATIVE.readers.get(candidate.window)?.session!==readerSession||
       (background&&!r3NativeIsOwned(candidate)))
       throw new Error('Character, source action or sheet ownership changed. No roll sent.');
@@ -2537,7 +2549,7 @@ async function r3NativeProbeReady(candidate,params,stillCurrent=()=>true){
       continue;
     }
     if(latest.status==='ready'||!params.background)return latest;
-    if(!/^(?:No unique matching |Matched the attack row but found no verified|Background sheet did not expose Combat|Background Combat tab did not activate)/.test(latest.message||''))
+    if(!/^(?:No unique matching |Matched the attack row but found no verified|Background sheet did not expose |Background Combat tab did not activate)/.test(latest.message||''))
       return latest;
     if(attempt<5){
       r3NativeStatus('Waiting for the official Combat attack button to mount…');
@@ -4063,7 +4075,7 @@ function r3TokenSnapshotFor(info){
   }
   // Never show a previous PC's HP, spells or attacks while a new sheet loads.
   const blank=r3Empty();blank.name=info.name;
-  blank.diagnostics.notes.push('This character has not been imported. Open its official sheet and import through Debug.');
+  blank.diagnostics.notes.push('Loading the selected token's private Roll20 sheet and importing available tabs automatically.');
   return r3Coverage(blank);
 }
 function r3TokenSwitch(info){
@@ -4165,11 +4177,16 @@ function r3AutoSave(){
 // character and the current player's Controlled By permission. No name-only
 // auto-adoption and no need to visit Debug or import a sheet first.
 function r3AutoFollowToken(info){
-  if(!info?.tokenId||!info?.characterId||!info?.name||
-     R3_AUTO.explicitlyDisabled)return false;
+  if(!info?.tokenId||!info?.characterId||!info?.name)return false;
+  // Selected, player-controlled character sheets always synchronize without
+  // setup. A legacy saved "Auto-sync Off" must not strand native attacks.
+  R3_AUTO.explicitlyDisabled=false;
   const changed=R3_AUTO.characterId!==info.characterId||
     R3_AUTO.name!==info.name;
-  if(!changed&&R3_AUTO.enabled)return true;
+  if(!changed&&R3_AUTO.enabled){
+    r3AutoSave(); // migrate any old sticky disabled preference
+    return true;
+  }
   // Invalidates requests from another character before a late iframe result
   // can write its data to this character's visible HUD.
   R3_AUTO.generation++;
@@ -4500,7 +4517,7 @@ async function r3AutoTick(eventTriggered=false){
     if(identity.model&&(!R3_AUTO.characterId||
        identity.id===R3_AUTO.characterId)&&
        (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground())){
-      if(now-R3_AUTO.lastOpenAttempt<60000)return;
+      if(now-R3_AUTO.lastOpenAttempt<12000)return;
       R3_AUTO.lastOpenAttempt=now;
       const generation=R3_AUTO.generation;
       R3_AUTO.opening=true;
@@ -4510,6 +4527,9 @@ async function r3AutoTick(eventTriggered=false){
         if(r3AutoId(opened)!==identity.id)
           throw new Error('Background reader did not match the controlled character ID');
         candidate=r3AutoCandidate();
+        // A new private dialog may need one extra Vue render to expose its
+        // official title. Don't impose the old 60-second retry backoff.
+        if(!candidate)R3_AUTO.lastOpenAttempt=0;
         // Roll20's title may load after the frame. Never import before its
         // authenticated name is available; the next timer will retry it.
         if(!candidate)r3AutoDisplay('Waiting for the private character sheet to finish loading');
@@ -4517,8 +4537,8 @@ async function r3AutoTick(eventTriggered=false){
         if(R3_AUTO.enabled&&generation===R3_AUTO.generation){
           // A player-initiated reveal is a cancellation, not an opener fault:
           // don't impose the full one-minute failure backoff after they close.
-          if(/Player opened the original sheet/i.test(String(e?.message||e)))
-            R3_AUTO.lastOpenAttempt=0;
+          if(/Player opened the original sheet|original Roll20 sheet is being opened/i.test(
+            String(e?.message||e)))R3_AUTO.lastOpenAttempt=0;
           r3AutoDisplay('Background reader: '+r3String(e?.message||e,170));
         }
       }finally{R3_AUTO.opening=false;}
@@ -4600,6 +4620,15 @@ async function r3AutoHealthTick(){
 }
 
 function r3ToggleAuto(){
+  // A verified selection uses the native sheet for the user's requested
+  // Attacks/Features without a manual settings switch. Do not let an old
+  // Debug "sync off" action suspend the selected token's private importer.
+  const activeToken=R3_TOKEN.active;
+  if(activeToken?.tokenId&&activeToken?.characterId&&activeToken?.name){
+    r3AutoFollowToken(activeToken);
+    r3AutoDisplay('Selected-token private sheet sync is automatic');
+    return;
+  }
   if(R3_AUTO.enabled){
     R3_AUTO.enabled=false;R3_AUTO.explicitlyDisabled=true;
     R3_AUTO.generation++;
