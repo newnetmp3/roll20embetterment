@@ -259,7 +259,7 @@ test('priority import exposes Combat, Features resources, Inventory and Spells b
       getClientRects:()=>[{}],disabled:false,
       getAttribute:k=>k==='aria-label'?label:
         k==='aria-selected'?String(label===selected):null,
-      closest:()=>group,
+      closest:selector=>selector==='[role="tablist"]'?group:null,
       click(){selected=label;}
     })):[];
   context.setTimeout=callback=>{callback();return 1;};
