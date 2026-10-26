@@ -1,0 +1,63 @@
+name: Stage PView Mozilla-signed XPI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/pview-stage-signed.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  stage-signed-xpi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download verified Mozilla-signed v1.0.1 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pview-pornhex-video-saver-mozilla-signed
+          repository: newnetmp3/roll20embetterment
+          run-id: 40288779082
+          github-token: ${{ github.token }}
+          path: signed
+
+      - name: Verify identity and Mozilla signature files
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(signed/*.xpi)
+          if (( ${#files[@]} != 1 )); then
+            echo "::error::Expected one signed XPI, found ${#files[@]}."
+            exit 1
+          fi
+          file="${files[0]}"
+          version=$(unzip -p "$file" manifest.json | jq -r '.version')
+          id=$(unzip -p "$file" manifest.json | jq -r '.browser_specific_settings.gecko.id')
+          test "$version" = "1.0.1"
+          test "$id" = "pornhex-video-saver@local.addon"
+          unzip -Z -1 "$file" | grep -q '^META-INF/'
+          cp "$file" signed/pview-pornhex-video-saver-v1.0.1-signed.xpi
+          if [ "$file" != "signed/pview-pornhex-video-saver-v1.0.1-signed.xpi" ]; then rm "$file"; fi
+          sha256sum signed/pview-pornhex-video-saver-v1.0.1-signed.xpi
+
+      - name: Publish temporary signed staging asset for PView release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="pview-pornhex-v1.0.1"
+          file="signed/pview-pornhex-video-saver-v1.0.1-signed.xpi"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$file" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "$file" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "PView v1.0.1 Mozilla-signed staging" \
+              --notes "Mozilla-signed unlisted PView Firefox add-on, built from newnetmp3/pview. The permanent release location is https://github.com/newnetmp3/pview/releases. This prerelease stages the verified XPI for the PView release workflow." \
+              --prerelease --latest=false
+          fi
