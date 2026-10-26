@@ -1236,6 +1236,50 @@ test('attack menu groups exactly observed variants by weapon and mode with Throw
   assert.match(html,/Molotov Cocktail/);
   assert.equal(h.sent.length,0,'menu exploration cannot roll');
 });
+test('clicking Attack keeps the same scrolled weapon visible through native status rerenders',()=>{
+  const h=panelHarness('Independent Hero');
+  h.api.r3StartEditorBridge();h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='Independent Hero';
+  snap.attacks=[{name:'Dagger',_key:'dagger',tab:'Combat',
+    visible:'Dagger Melee +7 Attack 1d4+4',actions:[{label:'+7 Attack'}]}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.api.R3_HUD.flyout='actions';
+  h.api.r3HudRender();
+  const hud=h.nodes.get('r3-hud');
+  const original=Object.getOwnPropertyDescriptor(hud,'innerHTML');
+  let flyout={scrollTop:337,scrollLeft:13};
+  Object.defineProperty(hud,'innerHTML',{
+    get(){return original.get.call(hud);},
+    set(markup){
+      original.set.call(hud,markup);
+      flyout=markup.includes('class="hud-flyout"')?
+        {scrollTop:0,scrollLeft:0}:null;
+    }
+  });
+  hud.querySelector=selector=>selector==='.hud-flyout'?flyout:null;
+  hud.querySelectorAll=()=>[];
+  // This is the same click path used by the HUD Attack button.
+  h.shadow.handlers.get('click')({target:{dataset:{hudAttackKey:'dagger'}}});
+  assert.equal(flyout.scrollTop,337,'attack button must not jump the list to the top');
+  assert.equal(flyout.scrollLeft,13,'horizontal position is also retained');
+  // Official sheet preparation can generate multiple status messages.
+  for(const msg of ['Checking the official attacks control…',
+    'Waiting for the official sheet','Clicked the official roll button']){
+    vm.runInContext('r3NativeStatus('+JSON.stringify(msg)+')',h.context);
+    assert.equal(flyout.scrollTop,337,'status '+msg+' must keep the exact viewport');
+    assert.equal(flyout.scrollLeft,13);
+  }
+  const html=hud.innerHTML;
+  assert.ok(html.indexOf('class="hud-attack-list"')>=0);
+  assert.ok(html.indexOf('class="hud-native-status"')>
+    html.indexOf('class="hud-attack-list"'),
+    'progress messages must appear after the attack list, not push it down');
+  // Changing weapon categories intentionally opens a new viewport.
+  h.api.R3_HUD.attackMode='ranged';
+  h.api.r3HudRender();
+  assert.equal(flyout.scrollTop,0);
+});
+
 test('weapon variants update when authenticated re-import changes attack catalog',()=>{
   const h=panelHarness();h.api.r3StartEditorBridge();h.api.r3StartUI();
   const snap=h.api.r3Empty();snap.name='NIER';
