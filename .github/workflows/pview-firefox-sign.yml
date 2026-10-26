@@ -44,7 +44,7 @@ jobs:
           if (m.browser_specific_settings?.gecko?.id !== 'pornhex-video-saver@local.addon') {
             throw Error('Unexpected extension ID');
           }
-          if (!/^\\d+\\.\\d+\\.\\d+$/.test(m.version)) {
+          if (!/^[0-9]+[.][0-9]+[.][0-9]+$/.test(m.version)) {
             throw Error('Invalid extension version');
           }
           console.log('Signing PView Pornhex Video Saver v' + m.version);
