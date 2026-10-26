@@ -1,0 +1,105 @@
+name: PView Firefox unlisted signed build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pview-firefox-sign.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pview-firefox-unlisted-sign
+  cancel-in-progress: false
+
+jobs:
+  sign-pview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: firefox-signing
+    steps:
+      - name: Check out PView source (no signing credentials)
+        uses: actions/checkout@v4
+        with:
+          repository: newnetmp3/pview
+          ref: main
+          persist-credentials: false
+          path: pview
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check add-on identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const m = JSON.parse(fs.readFileSync('pview/addons/pornhex-video-saver/manifest.json', 'utf8'));
+          if (m.browser_specific_settings?.gecko?.id !== 'pornhex-video-saver@local.addon') {
+            throw Error('Unexpected extension ID');
+          }
+          if (!/^\\d+\\.\\d+\\.\\d+$/.test(m.version)) {
+            throw Error('Invalid extension version');
+          }
+          console.log('Signing PView Pornhex Video Saver v' + m.version);
+          NODE
+
+      - name: Test extension
+        working-directory: pview/addons/pornhex-video-saver
+        run: |
+          node tests/run.js
+          node tests/hls-integration.js
+
+      - name: Lint Firefox add-on
+        run: |
+          npm exec --yes --package=web-ext -- web-ext lint \
+            --source-dir pview/addons/pornhex-video-saver \
+            --ignore-files 'tests/**' README.md sign-unlisted.sh
+
+      - name: Request unlisted Mozilla signature
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$AMO_JWT_ISSUER" || -z "$AMO_JWT_SECRET" ]]; then
+            echo "::error::Existing R20eb firefox-signing environment credentials are unavailable."
+            exit 1
+          fi
+          mkdir -p signed
+          npm exec --yes --package=web-ext -- web-ext sign \
+            --source-dir pview/addons/pornhex-video-saver \
+            --artifacts-dir signed \
+            --channel unlisted \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET" \
+            --ignore-files 'tests/**' README.md sign-unlisted.sh \
+            --no-input
+
+      - name: Validate signed XPI and label version
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(signed/*.xpi)
+          if [[ ${#files[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly one Mozilla-signed XPI; got ${#files[@]}."
+            exit 1
+          fi
+          version=$(node -p "require('./pview/addons/pornhex-video-saver/manifest.json').version")
+          mv "${files[0]}" "signed/pview-pornhex-video-saver-v${version}-signed.xpi"
+
+      - name: Upload signed XPI (private workflow artifact, not public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pview-pornhex-video-saver-mozilla-signed
+          path: signed/*.xpi
+          if-no-files-found: error
+          retention-days: 90
