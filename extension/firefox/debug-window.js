@@ -80,6 +80,7 @@ function r3DebugMarkup(){
     '<button type="button" data-r3-debug="reset-layout">Reset HUD layout</button>'+
     '<button type="button" data-r3-debug="toggle-hud">'+(typeof R3_HUD==='object'&&R3_HUD.collapsed?'Restore HUD':'Hide HUD')+'</button>'+
     '</div><small>Private readers run automatically. Opening an original sheet always restores its visibility and pauses private access briefly. No action above modifies character statistics.</small></details>'+
+    (typeof r3ThemeManagerMarkup==='function'?r3ThemeManagerMarkup():'')+
     '<details class="r3-debug-movement"><summary>Manual turn corrections</summary>'+
     (typeof r3TurnMarkup==='function'?r3TurnMarkup(R3_UI.snapshot):'<p>Turn tracker unavailable.</p>')+
     '</details>'+
@@ -169,6 +170,9 @@ function r3DebugInstall(root){
   root.addEventListener('focusin',event=>{
     const title=event.target?.getAttribute?.('title');
     if(title&&title.length<=350)r3DebugLog('Help',title);
+  },true);
+  root.addEventListener('toggle',event=>{
+    if(typeof r3ThemeManagerInput==='function')r3ThemeManagerInput(event);
   },true);
   root.addEventListener('change',event=>{
     if(event.target?.id==='r3-debug-filter'){
