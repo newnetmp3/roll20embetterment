@@ -61,6 +61,11 @@ test('the real v3 source is bundled in order, without legacy or Tampermonkey dep
     assert.doesNotMatch(source,/r3-bf-drag-grip|data-bf-grip|function r3BattlefieldGrip\(/);
     assert.match(source,/function r3BattlefieldPreventDragClick\(/);
     assert.match(source,/extension\/firefox\/movement-tracker\.js/);
+    assert.match(source,/extension\/firefox\/theme-manager\.js/);
+    assert.match(source,/function r3ThemeManagerMarkup\(/);
+    assert.match(source,/function r3ThemeApply\(/);
+    assert.ok(source.indexOf('extension/firefox/theme-manager.js')<
+      source.indexOf('extension/firefox/debug-window.js'),'Theme palette before Debug markup');
     assert.match(source,/extension\/firefox\/debug-window\.js/);
     assert.match(source,/function r3DebugMarkup\(/);
     assert.ok(source.indexOf('extension/firefox/debug-window.js')<source.indexOf('// ===== v3/30_boot.js ====='));

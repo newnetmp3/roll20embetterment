@@ -65,6 +65,12 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Theme Manager — BG3, Tokyo Night and Oh My Posh-inspired palettes (Firefox v3.10.9 candidate)
+
+Open **R20eb Debug → Theme Manager** to change the entire HUD appearance instantly without moving panels or reloading Roll20. The theme is saved across characters and games. **Baldur's Gate 3** (dark fantasy, leather and gold) is the default. Windows 95/98 remains available as a selectable retro skin.
+
+The presets include **Tokyo Night Storm** (palette derived from [Oh My Posh's `tokyonight_storm.omp.json`](https://github.com/JanDeDobbeleer/oh-my-posh/blob/main/themes/tokyonight_storm.omp.json)), Catppuccin Mocha, Dracula, Gruvbox Dark and Nord Frost. These are R20eb UI adaptations of published shell-theme color families, *not* executable Oh My Posh configuration imports. They require no shell, font installation, network access, or user CSS. Appearance is isolated to R20eb's Shadow DOM, not the native Roll20 app.
+
 ## Firefox v3.10.8 — Win9x contrast polish (candidate)
 
 The Windows 9x visual system uses readable light surfaces for expanded cards, character HP and stats, class resource panels and the full-screen action dock. The original Roll20 UI remains unaffected. Native sheet-action behavior is unchanged from v3.10.7; in-game parity verification remains necessary.

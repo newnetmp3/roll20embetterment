@@ -1,9 +1,17 @@
 # R20 Embetterment — development handover
 
-**Updated:** 2026-10-24  
+**Updated:** 2026-10-25  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
+
+## 2026-10-25 — BG3 restored + Oh My Posh-inspired Theme Manager (Firefox v3.10.9 candidate)
+
+- **Request:** restore Baldur's Gate 3 fantasy look while keeping the recent Windows 9x styling selectable, and build a Theme Manager from Oh My Posh palettes with special attention to Tokyo Night.
+- Added `extension/firefox/theme-manager.js`, loaded before Debug and battlefield via the Firefox builder. Theme Manager is under **Debug → Theme Manager** and offers instant visual previews and accessible theme-choice buttons. Default is **Baldur's Gate 3** for unconfigured browsers. Selection is stored globally in `r20eb:ui-theme:v1` (across campaigns/characters), validated against built-in IDs, and restored at startup. Invalid stored themes fall back to BG3.
+- Seven themes: **BG3** (dark leather/gold fantasy); **Tokyo Night Storm** (official Oh My Posh `tokyonight_storm` palette `#24283b`, `#7aa2f7`, `#bb9af7`, `#9ece6a`); **Catppuccin Mocha**, **Dracula**, **Gruvbox Dark**, **Nord Frost** (curated Oh My Posh–inspired variants); **Windows 95/98** (preserved full beveled CSS).
+- Switching themes updates only `#r3-theme-style` inside R20eb's Shadow DOM. It does **not** rebuild attack panels, touch Roll20's native sheet/chat, move HUD panels, perform a game action, or fetch untrusted remote CSS/fonts. Debug gallery, profile, token rings, spells/attacks/features/inventory, importer and notes all share a palette. Win9x styles are no longer unconditional.
+- Tests for default BG3, exact Tokyo Night palette, whitelist/persistence, all seven presets, gallery accessibility, no network CSS/HTML, unchanged native actions/layout on switch, module bundle order and theme CSS isolation. Existing native Roll20 mapping is unchanged. **CI, Mozilla signing and real-game visual QA remain separate acceptance gates**.
 
 ## 2026-10-24 — Windows 9x contrast polish (Firefox v3.10.8 candidate)
 
