@@ -1924,10 +1924,22 @@ function r3NativeDomContext(kind,key){
 }
 async function r3NativeDomInvoke(kind,key){
   if(R3_NATIVE.busy)return false;
-  const initial=r3NativeDomContext(kind,key);
+  let initial=r3NativeDomContext(kind,key);
   if(!initial.entry){r3NativeStatus(initial.reason);return false;}
   if(R3_UI.busy){r3NativeStatus('Manual import is running. No roll sent.');return false;}
-  const stillCurrent=()=>r3NativeDomContext(kind,key).signature===initial.signature;
+  // The next full-tab import can legitimately refresh observed row text
+  // while a player is clicking. Preserve the selected identity and key until
+  // it completes, then use the newly imported evidence to inspect the sheet.
+  // Never transfer a click to another selected token/character.
+  const expectedId=initial.id,expectedName=initial.name;
+  const stillSelected=()=>{
+    const active=R3_TOKEN.active;
+    if(active&&(active.characterId!==expectedId||
+      active.name?.toLowerCase()!==expectedName.toLowerCase()))return false;
+    return r3NativeBgResolve(expectedName)?.id===expectedId;
+  };
+  const stillCurrent=()=>stillSelected()&&
+    r3NativeDomContext(kind,key).signature===initial.signature;
   const matchesCharacter=candidate=>{
     const id=r3AutoId(candidate);
     return candidate?.window&&r3NativeCandidate(initial.name)?.window===candidate.window&&
@@ -1939,14 +1951,21 @@ async function r3NativeDomInvoke(kind,key){
     // Finish an active private full-tab import before clicking its controls.
     // A single user click is preserved; no native invocation is repeated.
     for(let i=0;(R3_AUTO.running||R3_AUTO.healthRunning)&&i<184;i++){
-      if(!stillCurrent())throw new Error('Selected token changed during private import.');
+      if(!stillSelected())throw new Error('Selected token changed during private import.');
       if(i===0)r3NativeStatus('Finishing private sheet import before '+kind+'…');
       await r3Pause(250);
     }
     if(R3_AUTO.running||R3_AUTO.healthRunning)
       throw new Error('Private import did not complete. No roll sent.');
-    if(!stillCurrent()||R3_UI.busy)
-      throw new Error('Source action changed during import. No roll sent.');
+    if(!stillSelected()||R3_UI.busy)
+      throw new Error('Selected token changed or manual import started. No roll sent.');
+    // Rebind to the just-imported exact source entry before sending any
+    // probe. A stale cached row label is never passed to the real sheet.
+    const refreshed=r3NativeDomContext(kind,key);
+    if(!refreshed.entry||refreshed.id!==expectedId||
+       refreshed.name!==expectedName)
+      throw new Error('Attack identity changed during import. No roll sent.');
+    initial=refreshed;
     let candidate=r3NativeCandidate(initial.name);
     if(!candidate)candidate=await r3NativeBgEnsure(initial.name);
     if(!stillCurrent()||!matchesCharacter(candidate))throw new Error('Character identity changed while locating the sheet. No roll sent.');
@@ -3222,7 +3241,10 @@ function r3HudFlyoutMarkup(snapshot){
   }
   return '<section class="hud-flyout" aria-label="Combat '+r3Escape(titles[flyout]||flyout)+' flyout">'+
     '<header><strong>'+r3Escape(titles[flyout]||flyout)+'</strong>'+
-    '<small>'+(flyout==='actions'?'Native Attack when mapped · Dice fallback is not the sheet action':
+    '<small'+(flyout==='actions'?' class="hud-attack-live-status" role="status" title="'+
+      r3Escape(R3_NATIVE.status||'Native Attack when mapped · Dice fallback is not the sheet action')+'"':'')+'>'+
+      (flyout==='actions'&&R3_NATIVE.status?r3Escape(R3_NATIVE.status):
+      flyout==='actions'?'Native Attack when mapped · Dice fallback is not the sheet action':
       'Native actions run only for verified links; other sheet controls remain read-only')+'</small>'+
     '<button type="button" id="r3-hud-flyout-close" aria-label="Close">×</button></header>'+
     // Native status changes repeatedly while a sheet click is prepared.
@@ -3407,6 +3429,7 @@ function r3HudRender(){
 }
 function r3HudStyles(){
   return [
+    '.hud-attack-live-status{flex:1;min-width:0;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;line-height:1.35}',
     '#r3-hud{position:absolute;bottom:10px;left:12px;width:min(1250px,calc(100vw - 325px));pointer-events:auto;font:12px/1.25 system-ui,sans-serif}',
     '.hud-shell{position:relative;color:#f0f2f3;isolation:isolate;font-family:system-ui,sans-serif}',
     '.hud-shell button{color:inherit;font:inherit;border-radius:0;cursor:pointer;box-sizing:border-box}',
@@ -4237,6 +4260,25 @@ function r3AutoCandidate(){
   // A player-popped-out official sheet is a valid authenticated reader.
   // It has no parent dialog with a character ID, so require a unique exact
   // name. Prefer the popout when the same sheet also has an embedded frame.
+  // Roll20 frequently assigns a generic iframe title until Vue finishes
+  // mounting. Our private dialog has an authoritative character ID, and the
+  // reader announces its actual name through the authenticated message
+  // bridge. Never require a stale iframe title for a script-owned session.
+  const owned=typeof r3NativeBgCandidate==='function'?r3NativeBgCandidate():null;
+  if(owned&&R3_AUTO.characterId&&
+    r3AutoId(owned)===R3_AUTO.characterId&&
+    R3_NATIVE_BG.name?.toLowerCase()===R3_AUTO.name.toLowerCase()&&
+    (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground())){
+    const announced=R3_NATIVE.readers.get(owned.window);
+    if(!announced?.name||
+       announced.name.toLowerCase()===R3_AUTO.name.toLowerCase()||
+       /^(?:unnamed sheet|official sheet popout|2024 character sheet)/i.test(announced.name)){
+      // Keep this candidate bound to the original frame/window, not a new
+      // iframe clone or a nameless manually opened sheet.
+      return {...owned,name:R3_AUTO.name,characterId:R3_AUTO.characterId};
+    }
+    return null; // Authenticated reader contradicts the owned character.
+  }
   const choices=r3Candidates().filter(c=>c.visible&&c.window&&
     (c.type==='iframe'||c.type==='popout'));
   // Never allow an explicit, conflicting character ID to be rescued by a
@@ -4254,11 +4296,11 @@ function r3AutoCandidate(){
   const safe=named.filter(c=>!duplicateName||r3AutoId(c)===R3_AUTO.characterId);
   // Prefer our own character-bound private reader even when a player also
   // has an official popout open. Never navigate that player's live tab.
-  const owned=safe.filter(c=>c.type==='iframe'&&r3NativeIsOwned(c));
-  if(owned.length===1&&
+  const namedOwned=safe.filter(c=>c.type==='iframe'&&r3NativeIsOwned(c));
+  if(namedOwned.length===1&&
      (typeof r3SheetAllowsBackground!=='function'||r3SheetAllowsBackground()))
-    return owned[0];
-  if(owned.length>1)return null;
+    return namedOwned[0];
+  if(namedOwned.length>1)return null;
   const popouts=safe.filter(c=>c.type==='popout');
   if(popouts.length===1)return popouts[0];
   if(popouts.length>1)return null; // same-named popouts are ambiguous
@@ -4602,7 +4644,8 @@ function r3AutoStoreHealth(snapshot){
   return true;
 }
 async function r3AutoHealthTick(){
-  if(!R3_AUTO.enabled||!R3_AUTO.name||R3_AUTO.healthRunning||R3_AUTO.running||R3_UI.busy)return;
+  if(!R3_AUTO.enabled||!R3_AUTO.name||R3_AUTO.healthRunning||R3_AUTO.running||
+     R3_NATIVE.busy||R3_UI.busy)return;
   const candidate=r3AutoCandidate();
   if(!candidate)return;
   const generation=R3_AUTO.generation;
