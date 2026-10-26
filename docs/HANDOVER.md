@@ -5,6 +5,14 @@
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
 
+## 2026-10-26 — native Attack nonresponse follow-up (Firefox v3.10.12)
+
+- User screenshot: imported Nier attack cards correctly render real **Attack** buttons and label **Native sheet**, yet clicks produce no visible Roll20 attack. Previous build had automatic hidden-reader ownership but did not guarantee that the all-tab importer could recognize its candidate; `r3AutoCandidate` demanded a matching iframe title, which may remain generic even after the script creates an exact-ID private dialog.
+- Fix: prioritize an existing script-owned `r3NativeBgCandidate` by exact controlled character ID and expected owner name, cross-check an authenticated reader name when available, and **never accept contradictory authenticated identity**. This supports full private import without relying on Roll20's iframe `title`; manual same-name sheets stay unclaimed.
+- A player Attack issued during the full private import is now bound first to a verified selected character ID, then rebinds to the freshly captured attack metadata when the scan completes. Revalidate source key/name/ID again before the one-shot native click; source disappearances or token switches abort. Pause subsequent HP scans while a native action is pending.
+- Give the Attack flyout a **fixed-height, ellipsis-truncated, tooltip-accessible native status line in its titlebar**. Native-control lookup errors and successful acknowledgements appear immediately without moving the Attack-list scroll. The Debug Native log retains full text.
+- Regression tests: generic-iframe-title exact-ID owned sheet, mismatch of authenticated reader name, refreshed imported attack during queued click, visible top-bar status and prior safeguards. No claim that a mocked reader proves actual Jumpgate chat parity; install signed v3.10.12 and compare Dagger Standard/Off-Hand against the original sheet. Retain manual-sheet noninterference.
+
 ## 2026-10-25 — selected-token private sheet and native Attack reliability (v3.10.11)
 
 - Selected controlled token now automatically enables ID-pinned private full-tab import even if an older setting stored Auto-sync Off. No setup toggle is required for normal Attack use.
