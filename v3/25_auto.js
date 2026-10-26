@@ -479,7 +479,8 @@ function r3AutoStoreHealth(snapshot){
   return true;
 }
 async function r3AutoHealthTick(){
-  if(!R3_AUTO.enabled||!R3_AUTO.name||R3_AUTO.healthRunning||R3_AUTO.running||R3_UI.busy)return;
+  if(!R3_AUTO.enabled||!R3_AUTO.name||R3_AUTO.healthRunning||R3_AUTO.running||
+     R3_NATIVE.busy||R3_UI.busy)return;
   const candidate=r3AutoCandidate();
   if(!candidate)return;
   const generation=R3_AUTO.generation;
