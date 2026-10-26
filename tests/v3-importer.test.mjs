@@ -248,6 +248,67 @@ test('Import all tabs reacquires Vue-replaced tab nodes and reaches inventory af
   assert.equal(scan.coverage.inventory,1);
   assert.equal(scan.coverage.resources,1);
 });
+test('priority import exposes Combat, Features resources, Inventory and Spells before nested filters',async()=>{
+  const fixture=docFixture(),{h,context}=harness(fixture);
+  let selected='About';
+  const labels=['Filter 1','Filter 2','Filter 3','Filter 4','Filter 5',
+    'Spells','Inventory','Combat','Notes','Features & Traits','About'];
+  const group={className:'primary',getAttribute:()=>null};
+  context.document.querySelectorAll=sel=>sel.startsWith('[role="tab"]')?
+    labels.map(label=>({
+      getClientRects:()=>[{}],disabled:false,
+      getAttribute:k=>k==='aria-label'?label:
+        k==='aria-selected'?String(label===selected):null,
+      closest:selector=>selector==='[role="tablist"]'?group:null,
+      click(){selected=label;}
+    })):[];
+  context.setTimeout=callback=>{callback();return 1;};
+  const tracker=namedResourceTracker('Second Wind','Second Wind 2/3',[false,true,true]);
+  const original=fixture.body.querySelectorAll.bind(fixture.body);
+  fixture.body.querySelectorAll=sel=>selected==='Features & Traits'&&
+    sel.startsWith('.resource-tracker,')?[tracker.tracker]:original(sel);
+  const sequence=[];
+  const result=await h.r3CollectAllTabs((label,snapshot)=>{
+    sequence.push({label,resources:snapshot.resources.length,tabs:[...snapshot.diagnostics.tabs]});
+  });
+  assert.equal(sequence[0].label,'About');
+  assert.deepEqual(sequence.slice(1,5).map(e=>e.label),
+    ['Combat','Features & Traits','Inventory','Spells']);
+  assert.equal(sequence[2].resources,1,'feature resource is available before deep scan completes');
+  assert.ok(sequence.findIndex(e=>e.label==='Filter 1')>
+    sequence.findIndex(e=>e.label==='Spells'));
+  assert.equal(selected,'About','private reader returns to originally active tab');
+  assert.equal(result.resources.length,1);
+});
+test('progressive sheet snapshots are only delivered from the authenticated pending iframe',async()=>{
+  const {h,context}=harness(docFixture());
+  const listeners=[];
+  context.window.addEventListener=(type,listener)=>listeners.push(listener);
+  const sent=[],win={postMessage:m=>sent.push(m)};
+  const frame={src:'https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/test',
+    getClientRects:()=>[{}],getAttribute:k=>k==='title'?'NIER':null,
+    closest:()=>null,contentWindow:win};
+  context.document.querySelectorAll=sel=>sel==='iframe'?[frame]:[];
+  h.r3StartEditorBridge();
+  const received=[],candidate=h.r3Candidates()[0];
+  const pending=h.r3SendScan(candidate,'all',(snapshot,tab)=>received.push([snapshot.name,tab]));
+  const id=sent.at(-1).id,progress=h.r3Coverage(h.r3Empty());progress.name='NIER';
+  const respond=(origin,source,type,data={})=>listeners[0]({
+    origin,source,data:{protocol:'r20eb:import:v3',id,type,...data}
+  });
+  respond('https://attacker.example',win,'progress',{tab:'Combat',snapshot:progress});
+  respond('https://advanced-sheets.production.roll20preflight.net',{},'progress',
+    {tab:'Combat',snapshot:progress});
+  assert.equal(received.length,0,'no cross-origin/window action leakage');
+  respond('https://advanced-sheets.production.roll20preflight.net',win,'progress',
+    {tab:'Combat',snapshot:progress});
+  assert.deepEqual(received,[['NIER','Combat']]);
+  respond('https://advanced-sheets.production.roll20preflight.net',win,'result',{snapshot:progress});
+  assert.equal((await pending).name,'NIER');
+  respond('https://advanced-sheets.production.roll20preflight.net',win,'progress',
+    {tab:'Features & Traits',snapshot:progress});
+  assert.equal(received.length,1,'finished request cannot publish delayed progress');
+});
 test('official reader cancels a private full import immediately after manual sheet open',async()=>{
   const {h,context}=harness(docFixture());
   const sent=[],editor={postMessage(message){sent.push(message);}};

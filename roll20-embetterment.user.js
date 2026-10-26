@@ -801,19 +801,39 @@ async function r3CollectAllTabs(progress,shouldCancel=()=>false){
     check();
     collect(r3CurrentTabLabel());
     const initial=descriptors();
-    // The six main 2024 sheet panels must not be pushed out of the first
-    // 14 tabs by nested filter tabs (a previous source of false zeroes).
-    const main=initial.filter(x=>primaryLabel.test(x.label));
+    // Put useful actionable data first. A 2024 sheet can have many nested
+    // filter tabs; their repeated 290ms renders previously delayed *every*
+    // resource and spell until the entire traversal completed.
+    const priorities=['Combat','Features & Traits','Inventory','Spells',
+      'Skills & Tools','Notes','About'];
+    const rank=label=>{
+      const i=priorities.findIndex(name=>name.toLowerCase()===label.toLowerCase());
+      return i<0?priorities.length:i;
+    };
+    const main=initial.filter(x=>primaryLabel.test(x.label))
+      .sort((a,b)=>rank(a.label)-rank(b.label));
+    const deferred=[];
     for(const mainTab of main){
       if(visited>=32)break;
       if(!await visit(mainTab))continue;
-      const children=descriptors().filter(x=>!primaryLabel.test(x.label)&&!seen.has(x.key)).slice(0,20);
-      for(const child of children){
-        if(visited>=32)break;
-        await visit(child);
-      }
+      // Capture these same top-level tabs for the HUD before expensive
+      // secondary filters. Deferred children are revisited below.
+      const children=descriptors().filter(x=>!primaryLabel.test(x.label)&&!seen.has(x.key));
+      for(const child of children.slice(0,20))
+        deferred.push({parent:mainTab,child});
     }
-    // Visit any other initially visible tabs missed by the priority pass.
+    // Follow each secondary view after the primary actions/resources have
+    // already been reported. Re-acquire Vue elements on each switch.
+    for(const {parent,child} of deferred){
+      if(visited>=32)break;
+      if(seen.has(child.key))continue;
+      const parentTab=r3ResolveTab(parent.key,parent.label);
+      if(!parentTab)continue;
+      if(!r3Active(parentTab)){
+        check();parentTab.click();await r3Pause(130);check();
+      }
+      await visit(child);
+    }
     for(const extra of initial.filter(x=>!primaryLabel.test(x.label))){
       if(visited>=32)break;
       await visit(extra);
@@ -873,7 +893,17 @@ async function r3ReaderReceive(event){
   try{
     const cancelled=()=>R3_READER_CANCELLED.has(data.id);
     const snap=await r3ReaderScan(data.mode,(tab,coverage)=>{
-      if(!cancelled())peer.postMessage(r3Msg('progress',{id:data.id,tab,coverage}),R3_EDITOR);
+      if(!cancelled()){
+        // Detailed snapshots for only the high-value panels. Sending large
+        // inventory/control arrays for 20+ secondary filters on every visit
+        // needlessly congests the main-thread postMessage channel.
+        const priority=/^(?:Current view|Combat|Features\s*(?:&|and)\s*Traits|Inventory|Spells)$/i;
+        const fast=priority.test(tab)&&coverage?.schema===3;
+        peer.postMessage(r3Msg('progress',{
+          id:data.id,tab,coverage:fast?coverage.coverage:undefined,
+          snapshot:fast?coverage:undefined
+        }),R3_EDITOR);
+      }
     },cancelled);
     if(cancelled())throw new Error('Private scan cancelled for manual sheet access');
     peer.postMessage(r3Msg('result',{id:data.id,snapshot:snap,session:R3_SESSION}),R3_EDITOR);
@@ -927,7 +957,10 @@ function r3StartReader(){
     document.addEventListener(type,r3ReaderChanged,true);
   r3ReaderAnnounce();
   let attempts=0;
-  const timer=setInterval(()=>{if(++attempts>=24)clearInterval(timer);else r3ReaderAnnounce();},1500);
+  // The private frame often mounts before Vue exposes its character name.
+  // A quicker ready announcement removes a needless ~1.5s gap while the
+  // authenticated editor waits for the exact selected character identity.
+  const timer=setInterval(()=>{if(++attempts>=32)clearInterval(timer);else r3ReaderAnnounce();},500);
   window.addEventListener('focus',r3ReaderAnnounce);
 }
 function r3FrameList(){
@@ -1001,6 +1034,11 @@ function r3Listen(event){
   if(!candidate||!pending||pending.window!==event.source)return;
   if(data.type==='progress'){
     r3UIStatus?.('Reading '+r3String(data.tab,65)+'…',data.coverage);
+    // A partial result belongs only to the exact pending frame/scan ID,
+    // already checked above. This is not an external or unverified sheet.
+    if(pending.mode==='all'&&typeof pending.onProgress==='function'&&
+       data.snapshot?.schema===3)
+      pending.onProgress(data.snapshot,r3String(data.tab,65));
     return;
   }
   if(!['result','failure'].includes(data.type))return;
@@ -1009,7 +1047,7 @@ function r3Listen(event){
   else if(!data.snapshot||data.snapshot.schema!==3)pending.reject(new Error('Malformed sheet snapshot'));
   else pending.resolve(data.snapshot);
 }
-function r3SendScan(candidate,mode){
+function r3SendScan(candidate,mode,onProgress=null){
   if(!candidate?.window)return Promise.reject(new Error('No matching official 2024 iframe or popout'));
   if(!candidate.visible)return Promise.reject(new Error('Sheet iframe is hidden. Open the character sheet in Roll20 first.'));
   return new Promise((resolve,reject)=>{
@@ -1017,7 +1055,8 @@ function r3SendScan(candidate,mode){
     const timeout=setTimeout(()=>{R3_PENDING.delete(id);reject(new Error(
       'Official sheet reader did not answer. Ensure the new userscript is active on the advanced-sheets.production.roll20preflight.net domain and reload the character sheet.'));},
       mode==='all'?40000:mode==='hp'?2500:12000);
-    R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout,mode});
+    R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout,mode,
+      onProgress:typeof onProgress==='function'?onProgress:null});
     try{candidate.window.postMessage(r3Msg('scan',{id,mode}),R3_ORIGIN);}
     catch(e){R3_PENDING.delete(id);clearTimeout(timeout);reject(e);}
   });
@@ -4606,7 +4645,25 @@ async function r3AutoTick(eventTriggered=false){
   const generation=R3_AUTO.generation;
   r3UIRefresh();
   try{
-    const snapshot=await r3SendScan(candidate,mode);
+    // Populate confirmed actions/resources progressively rather than
+    // withholding every mapped button until the final secondary tab finishes.
+    // Only the exact reader for this character/generation may contribute.
+    const quickTabs=/^(?:Current view|Combat|Features\s*(?:&|and)\s*Traits|Inventory|Spells)$/i;
+    const published=new Set();
+    const onProgress=mode==='all'&&background?(partial,tab)=>{
+      if(!quickTabs.test(tab)||published.has(tab.toLowerCase()))return;
+      if(!R3_AUTO.enabled||generation!==R3_AUTO.generation||
+         R3_AUTO.characterId!==r3AutoId(candidate)||
+         R3_AUTO.name.toLowerCase()!==r3String(partial?.name,120).toLowerCase()||
+         R3_TOKEN.active?.characterId!==R3_AUTO.characterId||
+         R3_UI.busy||!r3NativeIsOwned(candidate))return;
+      try{
+        r3AutoStoreSnapshot(partial,'current');
+        published.add(tab.toLowerCase());
+        r3AutoDisplay('Mapped '+tab+'; continuing remaining tabs');
+      }catch{/* Unpopulated Vue panel: await next verified primary tab. */}
+    }:null;
+    const snapshot=await r3SendScan(candidate,mode,onProgress);
     // A disabled auto-sync must never publish a late response.
     if(!R3_AUTO.enabled||R3_AUTO.generation!==generation)return;
     r3AutoStoreSnapshot(snapshot,mode);
@@ -4704,9 +4761,9 @@ function r3ToggleAuto(){
 function r3StartAuto(){
   r3AutoLoad();
   r3AutoDisplay();
-  if(R3_AUTO.timer===null)R3_AUTO.timer=setInterval(()=>{r3AutoTick();},8000);
+  if(R3_AUTO.timer===null)R3_AUTO.timer=setInterval(()=>{r3AutoTick();},3000);
   if(R3_AUTO.healthTimer===null)R3_AUTO.healthTimer=setInterval(()=>{r3AutoHealthTick();},1000);
-  if(R3_AUTO.enabled)setTimeout(()=>{r3AutoTick();},1600);
+  if(R3_AUTO.enabled)setTimeout(()=>{r3AutoTick();},180);
 }
 
 // ===== v3/30_boot.js =====

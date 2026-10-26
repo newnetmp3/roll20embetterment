@@ -1,3 +1,11 @@
+## 2026-10-26 — progressive quick import (Firefox v3.10.13 candidate)
+
+- [x] Map source-observed Combat controls and feature/resource trackers as soon as each authenticated primary tab is captured instead of waiting for 32 tab views.
+- [x] Prioritize Combat, Features, Inventory and Spells; defer expensive nested filters without skipping final coverage or changing player-owned sheets.
+- [x] Validate partial imports against exact selected character ID, private reader ownership, pending window/scan ID, and generation. Retain previously imported tabs until final all-tab scan succeeds.
+- [x] Shorten initial reader announcements and automatic sync scheduler cadence. Keep independent 1-second HP polling.
+- [ ] Benchmark select-to-first-mapping in real Jumpgate/Floorp and verify native Attack chat parity. The browser cannot guarantee sub-second Roll20 iframe startup.
+
 ## 2026-10-26 — native Attack reliability v3.10.12
 
 - [x] Resolve hidden reader using selected controlled-character ID even with a generic Roll20 iframe title; reject authenticated name mismatch.

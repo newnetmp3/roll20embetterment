@@ -259,6 +259,49 @@ test('opt-in auto-sync sends a real current-view request without manually clicki
   h.click('r3-auto');
   assert.equal(h.api.R3_AUTO.enabled,false);
 });
+test('selected private sheet publishes verified attacks/resources before slow all-tab traversal completes',async()=>{
+  const x=backgroundNativeRig(),h=x.h;
+  const reader=await h.api.r3NativeBgEnsure('Elowen');
+  h.api.R3_TOKEN.active={tokenId:'token-elf',name:'Elowen',characterId:'char-elf'};
+  Object.assign(h.api.R3_AUTO,{enabled:true,origin:'token',
+    name:'Elowen',characterId:'char-elf',lastFull:0,lastScan:0});
+  let receive=null,finish=null;
+  h.context.fastTestScan=(candidate,mode,onProgress)=>{
+    assert.equal(candidate.window,reader.window);
+    assert.equal(mode,'all');
+    receive=onProgress;
+    return new Promise(resolve=>{finish=resolve;});
+  };
+  vm.runInContext('r3SendScan = (...args)=>globalThis.fastTestScan(...args)',h.context);
+  const work=h.api.r3AutoTick();
+  assert.equal(h.api.R3_AUTO.running,true);
+  assert.equal(typeof receive,'function');
+  const combat=h.api.r3Empty();combat.name='Elowen';
+  combat.attacks=[{name:'Dagger',_key:'dagger',tab:'Combat',
+    visible:'Dagger +7 Attack 1d4+4',actions:[{label:'+7 Attack'}]}];
+  receive(h.api.r3Coverage(combat),'Combat');
+  assert.equal(h.api.R3_UI.snapshot.attacks.length,1,
+    'Attack list appears before the background full scan returns');
+  assert.equal(h.api.r3NativeMappedPreview('dagger').sheetAction,true);
+  const part=h.api.r3Empty();part.name='Elowen';
+  part.resources=[{name:'Second Wind',_key:'second-wind',
+    visible:'Second Wind 1 / 3',tab:'Features & Traits'}];
+  receive(h.api.r3Coverage(part),'Features & Traits');
+  assert.equal(h.api.R3_UI.snapshot.resources.length,1);
+  assert.equal(h.api.R3_UI.snapshot.attacks.length,1,
+    'a new tab must not erase early verified attack mappings');
+  const stale=h.api.r3Empty();stale.name='Different Hero';
+  receive(h.api.r3Coverage(stale),'Spells');
+  assert.equal(h.api.R3_UI.snapshot.name,'Elowen',
+    'a different character cannot overwrite progressive mappings');
+  const all=h.api.r3Empty();all.name='Elowen';
+  all.attacks=combat.attacks;all.resources=part.resources;
+  finish(h.api.r3Coverage(all));await work;
+  assert.equal(h.api.R3_AUTO.running,false);
+  assert.ok(h.api.R3_AUTO.lastFull>0);
+  assert.equal(h.api.R3_UI.snapshot.attacks.length,1);
+  assert.equal(h.api.R3_UI.snapshot.resources.length,1);
+});
 test('auto import fails closed when official character identity mismatches',()=>{
   const h=panelHarness();h.api.r3StartUI();
   const prev=h.api.r3Empty();prev.name='Nier';prev.stats.hp=82;
@@ -388,7 +431,7 @@ test('a conflicting official character ID cannot be rescued by identical name',(
 test('automatic scheduler samples HP each second without accelerating full tab imports',()=>{
   const h=panelHarness();h.api.r3StartUI();h.api.r3StartAuto();
   assert.ok(h.intervals.includes(1000));
-  assert.ok(h.intervals.includes(8000));
+  assert.ok(h.intervals.includes(3000),'resume paused private reads promptly');
 });
 
 

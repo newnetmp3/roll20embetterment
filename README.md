@@ -65,6 +65,12 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Firefox v3.10.13 — Faster native action/resource mapping (candidate)
+
+Selecting a controllable token starts private sheet synchronization immediately. Instead of withholding mapped attacks and resources until every nested sheet filter has been read, R20eb prioritizes **Combat, Features & Traits, Inventory and Spells** and publishes verified data as those sections arrive. The remaining sheet views finish importing afterward. The private sheet continues to stay offscreen; player-opened sheets are untouched.
+
+The browser now checks sheet readiness more promptly, while preserving exact token/character ownership and source-observed native action verification. This makes useful information appear earlier, but cannot guarantee instantaneous loading when Roll20's sheet iframe or Vue controls have not finished mounting.
+
 ## Firefox v3.10.12 — Attack button visibility and hidden-reader repair
 
 A private Roll20 character sheet can use a generic iframe title even when its owning dialog has the correct character ID. The Auto-sync importer now locates that owned reader by ID and authenticated name rather than treating the generic title as a different character. Pending Attack clicks use the freshly imported official control evidence after an in-progress all-tab scan; unrelated HP polling is deferred while the action resolves. The Attack window shows native progress or errors in its compact titlebar without scrolling your weapon list.
