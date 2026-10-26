@@ -112,11 +112,21 @@ function r3ThemeStyles(){
     '.hud-hp-track{background:var(--r3-inset)!important;border:1px solid var(--r3-border)!important}',
     '.hud-hp-fill{background:var(--r3-positive)!important}',
     '.r3-bf-turn-icon svg{color:var(--r3-accent)!important}',
-    '.r3-theme-preview{border-color:var(--r3-border)!important;background:var(--r3-inset)!important}',
+    // Preview swatches are intentionally driven by static inline colors from
+    // the other palettes; never repaint them to the currently selected color.
     '.r3-theme-choice.is-current{outline:2px solid var(--r3-accent)!important;outline-offset:1px}',
     '.r3-theme-choice:focus-visible{outline:2px solid var(--r3-accent)!important}',
     '@media(prefers-reduced-motion:reduce){.r3-bf-shell *,.hud-flyout *{transition:none!important;animation:none!important}}'
-  ].join('');
+  ].join('')+(p.id==='bg3'?[
+    // A restrained fantasy treatment inspired by BG3: engraved gold frame,
+    // carved titlebar serif and parchment highlights, without blocking map.
+    '.hud-flyout,.r3-debug-window,.r3-bf-actions,.r3-bf-category-dock,.r3-bf-sidebar .r3-bf-section{border:1px solid #8b7755!important;box-shadow:0 4px 18px #080905, inset 0 0 0 1px #584b34!important}',
+    '.hud-flyout>header,.r3-debug-header{background:linear-gradient(90deg,#33291e,#554734,#2a2922)!important;border-bottom:2px solid #b39560!important}',
+    '.hud-flyout>header strong,.r3-debug-header strong,.r3-bf-section header strong{font-family:Georgia,serif!important;letter-spacing:.035em!important;color:#e8d7aa!important}',
+    '.r3-bf-category.selected,.r3-bf-ring[aria-pressed=true]{border-color:#d5b779!important;box-shadow:inset 0 0 0 1px #b39560!important}',
+    '.hud-flyout-caption,.hud-skill-group b{border-bottom:1px solid #8b7755!important;color:#e8d7aa!important}',
+    '.hud-weapon-group,.hud-card{box-shadow:inset 0 0 0 1px #3d3a2e!important}'
+  ].join(''):'');
 }
 function r3ThemeApply(){
   // Theme changes mutate only this dedicated stylesheet and dataset.
