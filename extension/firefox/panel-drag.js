@@ -2,7 +2,7 @@
 // Panel locations belong to the game, not the selected character.
 const R3_BF_PANELS=new Set([
   'actions','categories','turn','profile','concentration','resources',
-  'notes','advanced','tools','flyout','native','importer','show-profile','debug'
+  'notes','advanced','tools','flyout','native','importer','show-profile','debug','taskbar'
 ]);
 const R3_BF_DRAG={scope:'',positions:{},active:null,suppressClick:null,enabled:false,root:null};
 function r3BattlefieldLayoutKey(){
@@ -101,6 +101,9 @@ function r3BattlefieldPlacePanels(){
   const importer=root.getElementById?.('r3-wrap');
   if(importer)importer.setAttribute?.('data-bf-panel','importer');
   for(const name of R3_BF_PANELS){
+    // Actions and categories are children of the unified dock, no longer
+    // independently positioned (historical saved positions are ignored).
+    if(['actions','categories'].includes(name))continue;
     const panel=r3BattlefieldPanel(root,name);
     if(!panel)continue;
     panel.setAttribute?.('tabindex','0');
@@ -128,7 +131,8 @@ function r3BattlefieldIsEditor(target){
 function r3BattlefieldDragStart(event){
   if(R3_BF_DRAG.active)return;
   if(event.pointerType==='mouse'&&event.button!==0)return;
-  const panel=event.target?.closest?.('[data-bf-panel]');
+  const dock=event.target?.closest?.('[data-bf-panel="taskbar"]');
+  const panel=dock||event.target?.closest?.('[data-bf-panel]');
   const name=panel?.getAttribute?.('data-bf-panel');
   if(!R3_BF_PANELS.has(name)||r3BattlefieldIsEditor(event.target))return;
   if(!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return;
@@ -171,7 +175,8 @@ function r3BattlefieldPreventDragClick(event){
   }
   // Don't consume a subsequent keyboard-originated activation.
   if(event.detail===0)return;
-  const panel=event.target?.closest?.('[data-bf-panel]');
+  const panel=event.target?.closest?.('[data-bf-panel="taskbar"]')||
+    event.target?.closest?.('[data-bf-panel]');
   if(panel?.getAttribute?.('data-bf-panel')!==block.name)return;
   R3_BF_DRAG.suppressClick=null;
   event.preventDefault?.();
@@ -180,7 +185,8 @@ function r3BattlefieldPreventDragClick(event){
 }
 function r3BattlefieldDragKeyboard(event){
   if(!event.altKey||r3BattlefieldIsEditor(event.target))return;
-  const panel=event.target?.closest?.('[data-bf-panel]');
+  const panel=event.target?.closest?.('[data-bf-panel="taskbar"]')||
+    event.target?.closest?.('[data-bf-panel]');
   const name=panel?.getAttribute?.('data-bf-panel');
   if(!R3_BF_PANELS.has(name))return;
   const vectors={ArrowLeft:[-1,0],ArrowRight:[1,0],
