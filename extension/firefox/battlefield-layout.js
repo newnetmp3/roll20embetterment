@@ -170,7 +170,7 @@ function r3BattlefieldSidebar(snapshot){
     R3_TURN.concentration===false?'None (manual)':'Not tracked';
   const resources=r3HudResourceBar(snapshot);
   return '<aside class="r3-bf-sidebar" aria-label="Character quick overview">'+
-    '<section class="r3-bf-profile r3-bf-section" data-bf-panel="profile">'+
+    (R3_BF.visible.profile?'<section class="r3-bf-profile r3-bf-section" data-bf-panel="profile">'+
     ''+
     '<div class="r3-bf-character">'+
     '<div class="r3-bf-avatar">'+
@@ -186,19 +186,19 @@ function r3BattlefieldSidebar(snapshot){
     r3HudStat('AC',stats.ac)+r3HudStat('Speed',stats.speed,' ft')+
     r3HudStat('Init',stats.initiative)+
     '<div title="'+r3Escape(passive.source)+'">'+r3HudStat(passive.label,passive.value)+'</div>'+
-    '</div></section>'+
-    '<section class="r3-bf-section r3-bf-concentration" data-bf-panel="concentration">'+
+    '</div></section>':'')+
+    (R3_BF.visible.concentration?'<section class="r3-bf-section r3-bf-concentration" data-bf-panel="concentration">'+
     ''+
     '<span>'+r3HudIcon('target')+'</span><div><strong>Concentration</strong>'+
     '<small>'+r3Escape(focus)+'</small></div>'+
     '<button type="button" data-turn-action="focus" '+
-    'title="Cycle manual concentration state; the sheet is authoritative">±</button></section>'+
-    '<section class="r3-bf-section r3-bf-resource-panel" data-bf-panel="resources" aria-label="Observed character resources">'+
+    'title="Cycle manual concentration state; the sheet is authoritative">±</button></section>':'')+
+    (R3_BF.visible.resources?'<section class="r3-bf-section r3-bf-resource-panel" data-bf-panel="resources" aria-label="Observed character resources">'+
     ''+
     '<header><strong>Resources</strong>'+
     '<button type="button" data-hud-flyout="resources" title="Browse imported resources">⌃</button></header>'+
     (resources||'<small>No official slots or resources imported yet.</small>')+
-    '</section>'+r3BattlefieldNotes()+
+    '</section>':'')+(R3_BF.visible.notes?r3BattlefieldNotes():'')+
     '</aside>';
 }
 function r3BattlefieldMarkup(snapshot){
@@ -228,30 +228,32 @@ function r3BattlefieldMarkup(snapshot){
       '<span style="width:'+fill+'%"></span></span></div>'
   ].join('');
   return '<section class="r3-bf-shell" aria-label="R20eb battlefield HUD">'+
-    '<div class="r3-bf-turnstrip" data-bf-panel="turn" aria-label="Turn state">'+
+    (R3_BF.visible.turn?'<div class="r3-bf-turnstrip" data-bf-panel="turn" aria-label="Turn state">'+
     ''+
     '<span class="r3-bf-turn-icon">'+r3HudIcon('clock')+'</span>'+
     '<span><strong>'+r3Escape(phase)+'</strong><small>'+r3Escape(status)+'</small></span>'+
     '<button type="button" data-turn-action="start" title="Reset local turn counters; keep concentration">↻</button>'+
     '<button type="button" data-turn-action="end" title="Mark end of turn locally; does not advance Roll20">⏭</button>'+
     '<button type="button" id="r3-hud-debug" class="r3-bf-debug-trigger" title="Debug, advanced controls and layout settings" aria-label="Open Debug window">⚙ Debug</button>'+
-    '</div>'+
+    '</div>':'')+
     (R3_BF.sidebar&&!R3_UI.shown?r3BattlefieldSidebar(snapshot):
       '<div class="r3-bf-show-profile-wrap" data-bf-panel="show-profile">'+
         ''+
         '<button type="button" class="r3-bf-show-profile" data-bf-action="sidebar" '+
         'title="Show character overview">☷ '+r3Escape(name)+'</button></div>')+
-    '<nav class="r3-bf-actions" data-bf-panel="actions" aria-label="Action economy quick dock">'+
+    '<div class="r3-bf-taskbar" data-bf-panel="taskbar" data-r3-orientation="'+R3_BF.orientation+
+    '" aria-label="R20eb taskbar" title="Right-click for dock and visibility settings">'+
+    (R3_BF.visible.actions?'<nav class="r3-bf-actions" aria-label="Action economy quick dock">'+
     ''+
-    '<div class="r3-bf-rings">'+ring+'</div>'+
-    '<div class="r3-bf-quick">'+
+    '<div class="r3-bf-rings">'+ring+'</div>':'')+
+    (R3_BF.visible.quick?'<div class="r3-bf-quick">'+
     '<button type="button" data-turn-action="dash-action" title="Mark Action Dash locally and add one speed allowance">'+
     r3HudIcon('move')+'<span>Dash</span></button>'+
     '<button type="button" data-bf-action="disengage" title="Mark Disengage as a local action; no Roll20 execution">'+
     r3HudIcon('shield')+'<span>Disengage</span></button>'+
     '<button type="button" data-bf-action="hide" title="Mark Hide as a local action; no Roll20 execution">'+
-    r3HudIcon('eye')+'<span>Hide</span></button></div></nav>'+
-    '<nav class="r3-bf-category-dock" data-bf-panel="categories" aria-label="Character ability menus">'+
+    r3HudIcon('eye')+'<span>Hide</span></button></div>':'')+'</nav>':'')+
+    (R3_BF.visible.categories?'<nav class="r3-bf-category-dock" aria-label="Character ability menus">'+
     ''+
     r3BattlefieldControl('blade','Attacks','actions')+
     r3BattlefieldControl('star','Features','features')+
@@ -259,7 +261,18 @@ function r3BattlefieldMarkup(snapshot){
     r3BattlefieldControl('bag','Inventory','inventory')+
     r3BattlefieldControl('book','Skills','skills')+
     r3BattlefieldControl('star','MISC','misc')+
-    '</nav>'+
+    '</nav>':'')+
+    (R3_BF.visible.status?'<div class="r3-bf-taskbar-status" role="status" aria-live="off">'+
+      '<span class="r3-bf-status-character">'+r3Escape(name)+'</span>'+
+      '<span>HP '+r3HudValue(snapshot?.stats?.hp)+' / '+r3HudValue(snapshot?.stats?.maxHp)+'</span>'+
+      '<span>AC '+r3HudValue(snapshot?.stats?.ac)+'</span>'+
+      '<span>Move '+r3Escape(left)+'</span>'+
+      '<span class="r3-bf-status-phase">'+r3Escape(phase)+'</span>'+
+      (R3_NATIVE.status?'<span class="r3-bf-status-native" title="'+r3Escape(R3_NATIVE.status)+'">'+
+        r3Escape(R3_NATIVE.status)+'</span>':'')+'</div>':'')+
+    '<button type="button" class="r3-bf-menu-button" data-bf-action="taskbar-menu" '+
+    'aria-label="Taskbar settings" title="Taskbar settings · right-click anywhere on the taskbar">⋯</button>'+
+    '</div>'+r3BattlefieldContextMarkup()+
     (R3_HUD.flyout||R3_HUD.chooser!==null?
       r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):'')+
     (R3_NATIVE.preview?
