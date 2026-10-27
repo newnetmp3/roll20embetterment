@@ -88,6 +88,11 @@ test('right-clicking just the dock opens an accessible orientation and visibilit
     'native Roll20 context menus must not be intercepted');
   assert.equal(h.api.r3BattlefieldContextClose(),true);
   assert.doesNotMatch(h.html(),/class="r3-bf-context"/);
+  h.api.r3BattlefieldContextOpen(1435,899);
+  assert.ok(h.api.R3_BF.contextY<=435,
+    'the settings menu must fit vertically when opened at the bottom edge');
+  assert.ok(h.api.R3_BF.contextX<=1440-308-242,
+    'the settings menu must avoid the Roll20 chat/sidebar');
 });
 test('orientation change persists without moving independently dragged character panels',()=>{
   const h=rig();h.api.r3BattlefieldLoad();
