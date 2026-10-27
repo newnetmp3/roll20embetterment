@@ -1,9 +1,18 @@
 # R20 Embetterment — development handover
 
-**Updated:** 2026-10-25  
+**Updated:** 2026-10-27  
 **Repository:** https://github.com/newnetmp3/roll20embetterment  
 **Branch:** main  
 **Workflow:** feature PR → `npm run check:firefox` → green GitHub CI → merge → Mozilla signing → signed XPI and update-feed verification.
+
+## 2026-10-27 — taskbar/status bar + right-click customization (Firefox v3.10.14 candidate)
+
+- User requested a **taskbar/status-bar-style HUD** with right-click orientation and per-element show/hide controls. Existing two large action/category blocks and scattered stats occupy too much Roll20 canvas.
+- New unified **R20eb taskbar** wraps Action/Bonus/Reaction/Move indicators, the six action-category menus, and a narrow status line with verified character name/HP/AC, movement allowance/remaining, turn phase and native action progress. The separate panels (profile, concentration, resources, notes, turn strip, flyouts, Debug) remain independently movable. Action controls still use existing native action routes.
+- **Right-click any part of the taskbar**, or select its always-visible **⋯ Taskbar settings** button, to open an accessible context menu. Orientation choices: Bottom, Top, Left and Right. Per-section checkboxes show/hide Character, Concentration, Resources, Turn notes, Turn controls, Action indicators, Quick actions, Category buttons and Status bar. Reset panel positions remains available. The settings persist in per-game battlefield schema 2; schema 1 notes/sidebar settings migrate. Invalid stored section/orientation values are ignored.
+- Dock orientation changes clear only a previously dragged taskbar position (not manually placed character panels). The unified taskbar itself can still be dragged or nudged via Alt+Arrow, and clamps to the viewport. Right docking reserves the Roll20 chat/sidebar inset. Old independent action/category positions are ignored by the new grouped layout. Menu is dismissed with Escape or outside click, without hijacking the Roll20 map's normal context menu.
+- Status and context menu colors follow the selected BG3, Tokyo Night or other palette; Windows 9x retains classic gray beveled context styling. Context controls are isolated to R20eb's Shadow DOM and never hide, navigate or move a manually opened official Roll20 sheet.
+- New tests cover dock markup, all four edges, visibility persistence and legacy migration, context menu scoping, drag grouping, theme hooks and guaranteed access to settings even when every optional section is hidden. **CI/Mozilla signing and live screenshot QA are separate checks.**
 
 ## 2026-10-26 — fast progressive sheet imports (Firefox v3.10.13 candidate)
 
