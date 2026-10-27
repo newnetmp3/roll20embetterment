@@ -1,22 +1,89 @@
 // Firefox reference layout: compact battlefield-first overlay, no tutorial popups.
 // Only this renderer changes; Roll20's map, sheet and chat remain authoritative.
-const R3_BF={notes:'',sidebar:true,options:false,statusOpen:false,revision:0};
+const R3_BF_VISIBILITY=Object.freeze({
+  profile:'Character',concentration:'Concentration',resources:'Resources',
+  notes:'Turn notes',turn:'Turn controls',actions:'Action indicators',
+  quick:'Quick actions',categories:'Category buttons',status:'Status bar'
+});
+const R3_BF_DOCKS=['bottom','top','left','right'];
+const R3_BF={notes:'',sidebar:true,options:false,statusOpen:false,
+  orientation:'bottom',visible:{},contextOpen:false,contextX:12,contextY:12,revision:0};
 function r3BattlefieldKey(){return r3TokenSettingsKey()+':battlefield';}
 function r3BattlefieldLoad(){
   R3_BF.notes='';R3_BF.sidebar=true;R3_BF.options=false;R3_BF.statusOpen=false;
+  R3_BF.orientation='bottom';R3_BF.contextOpen=false;
+  R3_BF.visible=Object.fromEntries(Object.keys(R3_BF_VISIBILITY).map(k=>[k,true]));
   try{
     const saved=JSON.parse(localStorage.getItem(r3BattlefieldKey())||'null');
-    if(saved?.schema===1){
+    if(saved?.schema===1||saved?.schema===2){
       if(typeof saved.notes==='string')R3_BF.notes=saved.notes.slice(0,320);
       if(typeof saved.sidebar==='boolean')R3_BF.sidebar=saved.sidebar;
+      if(R3_BF_DOCKS.includes(saved.orientation))R3_BF.orientation=saved.orientation;
+      for(const key of Object.keys(R3_BF_VISIBILITY))
+        if(typeof saved.visible?.[key]==='boolean')R3_BF.visible[key]=saved.visible[key];
     }
   }catch{}
   R3_BF.revision++;
 }
 function r3BattlefieldSave(){
   try{localStorage.setItem(r3BattlefieldKey(),JSON.stringify({
-    schema:1,notes:R3_BF.notes,sidebar:R3_BF.sidebar
+    schema:2,notes:R3_BF.notes,sidebar:R3_BF.sidebar,
+    orientation:R3_BF.orientation,visible:R3_BF.visible
   }));}catch{}
+}
+function r3BattlefieldDockOrientation(value){
+  if(!R3_BF_DOCKS.includes(value))return false;
+  if(R3_BF.orientation===value){R3_BF.contextOpen=false;r3HudRender();return true;}
+  R3_BF.orientation=value;R3_BF.contextOpen=false;
+  // A manually dragged former dock position must not override the newly
+  // selected edge. Independent profile, flyout and Debug positions survive.
+  if(typeof R3_BF_DRAG==='object'){
+    delete R3_BF_DRAG.positions.taskbar;
+    r3BattlefieldLayoutSave();
+  }
+  r3BattlefieldSave();R3_BF.revision++;r3HudRender();
+  return true;
+}
+function r3BattlefieldTogglePart(name){
+  if(!Object.prototype.hasOwnProperty.call(R3_BF_VISIBILITY,name))return false;
+  R3_BF.visible[name]=!R3_BF.visible[name];
+  r3BattlefieldSave();R3_BF.revision++;r3HudRender();return true;
+}
+function r3BattlefieldContextOpen(x,y){
+  const width=Math.max(320,Number(window.innerWidth)||1280);
+  const height=Math.max(300,Number(window.innerHeight)||800);
+  const inset=typeof r3BattlefieldChatInset==='function'?r3BattlefieldChatInset():0;
+  R3_BF.contextX=Math.max(5,Math.min(Math.round(Number(x)||8),Math.max(5,width-inset-242)));
+  R3_BF.contextY=Math.max(5,Math.min(Math.round(Number(y)||8),Math.max(5,height-385)));
+  R3_BF.contextOpen=true;R3_BF.revision++;r3HudRender();
+  return true;
+}
+function r3BattlefieldContextClose(){
+  if(!R3_BF.contextOpen)return false;
+  R3_BF.contextOpen=false;R3_BF.revision++;r3HudRender();return true;
+}
+function r3BattlefieldContextMarkup(){
+  if(!R3_BF.contextOpen)return '';
+  const orientation=R3_BF_DOCKS.map(dock=>
+    '<button type="button" role="menuitemradio" aria-checked="'+(R3_BF.orientation===dock)+
+    '" data-bf-action="dock-orientation" data-bf-value="'+dock+'">'+
+    (R3_BF.orientation===dock?'● ':'○ ')+dock[0].toUpperCase()+dock.slice(1)+'</button>').join('');
+  const visibility=Object.entries(R3_BF_VISIBILITY).map(([key,label])=>
+    '<button type="button" role="menuitemcheckbox" aria-checked="'+R3_BF.visible[key]+
+    '" data-bf-action="dock-toggle" data-bf-item="'+key+'">'+
+    (R3_BF.visible[key]?'☑ ':'☐ ')+r3Escape(label)+'</button>').join('');
+  return '<div class="r3-bf-context" data-bf-no-drag role="menu" aria-label="R20eb taskbar options" '+
+    'style="left:'+R3_BF.contextX+'px;top:'+R3_BF.contextY+'px">'+
+    '<strong>Dock orientation</strong>'+orientation+
+    '<strong>Show / hide</strong>'+visibility+
+    '<button type="button" role="menuitem" data-bf-action="reset-layout">Reset panel positions</button>'+
+    '<button type="button" role="menuitem" data-bf-action="dock-close">Close menu</button></div>';
+}
+function r3BattlefieldContextEvent(event){
+  const within=event?.target?.closest?.('[data-bf-panel="taskbar"]');
+  if(!within)return false;
+  event.preventDefault?.();event.stopPropagation?.();
+  return r3BattlefieldContextOpen(event.clientX,event.clientY);
 }
 function r3BattlefieldInput(el){
   if(el?.id!=='r3-bf-notes')return false;
@@ -30,6 +97,19 @@ function r3BattlefieldClick(target){
     target?.closest?.('[data-bf-action]')?.dataset?.bfAction;
   if(typeof action!=='string')return false;
   switch(action){
+    case 'taskbar-menu':
+      if(R3_BF.contextOpen)return r3BattlefieldContextClose();
+      return r3BattlefieldContextOpen(
+        Math.max(10,(Number(window.innerWidth)||1280)-
+          (typeof r3BattlefieldChatInset==='function'?r3BattlefieldChatInset():0)-258),
+        (Number(window.innerHeight)||800)-410);
+    case 'dock-orientation':
+      return r3BattlefieldDockOrientation(target?.dataset?.bfValue||
+        target?.closest?.('[data-bf-value]')?.dataset?.bfValue);
+    case 'dock-toggle':
+      return r3BattlefieldTogglePart(target?.dataset?.bfItem||
+        target?.closest?.('[data-bf-item]')?.dataset?.bfItem);
+    case 'dock-close':return r3BattlefieldContextClose();
     case 'sidebar':
       R3_BF.sidebar=!R3_BF.sidebar;r3BattlefieldSave();break;
     case 'options':
