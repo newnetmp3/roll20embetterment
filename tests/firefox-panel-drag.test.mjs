@@ -48,7 +48,10 @@ test('all panels drag directly and no visible grab handles are generated',()=>{
   assert.doesNotMatch(css,/drag-grip/);
   assert.match(css,/cursor:grab/);
   h.api.r3BattlefieldPlacePanels();
-  for(const panel of h.panels.values())assert.equal(panel.style.get('tabindex'),'0');
+  for(const [name,panel] of h.panels)
+    assert.equal(panel.style.get('tabindex'),
+      ['actions','categories'].includes(name)?undefined:'0',
+      'grouped action/category controls are positioned by the taskbar');
 });
 test('chat panel geometry is respected; sensible fallback exists',()=>{
   const h=harness({width:1200});
