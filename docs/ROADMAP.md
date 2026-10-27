@@ -1,3 +1,11 @@
+## 2026-10-27 — unified taskbar/status bar (Firefox v3.10.14 candidate)
+
+- [x] Replace independent oversized Action and Category panels with a compact consolidated, draggable taskbar and character/turn/movement/status strip.
+- [x] Provide right-click/⋯ accessible taskbar context menu for Bottom / Top / Left / Right orientation; persist per-game preferences.
+- [x] Per-section show/hide: Character, Concentration, Resources, Notes, Turn, Action Indicators, Quick Actions, Category Buttons and Status. Guarantee settings stay reachable even if all optional sections are hidden.
+- [x] Respect Roll20 right-side chat inset, independent floating panels, existing saved positions, attack-list scroll, BG3/Tokyo Night/Win9x theme selection, manual sheet priority and native action mappings.
+- [ ] Real Floorp/Jumpgate QA on 1080p and 1440p, edge dock layouts, interactions, panel overflow and actual native attack chat parity. Signed Firefox XPI + feed verification required.
+
 ## 2026-10-26 — progressive quick import (Firefox v3.10.13 candidate)
 
 - [x] Map source-observed Combat controls and feature/resource trackers as soon as each authenticated primary tab is captured instead of waiting for 32 tab views.
