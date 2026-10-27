@@ -54,7 +54,7 @@ function r3BattlefieldContextOpen(x,y){
   const height=Math.max(300,Number(window.innerHeight)||800);
   const inset=typeof r3BattlefieldChatInset==='function'?r3BattlefieldChatInset():0;
   R3_BF.contextX=Math.max(5,Math.min(Math.round(Number(x)||8),Math.max(5,width-inset-242)));
-  R3_BF.contextY=Math.max(5,Math.min(Math.round(Number(y)||8),Math.max(5,height-385)));
+  R3_BF.contextY=Math.max(5,Math.min(Math.round(Number(y)||8),Math.max(5,height-Math.min(465,Math.floor(height*.75)+8))));
   R3_BF.contextOpen=true;R3_BF.revision++;r3HudRender();
   return true;
 }
