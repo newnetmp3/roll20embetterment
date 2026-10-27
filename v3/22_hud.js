@@ -856,6 +856,7 @@ function r3HudStyles(){
     typeof r3TurnStyles==='function'?r3TurnStyles():'',
     typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():'',
     typeof r3BattlefieldDragStyles==='function'?r3BattlefieldDragStyles():'',
+    typeof r3BattlefieldTaskbarStyles==='function'?r3BattlefieldTaskbarStyles():'',
     typeof r3DebugStyles==='function'?r3DebugStyles():'',
     typeof r3ThemeManagerStyles==='function'?r3ThemeManagerStyles():''
 

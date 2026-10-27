@@ -1,22 +1,89 @@
 // Firefox reference layout: compact battlefield-first overlay, no tutorial popups.
 // Only this renderer changes; Roll20's map, sheet and chat remain authoritative.
-const R3_BF={notes:'',sidebar:true,options:false,statusOpen:false,revision:0};
+const R3_BF_VISIBILITY=Object.freeze({
+  profile:'Character',concentration:'Concentration',resources:'Resources',
+  notes:'Turn notes',turn:'Turn controls',actions:'Action indicators',
+  quick:'Quick actions',categories:'Category buttons',status:'Status bar'
+});
+const R3_BF_DOCKS=['bottom','top','left','right'];
+const R3_BF={notes:'',sidebar:true,options:false,statusOpen:false,
+  orientation:'bottom',visible:{},contextOpen:false,contextX:12,contextY:12,revision:0};
 function r3BattlefieldKey(){return r3TokenSettingsKey()+':battlefield';}
 function r3BattlefieldLoad(){
   R3_BF.notes='';R3_BF.sidebar=true;R3_BF.options=false;R3_BF.statusOpen=false;
+  R3_BF.orientation='bottom';R3_BF.contextOpen=false;
+  R3_BF.visible=Object.fromEntries(Object.keys(R3_BF_VISIBILITY).map(k=>[k,true]));
   try{
     const saved=JSON.parse(localStorage.getItem(r3BattlefieldKey())||'null');
-    if(saved?.schema===1){
+    if(saved?.schema===1||saved?.schema===2){
       if(typeof saved.notes==='string')R3_BF.notes=saved.notes.slice(0,320);
       if(typeof saved.sidebar==='boolean')R3_BF.sidebar=saved.sidebar;
+      if(R3_BF_DOCKS.includes(saved.orientation))R3_BF.orientation=saved.orientation;
+      for(const key of Object.keys(R3_BF_VISIBILITY))
+        if(typeof saved.visible?.[key]==='boolean')R3_BF.visible[key]=saved.visible[key];
     }
   }catch{}
   R3_BF.revision++;
 }
 function r3BattlefieldSave(){
   try{localStorage.setItem(r3BattlefieldKey(),JSON.stringify({
-    schema:1,notes:R3_BF.notes,sidebar:R3_BF.sidebar
+    schema:2,notes:R3_BF.notes,sidebar:R3_BF.sidebar,
+    orientation:R3_BF.orientation,visible:R3_BF.visible
   }));}catch{}
+}
+function r3BattlefieldDockOrientation(value){
+  if(!R3_BF_DOCKS.includes(value))return false;
+  if(R3_BF.orientation===value){R3_BF.contextOpen=false;r3HudRender();return true;}
+  R3_BF.orientation=value;R3_BF.contextOpen=false;
+  // A manually dragged former dock position must not override the newly
+  // selected edge. Independent profile, flyout and Debug positions survive.
+  if(typeof R3_BF_DRAG==='object'){
+    delete R3_BF_DRAG.positions.taskbar;
+    r3BattlefieldLayoutSave();
+  }
+  r3BattlefieldSave();R3_BF.revision++;r3HudRender();
+  return true;
+}
+function r3BattlefieldTogglePart(name){
+  if(!Object.prototype.hasOwnProperty.call(R3_BF_VISIBILITY,name))return false;
+  R3_BF.visible[name]=!R3_BF.visible[name];
+  r3BattlefieldSave();R3_BF.revision++;r3HudRender();return true;
+}
+function r3BattlefieldContextOpen(x,y){
+  const width=Math.max(320,Number(window.innerWidth)||1280);
+  const height=Math.max(300,Number(window.innerHeight)||800);
+  const inset=typeof r3BattlefieldChatInset==='function'?r3BattlefieldChatInset():0;
+  R3_BF.contextX=Math.max(5,Math.min(Math.round(Number(x)||8),Math.max(5,width-inset-242)));
+  R3_BF.contextY=Math.max(5,Math.min(Math.round(Number(y)||8),Math.max(5,height-Math.min(465,Math.floor(height*.75)+8))));
+  R3_BF.contextOpen=true;R3_BF.revision++;r3HudRender();
+  return true;
+}
+function r3BattlefieldContextClose(){
+  if(!R3_BF.contextOpen)return false;
+  R3_BF.contextOpen=false;R3_BF.revision++;r3HudRender();return true;
+}
+function r3BattlefieldContextMarkup(){
+  if(!R3_BF.contextOpen)return '';
+  const orientation=R3_BF_DOCKS.map(dock=>
+    '<button type="button" role="menuitemradio" aria-checked="'+(R3_BF.orientation===dock)+
+    '" data-bf-action="dock-orientation" data-bf-value="'+dock+'">'+
+    (R3_BF.orientation===dock?'● ':'○ ')+dock[0].toUpperCase()+dock.slice(1)+'</button>').join('');
+  const visibility=Object.entries(R3_BF_VISIBILITY).map(([key,label])=>
+    '<button type="button" role="menuitemcheckbox" aria-checked="'+R3_BF.visible[key]+
+    '" data-bf-action="dock-toggle" data-bf-item="'+key+'">'+
+    (R3_BF.visible[key]?'☑ ':'☐ ')+r3Escape(label)+'</button>').join('');
+  return '<div class="r3-bf-context" data-bf-no-drag role="menu" aria-label="R20eb taskbar options" '+
+    'style="left:'+R3_BF.contextX+'px;top:'+R3_BF.contextY+'px">'+
+    '<strong>Dock orientation</strong>'+orientation+
+    '<strong>Show / hide</strong>'+visibility+
+    '<button type="button" role="menuitem" data-bf-action="reset-layout">Reset panel positions</button>'+
+    '<button type="button" role="menuitem" data-bf-action="dock-close">Close menu</button></div>';
+}
+function r3BattlefieldContextEvent(event){
+  const within=event?.target?.closest?.('[data-bf-panel="taskbar"]');
+  if(!within)return false;
+  event.preventDefault?.();event.stopPropagation?.();
+  return r3BattlefieldContextOpen(event.clientX,event.clientY);
 }
 function r3BattlefieldInput(el){
   if(el?.id!=='r3-bf-notes')return false;
@@ -30,6 +97,19 @@ function r3BattlefieldClick(target){
     target?.closest?.('[data-bf-action]')?.dataset?.bfAction;
   if(typeof action!=='string')return false;
   switch(action){
+    case 'taskbar-menu':
+      if(R3_BF.contextOpen)return r3BattlefieldContextClose();
+      return r3BattlefieldContextOpen(
+        Math.max(10,(Number(window.innerWidth)||1280)-
+          (typeof r3BattlefieldChatInset==='function'?r3BattlefieldChatInset():0)-258),
+        (Number(window.innerHeight)||800)-410);
+    case 'dock-orientation':
+      return r3BattlefieldDockOrientation(target?.dataset?.bfValue||
+        target?.closest?.('[data-bf-value]')?.dataset?.bfValue);
+    case 'dock-toggle':
+      return r3BattlefieldTogglePart(target?.dataset?.bfItem||
+        target?.closest?.('[data-bf-item]')?.dataset?.bfItem);
+    case 'dock-close':return r3BattlefieldContextClose();
     case 'sidebar':
       R3_BF.sidebar=!R3_BF.sidebar;r3BattlefieldSave();break;
     case 'options':
@@ -90,7 +170,7 @@ function r3BattlefieldSidebar(snapshot){
     R3_TURN.concentration===false?'None (manual)':'Not tracked';
   const resources=r3HudResourceBar(snapshot);
   return '<aside class="r3-bf-sidebar" aria-label="Character quick overview">'+
-    '<section class="r3-bf-profile r3-bf-section" data-bf-panel="profile">'+
+    (R3_BF.visible.profile?'<section class="r3-bf-profile r3-bf-section" data-bf-panel="profile">'+
     ''+
     '<div class="r3-bf-character">'+
     '<div class="r3-bf-avatar">'+
@@ -106,19 +186,19 @@ function r3BattlefieldSidebar(snapshot){
     r3HudStat('AC',stats.ac)+r3HudStat('Speed',stats.speed,' ft')+
     r3HudStat('Init',stats.initiative)+
     '<div title="'+r3Escape(passive.source)+'">'+r3HudStat(passive.label,passive.value)+'</div>'+
-    '</div></section>'+
-    '<section class="r3-bf-section r3-bf-concentration" data-bf-panel="concentration">'+
+    '</div></section>':'')+
+    (R3_BF.visible.concentration?'<section class="r3-bf-section r3-bf-concentration" data-bf-panel="concentration">'+
     ''+
     '<span>'+r3HudIcon('target')+'</span><div><strong>Concentration</strong>'+
     '<small>'+r3Escape(focus)+'</small></div>'+
     '<button type="button" data-turn-action="focus" '+
-    'title="Cycle manual concentration state; the sheet is authoritative">±</button></section>'+
-    '<section class="r3-bf-section r3-bf-resource-panel" data-bf-panel="resources" aria-label="Observed character resources">'+
+    'title="Cycle manual concentration state; the sheet is authoritative">±</button></section>':'')+
+    (R3_BF.visible.resources?'<section class="r3-bf-section r3-bf-resource-panel" data-bf-panel="resources" aria-label="Observed character resources">'+
     ''+
     '<header><strong>Resources</strong>'+
     '<button type="button" data-hud-flyout="resources" title="Browse imported resources">⌃</button></header>'+
     (resources||'<small>No official slots or resources imported yet.</small>')+
-    '</section>'+r3BattlefieldNotes()+
+    '</section>':'')+(R3_BF.visible.notes?r3BattlefieldNotes():'')+
     '</aside>';
 }
 function r3BattlefieldMarkup(snapshot){
@@ -148,30 +228,32 @@ function r3BattlefieldMarkup(snapshot){
       '<span style="width:'+fill+'%"></span></span></div>'
   ].join('');
   return '<section class="r3-bf-shell" aria-label="R20eb battlefield HUD">'+
-    '<div class="r3-bf-turnstrip" data-bf-panel="turn" aria-label="Turn state">'+
+    (R3_BF.visible.turn?'<div class="r3-bf-turnstrip" data-bf-panel="turn" aria-label="Turn state">'+
     ''+
     '<span class="r3-bf-turn-icon">'+r3HudIcon('clock')+'</span>'+
     '<span><strong>'+r3Escape(phase)+'</strong><small>'+r3Escape(status)+'</small></span>'+
     '<button type="button" data-turn-action="start" title="Reset local turn counters; keep concentration">↻</button>'+
     '<button type="button" data-turn-action="end" title="Mark end of turn locally; does not advance Roll20">⏭</button>'+
     '<button type="button" id="r3-hud-debug" class="r3-bf-debug-trigger" title="Debug, advanced controls and layout settings" aria-label="Open Debug window">⚙ Debug</button>'+
-    '</div>'+
+    '</div>':'')+
     (R3_BF.sidebar&&!R3_UI.shown?r3BattlefieldSidebar(snapshot):
       '<div class="r3-bf-show-profile-wrap" data-bf-panel="show-profile">'+
         ''+
         '<button type="button" class="r3-bf-show-profile" data-bf-action="sidebar" '+
         'title="Show character overview">☷ '+r3Escape(name)+'</button></div>')+
-    '<nav class="r3-bf-actions" data-bf-panel="actions" aria-label="Action economy quick dock">'+
-    ''+
-    '<div class="r3-bf-rings">'+ring+'</div>'+
-    '<div class="r3-bf-quick">'+
-    '<button type="button" data-turn-action="dash-action" title="Mark Action Dash locally and add one speed allowance">'+
-    r3HudIcon('move')+'<span>Dash</span></button>'+
-    '<button type="button" data-bf-action="disengage" title="Mark Disengage as a local action; no Roll20 execution">'+
-    r3HudIcon('shield')+'<span>Disengage</span></button>'+
-    '<button type="button" data-bf-action="hide" title="Mark Hide as a local action; no Roll20 execution">'+
-    r3HudIcon('eye')+'<span>Hide</span></button></div></nav>'+
-    '<nav class="r3-bf-category-dock" data-bf-panel="categories" aria-label="Character ability menus">'+
+    '<div class="r3-bf-taskbar" data-bf-panel="taskbar" data-r3-orientation="'+R3_BF.orientation+
+    '" aria-label="R20eb taskbar" title="Right-click for dock and visibility settings">'+
+    (R3_BF.visible.actions?'<nav class="r3-bf-actions" data-bf-panel="actions" aria-label="Action economy quick dock">'+
+      '<div class="r3-bf-rings">'+ring+'</div>'+
+      (R3_BF.visible.quick?'<div class="r3-bf-quick">'+
+        '<button type="button" data-turn-action="dash-action" title="Mark Action Dash locally and add one speed allowance">'+
+        r3HudIcon('move')+'<span>Dash</span></button>'+
+        '<button type="button" data-bf-action="disengage" title="Mark Disengage as a local action; no Roll20 execution">'+
+        r3HudIcon('shield')+'<span>Disengage</span></button>'+
+        '<button type="button" data-bf-action="hide" title="Mark Hide as a local action; no Roll20 execution">'+
+        r3HudIcon('eye')+'<span>Hide</span></button></div>':'')+
+      '</nav>':'')+
+    (R3_BF.visible.categories?'<nav class="r3-bf-category-dock" data-bf-panel="categories" aria-label="Character ability menus">'+
     ''+
     r3BattlefieldControl('blade','Attacks','actions')+
     r3BattlefieldControl('star','Features','features')+
@@ -179,7 +261,18 @@ function r3BattlefieldMarkup(snapshot){
     r3BattlefieldControl('bag','Inventory','inventory')+
     r3BattlefieldControl('book','Skills','skills')+
     r3BattlefieldControl('star','MISC','misc')+
-    '</nav>'+
+    '</nav>':'')+
+    (R3_BF.visible.status?'<div class="r3-bf-taskbar-status" role="status" aria-live="off">'+
+      '<span class="r3-bf-status-character">'+r3Escape(name)+'</span>'+
+      '<span>HP '+r3HudValue(snapshot?.stats?.hp)+' / '+r3HudValue(snapshot?.stats?.maxHp)+'</span>'+
+      '<span>AC '+r3HudValue(snapshot?.stats?.ac)+'</span>'+
+      '<span>Move '+r3Escape(left)+'</span>'+
+      '<span class="r3-bf-status-phase">'+r3Escape(phase)+'</span>'+
+      (R3_NATIVE.status?'<span class="r3-bf-status-native" title="'+r3Escape(R3_NATIVE.status)+'">'+
+        r3Escape(R3_NATIVE.status)+'</span>':'')+'</div>':'')+
+    '<button type="button" class="r3-bf-menu-button" data-bf-action="taskbar-menu" '+
+    'aria-label="Taskbar settings" title="Taskbar settings · right-click anywhere on the taskbar">⋯</button>'+
+    '</div>'+r3BattlefieldContextMarkup()+
     (R3_HUD.flyout||R3_HUD.chooser!==null?
       r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):'')+
     (R3_NATIVE.preview?
@@ -246,6 +339,55 @@ function r3BattlefieldStyles(){
 }
 
 
+// Taskbar/status bar geometry is independent of the selected color theme.
+// Unlike the old two oversized bottom HUD blocks, the actions, menus, and
+// character status share a single dock that can occupy any screen edge.
+function r3BattlefieldTaskbarStyles(){
+  return [
+    '.r3-bf-taskbar{position:absolute;left:8px;bottom:8px;right:auto;top:auto;width:min(1260px,calc(100vw - var(--r3-bf-chat-inset,330px) - 24px));min-width:100px;max-height:calc(100vh - 16px);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:3px;padding:4px 31px 4px 5px;pointer-events:auto;z-index:10;border:1px solid var(--r3-border,#475e78);border-radius:7px;background:var(--r3-panel,#182234f2);color:var(--r3-text,#f1f1ed);box-shadow:0 4px 18px #000a;overflow:visible}',
+    '.r3-bf-taskbar>.r3-bf-actions,.r3-bf-taskbar>.r3-bf-category-dock{position:relative!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;transform:none!important;min-width:0;max-width:none!important;height:auto!important;min-height:44px;width:auto!important;margin:0!important;padding:2px!important;box-shadow:none!important;border:0!important;border-radius:4px!important}',
+    '.r3-bf-taskbar>.r3-bf-actions{flex:1 1 48%;gap:3px!important}',
+    '.r3-bf-taskbar>.r3-bf-category-dock{flex:1 1 48%;display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:2px!important}',
+    '.r3-bf-taskbar .r3-bf-rings{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:2px!important;min-width:0}',
+    '.r3-bf-taskbar .r3-bf-ring{min-height:37px!important;height:100%;padding:3px!important;flex-direction:row!important;gap:4px!important;border-radius:5px!important;border-width:1px!important;box-shadow:none!important;justify-content:center}',
+    '.r3-bf-taskbar .r3-bf-ring svg{width:15px!important;height:15px!important;flex:none}',
+    '.r3-bf-taskbar .r3-bf-ring-name{font-size:10px!important;white-space:nowrap}',
+    '.r3-bf-taskbar .r3-bf-ring strong{font-size:10px!important;white-space:nowrap}',
+    '.r3-bf-taskbar .r3-bf-ring-sub{display:none!important}',
+    '.r3-bf-taskbar .r3-bf-movement-meter{bottom:1px;left:14%;right:14%;height:2px}',
+    '.r3-bf-taskbar .r3-bf-quick{flex:0 0 58px!important;flex-direction:row;flex-wrap:wrap;gap:2px}',
+    '.r3-bf-taskbar .r3-bf-quick button{flex:1 1 100%;min-height:12px!important;height:12px;font-size:8px!important;padding:0 2px!important;line-height:1!important}',
+    '.r3-bf-taskbar .r3-bf-quick button svg{height:10px!important;width:10px!important}',
+    '.r3-bf-taskbar .r3-bf-category{flex-direction:row!important;gap:3px!important;min-height:38px!important;padding:3px 4px!important;border-radius:4px!important;justify-content:center}',
+    '.r3-bf-taskbar .r3-bf-category svg{width:16px!important;height:16px!important;flex:none}',
+    '.r3-bf-taskbar .r3-bf-category span{font-size:10px!important;white-space:nowrap}',
+    '.r3-bf-taskbar-status{flex:1 1 100%;min-width:0;display:flex;gap:8px;align-items:center;border-top:1px solid var(--r3-border,#475e78);padding:2px 4px;min-height:19px;font-size:10px;color:inherit;overflow:hidden}',
+    '.r3-bf-taskbar-status>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}',
+    '.r3-bf-status-character{font-weight:700;max-width:130px}',
+    '.r3-bf-status-native{min-width:0!important;flex:1 1 auto!important;opacity:.85}',
+    '.r3-bf-menu-button{position:absolute!important;top:4px;right:4px;width:24px!important;min-width:24px!important;height:25px!important;padding:0!important;font-size:18px!important;line-height:1!important;z-index:2}',
+    '.r3-bf-context{position:absolute;z-index:3000;width:232px;max-height:min(75vh,460px);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:2px;padding:6px;background:var(--r3-panel,#202a39);color:var(--r3-text,#f4f5fa);border:1px solid var(--r3-border,#8294ad);border-radius:7px;box-shadow:0 8px 24px #000c;pointer-events:auto}',
+    '.r3-bf-context strong{font:700 11px system-ui,sans-serif;margin:5px 4px 2px}',
+    '.r3-bf-context button{display:block!important;text-align:left!important;padding:4px 7px!important;min-height:24px!important;border-radius:3px!important;font-size:11px!important;white-space:nowrap}',
+    '.r3-bf-context button[aria-checked=true]{font-weight:700!important}',
+    '.r3-bf-context button:focus-visible{outline:2px solid #f9d486!important;outline-offset:1px}',
+    '.r3-bf-taskbar[data-r3-orientation=top]{top:8px!important;bottom:auto!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left],.r3-bf-taskbar[data-r3-orientation=right]{top:8px!important;bottom:auto!important;width:174px!important;max-height:calc(100vh - 16px);overflow-y:auto;scrollbar-width:thin;align-content:flex-start;gap:4px}',
+    '.r3-bf-taskbar[data-r3-orientation=left]{left:8px!important;right:auto!important}',
+    '.r3-bf-taskbar[data-r3-orientation=right]{left:auto!important;right:calc(var(--r3-bf-chat-inset,330px) + 8px)!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left]>.r3-bf-actions,.r3-bf-taskbar[data-r3-orientation=right]>.r3-bf-actions{flex:1 1 100%!important;width:100%!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-rings,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-rings{grid-template-columns:repeat(2,minmax(0,1fr))!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-ring,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-ring{min-height:37px!important;flex-direction:column!important;gap:0!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left]>.r3-bf-category-dock,.r3-bf-taskbar[data-r3-orientation=right]>.r3-bf-category-dock{flex:1 1 100%!important;width:100%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-category,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-category{flex-direction:column!important;min-height:39px!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-quick,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-quick{flex:0 0 42px!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-taskbar-status,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-taskbar-status{flex-wrap:wrap;gap:3px 8px;align-content:flex-start}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-taskbar-status>span,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-taskbar-status>span{flex:1 1 100%!important}',
+    '@media(max-width:1000px){.r3-bf-taskbar:not([data-r3-orientation=left]):not([data-r3-orientation=right])>.r3-bf-actions,.r3-bf-taskbar:not([data-r3-orientation=left]):not([data-r3-orientation=right])>.r3-bf-category-dock{flex:1 1 100%!important}.r3-bf-taskbar-status{gap:5px}.r3-bf-status-phase{display:none}}',
+    '@media(max-width:540px){.r3-bf-taskbar .r3-bf-ring-name{display:none}.r3-bf-taskbar .r3-bf-category span{font-size:9px!important}.r3-bf-taskbar-status>span:nth-child(n+4){display:none}}'
+  ].join('');
+}
+
 // Windows 95/98 visual system. All selectors remain inside R20eb's Shadow DOM;
 // nothing changes Roll20's own editor, sheet, chat or controls.
 function r3Win9xStyles(){
@@ -309,6 +451,8 @@ function r3Win9xStyles(){
     '.r3-debug-entry strong,.r3-debug-entry time{color:#000080!important}',
     '.r3-debug-entry.warning span{color:#804000!important}.r3-debug-entry.error span{color:#a00000!important}',
     '.r3-debug-movement dt,.r3-debug-movement dd{color:#111!important}',
+    '.r3-bf-taskbar,.r3-bf-context{background:#c0c0c0!important;color:#111!important;border:2px solid!important;border-color:#fff #404040 #404040 #fff!important;border-radius:0!important;box-shadow:inset 1px 1px #dfdfdf,inset -1px -1px #808080!important}',
+    '.r3-bf-taskbar-status{border-top:1px solid #808080!important;color:#111!important}',
     '#r3-wrap{background:#c0c0c0!important;color:#111!important}',
     '#r3-toggle{font-size:12px!important;font-weight:700!important;padding:5px 9px!important}',
     '#r3-content{background:#c0c0c0!important;color:#111!important}',

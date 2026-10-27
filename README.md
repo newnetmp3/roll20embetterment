@@ -65,6 +65,14 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Firefox v3.10.14 — Taskbar and status-bar HUD (candidate)
+
+The combat HUD is now a compact **unified taskbar** with action indicators, Attack/Feature/Spell/Inventory/Skill/MISC shortcuts, and a **status bar** for the current character, HP, AC, movement, turn and official-sheet native action status.
+
+**Right-click the taskbar** or use the visible **⋯** menu to change orientation (**Bottom, Top, Left, Right**) and to show or hide Character, Concentration, Resources, Turn Notes, Turn Controls, Action Indicators, Quick Actions, Category Buttons and the Status Bar. Settings save per game, and the menu remains usable even with all optional elements hidden. Independent character flyouts and Debug remain movable. Context menus, status and buttons inherit the chosen Baldur's Gate 3, Tokyo Night, Oh My Posh-inspired or Windows 9x styling.
+
+Docking never changes any native Roll20 sheet, attack mapping, account state or character data. Actual Jumpgate performance and native chat parity still require in-game verification.
+
 ## Firefox v3.10.13 — Faster native action/resource mapping (candidate)
 
 Selecting a controllable token starts private sheet synchronization immediately. Instead of withholding mapped attacks and resources until every nested sheet filter has been read, R20eb prioritizes **Combat, Features & Traits, Inventory and Spells** and publishes verified data as those sections arrive. The remaining sheet views finish importing afterward. The private sheet continues to stay offscreen; player-opened sheets are untouched.
