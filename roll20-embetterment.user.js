@@ -1422,11 +1422,25 @@ function r3StartUI(){
   // Windows-style context menu for each weapon; the normal left-click
   // Options control provides the same keyboard/touch-accessible path.
   root.addEventListener('contextmenu',event=>{
+    if(typeof r3BattlefieldContextEvent==='function'&&
+       r3BattlefieldContextEvent(event))return;
     const row=event.target?.closest?.('[data-hud-weapon-row]');
     const key=row?.dataset?.hudWeaponRow;
     if(!key||!r3HudWeaponToggle(key))return;
     event.preventDefault?.();event.stopPropagation?.();
   });
+  // Dismiss the taskbar context menu without swallowing native Roll20
+  // clicks or accidentally using its private sheet.
+  document.addEventListener?.('pointerdown',event=>{
+    if(typeof R3_BF!=='object'||!R3_BF.contextOpen)return;
+    const path=event.composedPath?.()||[];
+    if(!path.includes(R3_UI.host))r3BattlefieldContextClose();
+  },true);
+  root.addEventListener('pointerdown',event=>{
+    if(typeof R3_BF!=='object'||!R3_BF.contextOpen)return;
+    if(event.target?.closest?.('.r3-bf-context,[data-bf-panel="taskbar"]'))return;
+    r3BattlefieldContextClose();
+  },true);
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
   if(typeof r3BattlefieldEnableDragging==='function')r3BattlefieldEnableDragging(root);
   if(typeof r3SheetVisibilityInstall==='function')r3SheetVisibilityInstall();
@@ -1434,7 +1448,11 @@ function r3StartUI(){
   root.addEventListener('input',event=>{
     if(typeof r3BattlefieldInput==='function')r3BattlefieldInput(event.target);
   });
-  root.addEventListener('keydown',event=>{event.stopPropagation();},true);
+  root.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&typeof r3BattlefieldContextClose==='function'&&
+       r3BattlefieldContextClose())event.preventDefault?.();
+    event.stopPropagation();
+  },true);
   root.addEventListener('keyup',event=>event.stopPropagation(),true);
   root.addEventListener('keypress',event=>event.stopPropagation(),true);
   document.body.appendChild(host);
@@ -3602,6 +3620,7 @@ function r3HudStyles(){
     typeof r3TurnStyles==='function'?r3TurnStyles():'',
     typeof r3BattlefieldStyles==='function'?r3BattlefieldStyles():'',
     typeof r3BattlefieldDragStyles==='function'?r3BattlefieldDragStyles():'',
+    typeof r3BattlefieldTaskbarStyles==='function'?r3BattlefieldTaskbarStyles():'',
     typeof r3DebugStyles==='function'?r3DebugStyles():'',
     typeof r3ThemeManagerStyles==='function'?r3ThemeManagerStyles():''
 
