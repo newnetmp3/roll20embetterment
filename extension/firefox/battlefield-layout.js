@@ -344,7 +344,7 @@ function r3BattlefieldStyles(){
 // character status share a single dock that can occupy any screen edge.
 function r3BattlefieldTaskbarStyles(){
   return [
-    '.r3-bf-taskbar{position:absolute;left:8px;bottom:8px;right:auto;top:auto;width:min(1260px,calc(100vw - var(--r3-bf-chat-inset,330px) - 24px));min-width:100px;max-height:calc(100vh - 16px);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:3px;padding:4px 31px 4px 5px;pointer-events:auto;z-index:10;border:1px solid #475e78;border-radius:7px;background:#182234f2;box-shadow:0 4px 18px #000a;overflow:visible}',
+    '.r3-bf-taskbar{position:absolute;left:8px;bottom:8px;right:auto;top:auto;width:min(1260px,calc(100vw - var(--r3-bf-chat-inset,330px) - 24px));min-width:100px;max-height:calc(100vh - 16px);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:3px;padding:4px 31px 4px 5px;pointer-events:auto;z-index:10;border:1px solid var(--r3-border,#475e78);border-radius:7px;background:var(--r3-panel,#182234f2);color:var(--r3-text,#f1f1ed);box-shadow:0 4px 18px #000a;overflow:visible}',
     '.r3-bf-taskbar>.r3-bf-actions,.r3-bf-taskbar>.r3-bf-category-dock{position:relative!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;transform:none!important;min-width:0;max-width:none!important;height:auto!important;min-height:44px;width:auto!important;margin:0!important;padding:2px!important;box-shadow:none!important;border:0!important;border-radius:4px!important}',
     '.r3-bf-taskbar>.r3-bf-actions{flex:1 1 48%;gap:3px!important}',
     '.r3-bf-taskbar>.r3-bf-category-dock{flex:1 1 48%;display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:2px!important}',
@@ -361,12 +361,12 @@ function r3BattlefieldTaskbarStyles(){
     '.r3-bf-taskbar .r3-bf-category{flex-direction:row!important;gap:3px!important;min-height:38px!important;padding:3px 4px!important;border-radius:4px!important;justify-content:center}',
     '.r3-bf-taskbar .r3-bf-category svg{width:16px!important;height:16px!important;flex:none}',
     '.r3-bf-taskbar .r3-bf-category span{font-size:10px!important;white-space:nowrap}',
-    '.r3-bf-taskbar-status{flex:1 1 100%;min-width:0;display:flex;gap:8px;align-items:center;border-top:1px solid #475e78;padding:2px 4px;min-height:19px;font-size:10px;color:inherit;overflow:hidden}',
+    '.r3-bf-taskbar-status{flex:1 1 100%;min-width:0;display:flex;gap:8px;align-items:center;border-top:1px solid var(--r3-border,#475e78);padding:2px 4px;min-height:19px;font-size:10px;color:inherit;overflow:hidden}',
     '.r3-bf-taskbar-status>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}',
     '.r3-bf-status-character{font-weight:700;max-width:130px}',
     '.r3-bf-status-native{min-width:0!important;flex:1 1 auto!important;opacity:.85}',
     '.r3-bf-menu-button{position:absolute!important;top:4px;right:4px;width:24px!important;min-width:24px!important;height:25px!important;padding:0!important;font-size:18px!important;line-height:1!important;z-index:2}',
-    '.r3-bf-context{position:absolute;z-index:3000;width:232px;max-height:min(75vh,460px);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:2px;padding:6px;background:#202a39;color:#f4f5fa;border:1px solid #8294ad;border-radius:7px;box-shadow:0 8px 24px #000c;pointer-events:auto}',
+    '.r3-bf-context{position:absolute;z-index:3000;width:232px;max-height:min(75vh,460px);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:2px;padding:6px;background:var(--r3-panel,#202a39);color:var(--r3-text,#f4f5fa);border:1px solid var(--r3-border,#8294ad);border-radius:7px;box-shadow:0 8px 24px #000c;pointer-events:auto}',
     '.r3-bf-context strong{font:700 11px system-ui,sans-serif;margin:5px 4px 2px}',
     '.r3-bf-context button{display:block!important;text-align:left!important;padding:4px 7px!important;min-height:24px!important;border-radius:3px!important;font-size:11px!important;white-space:nowrap}',
     '.r3-bf-context button[aria-checked=true]{font-weight:700!important}',
@@ -451,6 +451,8 @@ function r3Win9xStyles(){
     '.r3-debug-entry strong,.r3-debug-entry time{color:#000080!important}',
     '.r3-debug-entry.warning span{color:#804000!important}.r3-debug-entry.error span{color:#a00000!important}',
     '.r3-debug-movement dt,.r3-debug-movement dd{color:#111!important}',
+    '.r3-bf-taskbar,.r3-bf-context{background:#c0c0c0!important;color:#111!important;border:2px solid!important;border-color:#fff #404040 #404040 #fff!important;border-radius:0!important;box-shadow:inset 1px 1px #dfdfdf,inset -1px -1px #808080!important}',
+    '.r3-bf-taskbar-status{border-top:1px solid #808080!important;color:#111!important}',
     '#r3-wrap{background:#c0c0c0!important;color:#111!important}',
     '#r3-toggle{font-size:12px!important;font-weight:700!important;padding:5px 9px!important}',
     '#r3-content{background:#c0c0c0!important;color:#111!important}',
