@@ -243,7 +243,7 @@ function r3BattlefieldMarkup(snapshot){
         'title="Show character overview">☷ '+r3Escape(name)+'</button></div>')+
     '<div class="r3-bf-taskbar" data-bf-panel="taskbar" data-r3-orientation="'+R3_BF.orientation+
     '" aria-label="R20eb taskbar" title="Right-click for dock and visibility settings">'+
-    (R3_BF.visible.actions?'<nav class="r3-bf-actions" aria-label="Action economy quick dock">'+
+    (R3_BF.visible.actions?'<nav class="r3-bf-actions" data-bf-panel="actions" aria-label="Action economy quick dock">'+
       '<div class="r3-bf-rings">'+ring+'</div>'+
       (R3_BF.visible.quick?'<div class="r3-bf-quick">'+
         '<button type="button" data-turn-action="dash-action" title="Mark Action Dash locally and add one speed allowance">'+
@@ -253,7 +253,7 @@ function r3BattlefieldMarkup(snapshot){
         '<button type="button" data-bf-action="hide" title="Mark Hide as a local action; no Roll20 execution">'+
         r3HudIcon('eye')+'<span>Hide</span></button></div>':'')+
       '</nav>':'')+
-    (R3_BF.visible.categories?'<nav class="r3-bf-category-dock" aria-label="Character ability menus">'+
+    (R3_BF.visible.categories?'<nav class="r3-bf-category-dock" data-bf-panel="categories" aria-label="Character ability menus">'+
     ''+
     r3BattlefieldControl('blade','Attacks','actions')+
     r3BattlefieldControl('star','Features','features')+
