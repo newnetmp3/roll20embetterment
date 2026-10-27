@@ -339,6 +339,55 @@ function r3BattlefieldStyles(){
 }
 
 
+// Taskbar/status bar geometry is independent of the selected color theme.
+// Unlike the old two oversized bottom HUD blocks, the actions, menus, and
+// character status share a single dock that can occupy any screen edge.
+function r3BattlefieldTaskbarStyles(){
+  return [
+    '.r3-bf-taskbar{position:absolute;left:8px;bottom:8px;right:auto;top:auto;width:min(1260px,calc(100vw - var(--r3-bf-chat-inset,330px) - 24px));min-width:100px;max-height:calc(100vh - 16px);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:3px;padding:4px 31px 4px 5px;pointer-events:auto;z-index:10;border:1px solid #475e78;border-radius:7px;background:#182234f2;box-shadow:0 4px 18px #000a;overflow:visible}',
+    '.r3-bf-taskbar>.r3-bf-actions,.r3-bf-taskbar>.r3-bf-category-dock{position:relative!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;transform:none!important;min-width:0;max-width:none!important;height:auto!important;min-height:44px;width:auto!important;margin:0!important;padding:2px!important;box-shadow:none!important;border:0!important;border-radius:4px!important}',
+    '.r3-bf-taskbar>.r3-bf-actions{flex:1 1 48%;gap:3px!important}',
+    '.r3-bf-taskbar>.r3-bf-category-dock{flex:1 1 48%;display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:2px!important}',
+    '.r3-bf-taskbar .r3-bf-rings{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:2px!important;min-width:0}',
+    '.r3-bf-taskbar .r3-bf-ring{min-height:37px!important;height:100%;padding:3px!important;flex-direction:row!important;gap:4px!important;border-radius:5px!important;border-width:1px!important;box-shadow:none!important;justify-content:center}',
+    '.r3-bf-taskbar .r3-bf-ring svg{width:15px!important;height:15px!important;flex:none}',
+    '.r3-bf-taskbar .r3-bf-ring-name{font-size:10px!important;white-space:nowrap}',
+    '.r3-bf-taskbar .r3-bf-ring strong{font-size:10px!important;white-space:nowrap}',
+    '.r3-bf-taskbar .r3-bf-ring-sub{display:none!important}',
+    '.r3-bf-taskbar .r3-bf-movement-meter{bottom:1px;left:14%;right:14%;height:2px}',
+    '.r3-bf-taskbar .r3-bf-quick{flex:0 0 58px!important;flex-direction:row;flex-wrap:wrap;gap:2px}',
+    '.r3-bf-taskbar .r3-bf-quick button{flex:1 1 100%;min-height:12px!important;height:12px;font-size:8px!important;padding:0 2px!important;line-height:1!important}',
+    '.r3-bf-taskbar .r3-bf-quick button svg{height:10px!important;width:10px!important}',
+    '.r3-bf-taskbar .r3-bf-category{flex-direction:row!important;gap:3px!important;min-height:38px!important;padding:3px 4px!important;border-radius:4px!important;justify-content:center}',
+    '.r3-bf-taskbar .r3-bf-category svg{width:16px!important;height:16px!important;flex:none}',
+    '.r3-bf-taskbar .r3-bf-category span{font-size:10px!important;white-space:nowrap}',
+    '.r3-bf-taskbar-status{flex:1 1 100%;min-width:0;display:flex;gap:8px;align-items:center;border-top:1px solid #475e78;padding:2px 4px;min-height:19px;font-size:10px;color:inherit;overflow:hidden}',
+    '.r3-bf-taskbar-status>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}',
+    '.r3-bf-status-character{font-weight:700;max-width:130px}',
+    '.r3-bf-status-native{min-width:0!important;flex:1 1 auto!important;opacity:.85}',
+    '.r3-bf-menu-button{position:absolute!important;top:4px;right:4px;width:24px!important;min-width:24px!important;height:25px!important;padding:0!important;font-size:18px!important;line-height:1!important;z-index:2}',
+    '.r3-bf-context{position:absolute;z-index:3000;width:232px;max-height:min(75vh,460px);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:2px;padding:6px;background:#202a39;color:#f4f5fa;border:1px solid #8294ad;border-radius:7px;box-shadow:0 8px 24px #000c;pointer-events:auto}',
+    '.r3-bf-context strong{font:700 11px system-ui,sans-serif;margin:5px 4px 2px}',
+    '.r3-bf-context button{display:block!important;text-align:left!important;padding:4px 7px!important;min-height:24px!important;border-radius:3px!important;font-size:11px!important;white-space:nowrap}',
+    '.r3-bf-context button[aria-checked=true]{font-weight:700!important}',
+    '.r3-bf-context button:focus-visible{outline:2px solid #f9d486!important;outline-offset:1px}',
+    '.r3-bf-taskbar[data-r3-orientation=top]{top:8px!important;bottom:auto!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left],.r3-bf-taskbar[data-r3-orientation=right]{top:8px!important;bottom:auto!important;width:174px!important;max-height:calc(100vh - 16px);overflow-y:auto;scrollbar-width:thin;align-content:flex-start;gap:4px}',
+    '.r3-bf-taskbar[data-r3-orientation=left]{left:8px!important;right:auto!important}',
+    '.r3-bf-taskbar[data-r3-orientation=right]{left:auto!important;right:calc(var(--r3-bf-chat-inset,330px) + 8px)!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left]>.r3-bf-actions,.r3-bf-taskbar[data-r3-orientation=right]>.r3-bf-actions{flex:1 1 100%!important;width:100%!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-rings,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-rings{grid-template-columns:repeat(2,minmax(0,1fr))!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-ring,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-ring{min-height:37px!important;flex-direction:column!important;gap:0!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left]>.r3-bf-category-dock,.r3-bf-taskbar[data-r3-orientation=right]>.r3-bf-category-dock{flex:1 1 100%!important;width:100%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-category,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-category{flex-direction:column!important;min-height:39px!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-quick,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-quick{flex:0 0 42px!important}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-taskbar-status,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-taskbar-status{flex-wrap:wrap;gap:3px 8px;align-content:flex-start}',
+    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-taskbar-status>span,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-taskbar-status>span{flex:1 1 100%!important}',
+    '@media(max-width:1000px){.r3-bf-taskbar:not([data-r3-orientation=left]):not([data-r3-orientation=right])>.r3-bf-actions,.r3-bf-taskbar:not([data-r3-orientation=left]):not([data-r3-orientation=right])>.r3-bf-category-dock{flex:1 1 100%!important}.r3-bf-taskbar-status{gap:5px}.r3-bf-status-phase{display:none}}',
+    '@media(max-width:540px){.r3-bf-taskbar .r3-bf-ring-name{display:none}.r3-bf-taskbar .r3-bf-category span{font-size:9px!important}.r3-bf-taskbar-status>span:nth-child(n+4){display:none}}'
+  ].join('');
+}
+
 // Windows 95/98 visual system. All selectors remain inside R20eb's Shadow DOM;
 // nothing changes Roll20's own editor, sheet, chat or controls.
 function r3Win9xStyles(){
