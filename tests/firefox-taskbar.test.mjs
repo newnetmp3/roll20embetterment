@@ -23,6 +23,7 @@ function rig(){
     r3TokenSettingsKey:()=> 'test-campaign',
     r3StorageKey:()=> 'test-campaign',
     r3HudRender:()=>calls.push('render'),
+    r3String:(v,max=160)=>String(v??'').trim().slice(0,max),
     r3HudPortraitUrl:()=>null,r3HudHasValue:()=>false,
     r3HudValue:v=>v??'—',r3HudHp:()=>'<span>70 / 80 HP</span>',
     r3HudStat:(label,v)=>'<span>'+label+': '+(v??'—')+'</span>',
