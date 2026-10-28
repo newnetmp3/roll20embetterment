@@ -1632,7 +1632,8 @@ test('native registry rejects ambiguous, stale, cross-kind, unverified and unman
   assert.equal(x.sent.length,0);
   h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'inventory'}}});
   const html=h.nodes.get('r3-hud').innerHTML;
-  assert.match(html,/Native unmapped/);
+  assert.match(html,/No verified native Use action was found/);
+  assert.doesNotMatch(html,/Native unmapped/);
   assert.doesNotMatch(html,/data-hud-native-key="item"/);
 });
 test('native macro mapping rejects additional chat, wrong identity and selection-relative targets',()=>{
