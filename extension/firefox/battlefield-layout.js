@@ -110,6 +110,10 @@ function r3BattlefieldClick(target){
       return r3BattlefieldTogglePart(target?.dataset?.bfItem||
         target?.closest?.('[data-bf-item]')?.dataset?.bfItem);
     case 'dock-close':return r3BattlefieldContextClose();
+    case 'vertical-status':
+      R3_BF.statusOpen=!R3_BF.statusOpen;
+      R3_BF.revision++;r3HudRender();
+      return true;
     case 'sidebar':
       R3_BF.sidebar=!R3_BF.sidebar;r3BattlefieldSave();break;
     case 'options':
@@ -213,6 +217,12 @@ function r3BattlefieldMarkup(snapshot){
   const fill=total>0?Math.min(100,Math.round(100*t.movementUsed/total)):0;
   const phase=t.phase==='active'?'Your Turn':t.phase==='ended'?'Turn Ended':'Turn Tracking';
   const status=t.noteSource==='observed'?'Initiative observed':'Local markers';
+  const vertical=R3_BF.orientation==='left'||R3_BF.orientation==='right';
+  const hp=r3HudValue(snapshot?.stats?.hp),maxHp=r3HudValue(snapshot?.stats?.maxHp);
+  const ac=r3HudValue(snapshot?.stats?.ac);
+  const statusTitle=name+' · HP '+hp+' / '+maxHp+' · AC '+ac+
+    ' · Move '+left+' · '+phase+
+    (R3_NATIVE.status?' · '+r3String(R3_NATIVE.status,110):'');
   const ring=[
     r3BattlefieldRing('action','blade','Action',remaining>0?'Ready':'Spent',
       remaining+'/'+(1+t.extraActions),'Toggle action spent; manual correction'),
@@ -262,17 +272,32 @@ function r3BattlefieldMarkup(snapshot){
     r3BattlefieldControl('book','Skills','skills')+
     r3BattlefieldControl('star','MISC','misc')+
     '</nav>':'')+
-    (R3_BF.visible.status?'<div class="r3-bf-taskbar-status" role="status" aria-live="off">'+
+    (R3_BF.visible.status?(vertical?
+      '<button type="button" class="r3-bf-vertical-status" data-bf-action="vertical-status" '+
+      'aria-label="'+r3Escape('Character status: '+statusTitle)+
+      '" aria-expanded="'+R3_BF.statusOpen+'" title="'+r3Escape(statusTitle)+'">'+
+      '<span aria-hidden="true">HP</span><strong aria-hidden="true">'+r3Escape(hp)+'</strong></button>':
+      '<div class="r3-bf-taskbar-status" role="status" aria-live="off">'+
       '<span class="r3-bf-status-character">'+r3Escape(name)+'</span>'+
-      '<span>HP '+r3HudValue(snapshot?.stats?.hp)+' / '+r3HudValue(snapshot?.stats?.maxHp)+'</span>'+
-      '<span>AC '+r3HudValue(snapshot?.stats?.ac)+'</span>'+
+      '<span>HP '+r3Escape(hp)+' / '+r3Escape(maxHp)+'</span>'+
+      '<span>AC '+r3Escape(ac)+'</span>'+
       '<span>Move '+r3Escape(left)+'</span>'+
       '<span class="r3-bf-status-phase">'+r3Escape(phase)+'</span>'+
       (R3_NATIVE.status?'<span class="r3-bf-status-native" title="'+r3Escape(R3_NATIVE.status)+'">'+
-        r3Escape(R3_NATIVE.status)+'</span>':'')+'</div>':'')+
+        r3Escape(R3_NATIVE.status)+'</span>':'')+'</div>'):'')+
     '<button type="button" class="r3-bf-menu-button" data-bf-action="taskbar-menu" '+
     'aria-label="Taskbar settings" title="Taskbar settings · right-click anywhere on the taskbar">⋯</button>'+
     '</div>'+r3BattlefieldContextMarkup()+
+    (vertical&&R3_BF.visible.status&&R3_BF.statusOpen?
+      '<aside class="r3-bf-vertical-status-detail" data-bf-no-drag aria-label="Character status details" role="status">'+
+      '<strong>'+r3Escape(name)+'</strong>'+
+      '<div>HP '+r3Escape(hp)+' / '+r3Escape(maxHp)+'</div>'+
+      '<div>AC '+r3Escape(ac)+'</div>'+
+      '<div>Movement '+r3Escape(left)+'</div>'+
+      '<div>'+r3Escape(phase)+'</div>'+
+      (R3_NATIVE.status?'<div title="'+r3Escape(R3_NATIVE.status)+'">'+
+        r3Escape(r3String(R3_NATIVE.status,160))+'</div>':'')+
+      '</aside>':'')+
     (R3_HUD.flyout||R3_HUD.chooser!==null?
       r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):'')+
     (R3_NATIVE.preview?
