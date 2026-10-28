@@ -1528,9 +1528,11 @@ test('Inventory, Spells and Features use compact single-column expandable lists'
 // rerender. The importer harness otherwise has no DOM querySelectorAll.
 function hudListDom(h){
   const hud=h.nodes.get('r3-hud'),shadow=h.shadow;
-  let html='',cards=[],buttons=[],flyout=null;
+  let html='',lastWrites=-1,cards=[],buttons=[],flyout=null;
   function refresh(){
-    if(html===hud.innerHTML)return;
+    // innerHTML always replaces DOM nodes even when the markup is identical.
+    if(lastWrites===hud.writes)return;
+    lastWrites=hud.writes;
     html=hud.innerHTML;
     cards=[...html.matchAll(/<details class="hud-card hud-list-card" data-hud-card="([^"]+)"/g)]
       .map(([,key])=>{
