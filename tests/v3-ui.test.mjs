@@ -1524,6 +1524,96 @@ test('Inventory, Spells and Features use compact single-column expandable lists'
   assert.match(inventory,/Equipped: Off/);
   assert.match(h.api.r3HudStyles(),/\.hud-flyout-cards\.hud-list\{display:flex!important;flex-direction:column!important/);
 });
+// Model the live replacement of Shadow DOM nodes during the battlefield
+// rerender. The importer harness otherwise has no DOM querySelectorAll.
+function hudListDom(h){
+  const hud=h.nodes.get('r3-hud'),shadow=h.shadow;
+  let html='',cards=[],buttons=[],flyout=null;
+  function refresh(){
+    if(html===hud.innerHTML)return;
+    html=hud.innerHTML;
+    cards=[...html.matchAll(/<details class="hud-card hud-list-card" data-hud-card="([^"]+)"/g)]
+      .map(([,key])=>{
+        const card={key,open:false,getAttribute(k){return k==='data-hud-card'?key:null;}};
+        card.summary={
+          matches(sel){return sel==='summary';},
+          closest(sel){return sel==='details.hud-card'?card:null;},
+          focus(opts){shadow.activeElement=this;this.preventScroll=opts?.preventScroll;}
+        };
+        card.querySelector=sel=>sel==='summary'?card.summary:null;
+        return card;
+      });
+    buttons=[...html.matchAll(/<button[^>]*data-hud-native-kind="([^"]+)" data-hud-native-key="([^"]+)"/g)]
+      .map(([,kind,key])=>({
+        dataset:{hudNativeKind:kind,hudNativeKey:key},
+        matches(sel){return sel==='button[data-hud-native-kind][data-hud-native-key]';},
+        focus(opts){shadow.activeElement=this;this.preventScroll=opts?.preventScroll;}
+      }));
+    flyout=html.includes('class="hud-flyout"')?{scrollTop:0,scrollLeft:0}:null;
+  }
+  hud.querySelector=sel=>{refresh();return sel==='.hud-flyout'?flyout:null;};
+  hud.querySelectorAll=sel=>{
+    refresh();
+    if(sel==='details.hud-card[open]')return cards.filter(c=>c.open);
+    if(sel==='details.hud-card')return cards;
+    if(sel==='button[data-hud-native-kind][data-hud-native-key]')return buttons;
+    return [];
+  };
+  hud.contains=el=>{refresh();return cards.some(c=>c.summary===el)||buttons.includes(el);};
+  return {get cards(){refresh();return cards;},get buttons(){refresh();return buttons;},
+    get flyout(){refresh();return flyout;}};
+}
+test('expanded list rows and keyboard summary focus survive native status repaints',()=>{
+  const h=panelHarness('NIER');h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';
+  snap.inventory=[{name:'Torch',_key:'torch',tab:'Inventory',quantity:3}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.api.R3_HUD.flyout='inventory';h.api.r3HudRender();
+  const dom=hudListDom(h);
+  assert.equal(dom.cards.length,1);
+  dom.cards[0].open=true;
+  h.shadow.activeElement=dom.cards[0].summary;
+  dom.flyout.scrollTop=231;dom.flyout.scrollLeft=8;
+  h.api.R3_NATIVE.revision++;h.api.r3HudRender();
+  assert.equal(dom.cards[0].open,true,'details remain expanded without a legacy .hud-body');
+  assert.equal(h.shadow.activeElement,dom.cards[0].summary,'focused summary survives DOM replacement');
+  assert.equal(h.shadow.activeElement.preventScroll,true);
+  assert.equal(dom.flyout.scrollTop,231);
+  assert.equal(dom.flyout.scrollLeft,8);
+  // Identical row keys from another selected character must never restore
+  // an old character's expansion or steal keyboard focus.
+  const other=h.api.r3Empty();other.name='Another character';
+  other.inventory=[{name:'Torch',_key:'torch',tab:'Inventory',quantity:1}];
+  const priorFocus=h.shadow.activeElement;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(other);h.api.r3HudRender();
+  assert.equal(dom.cards[0].open,false,'character switch clears expansion state');
+  assert.equal(h.shadow.activeElement,priorFocus,'character switch does not redirect focus');
+  dom.cards[0].open=true;
+  h.api.R3_HUD.flyout='features';h.api.r3HudRender();
+  assert.equal(h.api.R3_HUD.openKeys.length,0,'flyout changes clear stale card keys');
+});
+test('verified native list action keeps keyboard focus during read-only status updates',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.inventory=[{name:'Healing Potion',_key:'healing',tab:'Inventory',quantity:2}];
+  x.model.abilities={models:[{id:'ability-1',get(k){return {
+    name:'Healing Potion',action:'%{char-player|repeating_inventory_HEAL_use}'
+  }[k];}}]};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  h.api.R3_HUD.flyout='inventory';h.api.r3HudRender();
+  const dom=hudListDom(h);
+  assert.equal(dom.buttons.length,1,'native action is displayed only for mapped control');
+  const old=dom.buttons[0];
+  h.shadow.activeElement=old;
+  dom.flyout.scrollTop=107;
+  h.api.R3_NATIVE.revision++;h.api.r3HudRender();
+  assert.notEqual(dom.buttons[0],old,'HUD really recreated the button');
+  assert.equal(h.shadow.activeElement,dom.buttons[0],'keyboard target follows the verified action');
+  assert.equal(h.shadow.activeElement.preventScroll,true);
+  assert.equal(dom.flyout.scrollTop,107);
+  assert.equal(x.sent.length,0,'focus restoration does not invoke the action');
+});
+
 test('verified native List buttons remain clickable on the row, while Show More never becomes Cast',()=>{
   const x=observedChatRig('Elowen'),h=x.h;
   const snap=h.api.r3Empty();snap.name='Elowen';
