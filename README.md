@@ -65,6 +65,12 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Firefox v3.10.16 — Compact Inventory, Spell and Feature lists (candidate)
+
+**Inventory, Spells and Features** now display as a **single-column list** instead of a multi-column tile grid. Each row shows its name and essential level/quantity/usage details; click the row to expand observed Roll20 sheet information. Real native **Cast, Use or Roll** buttons appear in the same row only when an exact official control or a safe pre-existing Roll20 character macro was verified.
+
+Previously almost every item showed a distracting **Native unmapped** warning. Passive equipment and resource details no longer display that warning in the collapsed list. Expanding an entry explains why a native Use/Cast/Roll action could not be verified. **This does not invent missing Roll20 actions**—some inventory items have quantity and equipped switches but no native Use control, and some spells expose only Show More. Manual sheets, automatic private importing and native action safety are unchanged.
+
 ## Firefox v3.10.15 — Roll20-style vertical toolbar and checkboxes (candidate)
 
 Selecting **Left** or **Right** from the taskbar context menu now creates a true **single-column, 66 px toolbar** with one action, shortcut, or ability category per row—similar to Roll20's native tool strip. Its status line becomes a compact HP tile; click the tile to see the full HP/AC/movement/turn/native-action status beside the toolbar. Bottom and Top keep the horizontal taskbar.
