@@ -205,7 +205,14 @@ function r3UIEvent(event){
   if(typeof r3DebugAction==='function'&&r3DebugAction(target))return;
   if(typeof r3BattlefieldClick==='function'&&r3BattlefieldClick(target))return;
   if(typeof r3TurnClick==='function'&&r3TurnClick(target))return;
-  if(target?.id==='r3-toggle'){R3_UI.shown=!R3_UI.shown;r3UIRefresh();}
+  if(target?.id==='r3-toggle'){
+    R3_UI.shown=!R3_UI.shown;
+    if(typeof R3_BF==='object'){
+      R3_BF.menuPane=R3_UI.shown?'importer':'';
+      R3_BF.revision++;
+    }
+    r3UIRefresh();r3HudRender();
+  }
   else if(target?.id==='r3-refresh')r3UIRefresh();
   else if(target?.id==='r3-scan')return r3StartImport('current');
   else if(target?.id==='r3-all')return r3StartImport('all');
