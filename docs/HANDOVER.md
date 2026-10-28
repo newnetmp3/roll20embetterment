@@ -1,3 +1,10 @@
+## 2026-10-28 — expanded list/focus preservation on HUD native status repaints (Firefox v3.10.17 candidate)
+
+- Static review identified a real regression in the v3.10.16 compact list feature: \`r3HudRender\` captured expanded \`details.hud-card\` only when the obsolete \`.hud-body\` was present. The active battlefield \`.hud-flyout\` lacks that container, so native status updates or HP/auto-import repaints could collapse open Inventory, Spell and Feature details even while the list's scrollbar remained stable.
+- Snapshot expanded row keys directly from the live HUD regardless of legacy \`.hud-body\`, but restore them **only for the same controlled character and same flyout/weapon/spell-level view**. Character switches, category navigation and level changes clear old expansion state, so one character's controls cannot accidentally appear focused in another's list.
+- Preserve keyboard focus for a focused list \`summary\` or verified \`data-hud-native-kind/key\` action across non-navigational repaints using exact data-key matching and \`focus({preventScroll:true})\`. Focus restoration does not execute the action, alter resource counts, or touch Roll20's own sheet, chat or map.
+- Add behavioral regression tests with a simulated replacing Shadow DOM for expanded cards, vertical/horizontal flyout scroll, native-action button focus, character-switch and flyout-change isolation. These tests cover HUD behavior, **not** actual Roll20 native gameplay parity. CI, Firefox signing and update-feed digest verification remain independent release gates.
+
 ## 2026-10-28 — compact Inventory, Spell and Feature lists / native control clarity (Firefox v3.10.16 candidate)
 
 - User screenshot showed a four-column **Inventory tile grid**, with long expanded descriptions crammed into ~150px widths, and the repeated "Native unmapped" label on every ordinary item. Follow-up explicitly requests the same list treatment for **Spells and Features**.
