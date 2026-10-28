@@ -149,6 +149,22 @@ function r3BattlefieldPlacePanels(){
       cascade.style?.setProperty?.('right','auto','important');
       cascade.style?.setProperty?.('bottom','auto','important');
     }
+    // The importer remains the original live DOM element (its own event
+    // listeners, scan state and focused inputs survive HUD rerenders), but it
+    // is positioned as the active second-level menu instead of a free window.
+    const importer=root.getElementById?.('r3-wrap');
+    const branch=cascade.querySelector?.('.r3-cascade-branch');
+    if(importer&&branch&&R3_BF.menuPane==='importer'&&R3_UI.shown){
+      const at=branch.getBoundingClientRect?.();
+      if(at){
+        importer.style?.setProperty?.('left',Math.round(at.left)+'px','important');
+        importer.style?.setProperty?.('top',Math.round(at.top)+'px','important');
+        importer.style?.setProperty?.('right','auto','important');
+        importer.style?.setProperty?.('bottom','auto','important');
+        importer.style?.setProperty?.('width',Math.max(180,Math.min(520,usable-at.left-6))+'px','important');
+        importer.style?.setProperty?.('z-index','2801','important');
+      }
+    }
   }
 }
 function r3BattlefieldIsEditor(target){
