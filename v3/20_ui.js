@@ -378,6 +378,14 @@ function r3StartUI(){
     if(!path.includes(R3_UI.host))
       r3BattlefieldClick({dataset:{bfAction:'cascade-close'}});
   },true);
+  // Only the R20eb menu rail responds to hover. Never hover-trigger a
+  // Roll20 sheet control, an attack, a spell cast, or an item use.
+  root.addEventListener('pointerover',event=>{
+    if(typeof r3BattlefieldClick!=='function')return;
+    const button=event.target?.closest?.('.r3-cascade-rail .r3-cascade-entry[aria-haspopup="true"]');
+    if(!button||button.getAttribute?.('aria-expanded')==='true')return;
+    button.click?.();
+  });
   root.addEventListener('pointerdown',event=>{
     if(typeof R3_BF!=='object')return;
     if(!(R3_BF.contextOpen||R3_BF.menuPane||R3_HUD.flyout||
@@ -401,6 +409,15 @@ function r3StartUI(){
        R3_BF?.contextOpen||R3_DEBUG?.open)){
       r3BattlefieldClick({dataset:{bfAction:'cascade-close'}});
       event.preventDefault?.();
+    }else if(['ArrowDown','ArrowUp'].includes(event.key)&&
+      event.target?.closest?.('.r3-cascade-rail')){
+      const buttons=[...(R3_UI.root?.querySelectorAll?.('.r3-cascade-rail button')||[])];
+      const index=buttons.indexOf(event.target);
+      if(index>=0&&buttons.length){
+        buttons[(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]
+          .focus?.({preventScroll:true});
+        event.preventDefault?.();
+      }
     }else if(event.key==='ArrowRight'&&
       event.target?.closest?.('.r3-cascade-rail')&&
       event.target?.matches?.('button[aria-haspopup="true"]')){
