@@ -112,7 +112,7 @@ function r3DebugRefresh(){
 function r3DebugToggle(){
   R3_DEBUG.open=!R3_DEBUG.open;
   if(R3_DEBUG.open){
-    R3_HUD.flyout='';R3_HUD.chooser=null;
+    if(typeof R3_HUD==='object'){R3_HUD.flyout='';R3_HUD.chooser=null;}
     if(typeof R3_BF==='object'){
       R3_BF.menuPane='';R3_BF.contextOpen=false;R3_BF.revision++;
     }
