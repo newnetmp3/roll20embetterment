@@ -289,7 +289,7 @@ function r3BattlefieldCascadeMarkup(snapshot){
   }else if(['profile','concentration','resources','notes'].includes(R3_BF.menuPane))
     detail='<div class="r3-cascade-info">'+r3BattlefieldSidebar(snapshot,R3_BF.menuPane)+'</div>';
   else if(R3_BF.menuPane==='importer')
-    detail='<section class="r3-cascade-info">Importer tools appear beside this menu. The official sheet remains unaffected.</section>';
+    detail='<div class="r3-cascade-importer-slot" role="region" aria-label="Importer tools"></div>';
   else if(R3_NATIVE.preview)detail='<section class="r3-cascade-info">'+r3NativeMarkup()+'</section>';
   return '<section class="r3-bf-cascade" data-bf-no-drag role="group" '+
     'aria-label="R20eb cascading menus" data-cascade-side="'+
@@ -543,6 +543,10 @@ function r3BattlefieldCascadeStyles(){
     '.r3-bf-cascade .hud-flyout:has(.hud-spell-levels)>.hud-native-status{grid-column:1/-1}',
     '.r3-bf-cascade .hud-flyout-cards.hud-list{width:100%;max-height:min(60vh,520px);overflow-y:auto;scrollbar-width:thin}',
     '.r3-bf-cascade .r3-cascade-info{padding:9px;min-width:240px;max-height:inherit;overflow:auto;box-sizing:border-box}',
+    '.r3-bf-cascade .r3-cascade-importer-slot{min-width:350px;min-height:220px;max-width:100%;pointer-events:none}',
+    '#r3-wrap[data-bf-panel=importer]:has(#r3-content[style*="block"]){box-shadow:0 8px 26px #000b!important;border:1px solid var(--r3-border,#8294ad)!important;border-radius:0 6px 6px 0!important;max-height:min(76dvh,650px)!important;overflow:auto!important}',
+    '#r3-wrap[data-bf-panel=importer] #r3-toggle{padding:6px 10px!important;font-size:12px!important}',
+    '#r3-wrap[data-bf-panel=importer] #r3-content{max-height:min(70dvh,570px)!important}',
     '.r3-bf-cascade .r3-bf-sidebar{display:block!important;position:static!important;inset:auto!important;width:100%!important;max-height:none!important;overflow:visible!important}',
     '.r3-bf-cascade .r3-bf-sidebar>.r3-bf-section{position:static!important;inset:auto!important;width:100%!important;max-height:none!important;overflow:visible!important;margin:0!important}',
     '.r3-bf-cascade .r3-debug-window{width:min(560px,100%)!important}',
