@@ -238,8 +238,10 @@ function r3BattlefieldMarkup(snapshot){
       t.bonusSpent?'Spent':'Available','Check when the Bonus Action is used; local only'),
     r3BattlefieldRing('reaction','shield','Reaction','',
       t.reactionSpent?'Spent':'Available','Check when the Reaction is used; local only'),
-    '<div class="r3-bf-movement">'+r3BattlefieldRing('move','move','Move',left,
-      'Used '+r3TurnDistance(t.movementUsed)+' ft','Auto-tracked token movement; click to correct by +5 ft')+
+    '<div class="r3-bf-movement">'+r3BattlefieldRing('move','move','Move',
+      vertical&&total!==null?r3TurnDistance(total-t.movementUsed)+' ft':left,
+      'Used '+r3TurnDistance(t.movementUsed)+' ft',
+      'Auto-tracked token movement; click to correct by +5 ft')+
       '<span class="r3-bf-movement-meter" role="progressbar" aria-label="Movement used" '+
       'aria-valuemin="0" aria-valuenow="'+t.movementUsed+'"'+
       (total!==null?' aria-valuemax="'+total+'"':'')+'>'+
