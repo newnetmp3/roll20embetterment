@@ -219,6 +219,7 @@ function r3UIEvent(event){
     R3_HUD.collapsed=!R3_HUD.collapsed;
     if(R3_HUD.collapsed){
       R3_HUD.flyout='';R3_HUD.chooser=null;
+      if(typeof R3_BF==='object'){R3_BF.menuPane='';R3_BF.contextOpen=false;}
     }else if(typeof r3TurnLoad!=='function')R3_HUD.used={action:false,bonus:false,reaction:false};
     r3HudSave();r3HudRender();
   }
@@ -282,11 +283,19 @@ function r3UIEvent(event){
   else if(flyout&&['spells','skills','actions','bonus','reactions','inventory',
     'features','resources','misc'].includes(flyout)){
     R3_HUD.chooser=null;
+    if(typeof R3_BF==='object'){
+      R3_BF.menuPane='';R3_BF.contextOpen=false;R3_BF.revision++;
+    }
+    if(typeof R3_DEBUG==='object')R3_DEBUG.open=false;
     R3_HUD.flyout=R3_HUD.flyout===flyout?'':flyout;
     R3_HUD.attackGroup='';R3_HUD.openKeys=[];R3_HUD.scrollTop=0;r3HudRender();
   }
   else if(hudCategory&&R3_HUD_TABS.some(tab=>tab.key===hudCategory)){
     R3_HUD.category=hudCategory;R3_HUD.flyout=hudCategory;
+    if(typeof R3_BF==='object'){
+      R3_BF.menuPane='';R3_BF.contextOpen=false;R3_BF.revision++;
+    }
+    if(typeof R3_DEBUG==='object')R3_DEBUG.open=false;
     R3_HUD.chooser=null;R3_HUD.openKeys=[];R3_HUD.scrollTop=0;
     r3HudSave();r3HudRender();
   }
@@ -352,17 +361,22 @@ function r3StartUI(){
     if(!key||!r3HudWeaponToggle(key))return;
     event.preventDefault?.();event.stopPropagation?.();
   });
-  // Dismiss the taskbar context menu without swallowing native Roll20
-  // clicks or accidentally using its private sheet.
+  // A click outside R20eb closes only R20eb menus; native Roll20 controls
+  // receive their own pointer event without interception.
   document.addEventListener?.('pointerdown',event=>{
-    if(typeof R3_BF!=='object'||!R3_BF.contextOpen)return;
+    if(typeof R3_BF!=='object')return;
+    if(!(R3_BF.contextOpen||R3_BF.menuPane||R3_HUD.flyout||
+      R3_HUD.chooser!==null||R3_DEBUG.open))return;
     const path=event.composedPath?.()||[];
-    if(!path.includes(R3_UI.host))r3BattlefieldContextClose();
+    if(!path.includes(R3_UI.host))
+      r3BattlefieldClick({dataset:{bfAction:'cascade-close'}});
   },true);
   root.addEventListener('pointerdown',event=>{
-    if(typeof R3_BF!=='object'||!R3_BF.contextOpen)return;
-    if(event.target?.closest?.('.r3-bf-context,[data-bf-panel="taskbar"]'))return;
-    r3BattlefieldContextClose();
+    if(typeof R3_BF!=='object')return;
+    if(!(R3_BF.contextOpen||R3_BF.menuPane||R3_HUD.flyout||
+      R3_HUD.chooser!==null||R3_DEBUG.open))return;
+    if(event.target?.closest?.('.r3-bf-cascade,[data-bf-panel="taskbar"],.r3-bf-turnstrip,.r3-bf-show-profile-wrap,#r3-wrap'))return;
+    r3BattlefieldClick({dataset:{bfAction:'cascade-close'}});
   },true);
   root.getElementById('r3-choices').addEventListener('change',event=>{R3_UI.selected=event.target.value;r3UIRefresh();});
   if(typeof r3BattlefieldEnableDragging==='function')r3BattlefieldEnableDragging(root);
@@ -372,8 +386,24 @@ function r3StartUI(){
     if(typeof r3BattlefieldInput==='function')r3BattlefieldInput(event.target);
   });
   root.addEventListener('keydown',event=>{
-    if(event.key==='Escape'&&typeof r3BattlefieldContextClose==='function'&&
-       r3BattlefieldContextClose())event.preventDefault?.();
+    // Escape closes the entire R20eb menu stack, not the native Roll20 sheet.
+    // ArrowRight activates a focused cascade entry; ArrowLeft returns to the
+    // parent menu. Standard Tab and Enter/Space remain native button behavior.
+    if(event.key==='Escape'&&typeof r3BattlefieldClick==='function'&&
+      (R3_HUD.flyout||R3_HUD.chooser!==null||R3_BF?.menuPane||
+       R3_BF?.contextOpen||R3_DEBUG?.open)){
+      r3BattlefieldClick({dataset:{bfAction:'cascade-close'}});
+      event.preventDefault?.();
+    }else if(event.key==='ArrowRight'&&
+      event.target?.closest?.('.r3-cascade-rail')&&
+      event.target?.matches?.('button[aria-haspopup="true"]')){
+      event.target.click?.();
+      event.preventDefault?.();
+    }else if(event.key==='ArrowLeft'&&
+      event.target?.closest?.('.r3-cascade-branch')){
+      r3BattlefieldClick({dataset:{bfAction:'cascade-close'}});
+      event.preventDefault?.();
+    }
     event.stopPropagation();
   },true);
   root.addEventListener('keyup',event=>event.stopPropagation(),true);
