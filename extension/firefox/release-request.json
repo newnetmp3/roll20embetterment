@@ -1,6 +1,6 @@
 {
-  "version": "3.10.18",
+  "version": "3.10.19",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Replace R20eb floating HUD windows with one taskbar-anchored cascading menu stack for combat, spells, features, inventory, character, notes, resource/status, Debug/Theme Manager, Settings and importer. Add hover/click/keyboard navigation; clamp to dock and chat inset; preserve verified native action safety, selected-character isolation and manually opened Roll20 character sheets."
+  "reason": "Fix loss of keyboard focus in taskbar-anchored cascading menus during HUD/native status/HP repaints. Preserve checked data-bound first-level menu focus only for the same character; ArrowLeft returns to parent without closing the cascade or stealing text-editing caret. Leave native Roll20 action dispatch and player-owned sheets unchanged."
 }
