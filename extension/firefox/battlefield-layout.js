@@ -7,11 +7,11 @@ const R3_BF_VISIBILITY=Object.freeze({
 });
 const R3_BF_DOCKS=['bottom','top','left','right'];
 const R3_BF={notes:'',sidebar:true,options:false,statusOpen:false,
-  orientation:'bottom',visible:{},contextOpen:false,contextX:12,contextY:12,revision:0};
+  orientation:'bottom',visible:{},menuPane:'',contextOpen:false,contextX:12,contextY:12,revision:0};
 function r3BattlefieldKey(){return r3TokenSettingsKey()+':battlefield';}
 function r3BattlefieldLoad(){
   R3_BF.notes='';R3_BF.sidebar=true;R3_BF.options=false;R3_BF.statusOpen=false;
-  R3_BF.orientation='bottom';R3_BF.contextOpen=false;
+  R3_BF.orientation='bottom';R3_BF.contextOpen=false;R3_BF.menuPane='';
   R3_BF.visible=Object.fromEntries(Object.keys(R3_BF_VISIBILITY).map(k=>[k,true]));
   try{
     const saved=JSON.parse(localStorage.getItem(r3BattlefieldKey())||'null');
@@ -55,7 +55,10 @@ function r3BattlefieldContextOpen(x,y){
   const inset=typeof r3BattlefieldChatInset==='function'?r3BattlefieldChatInset():0;
   R3_BF.contextX=Math.max(5,Math.min(Math.round(Number(x)||8),Math.max(5,width-inset-242)));
   R3_BF.contextY=Math.max(5,Math.min(Math.round(Number(y)||8),Math.max(5,height-Math.min(465,Math.floor(height*.75)+8))));
-  R3_BF.contextOpen=true;R3_BF.revision++;r3HudRender();
+  R3_BF.contextOpen=true;R3_BF.menuPane='';
+  R3_HUD.flyout='';R3_HUD.chooser=null;
+  if(typeof R3_DEBUG==='object')R3_DEBUG.open=false;
+  R3_BF.revision++;r3HudRender();
   return true;
 }
 function r3BattlefieldContextClose(){
@@ -110,6 +113,26 @@ function r3BattlefieldClick(target){
       return r3BattlefieldTogglePart(target?.dataset?.bfItem||
         target?.closest?.('[data-bf-item]')?.dataset?.bfItem);
     case 'dock-close':return r3BattlefieldContextClose();
+    case 'cascade-pane': {
+      const pane=target?.dataset?.bfItem||
+        target?.closest?.('[data-bf-item]')?.dataset?.bfItem;
+      if(!['profile','concentration','resources','notes','status','importer'].includes(pane))
+        return false;
+      R3_BF.menuPane=R3_BF.menuPane===pane?'':pane;
+      R3_HUD.flyout='';R3_HUD.chooser=null;R3_BF.contextOpen=false;
+      if(typeof R3_DEBUG==='object')R3_DEBUG.open=false;
+      if(pane==='importer'){
+        R3_UI.shown=R3_BF.menuPane==='importer';
+        if(typeof r3UIRefresh==='function')r3UIRefresh();
+      }else if(R3_UI.shown){R3_UI.shown=false;if(typeof r3UIRefresh==='function')r3UIRefresh();}
+      R3_BF.revision++;r3HudRender();return true;
+    }
+    case 'cascade-close':
+      R3_BF.menuPane='';R3_BF.contextOpen=false;
+      R3_HUD.flyout='';R3_HUD.chooser=null;
+      if(typeof R3_DEBUG==='object')R3_DEBUG.open=false;
+      if(R3_UI.shown){R3_UI.shown=false;if(typeof r3UIRefresh==='function')r3UIRefresh();}
+      R3_BF.revision++;r3HudRender();return true;
     case 'vertical-status':
       R3_BF.statusOpen=!R3_BF.statusOpen;
       R3_BF.revision++;r3HudRender();
@@ -173,7 +196,7 @@ function r3BattlefieldNotes(){
     'aria-label="Notes for the selected character" placeholder="Notes for this turn…">'+
     r3Escape(R3_BF.notes)+'</textarea></section>';
 }
-function r3BattlefieldSidebar(snapshot){
+function r3BattlefieldSidebar(snapshot,only=''){
   const name=r3String(snapshot?.name,80)||'Select your character';
   const stats=snapshot?.stats||{};
   const portrait=r3HudPortraitUrl(snapshot);
@@ -182,7 +205,7 @@ function r3BattlefieldSidebar(snapshot){
     R3_TURN.concentration===false?'None (manual)':'Not tracked';
   const resources=r3HudResourceBar(snapshot);
   return '<aside class="r3-bf-sidebar" aria-label="Character quick overview">'+
-    (R3_BF.visible.profile?'<section class="r3-bf-profile r3-bf-section" data-bf-panel="profile">'+
+    (R3_BF.visible.profile&&(!only||only==='profile')?'<section class="r3-bf-profile r3-bf-section" data-bf-panel="profile">'+
     ''+
     '<div class="r3-bf-character">'+
     '<div class="r3-bf-avatar">'+
@@ -199,19 +222,77 @@ function r3BattlefieldSidebar(snapshot){
     r3HudStat('Init',stats.initiative)+
     '<div title="'+r3Escape(passive.source)+'">'+r3HudStat(passive.label,passive.value)+'</div>'+
     '</div></section>':'')+
-    (R3_BF.visible.concentration?'<section class="r3-bf-section r3-bf-concentration" data-bf-panel="concentration">'+
+    (R3_BF.visible.concentration&&(!only||only==='concentration')?'<section class="r3-bf-section r3-bf-concentration" data-bf-panel="concentration">'+
     ''+
     '<span>'+r3HudIcon('target')+'</span><div><strong>Concentration</strong>'+
     '<small>'+r3Escape(focus)+'</small></div>'+
     '<button type="button" data-turn-action="focus" '+
     'title="Cycle manual concentration state; the sheet is authoritative">±</button></section>':'')+
-    (R3_BF.visible.resources?'<section class="r3-bf-section r3-bf-resource-panel" data-bf-panel="resources" aria-label="Observed character resources">'+
+    (R3_BF.visible.resources&&(!only||only==='resources')?'<section class="r3-bf-section r3-bf-resource-panel" data-bf-panel="resources" aria-label="Observed character resources">'+
     ''+
     '<header><strong>Resources</strong>'+
     '<button type="button" data-hud-flyout="resources" title="Browse imported resources">⌃</button></header>'+
     (resources||'<small>No official slots or resources imported yet.</small>')+
-    '</section>':'')+(R3_BF.visible.notes?r3BattlefieldNotes():'')+
+    '</section>':'')+(R3_BF.visible.notes&&(!only||only==='notes')?r3BattlefieldNotes():'')+
     '</aside>';
+}
+// All R20eb popups share one anchored, cascading menu tree. Roll20's
+// manually opened sheet and its own windows are never changed or owned.
+function r3BattlefieldCascadeMarkup(snapshot){
+  const opened=R3_HUD.flyout||R3_HUD.chooser!==null||
+    R3_BF.menuPane||R3_BF.contextOpen||R3_DEBUG.open||R3_NATIVE.preview;
+  if(!opened)return '';
+  const pages=[
+    ['actions','Attacks'],['features','Features'],['spells','Spells'],
+    ['inventory','Inventory'],['skills','Skills'],['misc','MISC'],
+    ['resources','Resources']
+  ];
+  const root=pages.map(([id,label])=>{
+    const active=R3_HUD.flyout===id&&!R3_BF.contextOpen&&!R3_DEBUG.open;
+    return '<button type="button" role="menuitem" class="r3-cascade-entry'+
+      (active?' selected':'')+'" data-hud-flyout="'+id+'" aria-haspopup="true" aria-expanded="'+active+'">'+
+      r3Escape(label)+'<span aria-hidden="true">▸</span></button>';
+  }).join('');
+  const parts=[['profile','Character'],['concentration','Concentration'],
+    ['notes','Turn notes'],['status','Status'],['importer','Importer']];
+  const extra=parts.filter(([id])=>id==='status'||id==='importer'||R3_BF.visible[id]).map(([id,label])=>
+    '<button type="button" role="menuitem" class="r3-cascade-entry'+
+      (R3_BF.menuPane===id?' selected':'')+'" data-bf-action="cascade-pane" data-bf-item="'+id+
+      '" aria-haspopup="true" aria-expanded="'+(R3_BF.menuPane===id)+'">'+
+      label+'<span aria-hidden="true">▸</span></button>').join('');
+  const settings='<button type="button" role="menuitem" class="r3-cascade-entry'+
+    (R3_BF.contextOpen?' selected':'')+'" data-bf-action="taskbar-menu" aria-haspopup="true" '+
+    'aria-expanded="'+R3_BF.contextOpen+'">Settings<span aria-hidden="true">▸</span></button>';
+  const debug='<button type="button" role="menuitem" class="r3-cascade-entry'+
+    (R3_DEBUG.open?' selected':'')+'" id="r3-hud-debug" aria-haspopup="true" '+
+    'aria-expanded="'+R3_DEBUG.open+'">Debug<span aria-hidden="true">▸</span></button>';
+  let detail='';
+  if(R3_BF.contextOpen)detail=r3BattlefieldContextMarkup();
+  else if(R3_DEBUG.open)detail=r3DebugMarkup();
+  else if(R3_HUD.flyout||R3_HUD.chooser!==null)
+    detail=r3HudFlyoutMarkup(snapshot);
+  else if(R3_BF.menuPane==='status'){
+    const stats=snapshot?.stats||{};
+    detail='<section class="r3-cascade-info" role="group" aria-label="Character status">'+
+      '<strong>'+r3Escape(snapshot?.name||'No character')+'</strong>'+
+      '<div>HP '+r3HudValue(stats.hp)+' / '+r3HudValue(stats.maxHp)+'</div>'+
+      '<div>AC '+r3HudValue(stats.ac)+'</div>'+
+      '<div>Speed '+r3HudValue(stats.speed)+' ft</div>'+
+      '<div>'+r3Escape(R3_TURN.phase||'Turn unknown')+'</div>'+
+      (R3_NATIVE.status?'<div>'+r3Escape(R3_NATIVE.status)+'</div>':'')+'</section>';
+  }else if(['profile','concentration','resources','notes'].includes(R3_BF.menuPane))
+    detail='<div class="r3-cascade-info">'+r3BattlefieldSidebar(snapshot,R3_BF.menuPane)+'</div>';
+  else if(R3_BF.menuPane==='importer')
+    detail='<section class="r3-cascade-info">Importer tools appear beside this menu. The official sheet remains unaffected.</section>';
+  else if(R3_NATIVE.preview)detail='<section class="r3-cascade-info">'+r3NativeMarkup()+'</section>';
+  return '<section class="r3-bf-cascade" data-bf-no-drag role="group" '+
+    'aria-label="R20eb cascading menus" data-cascade-side="'+
+    (R3_BF.orientation==='right'?'left':'right')+'">'+
+    '<nav class="r3-cascade-rail" role="menu" aria-label="R20eb categories">'+
+    root+extra+debug+settings+
+    '<button type="button" role="menuitem" class="r3-cascade-entry" '+
+    'data-bf-action="cascade-close">Close menu<span aria-hidden="true">×</span></button>'+
+    '</nav><div class="r3-cascade-branch">'+detail+'</div></section>';
 }
 function r3BattlefieldMarkup(snapshot){
   const name=r3String(snapshot?.name,80)||'No character selected';
@@ -256,11 +337,9 @@ function r3BattlefieldMarkup(snapshot){
     '<button type="button" data-turn-action="end" title="Mark end of turn locally; does not advance Roll20">⏭</button>'+
     '<button type="button" id="r3-hud-debug" class="r3-bf-debug-trigger" title="Debug, advanced controls and layout settings" aria-label="Open Debug window">⚙ Debug</button>'+
     '</div>':'')+
-    (R3_BF.sidebar&&!R3_UI.shown?r3BattlefieldSidebar(snapshot):
-      '<div class="r3-bf-show-profile-wrap" data-bf-panel="show-profile">'+
-        ''+
-        '<button type="button" class="r3-bf-show-profile" data-bf-action="sidebar" '+
-        'title="Show character overview">☷ '+r3Escape(name)+'</button></div>')+
+    '<div class="r3-bf-show-profile-wrap" data-bf-no-drag>'+
+        '<button type="button" class="r3-bf-show-profile" data-bf-action="cascade-pane" data-bf-item="profile" '+
+        'title="Open Character submenu">☷ '+r3Escape(name)+'</button></div>'+
     '<div class="r3-bf-taskbar" data-bf-panel="taskbar" data-r3-orientation="'+R3_BF.orientation+
     '" aria-label="R20eb taskbar" title="Right-click for dock and visibility settings">'+
     (R3_BF.visible.actions?'<nav class="r3-bf-actions" data-bf-panel="actions" aria-label="Action economy quick dock">'+
@@ -297,7 +376,7 @@ function r3BattlefieldMarkup(snapshot){
         r3Escape(R3_NATIVE.status)+'</span>':'')+'</div>'):'')+
     '<button type="button" class="r3-bf-menu-button" data-bf-action="taskbar-menu" '+
     'aria-label="Taskbar settings" title="Taskbar settings · right-click anywhere on the taskbar">⋯</button>'+
-    '</div>'+r3BattlefieldContextMarkup()+
+    '</div>'+
     (vertical&&R3_BF.visible.status&&R3_BF.statusOpen?
       '<aside class="r3-bf-vertical-status-detail" data-bf-no-drag aria-label="Character status details" role="status">'+
       '<strong>'+r3Escape(name)+'</strong>'+
@@ -308,14 +387,12 @@ function r3BattlefieldMarkup(snapshot){
       (R3_NATIVE.status?'<div title="'+r3Escape(R3_NATIVE.status)+'">'+
         r3Escape(r3String(R3_NATIVE.status,160))+'</div>':'')+
       '</aside>':'')+
-    (R3_HUD.flyout||R3_HUD.chooser!==null?
-      r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):'')+
+    r3BattlefieldCascadeMarkup(snapshot)+
     (R3_NATIVE.preview?
         '<div class="r3-bf-native" data-bf-panel="native">'+
         ''+
         '<button type="button" class="r3-bf-dismiss-status" data-bf-action="status" '+
         'title="Dismiss roll confirmation details">×</button>'+r3NativeMarkup()+'</div>':'')+
-    (typeof r3DebugMarkup==='function'?r3DebugMarkup():'')+
     '</section>';
 }
 function r3BattlefieldStyles(){
@@ -447,6 +524,44 @@ function r3BattlefieldTaskbarStyles(){
 
 // Windows 95/98 visual system. All selectors remain inside R20eb's Shadow DOM;
 // nothing changes Roll20's own editor, sheet, chat or controls.
+function r3BattlefieldCascadeStyles(){
+  return [
+    // The category rail is the first menu level; the selected category is the
+    // branch. No separate draggable HUD windows or unsolicited map overlays.
+    '.r3-bf-cascade{position:absolute;z-index:2800;display:flex;align-items:stretch;gap:0;max-width:calc(100vw - var(--r3-bf-chat-inset,0px) - 14px);max-height:min(76dvh,650px);min-height:80px;pointer-events:auto;background:var(--r3-panel,#202a39);color:var(--r3-text,#f4f5fa);border:1px solid var(--r3-border,#8294ad);box-shadow:0 10px 32px #000a;border-radius:6px;overflow:visible}',
+    '.r3-cascade-rail{box-sizing:border-box;flex:0 0 150px;max-width:150px;min-width:120px;max-height:inherit;overflow-y:auto;display:flex;flex-direction:column;gap:2px;padding:4px;border-right:1px solid var(--r3-border,#8294ad);scrollbar-width:thin}',
+    '.r3-cascade-entry{display:flex!important;align-items:center;justify-content:space-between;gap:9px;width:100%!important;min-height:26px!important;text-align:left!important;padding:5px 6px!important;white-space:nowrap;font-size:11px!important;border:0!important;border-radius:3px!important;background:transparent!important;color:inherit!important}',
+    '.r3-cascade-entry:hover,.r3-cascade-entry:focus-visible,.r3-cascade-entry.selected{background:var(--r3-selected,#405272)!important}',
+    '.r3-cascade-entry>span{opacity:.72}',
+    '.r3-cascade-branch{flex:1 1 365px;min-width:0;max-height:inherit;overflow:visible;position:relative}',
+    '.r3-bf-cascade .hud-flyout,.r3-bf-cascade .r3-debug-window,.r3-bf-cascade .r3-bf-context{position:relative!important;inset:auto!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;transform:none!important;display:block;width:100%!important;min-width:0!important;max-width:none!important;max-height:inherit!important;box-sizing:border-box;box-shadow:none!important;border:0!important;border-radius:0!important;background:var(--r3-panel,#202a39)!important;overflow-y:auto;overflow-x:visible;overscroll-behavior:contain;pointer-events:auto}',
+    '.r3-bf-cascade .hud-flyout>header,.r3-bf-cascade .r3-debug-header{min-height:29px;position:sticky;top:0;z-index:2}',
+    '.r3-bf-cascade .hud-attack-categories{display:flex;flex-direction:column;align-items:stretch;gap:2px;min-width:105px}',
+    '.r3-bf-cascade .hud-attack-list{display:grid;grid-template-columns:105px minmax(0,1fr);gap:4px;align-items:start}',
+    '.r3-bf-cascade .hud-attack-count{grid-column:1/-1}',
+    '.r3-bf-cascade .hud-weapon-list{min-width:0}',
+    '.r3-bf-cascade .hud-weapon-group{position:relative;overflow:visible}',
+    '.r3-bf-cascade .hud-weapon-submenu{position:relative;width:100%;max-height:40vh;overflow:auto;display:flex;flex-direction:column;gap:3px;border-left:2px solid var(--r3-accent,#7aa2f7);padding-left:5px}',
+    '.r3-bf-cascade .hud-spell-levels{display:flex;flex-direction:column;align-items:stretch;gap:2px;margin:0;padding:5px;overflow-y:auto;grid-row:1/3;min-width:95px}',
+    '.r3-bf-cascade .hud-spell-levels button{text-align:left!important;white-space:nowrap}',
+    '.r3-bf-cascade .hud-flyout:has(.hud-spell-levels){display:grid!important;grid-template-columns:105px minmax(0,1fr);align-content:start}',
+    '.r3-bf-cascade .hud-flyout:has(.hud-spell-levels)>header{grid-column:1/-1}',
+    '.r3-bf-cascade .hud-flyout:has(.hud-spell-levels) .hud-spell-levels{grid-row:2/5;grid-column:1}',
+    '.r3-bf-cascade .hud-flyout:has(.hud-spell-levels) .hud-flyout-caption,.r3-bf-cascade .hud-flyout:has(.hud-spell-levels) .hud-flyout-cards{grid-column:2}',
+    '.r3-bf-cascade .hud-flyout:has(.hud-spell-levels)>.hud-native-status{grid-column:1/-1}',
+    '.r3-bf-cascade .hud-flyout-cards.hud-list{width:100%;max-height:min(60vh,520px);overflow-y:auto;scrollbar-width:thin}',
+    '.r3-bf-cascade .r3-cascade-info{padding:9px;min-width:240px;max-height:inherit;overflow:auto;box-sizing:border-box}',
+    '.r3-bf-cascade .r3-bf-sidebar{display:block!important;position:static!important;inset:auto!important;width:100%!important;max-height:none!important;overflow:visible!important}',
+    '.r3-bf-cascade .r3-bf-sidebar>.r3-bf-section{position:static!important;inset:auto!important;width:100%!important;max-height:none!important;overflow:visible!important;margin:0!important}',
+    '.r3-bf-cascade .r3-debug-window{width:min(560px,100%)!important}',
+    '.r3-bf-cascade .r3-debug-body{max-height:min(68vh,580px);overflow:auto}',
+    '.r3-bf-cascade .r3-bf-context{display:flex!important;flex-direction:column!important;min-width:210px!important;max-height:inherit!important}',
+    '.r3-bf-cascade .r3-bf-context button{width:100%}',
+    '.r3-bf-cascade .hud-flyout .hud-list-card[open] .hud-card-body{border-left:2px solid var(--r3-accent,#7aa2f7)}',
+    '.r3-bf-cascade button:focus-visible,.r3-bf-cascade summary:focus-visible{outline:2px solid var(--r3-accent,#7aa2f7)!important;outline-offset:-2px!important}',
+    '@media(max-width:750px){.r3-cascade-rail{flex-basis:112px;min-width:102px}.r3-bf-cascade .hud-attack-list{grid-template-columns:1fr}.r3-bf-cascade .hud-spell-levels{min-width:70px}.r3-bf-cascade .hud-flyout:has(.hud-spell-levels){grid-template-columns:80px minmax(0,1fr)}.r3-bf-cascade .hud-attack-categories{flex-direction:row;flex-wrap:wrap}}'
+  ].join('');
+}
 function r3Win9xStyles(){
   return [
     ':host{color-scheme:light!important;font-family:Tahoma,"MS Sans Serif",Arial,sans-serif!important}',
