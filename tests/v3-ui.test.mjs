@@ -1486,6 +1486,82 @@ test('shared native mappings cover spells, features, inventory, skills, saves, a
     assert.match(skills,new RegExp('data-hud-native-kind="'+kind+'"'));
   assert.equal(h.sent.length,0,'no user sheet iframe is ever used');
 });
+test('Inventory, Spells and Features use compact single-column expandable lists',()=>{
+  const h=panelHarness('NIER');h.api.r3StartUI();
+  const snap=h.api.r3Empty();snap.name='NIER';
+  snap.inventory=[
+    {name:'Crowbar',_key:'crowbar',tab:'Inventory',quantity:1,
+      controls:[{kind:'toggle',label:'Equipped',value:false}],visible:'Crowbar Gear'},
+    {name:'Torch',_key:'torch',tab:'Inventory',quantity:9,visible:'Torch Gear'},
+    {name:'Elixir of Health',_key:'elixir',tab:'Inventory',quantity:2,visible:'Elixir of Health Gear'}
+  ];
+  snap.spells=[{name:'Detect Magic',_key:'detect-magic',tab:'Spells',
+    visible:'Detect Magic 1 action',level:'1',actions:[{label:'Show More'}]},
+    {name:'Druidcraft',_key:'druidcraft',tab:'Spells',level:'Cantrip',visible:'Druidcraft'}];
+  snap.features=[{name:'Action Surge',_key:'surge',tab:'Features & Traits',
+    visible:'Action Surge once per short rest'},
+    {name:'Second Wind',_key:'wind',tab:'Combat',
+      visible:'Second Wind recovery'}];
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  for(const [flyout,count] of [['inventory',3],['spells',1],['features',2]]){
+    h.api.R3_HUD.flyout=flyout;h.api.r3HudRender();
+    const html=h.nodes.get('r3-hud').innerHTML;
+    assert.match(html,/class="hud-flyout-cards hud-list"/,flyout+' list');
+    assert.equal((html.match(/class="hud-list-row"/g)||[]).length,count,
+      'one full-width row for each '+flyout+' entry in selected level');
+    assert.match(html,/class="hud-list-heading"/);
+    assert.match(html,/<details class="hud-card hud-list-card" data-hud-card=/);
+    assert.doesNotMatch(html,/Native unmapped/,'passive sheet entries do not need an unmapped badge');
+    assert.doesNotMatch(html,/data-hud-native-kind="(?:inventory|spells|features)"/,
+      'do not manufacture native actions without a real button or macro');
+    assert.ok(html.indexOf('class="hud-list-heading"')<
+      html.indexOf('class="hud-card-body"'),'details are collapsed below summary');
+  }
+  h.api.R3_HUD.flyout='inventory';h.api.r3HudRender();
+  const inventory=h.nodes.get('r3-hud').innerHTML;
+  assert.match(inventory,/Qty 2/);
+  assert.match(inventory,/No verified native Use action was found/);
+  assert.match(inventory,/Equipped: Off/);
+  assert.match(h.api.r3HudStyles(),/\.hud-flyout-cards\.hud-list\{display:flex!important;flex-direction:column!important/);
+});
+test('verified native List buttons remain clickable on the row, while Show More never becomes Cast',()=>{
+  const x=observedChatRig('Elowen'),h=x.h;
+  const snap=h.api.r3Empty();snap.name='Elowen';
+  snap.inventory=[{name:'Healing Potion',_key:'healing',tab:'Inventory',quantity:2,
+    visible:'Healing Potion quantity 2'}];
+  snap.spells=[{name:'Magic Missile',_key:'magic',tab:'Spells',
+    visible:'Magic Missile 1 action',actions:[{label:'Show More'}]}];
+  snap.features=[{name:'Second Wind',_key:'wind',tab:'Combat',
+    visible:'Second Wind Bonus Action 1d10+5',
+    actions:[{label:'1d10+5'}]}];
+  x.model.abilities={models:[
+    {id:'ability-item',get(k){return {name:'Healing Potion',
+      action:'%{char-player|repeating_inventory_HEAL_use}'}[k]}},
+    {id:'ability-spell',get(k){return {name:'Magic Missile',
+      action:'%{char-player|repeating_spell_ROW_cast}'}[k]}}
+  ]};
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snap);
+  for(const [kind,flyout,verb] of [
+    ['inventory','inventory','Use'],['spells','spells','Cast'],['features','features','Roll']
+  ]){
+    h.api.R3_HUD.flyout=flyout;h.api.r3HudRender();
+    const html=h.nodes.get('r3-hud').innerHTML;
+    assert.match(html,new RegExp('data-hud-native-kind="'+kind+'"'),kind+' native action');
+    assert.match(html,new RegExp('>'+verb+'<\\/button>'),kind+' action verb');
+    assert.match(html,/class="hud-list-row has-native"/);
+    assert.ok(html.indexOf('data-hud-native-kind=')>html.indexOf('</summary>'),
+      'button sits outside summary to avoid changing expansion state');
+  }
+  h.api.R3_HUD.flyout='inventory';h.api.r3HudRender();
+  h.shadow.handlers.get('click')({target:{dataset:{hudNativeKind:'inventory',hudNativeKey:'healing'}}});
+  assert.deepEqual(x.sent,['%{char-player|Healing Potion}']);
+  assert.equal(h.sent.length,0,'no fabricated reader or chat action');
+  assert.equal(h.api.r3NativeMapPreview('spells','magic').abilityName,'Magic Missile');
+  x.model.abilities={models:[]};
+  assert.equal(h.api.r3NativeMapPreview('spells','magic').sheetAction,undefined,
+    'Show More alone cannot cast a spell');
+});
+
 test('generic native controls dispatch original macro and never synthetic dice or resource edits',()=>{
   const x=observedChatRig('Elowen'),h=x.h;
   const snap=h.api.r3Empty();snap.name='Elowen';
@@ -1556,7 +1632,8 @@ test('native registry rejects ambiguous, stale, cross-kind, unverified and unman
   assert.equal(x.sent.length,0);
   h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'inventory'}}});
   const html=h.nodes.get('r3-hud').innerHTML;
-  assert.match(html,/Native unmapped/);
+  assert.match(html,/No verified native Use action was found/);
+  assert.doesNotMatch(html,/Native unmapped/);
   assert.doesNotMatch(html,/data-hud-native-key="item"/);
 });
 test('native macro mapping rejects additional chat, wrong identity and selection-relative targets',()=>{
