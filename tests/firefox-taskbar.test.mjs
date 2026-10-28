@@ -170,3 +170,70 @@ test('preserve BG3, Tokyo Night palette variables and original Win9x bevels',()=
   assert.match(h.api.r3Win9xStyles(),/\.r3-bf-taskbar,\.r3-bf-context/);
   assert.doesNotMatch(css,/document\.body|\.characterdialog|\.sheet-header/);
 });
+
+
+test('vertical dock is a 66px single-column toolbar, not paired action/category grids',()=>{
+  const h=rig();h.api.r3BattlefieldLoad();
+  for(const side of ['left','right']){
+    h.api.r3BattlefieldDockOrientation(side);
+    const html=h.html(),css=h.api.r3BattlefieldTaskbarStyles();
+    assert.match(html,new RegExp('data-r3-orientation="'+side+'"'));
+    assert.match(css,/width:66px!important;min-width:66px!important;max-width:66px!important/);
+    assert.match(css,/\.r3-bf-taskbar:is\(\[data-r3-orientation=left\],\[data-r3-orientation=right\]\)>\.r3-bf-category-dock/);
+    assert.match(css,/flex-direction:column!important;flex-wrap:nowrap!important/);
+    assert.match(css,/\.r3-bf-taskbar:is\(\[data-r3-orientation=left\],\[data-r3-orientation=right\]\) \.r3-bf-rings\{display:flex!important/);
+    assert.match(css,/\.r3-bf-taskbar:is\(\[data-r3-orientation=left\],\[data-r3-orientation=right\]\) \.r3-bf-category\{box-sizing:border-box!important;flex:0 0 auto!important;display:flex!important;flex-direction:column!important/);
+    assert.doesNotMatch(css,/repeat\(2,minmax\(0,1fr\)\)/,
+      'no two-column rules are allowed in vertical layout');
+    const actions=html.indexOf('data-bf-panel="actions"');
+    const categories=html.indexOf('data-bf-panel="categories"');
+    const hp=html.indexOf('class="r3-bf-vertical-status"');
+    assert.ok(actions>=0&&categories>actions&&hp>categories);
+    assert.doesNotMatch(html,/class="r3-bf-taskbar-status"/,
+      'large status stack should be replaced with one small tile');
+    assert.match(html,/data-bf-action="taskbar-menu"/);
+  }
+});
+test('Action, Bonus and Reaction use unchecked status checkboxes by default and checked means spent',()=>{
+  const h=rig();h.api.r3BattlefieldLoad();
+  const pattern=(label,checked)=>new RegExp(
+    'data-turn-action="'+label+'" role="checkbox" aria-checked="'+checked+'"');
+  let html=h.html();
+  for(const label of ['action','bonus','reaction']){
+    assert.match(html,pattern(label,'false'));
+    assert.match(html,new RegExp('data-turn-action="'+label+'"[^>]*><svg[^>]*>.*?', 's'));
+  }
+  assert.doesNotMatch(html,/>Ready</,'no Ready text labels');
+  assert.match(html,/class="r3-bf-used-checkbox" aria-hidden="true"><\/span>/);
+  // The real turn controller sets the shared R3_HUD.used values as the
+  // corresponding local action checkbox is toggled.
+  Object.assign(h.ctx.R3_TURN,{actionSpent:1,bonusSpent:true,reactionSpent:true});
+  Object.assign(h.ctx.R3_HUD.used,{action:true,bonus:true,reaction:true});
+  html=h.html();
+  for(const label of ['action','bonus','reaction']){
+    assert.match(html,pattern(label,'true'));
+    assert.match(html,new RegExp('data-turn-action="'+label+'"[^>]*aria-checked="true"[^>]*>','s'));
+  }
+  assert.match(html,/r3-bf-used-checkbox" aria-hidden="true">✓<\/span>/);
+  assert.match(h.api.r3BattlefieldTaskbarStyles(),/\.r3-bf-used-checkbox/);
+  assert.match(h.api.r3BattlefieldTaskbarStyles(),/role=checkbox/);
+});
+test('vertical status uses a compact expandable HP tile with the full state outside scrolling dock',()=>{
+  const h=rig();h.api.r3BattlefieldLoad();
+  h.api.r3BattlefieldDockOrientation('left');
+  let html=h.html();
+  assert.match(html,/data-bf-action="vertical-status"/);
+  assert.match(html,/aria-expanded="false"/);
+  assert.match(html,/Character status: Nier/);
+  assert.doesNotMatch(html,/class="r3-bf-vertical-status-detail"/);
+  h.api.r3BattlefieldClick(menuTarget('vertical-status'));
+  html=h.html();
+  assert.match(html,/aria-expanded="true"/);
+  assert.match(html,/class="r3-bf-vertical-status-detail"/);
+  assert.match(html,/Movement 25 \/ 30 ft/);
+  assert.match(html,/HP 70 \/ 80/);
+  assert.equal(h.calls.includes('player sheet'),false);
+  h.api.r3BattlefieldDockOrientation('bottom');
+  assert.match(h.html(),/class="r3-bf-taskbar-status"/,
+    'bottom and top layouts keep the long status bar');
+});

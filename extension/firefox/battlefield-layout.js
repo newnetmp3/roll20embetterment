@@ -110,6 +110,10 @@ function r3BattlefieldClick(target){
       return r3BattlefieldTogglePart(target?.dataset?.bfItem||
         target?.closest?.('[data-bf-item]')?.dataset?.bfItem);
     case 'dock-close':return r3BattlefieldContextClose();
+    case 'vertical-status':
+      R3_BF.statusOpen=!R3_BF.statusOpen;
+      R3_BF.revision++;r3HudRender();
+      return true;
     case 'sidebar':
       R3_BF.sidebar=!R3_BF.sidebar;r3BattlefieldSave();break;
     case 'options':
@@ -142,13 +146,21 @@ function r3BattlefieldControl(icon,title,flyout){
     r3HudIcon(icon)+'<span>'+r3Escape(title)+'</span><b aria-hidden="true">⌃</b></button>';
 }
 function r3BattlefieldRing(kind,icon,label,value,sub,tip){
+  const tracked=kind==='action'||kind==='bonus'||kind==='reaction';
   const spent=kind==='action'?R3_HUD.used.action:kind==='bonus'?R3_HUD.used.bonus:
     kind==='reaction'?R3_HUD.used.reaction:false;
   const action=kind==='move'?'move-plus':kind;
-  return '<button type="button" data-turn-action="'+action+
+  if(tracked)return '<button type="button" data-turn-action="'+action+
+    '" role="checkbox" aria-checked="'+spent+
     '" class="r3-bf-ring r3-bf-'+kind+(spent?' is-spent':'')+
+    '" aria-label="'+r3Escape(label+': '+(spent?'Used':'Available')+
+      '. '+tip)+'" title="'+r3Escape(tip)+'">'+
+    r3HudIcon(icon)+'<span class="r3-bf-ring-name">'+r3Escape(label)+'</span>'+
+    '<span class="r3-bf-used-checkbox" aria-hidden="true">'+(spent?'✓':'')+'</span></button>';
+  return '<button type="button" data-turn-action="'+action+
+    '" class="r3-bf-ring r3-bf-'+kind+
     '" aria-label="'+r3Escape(label+': '+value+'. '+tip)+'"'+
-    ' aria-pressed="'+(spent?'true':'false')+'" title="'+r3Escape(tip)+'">'+
+    ' title="'+r3Escape(tip)+'">'+
     r3HudIcon(icon)+'<span class="r3-bf-ring-name">'+r3Escape(label)+'</span>'+
     '<strong>'+r3Escape(value)+'</strong>'+
     '<span class="r3-bf-ring-sub">'+r3Escape(sub)+'</span></button>';
@@ -213,15 +225,23 @@ function r3BattlefieldMarkup(snapshot){
   const fill=total>0?Math.min(100,Math.round(100*t.movementUsed/total)):0;
   const phase=t.phase==='active'?'Your Turn':t.phase==='ended'?'Turn Ended':'Turn Tracking';
   const status=t.noteSource==='observed'?'Initiative observed':'Local markers';
+  const vertical=R3_BF.orientation==='left'||R3_BF.orientation==='right';
+  const hp=r3HudValue(snapshot?.stats?.hp),maxHp=r3HudValue(snapshot?.stats?.maxHp);
+  const ac=r3HudValue(snapshot?.stats?.ac);
+  const statusTitle=name+' · HP '+hp+' / '+maxHp+' · AC '+ac+
+    ' · Move '+left+' · '+phase+
+    (R3_NATIVE.status?' · '+r3String(R3_NATIVE.status,110):'');
   const ring=[
-    r3BattlefieldRing('action','blade','Action',remaining>0?'Ready':'Spent',
-      remaining+'/'+(1+t.extraActions),'Toggle action spent; manual correction'),
-    r3BattlefieldRing('bonus','lightning','Bonus',t.bonusSpent?'Spent':'Ready',
-      t.bonusSpent?'● ○ ○':'● ○ ○','Toggle bonus action spent; manual correction'),
-    r3BattlefieldRing('reaction','shield','Reaction',t.reactionSpent?'Spent':'Ready',
-      t.reactionSpent?'● ○ ○':'● ○ ○','Reaction persists outside turn until next start'),
-    '<div class="r3-bf-movement">'+r3BattlefieldRing('move','move','Move',left,
-      'Used '+r3TurnDistance(t.movementUsed)+' ft','Auto-tracked token movement; click to correct by +5 ft')+
+    r3BattlefieldRing('action','blade','Action','',remaining+'/'+(1+t.extraActions),
+      'Check when the Action is used; local only'),
+    r3BattlefieldRing('bonus','lightning','Bonus','',
+      t.bonusSpent?'Spent':'Available','Check when the Bonus Action is used; local only'),
+    r3BattlefieldRing('reaction','shield','Reaction','',
+      t.reactionSpent?'Spent':'Available','Check when the Reaction is used; local only'),
+    '<div class="r3-bf-movement">'+r3BattlefieldRing('move','move','Move',
+      vertical&&total!==null?r3TurnDistance(total-t.movementUsed)+' ft':left,
+      'Used '+r3TurnDistance(t.movementUsed)+' ft',
+      'Auto-tracked token movement; click to correct by +5 ft')+
       '<span class="r3-bf-movement-meter" role="progressbar" aria-label="Movement used" '+
       'aria-valuemin="0" aria-valuenow="'+t.movementUsed+'"'+
       (total!==null?' aria-valuemax="'+total+'"':'')+'>'+
@@ -262,17 +282,32 @@ function r3BattlefieldMarkup(snapshot){
     r3BattlefieldControl('book','Skills','skills')+
     r3BattlefieldControl('star','MISC','misc')+
     '</nav>':'')+
-    (R3_BF.visible.status?'<div class="r3-bf-taskbar-status" role="status" aria-live="off">'+
+    (R3_BF.visible.status?(vertical?
+      '<button type="button" class="r3-bf-vertical-status" data-bf-action="vertical-status" '+
+      'aria-label="'+r3Escape('Character status: '+statusTitle)+
+      '" aria-expanded="'+R3_BF.statusOpen+'" title="'+r3Escape(statusTitle)+'">'+
+      '<span aria-hidden="true">HP</span><strong aria-hidden="true">'+r3Escape(hp)+'</strong></button>':
+      '<div class="r3-bf-taskbar-status" role="status" aria-live="off">'+
       '<span class="r3-bf-status-character">'+r3Escape(name)+'</span>'+
-      '<span>HP '+r3HudValue(snapshot?.stats?.hp)+' / '+r3HudValue(snapshot?.stats?.maxHp)+'</span>'+
-      '<span>AC '+r3HudValue(snapshot?.stats?.ac)+'</span>'+
+      '<span>HP '+r3Escape(hp)+' / '+r3Escape(maxHp)+'</span>'+
+      '<span>AC '+r3Escape(ac)+'</span>'+
       '<span>Move '+r3Escape(left)+'</span>'+
       '<span class="r3-bf-status-phase">'+r3Escape(phase)+'</span>'+
       (R3_NATIVE.status?'<span class="r3-bf-status-native" title="'+r3Escape(R3_NATIVE.status)+'">'+
-        r3Escape(R3_NATIVE.status)+'</span>':'')+'</div>':'')+
+        r3Escape(R3_NATIVE.status)+'</span>':'')+'</div>'):'')+
     '<button type="button" class="r3-bf-menu-button" data-bf-action="taskbar-menu" '+
     'aria-label="Taskbar settings" title="Taskbar settings · right-click anywhere on the taskbar">⋯</button>'+
     '</div>'+r3BattlefieldContextMarkup()+
+    (vertical&&R3_BF.visible.status&&R3_BF.statusOpen?
+      '<aside class="r3-bf-vertical-status-detail" data-bf-no-drag aria-label="Character status details" role="status">'+
+      '<strong>'+r3Escape(name)+'</strong>'+
+      '<div>HP '+r3Escape(hp)+' / '+r3Escape(maxHp)+'</div>'+
+      '<div>AC '+r3Escape(ac)+'</div>'+
+      '<div>Movement '+r3Escape(left)+'</div>'+
+      '<div>'+r3Escape(phase)+'</div>'+
+      (R3_NATIVE.status?'<div title="'+r3Escape(R3_NATIVE.status)+'">'+
+        r3Escape(r3String(R3_NATIVE.status,160))+'</div>':'')+
+      '</aside>':'')+
     (R3_HUD.flyout||R3_HUD.chooser!==null?
       r3BattlefieldDraggableFlyout(r3HudFlyoutMarkup(snapshot)):'')+
     (R3_NATIVE.preview?
@@ -372,17 +407,39 @@ function r3BattlefieldTaskbarStyles(){
     '.r3-bf-context button[aria-checked=true]{font-weight:700!important}',
     '.r3-bf-context button:focus-visible{outline:2px solid #f9d486!important;outline-offset:1px}',
     '.r3-bf-taskbar[data-r3-orientation=top]{top:8px!important;bottom:auto!important}',
-    '.r3-bf-taskbar[data-r3-orientation=left],.r3-bf-taskbar[data-r3-orientation=right]{top:8px!important;bottom:auto!important;width:174px!important;max-height:calc(100vh - 16px);overflow-y:auto;scrollbar-width:thin;align-content:flex-start;gap:4px}',
+    // Vertical dock = one button per row, the same density as Roll20's
+    // native left toolbar. No two-column grids or wrapped three-line cards.
+    '.r3-bf-taskbar[data-r3-orientation=left],.r3-bf-taskbar[data-r3-orientation=right]{top:8px!important;bottom:auto!important;width:66px!important;min-width:66px!important;max-width:66px!important;max-height:calc(100vh - 16px)!important;overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:thin;display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;align-content:stretch!important;gap:3px!important;padding:5px 4px!important;box-sizing:border-box!important}',
     '.r3-bf-taskbar[data-r3-orientation=left]{left:8px!important;right:auto!important}',
     '.r3-bf-taskbar[data-r3-orientation=right]{left:auto!important;right:calc(var(--r3-bf-chat-inset,330px) + 8px)!important}',
-    '.r3-bf-taskbar[data-r3-orientation=left]>.r3-bf-actions,.r3-bf-taskbar[data-r3-orientation=right]>.r3-bf-actions{flex:1 1 100%!important;width:100%!important}',
-    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-rings,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-rings{grid-template-columns:repeat(2,minmax(0,1fr))!important}',
-    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-ring,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-ring{min-height:37px!important;flex-direction:column!important;gap:0!important}',
-    '.r3-bf-taskbar[data-r3-orientation=left]>.r3-bf-category-dock,.r3-bf-taskbar[data-r3-orientation=right]>.r3-bf-category-dock{flex:1 1 100%!important;width:100%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}',
-    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-category,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-category{flex-direction:column!important;min-height:39px!important}',
-    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-quick,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-quick{flex:0 0 42px!important}',
-    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-taskbar-status,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-taskbar-status{flex-wrap:wrap;gap:3px 8px;align-content:flex-start}',
-    '.r3-bf-taskbar[data-r3-orientation=left] .r3-bf-taskbar-status>span,.r3-bf-taskbar[data-r3-orientation=right] .r3-bf-taskbar-status>span{flex:1 1 100%!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right])>.r3-bf-actions,.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right])>.r3-bf-category-dock{flex:0 0 auto!important;width:100%!important;min-width:0!important;max-width:100%!important;min-height:0!important;display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;gap:3px!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-rings{display:flex!important;flex:0 0 auto!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;gap:3px!important;width:100%!important;min-width:0!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-ring{box-sizing:border-box!important;flex:0 0 auto!important;display:flex!important;flex-direction:column!important;gap:1px!important;width:100%!important;min-width:0!important;min-height:42px!important;height:42px!important;padding:3px 1px!important;justify-content:center!important;align-items:center!important;border-radius:5px!important;overflow:hidden!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-ring svg{width:16px!important;height:16px!important;flex:0 0 16px!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-ring-name{display:block!important;font-size:9px!important;line-height:11px!important;white-space:nowrap!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-ring strong{font-size:9px!important;line-height:11px!important;white-space:nowrap!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-movement{display:block!important;flex:none!important;width:100%!important;min-width:0!important;height:47px!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-movement .r3-bf-ring{height:47px!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-movement-meter{left:5px!important;right:5px!important;bottom:1px!important;height:3px!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-quick{display:flex!important;flex:0 0 auto!important;flex-direction:column!important;flex-wrap:nowrap!important;gap:3px!important;width:100%!important;min-width:0!important;margin-top:2px!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-quick button{display:flex!important;flex:0 0 auto!important;flex-direction:column!important;gap:1px!important;align-items:center!important;justify-content:center!important;width:100%!important;height:37px!important;min-height:37px!important;padding:2px 0!important;line-height:11px!important;font-size:9px!important;white-space:nowrap!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-quick button svg{width:15px!important;height:15px!important;flex:none!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right])>.r3-bf-category-dock{border-top:1px solid var(--r3-border,#475e78)!important;padding-top:4px!important;margin-top:3px!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-category{box-sizing:border-box!important;flex:0 0 auto!important;display:flex!important;flex-direction:column!important;gap:2px!important;align-items:center!important;justify-content:center!important;min-height:42px!important;height:42px!important;width:100%!important;min-width:0!important;padding:2px 1px!important;border-radius:5px!important;overflow:hidden!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-category svg{width:18px!important;height:18px!important;flex:0 0 18px!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-category span{font-size:9px!important;line-height:11px!important;white-space:nowrap!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-menu-button{position:relative!important;inset:auto!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;flex:0 0 auto!important;width:100%!important;height:27px!important;min-height:27px!important;margin:0!important;padding:0!important;font-size:18px!important;order:99!important}',
+    '.r3-bf-used-checkbox{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:13px;height:13px;min-width:13px;border:1px solid currentColor;border-radius:2px;background:transparent;color:inherit;font:bold 12px/12px system-ui,sans-serif}',
+    '.r3-bf-ring[role=checkbox]{position:relative;gap:4px!important;opacity:1!important;filter:none!important}',
+    '.r3-bf-ring[role=checkbox][aria-checked=true]{border-color:var(--r3-positive,#9ece6a)!important}',
+    '.r3-bf-ring[role=checkbox][aria-checked=true] .r3-bf-used-checkbox{background:var(--r3-positive,#9ece6a);color:var(--r3-inset,#111)!important;border-color:var(--r3-positive,#9ece6a)}',
+    '.r3-bf-ring[role=checkbox].is-spent{opacity:1!important;filter:none!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-ring[role=checkbox]{padding-right:13px!important}',
+    '.r3-bf-taskbar:is([data-r3-orientation=left],[data-r3-orientation=right]) .r3-bf-used-checkbox{position:absolute;right:2px;top:3px;width:12px;height:12px;min-width:12px;font-size:10px}',
+    '.r3-bf-vertical-status{flex:0 0 auto!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:0!important;width:100%!important;min-height:35px!important;height:35px!important;padding:2px!important;font-size:9px!important;line-height:12px!important}',
+    '.r3-bf-vertical-status strong{font-size:11px!important;line-height:12px!important}',
+    '.r3-bf-vertical-status-detail{position:absolute;top:50%;left:calc(100% + 6px);min-width:175px;max-width:250px;padding:9px;display:flex;flex-direction:column;gap:4px;border:1px solid var(--r3-border,#475e78);border-radius:6px;background:var(--r3-panel,#202a39);color:var(--r3-text,#fff);box-shadow:0 6px 22px #000a;z-index:400;pointer-events:auto}',
+    '.r3-bf-taskbar[data-r3-orientation=right]~.r3-bf-vertical-status-detail{left:auto;right:calc(var(--r3-bf-chat-inset,330px) + 81px)}',
     '@media(max-width:1000px){.r3-bf-taskbar:not([data-r3-orientation=left]):not([data-r3-orientation=right])>.r3-bf-actions,.r3-bf-taskbar:not([data-r3-orientation=left]):not([data-r3-orientation=right])>.r3-bf-category-dock{flex:1 1 100%!important}.r3-bf-taskbar-status{gap:5px}.r3-bf-status-phase{display:none}}',
     '@media(max-width:540px){.r3-bf-taskbar .r3-bf-ring-name{display:none}.r3-bf-taskbar .r3-bf-category span{font-size:9px!important}.r3-bf-taskbar-status>span:nth-child(n+4){display:none}}'
   ].join('');
