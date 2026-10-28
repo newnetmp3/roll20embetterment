@@ -127,6 +127,9 @@ function r3BattlefieldClick(target){
       }else if(R3_UI.shown){R3_UI.shown=false;if(typeof r3UIRefresh==='function')r3UIRefresh();}
       R3_BF.revision++;r3HudRender();return true;
     }
+    case 'cascade-debug':
+      if(typeof r3DebugToggle==='function')r3DebugToggle();
+      return true;
     case 'cascade-close':
       R3_BF.menuPane='';R3_BF.contextOpen=false;
       R3_HUD.flyout='';R3_HUD.chooser=null;
@@ -134,9 +137,11 @@ function r3BattlefieldClick(target){
       if(R3_UI.shown){R3_UI.shown=false;if(typeof r3UIRefresh==='function')r3UIRefresh();}
       R3_BF.revision++;r3HudRender();return true;
     case 'vertical-status':
-      R3_BF.statusOpen=!R3_BF.statusOpen;
-      R3_BF.revision++;r3HudRender();
-      return true;
+      R3_BF.menuPane=R3_BF.menuPane==='status'?'':'status';
+      R3_BF.contextOpen=false;R3_HUD.flyout='';R3_HUD.chooser=null;
+      if(typeof R3_DEBUG==='object')R3_DEBUG.open=false;
+      R3_BF.statusOpen=false;
+      R3_BF.revision++;r3HudRender();return true;
     case 'sidebar':
       R3_BF.sidebar=!R3_BF.sidebar;r3BattlefieldSave();break;
     case 'options':
@@ -264,7 +269,7 @@ function r3BattlefieldCascadeMarkup(snapshot){
     (R3_BF.contextOpen?' selected':'')+'" data-bf-action="taskbar-menu" aria-haspopup="true" '+
     'aria-expanded="'+R3_BF.contextOpen+'">Settings<span aria-hidden="true">▸</span></button>';
   const debug='<button type="button" role="menuitem" class="r3-cascade-entry'+
-    (R3_DEBUG.open?' selected':'')+'" id="r3-hud-debug" aria-haspopup="true" '+
+    (R3_DEBUG.open?' selected':'')+'" data-bf-action="cascade-debug" aria-haspopup="true" '+
     'aria-expanded="'+R3_DEBUG.open+'">Debug<span aria-hidden="true">▸</span></button>';
   let detail='';
   if(R3_BF.contextOpen)detail=r3BattlefieldContextMarkup();
@@ -377,22 +382,8 @@ function r3BattlefieldMarkup(snapshot){
     '<button type="button" class="r3-bf-menu-button" data-bf-action="taskbar-menu" '+
     'aria-label="Taskbar settings" title="Taskbar settings · right-click anywhere on the taskbar">⋯</button>'+
     '</div>'+
-    (vertical&&R3_BF.visible.status&&R3_BF.statusOpen?
-      '<aside class="r3-bf-vertical-status-detail" data-bf-no-drag aria-label="Character status details" role="status">'+
-      '<strong>'+r3Escape(name)+'</strong>'+
-      '<div>HP '+r3Escape(hp)+' / '+r3Escape(maxHp)+'</div>'+
-      '<div>AC '+r3Escape(ac)+'</div>'+
-      '<div>Movement '+r3Escape(left)+'</div>'+
-      '<div>'+r3Escape(phase)+'</div>'+
-      (R3_NATIVE.status?'<div title="'+r3Escape(R3_NATIVE.status)+'">'+
-        r3Escape(r3String(R3_NATIVE.status,160))+'</div>':'')+
-      '</aside>':'')+
+
     r3BattlefieldCascadeMarkup(snapshot)+
-    (R3_NATIVE.preview?
-        '<div class="r3-bf-native" data-bf-panel="native">'+
-        ''+
-        '<button type="button" class="r3-bf-dismiss-status" data-bf-action="status" '+
-        'title="Dismiss roll confirmation details">×</button>'+r3NativeMarkup()+'</div>':'')+
     '</section>';
 }
 function r3BattlefieldStyles(){
