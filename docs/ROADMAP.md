@@ -1,3 +1,11 @@
+## 2026-10-28 — Inventory / Spells / Features as compact native-action lists (Firefox v3.10.16 candidate)
+
+- [x] Replace the four-column tile layout with one full-width expandable list row per Inventory item, Spell and Feature; show category/quantity/level metadata.
+- [x] Put verified native Cast/Use/Roll buttons directly on corresponding rows, keeping exact source identity and one-shot native-action dispatch.
+- [x] Remove repeated "Native unmapped" noise from passive items and display source-specific missing-action explanations only when expanded. Preserve quantities, equipped-state observations, source details and explicit no-action behavior.
+- [ ] Confirm live Roll20 2024 native Use/Cast controls for Nier's item and spell inventory from a fresh authenticated Debug export; no inferred resource mutations or synthetic rolls.
+- [ ] Verify 1080p/1440p Floorp list rendering, keyboard/focus, scroll/expanded-state restoration and signed Firefox release.
+
 ## 2026-10-27 — true vertical toolbar (Firefox v3.10.15 candidate)
 
 - [x] Left/Right docks use a 66 px single column with one icon/menu/action per row—no two-column layout or multi-line status stack.
