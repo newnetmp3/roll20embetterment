@@ -1616,6 +1616,79 @@ test('verified native list action keeps keyboard focus during read-only status u
   assert.equal(x.sent.length,0,'focus restoration does not invoke the action');
 });
 
+test('focused cascade category survives HUD status repaints but not character switch',()=>{
+  const h=panelHarness('Elowen');h.api.r3StartUI();
+  const snapshot=h.api.r3Empty();snapshot.name='Elowen';
+  h.api.R3_UI.snapshot=h.api.r3Coverage(snapshot);
+  h.api.R3_HUD.flyout='actions';
+  vm.runInContext("function r3BattlefieldMarkup(){return '<section class=\"r3-bf-shell\">'+"+
+    "'<nav class=\"r3-cascade-rail\">'+"+
+    "['actions','spells','features'].map(id=>'<button type=\"button\" class=\"r3-cascade-entry\" data-hud-flyout=\"'+id+'\">'+id+'</button>').join('')+"+
+    "'</nav></section>'}",h.context);
+  h.api.r3HudRender();
+  const hud=h.nodes.get('r3-hud');
+  let writes=-1,buttons=[];
+  function refresh(){
+    if(writes===hud.writes)return;
+    writes=hud.writes;
+    buttons=['actions','spells','features'].map(category=>({
+      dataset:{hudFlyout:category},
+      matches(selector){return selector==='button.r3-cascade-entry';},
+      closest(selector){return selector==='.r3-cascade-rail'?{}:null;},
+      focus(options){h.shadow.activeElement=this;this.preventScroll=options?.preventScroll;}
+    }));
+  }
+  hud.querySelectorAll=selector=>{
+    refresh();
+    return selector==='.r3-cascade-rail button.r3-cascade-entry'?buttons:[];
+  };
+  hud.contains=element=>{refresh();return buttons.includes(element);};
+  refresh();
+  h.shadow.activeElement=buttons[0];
+  const old=buttons[0];
+  h.api.R3_NATIVE.revision++;h.api.r3HudRender();
+  assert.notEqual(buttons[0],old,'DOM controls were actually replaced');
+  assert.equal(h.shadow.activeElement,buttons[0],'first level menu regains focus');
+  assert.equal(h.shadow.activeElement.preventScroll,true);
+  h.api.R3_HUD.flyout='spells';h.api.r3HudRender();
+  assert.equal(h.shadow.activeElement,buttons[0],'menu category change retains keyboard entry');
+  const beforeSwitch=h.shadow.activeElement;
+  h.api.R3_TOKEN.active={characterId:'other',name:'Other'};
+  const other=h.api.r3Empty();other.name='Other';
+  h.api.R3_UI.snapshot=h.api.r3Coverage(other);
+  h.api.r3HudRender();
+  assert.equal(h.shadow.activeElement,beforeSwitch,'no focus jump to another character');
+});
+
+test('Left arrow returns from cascade branch to parent and ignores text caret movement',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  let focusCount=0,prevented=0;
+  const parent={focus(opts){focusCount++;assert.equal(opts?.preventScroll,true);}};
+  const cascade={querySelector(selector){
+    return selector==='.r3-cascade-rail button[aria-expanded="true"]'?parent:null;
+  }};
+  const target={
+    closest(sel){
+      if(sel==='.r3-cascade-branch')return {};
+      if(sel==='.r3-bf-cascade')return cascade;
+      return null;
+    }
+  };
+  const event={key:'ArrowLeft',target,
+    preventDefault(){prevented++;},stopPropagation(){}};
+  h.shadow.handlers.get('keydown')(event);
+  assert.equal(focusCount,1);
+  assert.equal(prevented,1);
+  const editor={closest(selector){
+    if(selector==='.r3-cascade-branch')return {};
+    if(selector==='input,textarea,select,[contenteditable="true"]')return {};
+    return null;
+  }};
+  h.shadow.handlers.get('keydown')({...event,target:editor});
+  assert.equal(focusCount,1,'Left inside notes/editor must not hijack the caret');
+  assert.equal(prevented,1);
+});
+
 test('verified native List buttons remain clickable on the row, while Show More never becomes Cast',()=>{
   const x=observedChatRig('Elowen'),h=x.h;
   const snap=h.api.r3Empty();snap.name='Elowen';
