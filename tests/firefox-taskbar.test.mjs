@@ -58,7 +58,7 @@ function menuTarget(action,value,key){
 test('all R20eb panels are one cascade with Character, Notes, Settings, Debug and category branches',()=>{
   const h=rig();h.api.r3BattlefieldLoad();
   assert.doesNotMatch(h.html(),/class="r3-bf-cascade"/,'menu remains hidden when closed');
-  h.api.R3_HUD.flyout='actions';
+  h.ctx.R3_HUD.flyout='actions';
   let html=h.html();
   assert.match(html,/class="r3-bf-cascade"/);
   assert.match(html,/role="menu" aria-label="R20eb categories"/);
