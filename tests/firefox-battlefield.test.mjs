@@ -87,7 +87,8 @@ test('turn/action indicators update and do not invoke native Roll20 controls',()
   h.api.r3TurnStart();
   h.api.r3BattlefieldClick({dataset:{bfAction:'disengage'}});
   assert.equal(state.actionSpent,1);
-  assert.match(h.api.r3BattlefieldMarkup(h.ui.snapshot),/Action<\/span><strong>Spent/);
+  assert.match(h.api.r3BattlefieldMarkup(h.ui.snapshot),
+    /data-turn-action="action" role="checkbox" aria-checked="true"/);
   assert.match(state.note,/Nothing was sent to Roll20/);
   h.api.r3BattlefieldClick({dataset:{bfAction:'hide'}});
   assert.equal(state.actionSpent,2);
