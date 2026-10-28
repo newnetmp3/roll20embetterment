@@ -812,9 +812,9 @@ function r3HudRender(){
     // Stable data attributes avoid selector injection and preserve the user's
     // navigation point even when the selected category changes on activation.
     const button=[...(el.querySelectorAll?.('.r3-cascade-rail button.r3-cascade-entry')||[])]
-      .find(item=>item.dataset?.hudFlyout===focusedCascade.flyout&&
-        item.dataset?.bfAction===focusedCascade.action&&
-        item.dataset?.bfItem===focusedCascade.item);
+      .find(item=>(item.dataset?.hudFlyout||'')===focusedCascade.flyout&&
+        (item.dataset?.bfAction||'')===focusedCascade.action&&
+        (item.dataset?.bfItem||'')===focusedCascade.item);
     button?.focus?.({preventScroll:true});
   }else if(focusedNative){
     const button=[...(el.querySelectorAll?.('button[data-hud-native-kind][data-hud-native-key]')||[])]
