@@ -123,6 +123,7 @@ test('user notes persist per selected character and do not rerender on input',()
   h.api.r3BattlefieldLoad();
   assert.equal(h.api.R3_BF.notes,'Flank left; avoid fire.');
   h.api.r3BattlefieldInput({id:'r3-bf-notes',value:'<script>alert(1)</script>'});
+  h.api.r3BattlefieldClick({dataset:{bfAction:'cascade-pane',bfItem:'notes'}});
   assert.doesNotMatch(h.api.r3BattlefieldMarkup(h.ui.snapshot),/<script>/);
   assert.match(h.api.r3BattlefieldMarkup(h.ui.snapshot),/&lt;script&gt;/);
   assert.equal(h.api.r3BattlefieldInput({id:'not-ours',value:'x'}),false);
@@ -151,7 +152,7 @@ test('old utility toolbar is removed; advanced controls are only reachable throu
 });
 test('sourced resource and HP values shown, no invented class or initiative round',()=>{
   const h=harness();
-  const html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
+  let html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
   assert.match(html,/Elowen/);
   assert.doesNotMatch(html,/Slots 3\/4/,'resources are available only inside their menu');
   h.api.r3BattlefieldClick({dataset:{bfAction:'cascade-pane',bfItem:'resources'}});
