@@ -1,6 +1,6 @@
 {
-  "version": "3.10.17",
+  "version": "3.10.18",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Preserve expanded Inventory/Spell/Feature rows and keyboard focus for verified native action buttons across HUD status/HP/background-import repaints. Save open cards without legacy hud-body; prevent focus/expansion bleed across character, category and spell-level navigation. Preserve flyout scroll, source-bound one-shot native actions and manual character-sheet priority."
+  "reason": "Replace R20eb floating HUD windows with one taskbar-anchored cascading menu stack for combat, spells, features, inventory, character, notes, resource/status, Debug/Theme Manager, Settings and importer. Add hover/click/keyboard navigation; clamp to dock and chat inset; preserve verified native action safety, selected-character isolation and manually opened Roll20 character sheets."
 }
