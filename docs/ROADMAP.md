@@ -1,3 +1,11 @@
+## 2026-10-28 — cascading menu keyboard regression repair (Firefox v3.10.19 candidate)
+
+- [x] Retain focused first-level cascading-menu button after action status, HP, reader updates and category navigation without changing the user's scroll position.
+- [x] Guard against focus carryover when selecting a different controlled character and use exact checked menu identities.
+- [x] Return Left-arrow from branch to expanded menu parent while keeping all panes open; leave caret navigation in textarea/input/select/contenteditable untouched.
+- [x] Add tests for native DOM replacement and keyboard menu navigation and regenerate the standalone userscript.
+- [ ] Run green push and PR Firefox checks, publish Mozilla-signed Firefox v3.10.19, verify update-feed digest; complete real Floorp/Jumpgate focus and attack-chat parity testing.
+
 ## 2026-10-28 — replace R20eb floating panels with cascading menus (Firefox v3.10.18 candidate)
 
 - [x] Consolidate HUD flyouts, Character, Concentration, Resources, Notes, Status, settings and Debug into a taskbar-anchored cascading menu stack rather than freely floating windows.
