@@ -1,3 +1,11 @@
+## 2026-10-27 — single-column vertical toolbar + action-used checkboxes (Firefox v3.10.15 candidate)
+
+- User supplied screenshot showing Left dock as a **174 px wide, two-column mess**, with Action/Bonus/Reaction/Movement squeezed into a grid, Dash/Disengage/Hide beside it, two-column ability menus and a full multi-line status block. Corrected **both Left and Right orientations** to a fixed **66 px single-column toolbar**, one independently clickable icon and short caption per row, similar to Roll20's own vertical toolbar. The six character category buttons and three optional quick actions also stack one per row, with no paired columns. Vertical layout scrolls only if necessary.
+- Replaced visible `Ready` / `Spent` for **Action, Bonus and Reaction** with **accessible checkbox-style status buttons** (`role=checkbox`, `aria-checked`). **Unchecked = available by default; checked = used**. Existing `data-turn-action` events toggle the same local action-economy model; the next observed turn resets them. A used box does **not** mutate Roll20 action resources or claim that a sheet action was executed.
+- Narrowed vertical Movement to a short remaining-feet value. Replaced the oversized stacked HP/AC/move/status text with one small **HP tile**. Click it for a detail panel beside the toolbar showing the full character, HP, AC, movement, turn and any native action status. Bottom/Top retain the wider horizontal status strip. The settings **⋯** button sits at the end and remains reachable, including when optional sections are hidden.
+- All visual changes use selectors scoped to R20eb's Shadow DOM and maintain BG3, Tokyo Night, Oh My Posh-inspired and Windows 9x styles. Manual character-sheet visibility, native action mapping, user preference persistence, independent panels and Roll20 toolbar remain untouched.
+- Added layout/checkbox/detail tests for both vertical orientations. PR CI, Mozilla signing, feed checksum and live Floorp screenshot QA remain distinct release gates.
+
 # R20 Embetterment — development handover
 
 **Updated:** 2026-10-27  
