@@ -1,6 +1,6 @@
 {
-  "version": "3.10.16",
+  "version": "3.10.17",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Replace tile grids in Inventory, Spells and Features with compact full-width expandable lists. Present native Cast/Use/Roll buttons on rows only for exact mapped official Roll20 controls, rather than showing Native unmapped on every passive item; expanded unmapped rows explain missing verified actions. Preserve source ownership, hidden importer, attack layout, scroll restoration and selected theme."
+  "reason": "Preserve expanded Inventory/Spell/Feature rows and keyboard focus for verified native action buttons across HUD status/HP/background-import repaints. Save open cards without legacy hud-body; prevent focus/expansion bleed across character, category and spell-level navigation. Preserve flyout scroll, source-bound one-shot native actions and manual character-sheet priority."
 }

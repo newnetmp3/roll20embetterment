@@ -1,3 +1,11 @@
+## 2026-10-28 — robust list focus and expansion (Firefox v3.10.17 candidate)
+
+- [x] Restore Inventory/Spells/Features expansion across native action status, HP and auto-import HUD repaints without depending on removed \`.hud-body\`.
+- [x] Restore keyboard focus to the same expanded row or source-verified native action button after a same-view redraw, without auto-triggering a Roll20 action.
+- [x] Keep flyout scroll positions and guard against stale expansion/focus on a controlled-character switch, flyout navigation or spell-level change.
+- [ ] Green GitHub CI, Mozilla-signed v3.10.17 XPI/update feed and digest verification.
+- [ ] Live Firefox/Floorp + Roll20 2024 QA: keyboard tab/Enter/Space, expand→HP update, Attack/native status→list scroll, focus after token changes; Dagger chat parity, native spell/item use and hidden sheet behavior still pending.
+
 ## 2026-10-28 — Inventory / Spells / Features as compact native-action lists (Firefox v3.10.16 candidate)
 
 - [x] Replace the four-column tile layout with one full-width expandable list row per Inventory item, Spell and Feature; show category/quantity/level metadata.
