@@ -1,7 +1,7 @@
 // Roll20 Embetterment HUD v1: read-only combat presentation of v3 sheet data.
 // This module never dispatches native Roll20 rolls, casts or sheet mutations.
 const R3_HUD={category:'actions',collapsed:false,drawerOpen:false,flyout:'',spellLevel:'',weaponSet:0,weaponSets:[null,null,null,null,null,null],chooser:null,used:{action:false,bonus:false,reaction:false},renderedSnapshot:null,
-  renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedNative:-1,renderedDebug:null,attackMode:'melee',attackGroup:'',renderedAttackMode:null,renderedAttackGroup:null,portraitName:'',portraitUrl:'',portraitChecked:0,portraitCache:null,openKeys:[],scrollTop:0};
+  renderedCharacterKey:null,renderedCategory:null,renderedCollapsed:null,renderedDrawer:null,renderedFlyout:null,renderedPortrait:null,renderedSpellLevel:null,renderedWeaponSet:null,renderedLoadouts:null,renderedChooser:null,renderedUsed:null,renderedNative:-1,renderedDebug:null,attackMode:'melee',attackGroup:'',renderedAttackMode:null,renderedAttackGroup:null,portraitName:'',portraitUrl:'',portraitChecked:0,portraitCache:null,openKeys:[],scrollTop:0};
 const R3_HUD_TABS=[
   {key:'actions',title:'Actions',icon:'⚔'},
   {key:'bonus',title:'Bonus',icon:'✦'},
@@ -19,7 +19,8 @@ function r3HudLoad(){
   R3_HUD.attackMode='melee';R3_HUD.attackGroup='';R3_HUD.renderedAttackMode=null;
   R3_HUD.renderedAttackGroup=null;
   R3_HUD.weaponSet=0;R3_HUD.weaponSets=[null,null,null,null,null,null];
-  R3_HUD.portraitCache=null;R3_HUD.renderedSnapshot=null;
+  R3_HUD.portraitCache=null;R3_HUD.renderedSnapshot=null;R3_HUD.renderedCharacterKey=null;
+  R3_HUD.openKeys=[];
   R3_HUD.renderedLoadouts=null;
   if(typeof r3TurnLoad==='function')r3TurnLoad();
   if(typeof r3BattlefieldLoad==='function')r3BattlefieldLoad();
@@ -694,8 +695,10 @@ function r3HudMarkup(snapshot){
 }
 function r3HudRender(){
   const el=R3_UI.root?.getElementById('r3-hud');if(!el)return;
+  const characterKey=r3String(R3_TOKEN.active?.characterId||R3_AUTO.characterId||R3_UI.snapshot?.name,120);
   const portrait=r3HudPortraitUrl(R3_UI.snapshot);
-  if(R3_HUD.renderedPortrait===portrait&&R3_HUD.renderedSnapshot===R3_UI.snapshot&&
+  if(R3_HUD.renderedPortrait===portrait&&R3_HUD.renderedCharacterKey===characterKey&&
+    R3_HUD.renderedSnapshot===R3_UI.snapshot&&
     R3_HUD.renderedCategory===R3_HUD.category&&
     R3_HUD.renderedCollapsed===R3_HUD.collapsed&&
     R3_HUD.renderedDrawer===R3_HUD.drawerOpen&&
@@ -718,6 +721,8 @@ function r3HudRender(){
   // only if the user stayed in the same flyout/weapon group; intentionally
   // navigating to another category or weapon view starts a fresh position.
   const sameFlyout=R3_HUD.renderedFlyout===R3_HUD.flyout&&
+    R3_HUD.renderedCharacterKey===characterKey&&
+    R3_HUD.renderedSpellLevel===R3_HUD.spellLevel&&
     R3_HUD.renderedChooser===R3_HUD.chooser&&
     R3_HUD.renderedAttackMode===R3_HUD.attackMode&&
     R3_HUD.renderedAttackGroup===R3_HUD.attackGroup;
@@ -725,15 +730,21 @@ function r3HudRender(){
   const flyoutScroll=existingFlyout?{
     top:existingFlyout.scrollTop,left:existingFlyout.scrollLeft
   }:null;
+  // Battlefield flyouts no longer contain the legacy .hud-body. Save expanded
+  // cards directly from the live flyout on every repaint, not only from the
+  // removed container. Never carry expansion into another character or view.
+  R3_HUD.openKeys=sameFlyout?[...(el.querySelectorAll?.('details.hud-card[open]')||[])]
+    .map(card=>card.getAttribute('data-hud-card')).filter(Boolean).slice(0,80):[];
   const oldBody=el.querySelector?.('.hud-body');
-  if(oldBody){
-    R3_HUD.scrollTop=oldBody.scrollTop;
-    R3_HUD.openKeys=[...(el.querySelectorAll?.('details.hud-card[open]')||[])]
-      .map(card=>card.getAttribute('data-hud-card')).filter(Boolean).slice(0,80);
-  }
+  if(oldBody)R3_HUD.scrollTop=oldBody.scrollTop;
   // Firefox battlefield notes live in a textarea. Auto-sync may repaint
   // while the player types; preserve focus/caret rather than kicking them out.
   const active=R3_UI.root?.activeElement;
+  const inFlyout=sameFlyout&&active&&el.contains?.(active);
+  const focusedNative=inFlyout&&active.matches?.('button[data-hud-native-kind][data-hud-native-key]')?
+    {kind:active.dataset.hudNativeKind,key:active.dataset.hudNativeKey}:null;
+  const focusedCard=inFlyout&&active.matches?.('summary')?
+    active.closest?.('details.hud-card')?.getAttribute('data-hud-card'):null;
   const noteFocused=active?.id==='r3-bf-notes';
   const noteStart=noteFocused?active.selectionStart:null;
   const noteEnd=noteFocused?active.selectionEnd:null;
@@ -753,6 +764,7 @@ function r3HudRender(){
     }
   }
   R3_HUD.renderedSnapshot=R3_UI.snapshot;
+  R3_HUD.renderedCharacterKey=characterKey;
   R3_HUD.renderedPortrait=portrait;
   R3_HUD.renderedCategory=R3_HUD.category;
   R3_HUD.renderedCollapsed=R3_HUD.collapsed;
@@ -782,6 +794,19 @@ function r3HudRender(){
   if(nextFlyout){
     nextFlyout.scrollTop=flyoutScroll.top;
     nextFlyout.scrollLeft=flyoutScroll.left;
+  }
+  // Native status updates replace the flyout DOM. Reattach keyboard focus to
+  // the same source-bound action or expanded row without scrolling the list.
+  // Do not restore focus after switching character, category or spell level.
+  if(focusedNative){
+    const button=[...(el.querySelectorAll?.('button[data-hud-native-kind][data-hud-native-key]')||[])]
+      .find(item=>item.dataset?.hudNativeKind===focusedNative.kind&&
+        item.dataset?.hudNativeKey===focusedNative.key);
+    button?.focus?.({preventScroll:true});
+  }else if(focusedCard){
+    const card=[...(el.querySelectorAll?.('details.hud-card')||[])]
+      .find(item=>item.getAttribute('data-hud-card')===focusedCard);
+    card?.querySelector?.('summary')?.focus?.({preventScroll:true});
   }
 }
 function r3HudStyles(){
