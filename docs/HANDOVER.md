@@ -1,3 +1,10 @@
+## 2026-10-28 — keyboard focus retention in cascading HUD menus (Firefox v3.10.19 candidate)
+
+- Firefox v3.10.18 signed and published, update feed SHA-256 verified. Follow-up review found a keyboard regression: `r3HudRender` restored focus only to Inventory/Spells/Features summaries or verified native action buttons, but not to a **first-level cascading-menu entry**. HP/reader/native-status repaints and submenu selection rebuilt the Shadow DOM, dropping the focused category button.
+- Preserve exact focused first-level entry using checked `data-hud-flyout` / `data-bf-action` / `data-bf-item` identities; restore it using `focus({preventScroll:true})` only while the same selected character remains active. Normalize absent dataset values; no dynamic selector injection, no action execution on focus restore, no focus transfer on character switch.
+- ArrowLeft inside a submenu returns keyboard focus to its expanded first-level menu entry **without closing the entire menu**. Do not hijack Left-arrow when the player edits notes, search boxes, selects or contenteditable fields. Escape continues closing the R20eb menu without touching the original Roll20 sheet.
+- Added behavioral unit tests for menu DOM replacement and keyboard behavior. Regenerated optional userscript; no modifications to source-bound native Roll20 Attack/Cast/Use execution paths. CI, Mozilla signature/feed and live Jumpgate keyboard QA are independent acceptance gates.
+
 ## 2026-10-28 — cascading menu HUD instead of independent windows (Firefox v3.10.18 candidate)
 
 - **User request:** "change all windows to cascading menus." Rework R20eb-only UI; **do not** replace/move/hide the manually opened official Roll20 character sheet or other Roll20-owned windows.

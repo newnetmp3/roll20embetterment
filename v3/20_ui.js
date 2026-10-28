@@ -424,9 +424,14 @@ function r3StartUI(){
       event.target.click?.();
       event.preventDefault?.();
     }else if(event.key==='ArrowLeft'&&
-      event.target?.closest?.('.r3-cascade-branch')){
-      r3BattlefieldClick({dataset:{bfAction:'cascade-close'}});
-      event.preventDefault?.();
+      event.target?.closest?.('.r3-cascade-branch')&&
+      !event.target?.closest?.('input,textarea,select,[contenteditable="true"]')){
+      // Explorer-style Left returns to the active parent in the first menu
+      // column. It must never close Roll20's sheet or steal caret movement
+      // from notes, search inputs, selects or other editable controls.
+      const cascade=event.target.closest('.r3-bf-cascade');
+      const parent=cascade?.querySelector?.('.r3-cascade-rail button[aria-expanded="true"]');
+      if(parent){parent.focus?.({preventScroll:true});event.preventDefault?.();}
     }
     event.stopPropagation();
   },true);

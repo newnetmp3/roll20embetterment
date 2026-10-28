@@ -740,6 +740,16 @@ function r3HudRender(){
   // Firefox battlefield notes live in a textarea. Auto-sync may repaint
   // while the player types; preserve focus/caret rather than kicking them out.
   const active=R3_UI.root?.activeElement;
+  // Cascade category buttons live outside .hud-flyout. Remember the focused
+  // first-level entry before replacing the Shadow DOM during status, token
+  // health or background-import updates; otherwise keyboard navigation dies.
+  // A character switch must not carry focus into another player's menu.
+  const focusedCascade=active?.closest?.('.r3-cascade-rail')&&
+    active.matches?.('button.r3-cascade-entry')&&el.contains?.(active)&&
+    R3_HUD.renderedCharacterKey===characterKey?
+      {flyout:active.dataset?.hudFlyout||'',
+        action:active.dataset?.bfAction||'',
+        item:active.dataset?.bfItem||''}:null;
   const inFlyout=sameFlyout&&active&&el.contains?.(active);
   const focusedNative=inFlyout&&active.matches?.('button[data-hud-native-kind][data-hud-native-key]')?
     {kind:active.dataset.hudNativeKind,key:active.dataset.hudNativeKey}:null;
@@ -798,7 +808,15 @@ function r3HudRender(){
   // Native status updates replace the flyout DOM. Reattach keyboard focus to
   // the same source-bound action or expanded row without scrolling the list.
   // Do not restore focus after switching character, category or spell level.
-  if(focusedNative){
+  if(focusedCascade){
+    // Stable data attributes avoid selector injection and preserve the user's
+    // navigation point even when the selected category changes on activation.
+    const button=[...(el.querySelectorAll?.('.r3-cascade-rail button.r3-cascade-entry')||[])]
+      .find(item=>(item.dataset?.hudFlyout||'')===focusedCascade.flyout&&
+        (item.dataset?.bfAction||'')===focusedCascade.action&&
+        (item.dataset?.bfItem||'')===focusedCascade.item);
+    button?.focus?.({preventScroll:true});
+  }else if(focusedNative){
     const button=[...(el.querySelectorAll?.('button[data-hud-native-kind][data-hud-native-key]')||[])]
       .find(item=>item.dataset?.hudNativeKind===focusedNative.kind&&
         item.dataset?.hudNativeKey===focusedNative.key);
