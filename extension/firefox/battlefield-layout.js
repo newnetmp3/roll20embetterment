@@ -143,7 +143,8 @@ function r3BattlefieldClick(target){
       R3_BF.statusOpen=false;
       R3_BF.revision++;r3HudRender();return true;
     case 'sidebar':
-      R3_BF.sidebar=!R3_BF.sidebar;r3BattlefieldSave();break;
+      R3_BF.menuPane=R3_BF.menuPane==='profile'?'':'profile';
+      R3_BF.revision++;r3HudRender();return true;
     case 'options':
       R3_BF.options=!R3_BF.options;break;
     case 'status':
