@@ -65,6 +65,12 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
+## Firefox v3.10.15 — Roll20-style vertical toolbar and checkboxes (candidate)
+
+Selecting **Left** or **Right** from the taskbar context menu now creates a true **single-column, 66 px toolbar** with one action, shortcut, or ability category per row—similar to Roll20's native tool strip. Its status line becomes a compact HP tile; click the tile to see the full HP/AC/movement/turn/native-action status beside the toolbar. Bottom and Top keep the horizontal taskbar.
+
+**Action, Bonus, Reaction** display simple checkboxes instead of "Ready" or "Spent". Unchecked means available (the default), checked means used. Clicking toggles the existing local turn tracker; it does not execute or consume a native Roll20 action. Existing manual sheet isolation and native attack mappings remain unchanged.
+
 ## Firefox v3.10.14 — Taskbar and status-bar HUD (candidate)
 
 The combat HUD is now a compact **unified taskbar** with action indicators, Attack/Feature/Spell/Inventory/Skill/MISC shortcuts, and a **status bar** for the current character, HP, AC, movement, turn and official-sheet native action status.
