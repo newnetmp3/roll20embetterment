@@ -1,3 +1,11 @@
+## 2026-10-27 — true vertical toolbar (Firefox v3.10.15 candidate)
+
+- [x] Left/Right docks use a 66 px single column with one icon/menu/action per row—no two-column layout or multi-line status stack.
+- [x] Action, Bonus and Reaction are local **checkbox state controls**: unchecked available, checked used, using the existing turn tracking events.
+- [x] Vertical status reduced to a compact HP tile with full details opened beside the dock; Bottom/Top retain horizontal status strip.
+- [x] Keep Dock orientation, context menu, show/hide settings, game preference storage, user themes and independent panels.
+- [ ] Live Floorp/Jumpgate 1080p/1440p screenshot and click QA, Roll20 chat parity and release signature verification.
+
 ## 2026-10-27 — unified taskbar/status bar (Firefox v3.10.14 candidate)
 
 - [x] Replace independent oversized Action and Category panels with a compact consolidated, draggable taskbar and character/turn/movement/status strip.
