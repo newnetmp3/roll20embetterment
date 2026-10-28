@@ -370,7 +370,7 @@ function r3BattlefieldMarkup(snapshot){
     (R3_BF.visible.status?(vertical?
       '<button type="button" class="r3-bf-vertical-status" data-bf-action="vertical-status" '+
       'aria-label="'+r3Escape('Character status: '+statusTitle)+
-      '" aria-expanded="'+R3_BF.statusOpen+'" title="'+r3Escape(statusTitle)+'">'+
+      '" aria-expanded="'+(R3_BF.menuPane==='status')+'" title="'+r3Escape(statusTitle)+'">'+
       '<span aria-hidden="true">HP</span><strong aria-hidden="true">'+r3Escape(hp)+'</strong></button>':
       '<div class="r3-bf-taskbar-status" role="status" aria-live="off">'+
       '<span class="r3-bf-status-character">'+r3Escape(name)+'</span>'+
@@ -619,7 +619,10 @@ function r3Win9xStyles(){
     '.r3-debug-entry strong,.r3-debug-entry time{color:#000080!important}',
     '.r3-debug-entry.warning span{color:#804000!important}.r3-debug-entry.error span{color:#a00000!important}',
     '.r3-debug-movement dt,.r3-debug-movement dd{color:#111!important}',
-    '.r3-bf-taskbar,.r3-bf-context{background:#c0c0c0!important;color:#111!important;border:2px solid!important;border-color:#fff #404040 #404040 #fff!important;border-radius:0!important;box-shadow:inset 1px 1px #dfdfdf,inset -1px -1px #808080!important}',
+    '.r3-bf-taskbar,.r3-bf-context,.r3-bf-cascade{background:#c0c0c0!important;color:#111!important;border:2px solid!important;border-color:#fff #404040 #404040 #fff!important;border-radius:0!important;box-shadow:inset 1px 1px #dfdfdf,inset -1px -1px #808080!important}',
+    '.r3-bf-cascade .r3-cascade-rail,.r3-bf-cascade .r3-cascade-branch{background:#c0c0c0!important;color:#111!important}',
+    '.r3-bf-cascade .r3-cascade-entry.selected,.r3-bf-cascade .r3-cascade-entry:hover,.r3-bf-cascade .r3-cascade-entry:focus-visible{background:#000080!important;color:#fff!important;border-radius:0!important}',
+    '.r3-bf-cascade .hud-flyout,.r3-bf-cascade .r3-debug-window,.r3-bf-cascade .r3-cascade-info{background:#c0c0c0!important;color:#111!important}',
     '.r3-bf-taskbar-status{border-top:1px solid #808080!important;color:#111!important}',
     '#r3-wrap{background:#c0c0c0!important;color:#111!important}',
     '#r3-toggle{font-size:12px!important;font-weight:700!important;padding:5px 9px!important}',
