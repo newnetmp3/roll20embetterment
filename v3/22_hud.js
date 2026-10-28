@@ -181,6 +181,68 @@ function r3HudCard(item,index){
     controls+native+
     '<div class="hud-card-note">Source details are observed; unmapped controls do not change Roll20. Native actions run only when clicked.</div></div></details>';
 }
+// Compact Explorer-style rows for Inventory, Features, and Spells.
+// A named inventory card is data, not necessarily a useable sheet action.
+// Display actionable native controls only when a verified macro/official
+// button exists. Never present passive quantity/equip switches as "Use".
+function r3HudListCard(item,index){
+  const kind=r3HudSourceKind(item),name=r3String(item.name||'Unnamed entry',125);
+  const id=r3String(item._key||'',240),mapped=id&&
+    typeof r3NativeMapPreview==='function'?
+      r3NativeMapPreview(kind,id,R3_UI.snapshot):{reason:'No source action identity was imported.'};
+  const actionable=!!(mapped?.abilityName||mapped?.sheetAction);
+  const featureRoll=kind==='features'&&mapped?.sheetAction&&
+    (item.actions||[]).some(action=>
+      /^\d{1,2}d\d{1,3}(?:[+-]\d{1,3})?$/i.test(r3String(action.label,70)));
+  const verb=featureRoll?'Roll':R3_NATIVE_CATEGORIES[kind]?.title||'Use';
+  const key=r3Escape(id+'|'+r3String(item.tab,60)+'|'+index);
+  const meta=[kind==='spells'?'Spell':kind==='features'?'Feature':'Item'];
+  if(r3HudHasValue(item.level))meta.push(r3String(item.level,24));
+  if(r3HudHasValue(item.quantity))meta.push('Qty '+r3String(item.quantity,20));
+  if(r3HudHasValue(item.uses))meta.push('Uses '+r3String(item.uses,20));
+  const tags=[];
+  for(const [label,value] of [['Range',item.range],['Casting',item.castingTime],
+    ['Uses',item.uses]]){
+    if(r3HudHasValue(value))tags.push('<span>'+r3Escape(label)+' '+r3Escape(value)+'</span>');
+  }
+  if(item.checkboxes)tags.push('<span>'+r3Escape(item.checkboxes.checked)+'/'+
+    r3Escape(item.checkboxes.total)+' checked</span>');
+  if(typeof r3TurnCost==='function'){
+    const cost=r3TurnCost(item);
+    if(cost)tags.unshift('<span class="hud-economy-cost">'+r3Escape(cost)+'</span>');
+  }
+  const details=r3String(item.visible,1100);
+  const controls=(item.controls||[]).slice(0,18).map(control=>
+    '<div class="hud-card-field">'+r3Escape(control.label||control.kind)+': '+
+      r3Escape(control.value===true?'On':control.value===false?'Off':control.value)+'</div>').join('');
+  const explanation={
+    inventory:'No verified native Use action was found for this item. Quantity, equipped state and other item controls are not automatically use actions.',
+    spells:'No verified native Cast action was found for this spell. Show More is a details control, not a cast.',
+    features:'No verified native Use or Roll control was found for this feature.'
+  }[kind]||'No verified native action was found.';
+  return '<div class="hud-list-row'+(actionable?' has-native':'')+'">'+
+    '<details class="hud-card hud-list-card" data-hud-card="'+key+'">'+
+    '<summary><span class="hud-card-mark" aria-hidden="true">'+
+      r3Escape((item._hudSource||'Item').slice(0,1))+'</span>'+
+    '<span class="hud-list-heading"><strong>'+r3Escape(name)+'</strong>'+
+      '<small>'+r3Escape(meta.join(' · '))+'</small></span>'+
+    '<span class="hud-card-caret" aria-hidden="true">⌄</span></summary>'+
+    '<div class="hud-card-body">'+
+      (tags.length?'<div class="hud-card-tags">'+tags.join('')+'</div>':'')+
+      (details?'<p>'+r3Escape(details)+'</p>':
+        '<p>No further labeled details were observed on the sheet.</p>')+
+      controls+
+      (actionable?'<small class="hud-card-note">This action uses a verified native Roll20 control. The sheet remains authoritative for resource changes.</small>':
+        '<small class="hud-card-note" title="'+r3Escape(mapped?.reason||'')+'">'+
+        r3Escape(explanation)+'</small>')+
+    '</div></details>'+
+    (actionable?'<div class="hud-list-action"><button type="button" class="hud-native-action" '+
+      'data-hud-native-kind="'+r3Escape(kind)+'" data-hud-native-key="'+r3Escape(id)+'" '+
+      'aria-label="'+r3Escape(verb+' '+name+' via Roll20')+'" title="'+
+      r3Escape('Trigger the exact verified official Roll20 sheet control')+'">'+
+      r3Escape(verb)+'</button></div>':'')+
+    '</div>';
+}
 // Argon core has a portrait panel + side-stat stacks and segmented action
 // panels. The provided Twilight: 2000 module is a system adapter, NOT a
 // standalone HUD/theme; this is a Roll20-native implementation of its layout
@@ -513,7 +575,7 @@ function r3HudFlyoutMarkup(snapshot){
         (lev===selected?'active':'')+'">'+(lev==='0'?'Cantrip':lev==='other'?'Unclassified':'Level '+lev)+
         ' <small>'+arr.length+'</small></button>').join('')+'</div>'+
         '<div class="hud-flyout-caption">'+(selected==='0'?'Cantrips':selected==='other'?'Unclassified spells':'Level '+selected)+
-        slots+'</div><div class="hud-flyout-cards">'+spells.slice(0,65).map((item,index)=>r3HudCard({...item,_hudSource:'Spell'},index)).join('')+'</div>';
+        slots+'</div><div class="hud-flyout-cards hud-list">'+spells.slice(0,65).map((item,index)=>r3HudListCard({...item,_hudSource:'Spell'},index)).join('')+'</div>';
     }
   }else if(flyout==='actions'){
     content=r3HudAttackMenu(snapshot);
@@ -529,7 +591,9 @@ function r3HudFlyoutMarkup(snapshot){
         '<span class="hud-empty">No imported entries</span>')+'</div>').join('');
   }else{
     const cards=r3HudEntries(snapshot,flyout);
-    content=cards.length?'<div class="hud-flyout-cards">'+cards.slice(0,80).map(r3HudCard).join('')+'</div>':
+    const compact=flyout==='inventory'||flyout==='features';
+    content=cards.length?'<div class="hud-flyout-cards'+(compact?' hud-list':'')+'">'+
+      cards.slice(0,80).map((item,index)=>compact?r3HudListCard(item,index):r3HudCard(item,index)).join('')+'</div>':
       '<p class="hud-empty">No confirmed entries in this category.</p>';
   }
   return '<section class="hud-flyout" aria-label="Combat '+r3Escape(titles[flyout]||flyout)+' flyout">'+
@@ -774,6 +838,24 @@ function r3HudStyles(){
     '.hud-spell-levels{display:flex;gap:4px;margin:6px;overflow-x:auto}.hud-spell-levels button{background:#526371!important;border:0!important;padding:5px 8px!important;font-size:11px!important;white-space:nowrap}',
     '.hud-spell-levels button.active{background:#9e7987!important;color:white!important}.hud-spell-levels small{opacity:.8}',
     '.hud-flyout-caption{padding:2px 8px;color:#f0dbe7;font-weight:700;font-size:10px}.hud-flyout-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:4px;padding:7px}',
+    // Inventory/Spells/Features use a single-column master/detail list.
+    // Native buttons are only shown when a source-observed action is verified.
+    '.hud-flyout-cards.hud-list{display:flex!important;flex-direction:column!important;gap:2px!important;padding:5px!important;min-width:0!important;grid-template-columns:none!important}',
+    '.hud-list-row{position:relative;display:block;min-width:0;border:1px solid var(--r3-border,#60758c);border-radius:4px;background:var(--r3-surface,#303f4d);color:var(--r3-text,#f2f2f2);overflow:visible}',
+    '.hud-list-row .hud-list-card{display:block;width:100%;min-width:0;border:0!important;border-radius:3px!important;background:transparent!important;box-shadow:none!important;color:inherit!important}',
+    '.hud-list-row .hud-list-card summary{box-sizing:border-box;display:flex;align-items:center;gap:8px;min-height:38px;padding:5px 8px!important;cursor:pointer;min-width:0}',
+    '.hud-list-row.has-native .hud-list-card summary{padding-right:96px!important}',
+    '.hud-list-row .hud-card-mark{width:23px;height:23px;flex:0 0 23px;border-radius:2px}',
+    '.hud-list-heading{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;line-height:1.25}',
+    '.hud-list-heading strong{font-size:12px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:inherit}',
+    '.hud-list-heading small{font-size:10px!important;opacity:.78;color:inherit}',
+    '.hud-list-row .hud-card-caret{margin-left:auto;font-size:12px;flex:none}',
+    '.hud-list-row .hud-list-card[open] .hud-card-caret{transform:rotate(180deg)}',
+    '.hud-list-row .hud-card-body{box-sizing:border-box;width:100%;padding:7px 9px!important;background:var(--r3-inset,#222d39)!important;border-top:1px solid var(--r3-border,#60758c)!important;color:var(--r3-text,#fff)!important;font-size:11px!important}',
+    '.hud-list-row .hud-card-note{display:block;margin-top:6px;line-height:1.35;opacity:.9;color:var(--r3-muted,#b8c8d6)!important}',
+    '.hud-list-action{position:absolute;right:7px;top:5px;z-index:1;display:flex;align-items:center;min-height:27px}',
+    '.hud-list-action .hud-native-action{min-height:27px!important;min-width:66px!important;font-size:11px!important;padding:4px 7px!important}',
+    '.hud-list-row:focus-within{outline:1px solid var(--r3-accent,#d5b779);outline-offset:0}',
     '.hud-attack-list{display:flex;flex-direction:column;gap:5px;padding:7px;min-width:0}.hud-attack-count{font-size:10px;color:#becfde;padding:3px 4px}',
     '.hud-native-link{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0}.hud-native-linked{font-size:10px;color:#9bdcba}.hud-native-unmapped{font-size:10px;color:#d6ba86}',
     '.hud-native-action{border:1px solid #5e9bc8!important;border-radius:5px!important;background:#286394!important;color:#fff!important;font-weight:700!important;padding:5px 8px!important;min-height:27px}',
