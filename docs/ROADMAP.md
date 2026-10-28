@@ -1,3 +1,12 @@
+## 2026-10-28 — replace R20eb floating panels with cascading menus (Firefox v3.10.18 candidate)
+
+- [x] Consolidate HUD flyouts, Character, Concentration, Resources, Notes, Status, settings and Debug into a taskbar-anchored cascading menu stack rather than freely floating windows.
+- [x] Keep nested Attack mode/weapon variants, Spell levels/list rows, expanded Inventory/Feature detail, Debug tools and Theme Manager accessible in the active branch.
+- [x] Add click/hover and keyboard cascade navigation; avoid accidental native Cast/Use/Attack triggers from hover or menu state updates.
+- [x] Place menu relative to current taskbar orientation and clamp to viewport/chat safe bounds; preserve theme manager, importers, visible Roll20 sheets and source-verified one-shot native actions.
+- [ ] Confirm real Floorp/Firefox 1080p and 1440p cascade placement, hover menu behavior, tablet/touch fallback, keyboard focus and notes/Debug/importer operation.
+- [ ] Require green Firefox CI, signed unlisted v3.10.18 release + update feed digest and native Roll20 2024 chat parity.
+
 ## 2026-10-28 — robust list focus and expansion (Firefox v3.10.17 candidate)
 
 - [x] Restore Inventory/Spells/Features expansion across native action status, HP and auto-import HUD repaints without depending on removed \`.hud-body\`.
