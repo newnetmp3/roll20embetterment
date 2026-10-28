@@ -106,6 +106,9 @@ function r3BattlefieldPlacePanels(){
     if(['actions','categories'].includes(name))continue;
     const panel=r3BattlefieldPanel(root,name);
     if(!panel)continue;
+    // Menus live in one anchored cascade; ignore historic per-window drag
+    // positions for child panels and preserve ordinary menu interaction.
+    if(panel.closest?.('.r3-bf-cascade'))continue;
     panel.setAttribute?.('tabindex','0');
     panel.setAttribute?.('title','Drag to move · Alt+Arrow to nudge, Alt+Shift+Arrow for 1px');
     const saved=R3_BF_DRAG.positions[name];
@@ -123,6 +126,46 @@ function r3BattlefieldPlacePanels(){
         anchor.right-menu.width,anchor.top-menu.height-8);
     }
   }
+  // Anchor the whole cascade once, rather than dragging each flyout. Roll20
+  // chat is a reserved inset and a right-side dock opens branches to its left.
+  const cascade=root.querySelector?.('.r3-bf-cascade');
+  if(cascade){
+    const dock=r3BattlefieldPanel(root,'taskbar');
+    const anchor=dock?.getBoundingClientRect?.();
+    const rect=cascade.getBoundingClientRect?.();
+    if(anchor&&rect){
+      const maxLeft=Math.max(4,usable-rect.width-6);
+      const x=R3_BF.orientation==='right'?
+        anchor.left-rect.width-6:
+        R3_BF.orientation==='left'?anchor.right+6:
+        anchor.right-rect.width;
+      const y=R3_BF.orientation==='bottom'?
+        anchor.top-rect.height-6:
+        R3_BF.orientation==='top'?anchor.bottom+6:
+        anchor.top;
+      // Set bounds in CSS-pixels; never move native Roll20 controls.
+      cascade.style?.setProperty?.('left',Math.max(4,Math.min(maxLeft,Math.round(x)))+'px','important');
+      cascade.style?.setProperty?.('top',Math.max(4,Math.min(height-rect.height-4,Math.round(y)))+'px','important');
+      cascade.style?.setProperty?.('right','auto','important');
+      cascade.style?.setProperty?.('bottom','auto','important');
+    }
+    // The importer remains the original live DOM element (its own event
+    // listeners, scan state and focused inputs survive HUD rerenders), but it
+    // is positioned as the active second-level menu instead of a free window.
+    const importer=root.getElementById?.('r3-wrap');
+    const branch=cascade.querySelector?.('.r3-cascade-branch');
+    if(importer&&branch&&R3_BF.menuPane==='importer'&&R3_UI.shown){
+      const at=branch.getBoundingClientRect?.();
+      if(at){
+        importer.style?.setProperty?.('left',Math.round(at.left)+'px','important');
+        importer.style?.setProperty?.('top',Math.round(at.top)+'px','important');
+        importer.style?.setProperty?.('right','auto','important');
+        importer.style?.setProperty?.('bottom','auto','important');
+        importer.style?.setProperty?.('width',Math.max(180,Math.min(520,usable-at.left-6))+'px','important');
+        importer.style?.setProperty?.('z-index','2801','important');
+      }
+    }
+  }
 }
 function r3BattlefieldIsEditor(target){
   return !!target?.closest?.(
@@ -134,7 +177,8 @@ function r3BattlefieldDragStart(event){
   const dock=event.target?.closest?.('[data-bf-panel="taskbar"]');
   const panel=dock||event.target?.closest?.('[data-bf-panel]');
   const name=panel?.getAttribute?.('data-bf-panel');
-  if(!R3_BF_PANELS.has(name)||r3BattlefieldIsEditor(event.target))return;
+  if(!R3_BF_PANELS.has(name)||r3BattlefieldIsEditor(event.target)||
+    panel?.closest?.('.r3-bf-cascade'))return;
   if(!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return;
   const b=r3BattlefieldBounds(panel);
   R3_BF_DRAG.active={
@@ -188,7 +232,7 @@ function r3BattlefieldDragKeyboard(event){
   const panel=event.target?.closest?.('[data-bf-panel="taskbar"]')||
     event.target?.closest?.('[data-bf-panel]');
   const name=panel?.getAttribute?.('data-bf-panel');
-  if(!R3_BF_PANELS.has(name))return;
+  if(!R3_BF_PANELS.has(name)||panel?.closest?.('.r3-bf-cascade'))return;
   const vectors={ArrowLeft:[-1,0],ArrowRight:[1,0],
     ArrowUp:[0,-1],ArrowDown:[0,1]};
   const direction=vectors[event.key];

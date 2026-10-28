@@ -23,6 +23,7 @@ function harness(){
     R3_HUD:{used:{action:false,bonus:false,reaction:false},
       collapsed:false,flyout:'',chooser:null},
     R3_NATIVE:{status:'',preview:null},
+    R3_DEBUG:{open:false},
     R3_AUTO:{enabled:false},
     r3TokenSettingsKey(){return 'roll20:game:character:'+ctx.R3_TOKEN.active.characterId;},
     r3HudRender(){rendered.count++;},
@@ -39,6 +40,7 @@ function harness(){
     r3HudPortraitUrl(){return 'https://example.net/character.webp';},
     r3HudFlyoutMarkup(){return '<section class="hud-flyout">Existing real flyout</section>';},
     r3NativeMarkup(){return '<section class="hud-native-status">Native status</section>';},
+    r3DebugMarkup(){return '<aside class="r3-debug-window">Debug controls</aside>';},
     localStorage:{getItem(k){return store.get(k)||null;},
       setItem(k,v){store.set(k,v);}}
   };
@@ -57,7 +59,8 @@ test('reference: two short corner docks with pass-through map and compact top-ri
   const css=h.api.r3BattlefieldStyles();
   assert.match(html,/class="r3-bf-actions"/);
   assert.match(html,/class="r3-bf-category-dock"/);
-  assert.match(html,/class="r3-bf-sidebar"/);
+  assert.doesNotMatch(html,/class="r3-bf-sidebar"/,'no floating character window by default');
+  assert.match(html,/data-bf-action="cascade-pane" data-bf-item="profile"/);
   assert.match(html,/class="r3-bf-turnstrip"/);
   assert.match(css,/#r3-hud\{position:absolute!important;inset:0!important;/);
   assert.match(css,/pointer-events:none!important/,'HUD root must not intercept map clicks');
@@ -78,7 +81,8 @@ test('reference: four economy rings and six classified/MISC flyouts',()=>{
   assert.match(html,/data-turn-action="dash-action"/);
   assert.match(html,/data-bf-action="disengage"/);
   assert.match(html,/data-bf-action="hide"/);
-  assert.match(html,/data-turn-action="focus"/);
+  h.api.r3BattlefieldClick({dataset:{bfAction:'cascade-pane',bfItem:'concentration'}});
+  assert.match(h.api.r3BattlefieldMarkup(h.ui.snapshot),/data-turn-action="focus"/);
   assert.match(html,/data-turn-action="start"/);
   assert.match(html,/data-turn-action="end"/);
 });
@@ -103,12 +107,14 @@ test('Flyout is on demand, preserves native attack browsing and does not cover m
   h.ctx.R3_HUD.flyout='actions';
   html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
   assert.match(html,/Existing real flyout/);
-  assert.match(html,/data-hud-flyout="actions" aria-pressed="true"/);
+  assert.match(html,/class="r3-bf-cascade"/);
+  assert.match(html,/role="menu" aria-label="R20eb categories"/);
 });
 test('user notes persist per selected character and do not rerender on input',()=>{
   const h=harness(),notes={id:'r3-bf-notes',value:'Flank left; avoid fire.'};
   assert.equal(h.api.r3BattlefieldInput(notes),true);
   assert.equal(h.rendered.count,0,'typing must not reset selection or caret');
+  h.api.r3BattlefieldClick({dataset:{bfAction:'cascade-pane',bfItem:'notes'}});
   assert.match(h.api.r3BattlefieldMarkup(h.ui.snapshot),/Flank left; avoid fire/);
   h.ctx.R3_TOKEN.active={tokenId:'other',characterId:'brom-id',name:'Brom'};
   h.api.r3BattlefieldLoad();
@@ -117,22 +123,23 @@ test('user notes persist per selected character and do not rerender on input',()
   h.api.r3BattlefieldLoad();
   assert.equal(h.api.R3_BF.notes,'Flank left; avoid fire.');
   h.api.r3BattlefieldInput({id:'r3-bf-notes',value:'<script>alert(1)</script>'});
+  h.api.r3BattlefieldClick({dataset:{bfAction:'cascade-pane',bfItem:'notes'}});
   assert.doesNotMatch(h.api.r3BattlefieldMarkup(h.ui.snapshot),/<script>/);
   assert.match(h.api.r3BattlefieldMarkup(h.ui.snapshot),/&lt;script&gt;/);
   assert.equal(h.api.r3BattlefieldInput({id:'not-ours',value:'x'}),false);
 });
-test('side-panel toggle saves local preference without hiding the central battlefield',()=>{
+test('Character summary is a cascade branch, not a separate floating sidebar',()=>{
   const h=harness();
   h.api.r3BattlefieldClick({dataset:{bfAction:'sidebar'}});
-  assert.equal(h.api.R3_BF.sidebar,false);
-  const compact=h.api.r3BattlefieldMarkup(h.ui.snapshot);
-  assert.doesNotMatch(compact,/class="r3-bf-sidebar"/);
-  assert.match(compact,/data-bf-action="sidebar"/);
-  assert.match(compact,/class="r3-bf-actions"/);
+  assert.equal(h.api.R3_BF.menuPane,'profile');
+  const opened=h.api.r3BattlefieldMarkup(h.ui.snapshot);
+  assert.match(opened,/class="r3-bf-cascade"/);
+  assert.match(opened,/class="r3-bf-sidebar"/);
+  assert.match(opened,/data-bf-action="sidebar"/);
+  assert.match(opened,/class="r3-bf-actions"/);
   h.api.r3BattlefieldClick({dataset:{bfAction:'sidebar'}});
-  assert.equal(h.api.R3_BF.sidebar,true);
-  h.api.r3BattlefieldLoad();
-  assert.equal(h.api.R3_BF.sidebar,true);
+  assert.equal(h.api.R3_BF.menuPane,'');
+  assert.doesNotMatch(h.api.r3BattlefieldMarkup(h.ui.snapshot),/class="r3-bf-sidebar"/);
 });
 test('old utility toolbar is removed; advanced controls are only reachable through Debug',()=>{
   const h=harness();
@@ -145,10 +152,14 @@ test('old utility toolbar is removed; advanced controls are only reachable throu
 });
 test('sourced resource and HP values shown, no invented class or initiative round',()=>{
   const h=harness();
-  const html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
+  let html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
   assert.match(html,/Elowen/);
+  assert.doesNotMatch(html,/Slots 3\/4/,'resources are available only inside their menu');
+  h.api.r3BattlefieldClick({dataset:{bfAction:'cascade-pane',bfItem:'resources'}});
+  assert.match(h.api.r3BattlefieldMarkup(h.ui.snapshot),/Slots 3\/4/);
+  h.api.r3BattlefieldClick({dataset:{bfAction:'cascade-pane',bfItem:'profile'}});
+  html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
   assert.match(html,/25\/30/);
-  assert.match(html,/Slots 3\/4/);
   assert.match(html,/Level 5/);
   assert.match(html,/Local markers/);
   assert.doesNotMatch(html,/Round [0-9]/);
@@ -173,7 +184,8 @@ test('routine native/debug messages have no HUD overlays while roll confirmation
   assert.match(html,/data-bf-panel="categories"/);
   h.ctx.R3_NATIVE.preview={status:'ready'};
   html=h.api.r3BattlefieldMarkup(h.ui.snapshot);
-  assert.match(html,/class="r3-bf-native"/,'actionable native roll controls remain visible');
+  assert.match(html,/class="r3-bf-cascade"/,'native confirmation is in the cascading menu');
+  assert.match(html,/class="hud-native-status"/);
 });
 test('battlefield ring shows negative remaining movement instead of clipping at zero',()=>{
   const h=harness();

@@ -6,18 +6,18 @@ Player-focused D&D 2024 combat HUD and read-only Roll20 sheet companion. R20eb u
 
 | Distribution | Status |
 | --- | --- |
-| **Firefox / Floorp** | **v3.10.16** Mozilla-signed and published; v3.10.17 focus/expansion correction in development |
+| **Firefox / Floorp** | **v3.10.17** Mozilla-signed and published; v3.10.18 cascading-menu layout in development |
 | **Chrome / Chromium** | **v3.4.0**; independently versioned and not feature-parity guaranteed |
 | **Optional userscript** | **v3.4.0** metadata; built from `v3/` independently of Firefox releases |
 
-- [Firefox v3.10.16 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.16/r20eb-firefox-v3.10.16.xpi)
+- [Firefox v3.10.17 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.17/r20eb-firefox-v3.10.17.xpi)
 - [Firefox updates.json](extension/firefox/updates.json)
 - [Firefox installation and signing guide](extension/firefox/README.md)
 - [GitHub Actions](https://github.com/newnetmp3/roll20embetterment/actions)
 
 Disable any previous R20eb userscript or duplicate extension when using the signed Firefox add-on. Keep the native Roll20 chat panel accessible when running actions; R20eb does not overwrite an unsent chat draft.
 
-Firefox v3.10.16 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+Firefox v3.10.17 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
 
 ## Native-action and UI milestone (PR #110 — released in Firefox v3.10.0)
 
@@ -25,7 +25,7 @@ The **Milestone Completion** build extends native action discovery beyond existi
 
 The Firefox battlefield HUD replaces the former six-button utility toolbar with one **Debug** entry in the turn strip. Debug contains the manual turn corrections, original-sheet controls, automatic private reader status, layout reset, HUD visibility, importer and movement logs. Panels remain movable and keyboard-nudgeable. The layout scales to browser/monitor viewport size and accounts for Roll20 chat/sidebar space.
 
-**Firefox v3.10.16 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
+**Firefox v3.10.17 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
 
 ## Firefox v3.10.3 background import (signed; live QA pending)
 
@@ -64,6 +64,12 @@ buttons rather than verified Cast buttons, so **native spell casting is not
 yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
+
+## Firefox v3.10.18 — Cascading HUD menus (candidate)
+
+All R20eb display windows have been reorganized into a single **cascading menu stack** attached to the taskbar: Attacks → type/weapon/variant, Spells → level/spell, Inventory/Features → expandable details, Skills, MISC, Resources, Character, Concentration, Notes, Status, Debug, Theme Manager and Settings. Open a category by clicking a taskbar icon; move between first-level menus with hover or click. Keyboard users can Tab, use arrow keys and Enter/Space; Escape closes the menu. The Importer is positioned as a branch while preserving its live controls and active scans.
+
+Menus open toward the available screen area without covering Roll20's chat. **Only verified source-bound native actions are executable**; opening, hovering or expanding a menu never rolls or modifies a character. The player's official Roll20 character sheet and other Roll20-owned dialogs are unchanged. Native Attack/Spell/Item parity and final visual QA still require a real browser session.
 
 ## Firefox v3.10.17 — Preserve list expansion and keyboard focus (candidate)
 

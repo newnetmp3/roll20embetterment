@@ -19,7 +19,8 @@ function rig(){
     R3_UI:{shown:false,snapshot:null,root:null,host:null},
     R3_TURN:{extraActions:0,actionSpent:0,bonusSpent:false,reactionSpent:false,
       dashes:0,movementUsed:5,phase:'active',noteSource:'observed',concentration:null},
-    R3_NATIVE:{status:''},
+    R3_NATIVE:{status:'',preview:null},
+    R3_DEBUG:{open:false},
     r3TokenSettingsKey:()=> 'test-campaign',
     r3StorageKey:()=> 'test-campaign',
     r3HudRender:()=>calls.push('render'),
@@ -32,7 +33,7 @@ function rig(){
     r3HudIcon:name=>'<svg data-symbol="'+name+'"></svg>',
     r3HudFlyoutMarkup:()=>'<section class="hud-flyout">ATTACK</section>',
     r3TurnSpeed:()=>30,r3TurnDistance:value=>String(value),
-    r3BattlefieldDraggableFlyout:markup=>markup,r3DebugMarkup:()=> '',
+    r3BattlefieldDraggableFlyout:markup=>markup,r3DebugMarkup:()=> '<aside class="r3-debug-window">Debug</aside>',
     r3NativeMarkup:()=>'',r3SheetRevealAll:()=>calls.push('player sheet'),
     r3TurnChange:()=>calls.push('local turn'),
     r3Escape:value=>String(value).replace(/[&<>"]/g,c=>({
@@ -44,6 +45,7 @@ function rig(){
     '\nglobalThis.taskbarApi={R3_BF,R3_BF_DOCKS,R3_BF_VISIBILITY,R3_BF_DRAG,'+
     'r3BattlefieldLoad,r3BattlefieldSave,r3BattlefieldMarkup,r3BattlefieldClick,'+
     'r3BattlefieldContextEvent,r3BattlefieldContextOpen,r3BattlefieldContextClose,'+
+    'r3BattlefieldCascadeStyles,r3BattlefieldCascadeMarkup,'+
     'r3BattlefieldDockOrientation,r3BattlefieldTogglePart,'+
     'r3BattlefieldTaskbarStyles,r3Win9xStyles,r3BattlefieldDragStart};',ctx);
   const api=ctx.taskbarApi;
@@ -53,6 +55,34 @@ function rig(){
 function menuTarget(action,value,key){
   return {dataset:{bfAction:action,bfValue:value,bfItem:key}};
 }
+test('all R20eb panels are one cascade with Character, Notes, Settings, Debug and category branches',()=>{
+  const h=rig();h.api.r3BattlefieldLoad();
+  assert.doesNotMatch(h.html(),/class="r3-bf-cascade"/,'menu remains hidden when closed');
+  h.ctx.R3_HUD.flyout='actions';
+  let html=h.html();
+  assert.match(html,/class="r3-bf-cascade"/);
+  assert.match(html,/role="menu" aria-label="R20eb categories"/);
+  for(const key of ['actions','spells','inventory','features','skills','misc'])
+    assert.match(html,new RegExp('data-hud-flyout="'+key+'"'));
+  assert.match(html,/class="r3-cascade-branch"/);
+  h.api.r3BattlefieldClick(menuTarget('cascade-pane',undefined,'notes'));
+  html=h.html();
+  assert.match(html,/data-bf-panel="notes"/);
+  assert.doesNotMatch(html,/class="hud-flyout"/);
+  h.api.r3BattlefieldClick(menuTarget('taskbar-menu'));
+  html=h.html();
+  assert.match(html,/class="r3-bf-context"/);
+  assert.doesNotMatch(html,/class="r3-bf-notes"/);
+  assert.equal(h.api.r3BattlefieldClick(menuTarget('cascade-close')),true);
+  assert.doesNotMatch(h.html(),/class="r3-bf-cascade"/);
+  assert.equal(h.api.r3BattlefieldClick(menuTarget('cascade-pane',undefined,'invalid')),false);
+  const css=h.api.r3BattlefieldCascadeStyles();
+  assert.match(css,/max-width:calc\(100vw - var\(--r3-bf-chat-inset/);
+  assert.match(css,/\.r3-cascade-rail/);
+  assert.match(css,/\.r3-bf-cascade \.hud-spell-levels/);
+  assert.match(css,/\.r3-bf-cascade \.hud-weapon-submenu/);
+  assert.doesNotMatch(css,/document\.body|\.characterdialog/);
+});
 test('compact taskbar is the default and shows native character status without mutating Roll20',()=>{
   const h=rig();h.api.r3BattlefieldLoad();
   const html=h.html();
@@ -90,9 +120,9 @@ test('right-clicking just the dock opens an accessible orientation and visibilit
   assert.doesNotMatch(h.html(),/class="r3-bf-context"/);
   h.api.r3BattlefieldContextOpen(1435,899);
   assert.ok(h.api.R3_BF.contextY<=435,
-    'the settings menu must fit vertically when opened at the bottom edge');
+    'context coordinates remain clamped, even though settings are now a menu branch');
   assert.ok(h.api.R3_BF.contextX<=1440-308-242,
-    'the settings menu must avoid the Roll20 chat/sidebar');
+    'context coordinates remain bounded away from the chat sidebar');
 });
 test('orientation change persists without moving independently dragged character panels',()=>{
   const h=rig();h.api.r3BattlefieldLoad();
@@ -228,10 +258,10 @@ test('vertical status uses a compact expandable HP tile with the full state outs
   assert.doesNotMatch(html,/class="r3-bf-vertical-status-detail"/);
   h.api.r3BattlefieldClick(menuTarget('vertical-status'));
   html=h.html();
-  assert.match(html,/aria-expanded="true"/);
-  assert.match(html,/class="r3-bf-vertical-status-detail"/);
-  assert.match(html,/Movement 25 \/ 30 ft/);
+  assert.match(html,/class="r3-bf-cascade"/);
+  assert.match(html,/aria-label="Character status"/);
   assert.match(html,/HP 70 \/ 80/);
+  assert.doesNotMatch(html,/class="r3-bf-vertical-status-detail"/);
   assert.equal(h.calls.includes('player sheet'),false);
   h.api.r3BattlefieldDockOrientation('bottom');
   assert.match(h.html(),/class="r3-bf-taskbar-status"/,

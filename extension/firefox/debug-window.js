@@ -111,6 +111,12 @@ function r3DebugRefresh(){
 }
 function r3DebugToggle(){
   R3_DEBUG.open=!R3_DEBUG.open;
+  if(R3_DEBUG.open){
+    if(typeof R3_HUD==='object'){R3_HUD.flyout='';R3_HUD.chooser=null;}
+    if(typeof R3_BF==='object'){
+      R3_BF.menuPane='';R3_BF.contextOpen=false;R3_BF.revision++;
+    }
+  }
   r3HudRender();
 }
 function r3DebugCopyText(){
@@ -155,7 +161,12 @@ function r3DebugAction(target){
       else r3DebugNotice('Clipboard access unavailable in this browser context.');
       break;
     case 'importer':
-      R3_UI.shown=!R3_UI.shown;r3UIRefresh();break;
+      R3_UI.shown=!R3_UI.shown;
+      if(typeof R3_BF==='object'){
+        R3_BF.menuPane=R3_UI.shown?'importer':'';
+        R3_DEBUG.open=false;R3_BF.revision++;
+      }
+      r3UIRefresh();r3HudRender();break;
     default:return false;
   }
   return true;
