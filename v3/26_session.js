@@ -36,10 +36,20 @@ function r3TokenCheckCampaign(){
   R3_UI.renderedSnapshot=null;R3_UI.renderedView=null;
   if(typeof R3_NATIVE==='object'){
     R3_NATIVE.preview=null;R3_NATIVE.status='';R3_NATIVE.revision++;
+    R3_NATIVE.readers?.clear?.();
+  }
+  // A same-document game switch must not reuse authenticated popout windows
+  // or old sheet-dialog handles from the previous campaign.
+  if(typeof R3_POPOUTS==='object')R3_POPOUTS.clear();
+  if(typeof R3_NATIVE_BG==='object'){
+    R3_NATIVE_BG.sessions?.clear?.();
+    R3_NATIVE_BG.characterId='';R3_NATIVE_BG.name='';
   }
   r3Load();r3TokenLoad();
   if(typeof r3HudLoad==='function')r3HudLoad();
   if(typeof r3AutoLoad==='function')r3AutoLoad();
+  if(typeof r3TurnLoad==='function')r3TurnLoad();
+  if(typeof r3BattlefieldLoad==='function')r3BattlefieldLoad();
   if(typeof r3MoveRebase==='function')r3MoveRebase();
   if(typeof r3UIStatus==='function')
     r3UIStatus('Campaign changed. Waiting for a selected token or visible official character sheet.');
@@ -70,12 +80,7 @@ function r3TokenPoll(){
     if(typeof r3MovePoll==='function')r3MovePoll();
     return;
   }
-  let switched=false;
-  for(const id of candidates.slice().reverse()){
-    const index=tokens.lastIndexOf(id);
-    const info=r3TokenLinkedInfo(picked[index]);
-    if(info){r3TokenSwitch(info);switched=true;break;}
-  }
+  const switched=r3PlayerFollowSelection(picked,tokens,candidates);
   // The GM may select a map token not owned by a player and explicitly open
   // its sheet. Keep token-only mapping blocked, but show that visible sheet.
   if(!switched&&fresh.length)r3TokenFollowVisibleSheet();
