@@ -4983,17 +4983,14 @@ function r3AutoQueueDirty(candidate){
 async function r3AutoTick(eventTriggered=false){
   if(!R3_AUTO.enabled||R3_AUTO.running||R3_AUTO.opening||
      R3_UI.busy||R3_NATIVE.busy||!R3_AUTO.name)return;
-  // Saved auto-sync preferences are not evidence that a character belongs
-  // in the currently displayed HUD. Require this session's selected
-  // controlled token or its uniquely identified manually opened sheet
-  // before publishing a character, including legacy saved manual sync.
+  // The automatic token and visible-sheet modes require verified
+  // identity. Explicitly configured legacy manual sync remains supported
+  // within its original per-campaign storage key.
   if(R3_AUTO.origin==='token'&&
      (R3_TOKEN.active?.characterId!==R3_AUTO.characterId||
        R3_TOKEN.active?.name!==R3_AUTO.name))return;
   if(R3_AUTO.origin==='visible'&&
      (R3_TOKEN.active||R3_TOKEN.visibleSheetId!==R3_AUTO.characterId))return;
-  if(R3_AUTO.origin==='manual'&&!R3_TOKEN.active&&!R3_TOKEN.visibleSheetId)
-    return;
   const now=Date.now();
   let candidate=r3AutoCandidate();
   if(!candidate){
