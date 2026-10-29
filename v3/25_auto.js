@@ -350,6 +350,9 @@ function r3AutoStoreSnapshot(snapshot,mode){
     throw new Error('Sheet identity did not match the auto-sync character');
   if(R3_TOKEN.active&&R3_TOKEN.active.name.toLowerCase()!==candidateName.toLowerCase())
     throw new Error('Scan character differs from the selected controllable token');
+  if(R3_AUTO.origin==='visible'&&
+     (R3_TOKEN.active||R3_TOKEN.visibleSheetId!==R3_AUTO.characterId))
+    throw new Error('Manual sheet selection has changed during this import');
   if(!r3AutoHasRecognizedData(snapshot))
     throw new Error('Sheet has not populated recognizable character values yet');
   // A partial scan cannot erase the full inventory, spells and actions.
@@ -387,6 +390,10 @@ async function r3AutoTick(eventTriggered=false){
   const now=Date.now();
   let candidate=r3AutoCandidate();
   if(!candidate){
+    // A DM inspecting a manually opened official sheet has not authorized
+    // the extension to open or conceal any other sheet. Stop cleanly when
+    // that visible reader is gone, rather than falling back to Journal.
+    if(R3_AUTO.origin==='visible')return;
     // Use the same Roll20 character-scoped opener as native actions. This
     // works without opening the Journal sidebar or manually viewing a tab.
     // A verified Controlled By model and exact character ID are required.
@@ -428,8 +435,10 @@ async function r3AutoTick(eventTriggered=false){
     }
     if(!candidate)return;
   }
+  if(R3_AUTO.origin==='visible'&&!candidate.visible)return;
   r3AutoRemember(candidate);
-  const background=r3NativeIsOwned(candidate)||r3AutoMoveOffscreen(candidate);
+  const background=R3_AUTO.origin!=='visible'&&
+    (r3NativeIsOwned(candidate)||r3AutoMoveOffscreen(candidate));
   // Only navigate sheet tabs when the script itself opened an offscreen
   // dialog. A player-opened visible sheet is read without changing tabs.
   const mode=background&&now-R3_AUTO.lastFull>300000?'all':'current';
@@ -476,6 +485,8 @@ async function r3AutoTick(eventTriggered=false){
 function r3AutoStoreHealth(snapshot){
   if(snapshot?.schema!==3||r3String(snapshot.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())
     return false;
+  if(R3_AUTO.origin==='visible'&&
+     (R3_TOKEN.active||R3_TOKEN.visibleSheetId!==R3_AUTO.characterId))return false;
   if(!Object.prototype.hasOwnProperty.call(snapshot.stats||{},'hp'))return false;
   const prior=R3_UI.snapshot;
   if(!prior||r3String(prior.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())return false;
