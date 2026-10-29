@@ -78,6 +78,18 @@ function panelHarness(character='NIER'){
   }
   return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,timeouts,windowListeners,frameWindow,click,respond};
 }
+test('saved manual auto-sync cannot resurrect an unselected old character on boot',async()=>{
+  const h=panelHarness('2024 character sheet');
+  const old=h.api.r3Empty();old.name='Nier';old.stats.hp=84;
+  h.store.set('roll20-embetterment-v3:123',JSON.stringify({schema:3,snapshot:old}));
+  h.store.set('roll20-embetterment-v3:123:auto',
+    JSON.stringify({enabled:true,name:'Nier',characterId:'old-nier',origin:'manual'}));
+  h.api.r3StartEditorBridge();h.api.r3StartUI();
+  vm.runInContext('r3AutoLoad()',h.context);
+  await h.api.r3AutoTick();
+  assert.equal(h.api.R3_UI.snapshot,null);
+  assert.equal(h.sent.length,0,'no private scan or restored-Nier import without a current sheet identity');
+});
 test('new DM campaign never displays cached Nier until its identity is verified',()=>{
   const h=panelHarness('Elowen');
   const old=h.api.r3Empty();old.name='Nier';old.stats.hp=84;
