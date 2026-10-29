@@ -50,6 +50,38 @@ function rig(options={}){
   const api=ctx.api;api.r3TurnLoad();
   return {api,ctx,elf,make,store,renders,pageAttrs,page,listeners};
 }
+test('Jumpgate coordinate-only movement settles after two unchanged polls without an event',()=>{
+  const h=rig();h.api.r3TurnStart();h.api.r3MovePoll();
+  h.elf.attrs.left=210;
+  h.api.r3MovePoll(); // position changed without a model change event
+  assert.equal(h.api.R3_TURN.movementUsed,0,'do not spend movement on an in-progress drag');
+  h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,0,'first settled poll still waits');
+  h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,5,'second stable poll completes the move');
+  h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,5,'no repeated counting after settlement');
+  h.elf.attrs.left=280;
+  h.api.r3MovePoll();
+  h.elf.attrs.left=350;h.api.r3MovePoll(); // a moving token resets quiet polls
+  h.api.r3MovePoll();h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,15,'continuous movement is one path, not a series of jitter moves');
+});
+test('same-token scene model replacement preserves movement baseline and rebinds listener',()=>{
+  const h=rig();h.api.r3TurnStart();h.api.r3MovePoll();
+  const replacement={id:'token-elf',get(k){return h.elf.attrs[k];},
+    on(name,cb){h.listeners.set('replacement',cb);},
+    off(name,cb){if(h.listeners.get('replacement')===cb)h.listeners.delete('replacement');}};
+  h.elf.object.model=replacement;
+  h.api.r3MovePoll(); // same character and same graphic ID, new model reference
+  assert.equal(h.api.R3_MOVE.model,replacement);
+  assert.equal(h.api.R3_TURN.movementUsed,0);
+  h.elf.attrs.left=210;
+  h.listeners.get('replacement')();
+  assert.equal(h.api.R3_TURN.movementUsed,5,'listener follows the refreshed model');
+  assert.equal(h.listeners.has('token-elf'),false,'old listener detached');
+});
+
 test('movement sums successive distances, including backtracking, with actual page scale',()=>{
   const h=rig(),t=h.api.R3_TURN;
   h.api.r3TurnStart();h.api.r3MovePoll();
