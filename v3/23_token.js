@@ -770,7 +770,7 @@ function r3TokenPoll(){
   // different PC sheet. A newly opened, explicitly named dialog takes
   // display priority unless a *new* verified token selection just occurred.
   if(!fresh.length)r3TokenFollowVisibleSheet();
-  const candidates=fresh.length?fresh:(!R3_TOKEN.active?tokens:[]);
+  const candidates=fresh.length?fresh:(!R3_TOKEN.active&&!R3_TOKEN.visibleSheetId?tokens:[]);
   if(!candidates.length){
     if(typeof r3MovePoll==='function')r3MovePoll();
     return;
