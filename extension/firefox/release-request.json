@@ -1,6 +1,6 @@
 {
-  "version": "3.10.22",
+  "version": "3.10.23",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Stop blocking verified, selected-token movement when R20eb's local turn marker is unknown or ended. Continue to account for source-bound completed token movements via Roll20 ruler/grid and stable Jumpgate polling without changing local action or initiative state; Start Turn/observed initiative still resets movement. Clarify menu and movement help text."
+  "reason": "Fix new DM campaign showing Nier from unrelated saved profile. Stage cached snapshots until a current-game identity is verified, remove shared editor storage fallback, detect campaign navigation, and follow one uniquely identified player-opened official PC sheet without a selected token. Preserve original controlled-token/native action restrictions and leave manual sheet tabs untouched."
 }
