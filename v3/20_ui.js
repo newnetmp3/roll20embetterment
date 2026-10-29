@@ -15,7 +15,7 @@ function r3StorageKey(){
     campaign?.get?.('id')||'',110);
   const gameId=String(urlId||modelId||'').trim();
   return 'roll20-embetterment-v3:'+
-    (gameId&&/^[a-z\d_-]{1,110}$/i.test(gameId)?'game:'+gameId:
+    (gameId&&/^[a-z\d_-]{1,110}$/i.test(gameId)?gameId:
       'session:'+R3_SESSION);
 }
 function r3Load(){
