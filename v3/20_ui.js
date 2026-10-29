@@ -1,16 +1,32 @@
 // v3 minimal companion: explicit imports, provenance, completeness, JSON export.
 const R3_UI={host:null,root:null,shown:false,busy:false,status:'Open your official Roll20 2024 character sheet, then select it below.',
-  snapshot:null,selected:'',view:'summary',storageWarning:'',renderedSnapshot:null,renderedView:null,
+  snapshot:null,restoredSnapshot:null,campaignKey:'',selected:'',view:'summary',storageWarning:'',renderedSnapshot:null,renderedView:null,
   renderedChoices:null,scrollByView:Object.create(null),openByView:Object.create(null)};
 function r3Escape(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function r3StorageKey(){
-  return 'roll20-embetterment-v3:'+(new URLSearchParams(location.search).get('id')||location.pathname.match(/\/editor\/(\d+)/)?.[1]||'editor');
+  // Never put different games into the historical shared "editor" bucket.
+  // The editor URL normally carries the game ID; use the direct Campaign
+  // model ID only when that URL has not populated yet. An unidentifiable
+  // editor session gets an ephemeral key, not an old campaign's profile.
+  const urlId=new URLSearchParams(location.search).get('id')||
+    location.pathname.match(/\/editor\/(\d+)/)?.[1];
+  const campaign=typeof r3TokenCampaign==='function'?r3TokenCampaign():window.Campaign;
+  const modelId=r3String(campaign?.id||campaign?.get?.('_id')||
+    campaign?.get?.('id')||'',110);
+  const gameId=String(urlId||modelId||'').trim();
+  return 'roll20-embetterment-v3:'+
+    (gameId&&/^[a-z\d_-]{1,110}$/i.test(gameId)?'game:'+gameId:
+      'session:'+R3_SESSION);
 }
 function r3Load(){
+  // A localStorage snapshot proves only that this browser previously read
+  // a sheet, not that the character exists in the current campaign. Stage
+  // it for explicit token/sheet identity matching; never render it blindly.
+  R3_UI.restoredSnapshot=null;
   try{
     const s=JSON.parse(localStorage.getItem(r3StorageKey())||'null');
     if(s?.schema===3&&s.snapshot?.schema===3&&JSON.stringify(s).length<4000000)
-      R3_UI.snapshot=r3InventoryPrune(s.snapshot);
+      R3_UI.restoredSnapshot=r3InventoryPrune(s.snapshot);
   }catch{/* Corrupted storage should never prevent scanning. */}
 }
 function r3Save(snapshot){
@@ -310,6 +326,7 @@ function r3UIEvent(event){
 }
 function r3StartUI(){
   if(document.getElementById('r20eb-v3-root'))return;
+  R3_UI.campaignKey=r3StorageKey();
   r3Load();r3TokenLoad();r3HudLoad();
   if(typeof r3ThemeLoad==='function')r3ThemeLoad();
   const host=document.createElement('div');host.id='r20eb-v3-root';
