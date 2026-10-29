@@ -3,7 +3,7 @@
 // GM-only Mod API or undocumented remote endpoints. Fail closed when the
 // selected token's represented character and its permissions are unavailable.
 const R3_TOKEN={
-  active:null,selectionIds:[],snapshots:new Map(),legacy:null,
+  active:null,selectionIds:[],snapshots:new Map(),legacy:null,visibleSheetId:'',
   timer:null,started:false
 };
 function r3TokenCampaign(){
@@ -539,11 +539,12 @@ function r3TokenUnambiguousName(name){
 }
 function r3TokenCacheKey(){return r3StorageKey()+':character-snapshots';}
 function r3TokenSettingsKey(){
-  return r3StorageKey()+':hud'+(R3_TOKEN.active?
-    ':character:'+encodeURIComponent(R3_TOKEN.active.characterId):'');
+  const identity=R3_TOKEN.active?.characterId||R3_TOKEN.visibleSheetId;
+  return r3StorageKey()+':hud'+
+    (identity?':character:'+encodeURIComponent(identity):'');
 }
 function r3TokenLoad(){
-  R3_TOKEN.legacy=R3_UI.snapshot;
+  R3_TOKEN.legacy=R3_UI.restoredSnapshot||R3_UI.snapshot;
   try{
     const stored=JSON.parse(localStorage.getItem(r3TokenCacheKey())||'null');
     if(stored?.schema!==1||!Array.isArray(stored.profiles))return;
@@ -607,7 +608,7 @@ function r3TokenSwitch(info){
     return;
   }
   if(previous)r3HudSave();
-  R3_TOKEN.active=info;
+  R3_TOKEN.active=info;R3_TOKEN.visibleSheetId='';
   R3_UI.snapshot=r3TokenSnapshotFor(info);
   R3_UI.view='summary';
   R3_UI.renderedSnapshot=null;
@@ -626,7 +627,101 @@ function r3TokenSwitch(info){
     'Synchronizing from Roll20 when its official sheet is available.'));
   r3UIRefresh();
 }
+// A DM can create/open a 2024 PC sheet before placing a controllable token.
+// Follow ONLY one visibly opened official sheet that resolves to a unique
+// current-campaign character model (or an exact character ID). This is a
+// read-only display/import mode, not a claim of token ownership; never use it
+// to issue token-bound native actions or open a private sheet automatically.
+function r3TokenFollowVisibleSheet(){
+  if(typeof r3Candidates!=='function')return false;
+  const collection=r3TokenCampaign()?.characters;
+  if(!collection)return false;
+  const candidates=r3Candidates().filter(c=>c?.visible&&c.window&&
+    (c.type==='iframe'||c.type==='popout')&&
+    typeof c.name==='string'&&c.name.length>0&&c.name.length<=120&&
+    !/^(?:2024 character sheet|unnamed sheet|official sheet popout)/i.test(c.name)&&
+    !(typeof r3NativeIsOwned==='function'&&r3NativeIsOwned(c)));
+  const resolved=[];
+  for(const candidate of candidates.slice(0,20)){
+    const exactId=typeof r3AutoId==='function'?r3AutoId(candidate):'';
+    let model=null;
+    if(exactId)model=r3TokenCharacter(exactId);
+    else if(Array.isArray(collection.models)){
+      const matches=collection.models.filter(m=>
+        r3String(r3TokenModelGet(m,'name'),120).toLowerCase()===candidate.name.toLowerCase());
+      if(matches.length===1)model=matches[0];
+    }
+    if(!model||r3String(r3TokenModelGet(model,'name'),120).toLowerCase()!==
+       candidate.name.toLowerCase())continue;
+    const id=r3String(model.id||r3TokenModelGet(model,'_id'),110);
+    if(id)resolved.push({candidate,model,id,name:r3String(r3TokenModelGet(model,'name'),120)});
+  }
+  if(resolved.length!==1)return false;
+  const {candidate,id,name}=resolved[0];
+  if(R3_TOKEN.visibleSheetId===id&&!R3_TOKEN.active)return false;
+  if(R3_TOKEN.active?.characterId===id)return false;
+  // A sheet opened by the player is an explicit selection even without a
+  // map token, but it cannot confer ownership on any map graphic. Release a
+  // previously followed map token when a different official sheet becomes
+  // the explicit no-token selection.
+  if(R3_TOKEN.active&&typeof r3HudSave==='function')r3HudSave();
+  R3_TOKEN.active=null;R3_TOKEN.visibleSheetId=id;
+  const snap=r3Empty();snap.name=name;
+  snap.diagnostics.notes.push('Viewing an official character sheet in this campaign. Token-bound actions require selecting a controlled token.');
+  R3_UI.snapshot=r3Coverage(snap);
+  R3_UI.view='summary';R3_UI.selected=candidate.key;
+  R3_UI.renderedSnapshot=null;R3_HUD.flyout='';R3_HUD.chooser=null;
+  if(typeof r3HudLoad==='function')r3HudLoad();
+  // Read the currently visible tab only. Never switch a manually opened
+  // Roll20 sheet's tabs or open an arbitrary character's Journal entry.
+  if(typeof R3_AUTO==='object'){
+    R3_AUTO.generation++;
+    R3_AUTO.enabled=true;R3_AUTO.origin='visible';
+    R3_AUTO.name=name;R3_AUTO.characterId=id;
+    R3_AUTO.lastScan=0;R3_AUTO.lastFull=0;R3_AUTO.lastOpenAttempt=0;
+  }
+  if(typeof r3UIStatus==='function')
+    r3UIStatus('Showing '+name+' from the current campaign’s official sheet; reading its visible tab.');
+  if(typeof r3UIRefresh==='function')r3UIRefresh();
+  if(typeof r3AutoTick==='function')r3AutoTick();
+  return true;
+}
+// A single-page Roll20 navigation may reuse the extension host while changing
+// the editor game. Do not keep the old game’s token, imported character,
+// auto-reader, cached sheet identities or character-specific UI in that case.
+function r3TokenCheckCampaign(){
+  if(typeof r3StorageKey!=='function'||typeof R3_UI!=='object')return false;
+  const current=r3StorageKey();
+  if(!R3_UI.campaignKey){R3_UI.campaignKey=current;return false;}
+  if(R3_UI.campaignKey===current)return false;
+  if(typeof r3AutoRestoreDialog==='function')r3AutoRestoreDialog();
+  if(typeof R3_AUTO==='object'){
+    R3_AUTO.generation++;R3_AUTO.enabled=false;R3_AUTO.name='';
+    R3_AUTO.characterId='';R3_AUTO.origin='manual';
+    R3_AUTO.lastScan=0;R3_AUTO.lastFull=0;
+    if(R3_AUTO.dirtyTimer!==null&&typeof clearTimeout==='function')
+      clearTimeout(R3_AUTO.dirtyTimer);
+    R3_AUTO.dirtyTimer=null;
+  }
+  R3_TOKEN.active=null;R3_TOKEN.selectionIds=[];R3_TOKEN.visibleSheetId='';
+  R3_TOKEN.snapshots.clear();R3_TOKEN.legacy=null;
+  R3_UI.campaignKey=current;R3_UI.snapshot=null;
+  R3_UI.restoredSnapshot=null;R3_UI.selected='';R3_UI.view='summary';
+  R3_UI.renderedSnapshot=null;R3_UI.renderedView=null;
+  if(typeof R3_NATIVE==='object'){
+    R3_NATIVE.preview=null;R3_NATIVE.status='';R3_NATIVE.revision++;
+  }
+  r3Load();r3TokenLoad();
+  if(typeof r3HudLoad==='function')r3HudLoad();
+  if(typeof r3AutoLoad==='function')r3AutoLoad();
+  if(typeof r3MoveRebase==='function')r3MoveRebase();
+  if(typeof r3UIStatus==='function')
+    r3UIStatus('Campaign changed. Waiting for a selected token or visible official character sheet.');
+  if(typeof r3UIRefresh==='function')r3UIRefresh();
+  return true;
+}
 function r3TokenPoll(){
+  if(r3TokenCheckCampaign())return;
   if(typeof r3TurnObserveInitiative==='function')r3TurnObserveInitiative();
   const picked=r3TokenSelected();
   const tokens=picked.map(item=>{
@@ -641,12 +736,20 @@ function r3TokenPoll(){
   // instead of permanently discarding the token ID until user deselects it.
   // Successful selections retain the old newest-token behavior.
   const candidates=fresh.length?fresh:(!R3_TOKEN.active?tokens:[]);
-  if(!candidates.length){if(typeof r3MovePoll==='function')r3MovePoll();return;}
+  if(!candidates.length){
+    if(!tokens.length)r3TokenFollowVisibleSheet();
+    if(typeof r3MovePoll==='function')r3MovePoll();
+    return;
+  }
+  let switched=false;
   for(const id of candidates.slice().reverse()){
     const index=tokens.lastIndexOf(id);
     const info=r3TokenLinkedInfo(picked[index]);
-    if(info){r3TokenSwitch(info);break;}
+    if(info){r3TokenSwitch(info);switched=true;break;}
   }
+  // The GM may select a map token not owned by a player and explicitly open
+  // its sheet. Keep token-only mapping blocked, but show that visible sheet.
+  if(!switched)r3TokenFollowVisibleSheet();
   if(typeof r3MovePoll==='function')r3MovePoll();
 }
 function r3StartTokenWatch(){

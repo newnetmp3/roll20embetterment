@@ -6,18 +6,18 @@ Player-focused D&D 2024 combat HUD and read-only Roll20 sheet companion. R20eb u
 
 | Distribution | Status |
 | --- | --- |
-| **Firefox / Floorp** | **v3.10.21** Mozilla-signed and published; v3.10.22 automatic movement correction in development |
+| **Firefox / Floorp** | **v3.10.22** Mozilla-signed and published; v3.10.23 DM campaign character isolation in development |
 | **Chrome / Chromium** | **v3.4.0**; independently versioned and not feature-parity guaranteed |
 | **Optional userscript** | **v3.4.0** metadata; built from `v3/` independently of Firefox releases |
 
-- [Firefox v3.10.21 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.21/r20eb-firefox-v3.10.21.xpi)
+- [Firefox v3.10.22 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.22/r20eb-firefox-v3.10.22.xpi)
 - [Firefox updates.json](extension/firefox/updates.json)
 - [Firefox installation and signing guide](extension/firefox/README.md)
 - [GitHub Actions](https://github.com/newnetmp3/roll20embetterment/actions)
 
 Disable any previous R20eb userscript or duplicate extension when using the signed Firefox add-on. Keep the native Roll20 chat panel accessible when running actions; R20eb does not overwrite an unsent chat draft.
 
-Firefox v3.10.21 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+Firefox v3.10.22 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
 
 ## Native-action and UI milestone (PR #110 — released in Firefox v3.10.0)
 
@@ -25,7 +25,7 @@ The **Milestone Completion** build extends native action discovery beyond existi
 
 The Firefox battlefield HUD replaces the former six-button utility toolbar with one **Debug** entry in the turn strip. Debug contains the manual turn corrections, original-sheet controls, automatic private reader status, layout reset, HUD visibility, importer and movement logs. Panels remain movable and keyboard-nudgeable. The layout scales to browser/monitor viewport size and accounts for Roll20 chat/sidebar space.
 
-**Firefox v3.10.21 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
+**Firefox v3.10.22 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
 
 ## Firefox v3.10.3 background import (signed; live QA pending)
 
@@ -65,7 +65,11 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
-## Firefox v3.10.22 — Movement tracks without manually starting a turn (candidate)
+## Firefox v3.10.23 — DM campaign character isolation (candidate)
+
+In a new campaign, a previously imported PC is no longer shown merely because that character is saved in the browser. R20eb stages old snapshots until a real character is verified in the **current campaign**, and game sessions without an exposed ID no longer share the old generic editor cache. A DM can open a new official 2024 Player Character sheet without first creating a controlled map token: when the visible sheet's identity resolves to exactly one character model, R20eb displays that character and reads the current tab. This is **read-only sheet presentation**; it does not claim token control, change the manually opened sheet's tabs or silently roll an action. Select a verified token for normal movement and private character-sync features. Real DM browser QA is still required.
+
+## Firefox v3.10.22 — Movement tracks without manually starting a turn (signed)
 
 The user's current Jumpgate Debug confirms native selection, controlled character and token coordinates work, but the local `Turn Ended` marker was blocking every movement update. R20eb now automatically tracks distance from an explicitly selected, controllable token even if the local turn marker is `unknown` or `ended`. Neither that movement nor a manual End Turn changes Roll20's actual initiative. The distance counter resets only when R20eb's Start Turn button is clicked or when a new turn is genuinely observed in Roll20 initiative. This counter therefore represents **travel since the last reset**, even outside combat. Source-verified model and token checks, grid/diagonal rules, native ruler fallback and completed-move deduplication remain in place.
 

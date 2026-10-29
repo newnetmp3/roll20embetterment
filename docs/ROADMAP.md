@@ -1,3 +1,15 @@
+## 2026-10-28 — per-campaign identity and newly created DM PCs (Firefox v3.10.23 candidate)
+
+- [x] Prevent old character snapshots from displaying before current-campaign identity is verified. Keep historical per-game cache keys and remove unsafe shared `editor` fallback.
+- [x] On same-page campaign change, clear old selected character, snapshot, native-action preview and auto-reader target, then load only new-campaign data.
+- [x] Follow exactly one visible, manually opened official PC sheet with a verified current-campaign character model even without a selected/controllable token; never pretend that means token ownership.
+- [x] Recognize officially authenticated reader names when iframe title is generic. Reject conflicting identities and duplicate character-name candidates.
+- [x] Read current manual tab only; do not move a DM-opened sheet offscreen, navigate its tabs or automatically open a Journal entry.
+- [x] Add targeted identity/migration/campaign-switch regression coverage, keep private player-owned token sync unchanged, regenerate userscript.
+- [ ] Green PR and post-merge Firefox CI; Mozilla-signed v3.10.23 release with matching update-feed SHA-256.
+- [ ] Live acceptance: new DM campaign, level-7 PC sheet opened without token, old Nier absent, correct PC stats/import, deliberate token selection still source-bound.
+- [ ] Inspect actual DM HTML once successfully attached to verify Roll20's title/character ID fields, avoiding guessed DOM assumptions.
+
 ## 2026-10-28 — automatic selected-token tracking outside local turn markers (Firefox v3.10.22 candidate)
 
 - [x] Verify from user Debug that Roll20 Jumpgate selection and token coordinates work; `turn: ended` explains why the v3.10.21 movement phase gate refused all movements.

@@ -234,8 +234,19 @@ function r3FrameList(){
         return url.origin===R3_ORIGIN&&/\/dnd2024byroll20(?:\/|$)/.test(url.pathname);
       }catch{return false;}
     }).map((frame,i)=>{
-      const name=r3String(frame.getAttribute('title')||frame.closest('.characterdialog')?.querySelector('.asv__header__name')?.textContent||'',90)
-        .replace(/^Character sheet for\s+/i,'');
+      // DM-created sheets can retain a generic iframe title even after the
+      // official reader has authenticated the live character name. Prefer an
+      // observed name only for this exact frame/window, and refuse to merge
+      // two contradictory non-generic identities.
+      const title=r3String(frame.getAttribute('title')||'',90)
+        .replace(/^Character sheet for\s+/i,'').trim();
+      const header=r3String(frame.closest?.('.characterdialog')?.querySelector?.('.asv__header__name')?.textContent||'',90).trim();
+      const reader=typeof R3_NATIVE==='object'?R3_NATIVE.readers.get(frame.contentWindow):null;
+      const announced=r3String(reader?.name||'',90).trim();
+      const generic=name=>!name||/^(?:2024 character sheet|unnamed sheet|official sheet popout)/i.test(name);
+      const named=[title,header,announced].filter(name=>!generic(name));
+      const conflict=new Set(named.map(name=>name.toLowerCase())).size>1;
+      const name=conflict?'':(named[0]||'');
       return {key:'iframe-'+i,name:name||'2024 character sheet '+(i+1),frame,window:frame.contentWindow,
         visible:r3Shown(frame),type:'iframe'};
     });
