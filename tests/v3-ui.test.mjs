@@ -78,7 +78,7 @@ function panelHarness(character='NIER'){
   }
   return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,timeouts,windowListeners,frame,frameWindow,click,respond};
 }
-function dmDialogRig(name='Rondez the Green Mage',id='-P54Bj0r75QLCHBmWYAJ'){
+function dmDialogRig(name='Example Level Seven Mage',id='-P5ExampleSheetABC123'){
   const h=panelHarness('Character sheet for '+name);
   const dialog={
     getAttribute(k){return k==='data-characterid'?id:null;},
@@ -101,13 +101,13 @@ test('DM-opened Roll20 2024 dialog imports its PC without hydrated Campaign char
   assert.equal(h.api.R3_UI.snapshot,null,'do not show stored Nier before verifying active sheet');
   h.api.r3TokenPoll();
   assert.equal(h.api.R3_TOKEN.active,null,'manual DM sheet must not forge controlled token');
-  assert.equal(h.api.R3_TOKEN.visibleSheetId,'-P54Bj0r75QLCHBmWYAJ');
-  assert.equal(h.api.R3_UI.snapshot.name,'Rondez the Green Mage');
+  assert.equal(h.api.R3_TOKEN.visibleSheetId,'-P5ExampleSheetABC123');
+  assert.equal(h.api.R3_UI.snapshot.name,'Example Level Seven Mage');
   assert.equal(h.api.R3_AUTO.origin,'visible');
-  assert.equal(h.api.R3_AUTO.characterId,'-P54Bj0r75QLCHBmWYAJ');
+  assert.equal(h.api.R3_AUTO.characterId,'-P5ExampleSheetABC123');
   assert.equal(h.sent.length,1,'auto-read the already open official sheet');
   assert.equal(h.sent[0].message.mode,'current','never navigate manually opened sheet tabs');
-  const sheet=h.api.r3Empty();sheet.name='Rondez the Green Mage';
+  const sheet=h.api.r3Empty();sheet.name='Example Level Seven Mage';
   sheet.stats.hp=42;sheet.stats.maxHp=42;sheet.stats.ac=16;
   h.respond(h.api.r3Coverage(sheet));
   await new Promise(resolve=>setImmediate(resolve));
@@ -123,12 +123,12 @@ test('open DM sheet wins over stale selected-character display without pretendin
   const old=h.api.r3Empty();old.name='Nier';h.api.R3_UI.snapshot=old;
   h.api.r3TokenPoll();
   assert.equal(h.api.R3_TOKEN.active,null);
-  assert.equal(h.api.R3_UI.snapshot.name,'Rondez the Green Mage');
+  assert.equal(h.api.R3_UI.snapshot.name,'Example Level Seven Mage');
   h.api.r3TokenPoll();
-  assert.equal(h.api.R3_UI.snapshot.name,'Rondez the Green Mage');
+  assert.equal(h.api.R3_UI.snapshot.name,'Example Level Seven Mage');
 });
 test('a DM sheet without a character dialog ID cannot invent a current character',()=>{
-  const {h}=dmDialogRig('Rondez the Green Mage','');
+  const {h}=dmDialogRig('Example Level Seven Mage','');
   h.api.r3StartUI();h.api.r3TokenPoll();
   assert.equal(h.api.R3_TOKEN.visibleSheetId,'');
   assert.equal(h.api.R3_UI.snapshot,null);
