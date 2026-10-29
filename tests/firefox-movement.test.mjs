@@ -675,6 +675,32 @@ test('both different Jumpgate build hashes accept the same proven selection inte
     assert.equal(diagnose().eligible,false);
   }
 });
+test('changed Jumpgate minifier formatting still passes a verified read-only selector',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  const campaign=h.ctx.window.Campaign;
+  campaign.characters={get(id){return id==='char-elf'?{
+    id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
+  }:null;}};
+  h.ctx.window.d20=undefined;
+  h.ctx.window.d20_player_id='player-elf';
+  const selected=[{id:'scene-node',dataWrapper:{model:h.elf.model}}];
+  const old=jumpgateSelectionFactory(h.ctx);
+  const varied=Function.prototype.toString.call(old)
+    .replace('getSelection(){return this.tabletop.getSelection()}',
+      'getSelection() { return this.tabletop.getSelection(); }')
+    .replace('getSelection(){var U,se;return(se=(U=this.state)==null?void 0:U.children)!=null?se:[]}',
+      'getSelection() { const state=this.state; return state && state.children || []; }');
+  assert.notEqual(varied,Function.prototype.toString.call(old));
+  const factory=vm.runInContext(varied,h.ctx);
+  const requireModule=jumpgateSelectionRequire(factory,jumpgateSelectionTable(selected),
+    '775403f71ba36dde7775');
+  jumpgateSelectionInstall(h,requireModule);
+  vm.runInContext(watch,h.ctx);
+  const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(diag.eligible,true,'existing proven getter can survive factory formatting changes');
+  assert.equal(diag.selectionCount,1);
+  assert.equal(requireModule.getCalls(),1);
+});
 test('unknown source signature cannot execute a Jumpgate module',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   h.ctx.window.d20=undefined;h.ctx.window.vttEngine='jumpgate';
@@ -688,7 +714,7 @@ test('unknown source signature cannot execute a Jumpgate module',()=>{
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(called,0);
   assert.equal(diag.nativeState,'unsupported Jumpgate selection interface');
-  assert.equal(diag.moduleSignature,'selection interfaces differ');
+  assert.match(diag.moduleSignature,/selection interfaces differ: module size outside verified bounds/);
   assert.equal(diag.eligible,false);
 });
 test('source-compatible module with changed getter fails closed',()=>{
