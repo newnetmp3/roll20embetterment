@@ -305,7 +305,8 @@ function r3MoveMeasure(signal='poll'){
       source:info.source,pending:null,nativeReadout:null,measurementSource:'none',dragging:false});
     r3MoveConnect(info);
     r3MoveReport('Movement tracker connected',
-      'Watching Roll20 ruler; page '+(signature||'scale unavailable'));
+      'Automatically watching selected token regardless of local turn marker; page '+
+      (signature||'scale unavailable'));
     return;
   }
   if(changedSource){
