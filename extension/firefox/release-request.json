@@ -1,6 +1,6 @@
 {
-  "version": "3.10.19",
+  "version": "3.10.20",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Fix loss of keyboard focus in taskbar-anchored cascading menus during HUD/native status/HP repaints. Preserve checked data-bound first-level menu focus only for the same character; ArrowLeft returns to parent without closing the cascade or stealing text-editing caret. Leave native Roll20 action dispatch and player-owned sheets unchanged."
+  "reason": "Restore Jumpgate selection/movement after recent Roll20 minifier changes by validating capabilities of the fixed VTTEngine module rather than exact emitted source. Preserve strict verified selection getters and controlled-token permissions; add 400ms polling fallback for token coordinate moves without model callbacks, and require clicks rather than hovering to change cascading-menu sections. Live new-build compatibility to be verified."
 }
