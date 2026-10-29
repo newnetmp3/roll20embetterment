@@ -96,6 +96,29 @@ test('new DM campaign never displays cached Nier until its identity is verified'
   assert.equal(h.api.R3_AUTO.characterId,'char-elowen');
   assert.equal(h.api.R3_AUTO.enabled,true);
 });
+test('DM generic frame title is resolved from the authenticated current-sheet reader',()=>{
+  const h=panelHarness('2024 character sheet');
+  const model={id:'char-new',get(k){return {name:'New Level 7 PC',controlledby:''}[k];}};
+  h.context.window.Campaign={characters:{models:[model]}};
+  h.api.r3StartUI();
+  assert.equal(h.api.R3_UI.snapshot,null);
+  h.api.R3_NATIVE.readers.set(h.frameWindow,{name:'New Level 7 PC',session:'current-reader'});
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_UI.snapshot.name,'New Level 7 PC');
+  assert.equal(h.api.R3_TOKEN.active,null,'DM sheet does not create fake token access');
+  assert.equal(h.api.R3_TOKEN.visibleSheetId,'char-new');
+});
+test('conflicting official reader name and iframe title cannot select a character',()=>{
+  const h=panelHarness('Nier');
+  h.context.window.Campaign={characters:{models:[
+    {id:'c1',get(k){return k==='name'?'Nier':'';}},
+    {id:'c2',get(k){return k==='name'?'New Level 7 PC':'';}}
+  ]}};
+  h.api.r3StartUI();
+  h.api.R3_NATIVE.readers.set(h.frameWindow,{name:'New Level 7 PC',session:'session'});
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_UI.snapshot,null,'contradictory sheet names must fail closed');
+});
 test('an ambiguous or unmatched DM character sheet cannot adopt an old saved identity',()=>{
   const h=panelHarness('Elowen');
   h.context.window.Campaign={characters:{models:[
