@@ -1,3 +1,13 @@
+## 2026-10-28 — automatic selected-token tracking outside local turn markers (Firefox v3.10.22 candidate)
+
+- [x] Verify from user Debug that Roll20 Jumpgate selection and token coordinates work; `turn: ended` explains why the v3.10.21 movement phase gate refused all movements.
+- [x] Decouple **passive selected-token travel** from R20eb local unknown/active/ended action-economy phase. Do not auto-reset local actions or fabricate initiative.
+- [x] Preserve completed move safeguards, real ruler or grid fallback, token identity, new-turn distance reset, and negative remaining allowance.
+- [x] Update move/End Turn tooltips so users know End Turn affects local action markers but does not pause token distance tracking.
+- [x] Cover pre-turn, ended-turn, stable-poll, duplicate and explicit reset scenarios in Firefox movement tests.
+- [ ] Green PR and post-merge Firefox CI, Mozilla-signed v3.10.22 XPI and matching update-feed digest.
+- [ ] Validate in user's current live Jumpgate build: select token, move one square without pressing Start Turn, observe +5ft; repeat after End Turn. Confirm actual native chat parity separately.
+
 ## 2026-10-28 — Jumpgate Webpack module ID relocation (Firefox v3.10.21 candidate)
 
 - [x] Use user v3.10.20 Debug to identify confirmed absence of old VTTEngine module 73210, rather than another minifier-string failure.
