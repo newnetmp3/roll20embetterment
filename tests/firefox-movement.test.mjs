@@ -726,7 +726,8 @@ test('relocated verified Jumpgate module restores selection for build 775403f71b
   const diagnose=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
   const diag=diagnose();
   assert.equal(diag.eligible,true);
-  assert.equal(diag.selectedTokenId,'token-elf');
+  assert.equal(vm.runInContext('r3TokenLinkedInfo(r3TokenSelected()[0]).tokenId',h.ctx),
+    'token-elf');
   assert.equal(diag.nativeState,'verified Jumpgate selection read');
   assert.equal(diag.moduleSignature,'verified selection capability');
   assert.equal(diag.actualBuild,'775403f71ba36dde7775');
