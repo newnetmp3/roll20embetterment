@@ -1,3 +1,14 @@
+## 2026-10-29 — DM opened sheet DOM identity (Firefox v3.10.24 candidate)
+
+- [x] Inspect real provided DM editor HTML; identify visible `.characterdialog[data-characterid]` and official iframe title/header. Distinguish unrelated settings/preload sheet iframes.
+- [x] Allow already-open, named official DM sheet to become read-only active HUD character by exact Roll20 dialog ID, even with no hydrated Campaign.characters collection or player Controlled By setting.
+- [x] Preserve permission boundary: no fabricated token selection or map movement, no GM privileged access, no unknown private action calls.
+- [x] Prefer newly opened dialog to old unchanged token; permit subsequent fresh token selection to take precedence; clear closed dialog identity and pending reads after guarded polling.
+- [x] Read current manual tab through authenticated 2024 reader without tab navigation/offscreen hiding. Add synthetic user-HTML-shaped regression fixtures and privacy-safe tests.
+- [ ] CI / PR merge / Mozilla-signed v3.10.24 XPI / update feed verification.
+- [ ] Live GM acceptance: open DM-owned PC sheet, expect new character name then imported visible HP/AC without pressing token.
+- [ ] Explore source-bound separate private GM reader for all tabs without disrupting a manually opened sheet; not implemented in this fix.
+
 ## 2026-10-28 — per-campaign identity and newly created DM PCs (Firefox v3.10.23 candidate)
 
 - [x] Prevent old character snapshots from displaying before current-campaign identity is verified. Keep historical per-game cache keys and remove unsafe shared `editor` fallback.
