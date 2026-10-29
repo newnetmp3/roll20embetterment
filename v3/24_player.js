@@ -12,9 +12,11 @@ function r3TokenSwitch(info){
   }
   if(previous)r3HudSave();
   R3_TOKEN.active=info;R3_TOKEN.visibleSheetId='';
-  // A sheet may be closed and reopened while a map token is selected.
-  // Clear the former dialog identity so the new explicit opening is recognized.
-  R3_TOKEN.visibleSheetSeen='';R3_TOKEN.visibleSheetMissing=0;
+  // Keep the currently opened dialog's last-seen ID when a *new* token was
+  // explicitly selected. Otherwise the unchanged DM dialog steals focus
+  // right back on the next 400ms poll. Once the sheet actually closes the
+  // DM watcher clears this latch so reopening is treated as a new choice.
+  R3_TOKEN.visibleSheetMissing=0;
   R3_UI.snapshot=r3TokenSnapshotFor(info);
   R3_UI.view='summary';
   R3_UI.renderedSnapshot=null;
