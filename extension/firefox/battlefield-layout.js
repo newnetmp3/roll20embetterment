@@ -328,7 +328,7 @@ function r3BattlefieldMarkup(snapshot){
     '<div class="r3-bf-movement">'+r3BattlefieldRing('move','move','Move',
       vertical&&total!==null?r3TurnDistance(total-t.movementUsed)+' ft':left,
       'Used '+r3TurnDistance(t.movementUsed)+' ft',
-      'Auto-tracked token movement; click to correct by +5 ft')+
+      'Auto-tracks the selected token even if local Turn Ended; click to correct by +5 ft. Start Turn resets distance.')+
       '<span class="r3-bf-movement-meter" role="progressbar" aria-label="Movement used" '+
       'aria-valuemin="0" aria-valuenow="'+t.movementUsed+'"'+
       (total!==null?' aria-valuemax="'+total+'"':'')+'>'+
@@ -340,7 +340,7 @@ function r3BattlefieldMarkup(snapshot){
     '<span class="r3-bf-turn-icon">'+r3HudIcon('clock')+'</span>'+
     '<span><strong>'+r3Escape(phase)+'</strong><small>'+r3Escape(status)+'</small></span>'+
     '<button type="button" data-turn-action="start" title="Reset local turn counters; keep concentration">↻</button>'+
-    '<button type="button" data-turn-action="end" title="Mark end of turn locally; does not advance Roll20">⏭</button>'+
+    '<button type="button" data-turn-action="end" title="Mark local turn ended; selected-token movement continues tracking until the next Start Turn reset. Does not advance Roll20.">⏭</button>'+
     '<button type="button" id="r3-hud-debug" class="r3-bf-debug-trigger" title="Debug, advanced controls and layout settings" aria-label="Open Debug window">⚙ Debug</button>'+
     '</div>':'')+
     '<div class="r3-bf-show-profile-wrap" data-bf-no-drag>'+
