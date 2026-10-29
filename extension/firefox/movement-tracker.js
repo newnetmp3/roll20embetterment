@@ -325,12 +325,12 @@ function r3MoveMeasure(signal='poll'){
       scale?'Movement baseline refreshed':'Roll20 page scale in feet is not exposed');
     return;
   }
-  if(R3_TURN.phase!=='active'){
-    tracker.last=sample;tracker.lastMove=lastMove;
-    tracker.pending=null;tracker.nativeReadout=null;tracker.dragging=false;
-    r3MoveReport('Waiting for your turn','Select Start Turn to count token movement');
-    return;
-  }
+  // Passive token travel is independent of the *local* action-economy
+  // phase. Players can select/move a token before the turn-order starts or
+  // after they press End Turn; neither marker changes the real Roll20 token.
+  // Still use only the explicitly verified controlled token, and reset the
+  // movement count on an observed new turn or the user's Start/Reset action.
+  // Do not silently set phase='active' or reset spent action indicators.
   if(!tracker.pending&&Math.hypot(sample.x-previous.x,sample.y-previous.y)>=0.05)
     tracker.pending={start:previous,end:sample,stablePolls:0};
   else if(tracker.pending){
