@@ -78,6 +78,57 @@ function panelHarness(character='NIER'){
   }
   return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,timeouts,windowListeners,frameWindow,click,respond};
 }
+test('new DM campaign never displays cached Nier until its identity is verified',()=>{
+  const h=panelHarness('Elowen');
+  const old=h.api.r3Empty();old.name='Nier';old.stats.hp=84;
+  h.store.set('roll20-embetterment-v3:123',JSON.stringify({schema:3,snapshot:old}));
+  const model={id:'char-elowen',get(k){return {name:'Elowen',controlledby:''}[k];}};
+  h.context.window.Campaign={characters:{models:[model],get(){return null;}}};
+  h.api.r3StartEditorBridge();h.api.r3StartUI();
+  assert.equal(h.api.R3_UI.snapshot,null,'saved Nier profile must not leak on startup');
+  assert.match(h.nodes.get('r3-hud').innerHTML,/No character imported/);
+  h.api.r3TokenPoll(); // No selected token; DM explicitly opened this sheet
+  assert.equal(h.api.R3_TOKEN.active,null,'visible sheet is NOT forged into a controlled token');
+  assert.equal(h.api.R3_TOKEN.visibleSheetId,'char-elowen');
+  assert.equal(h.api.R3_UI.snapshot.name,'Elowen');
+  assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/Nier/);
+  assert.equal(h.api.R3_AUTO.origin,'visible');
+  assert.equal(h.api.R3_AUTO.characterId,'char-elowen');
+  assert.equal(h.api.R3_AUTO.enabled,true);
+});
+test('an ambiguous or unmatched DM character sheet cannot adopt an old saved identity',()=>{
+  const h=panelHarness('Elowen');
+  h.context.window.Campaign={characters:{models:[
+    {id:'one',get(k){return k==='name'?'Elowen':'';}},
+    {id:'two',get(k){return k==='name'?'Elowen':'';}}
+  ]}};
+  const saved=h.api.r3Empty();saved.name='Nier';saved.stats.hp=84;
+  h.store.set('roll20-embetterment-v3:123',JSON.stringify({schema:3,snapshot:saved}));
+  h.api.r3StartUI();h.api.r3TokenPoll();
+  assert.equal(h.api.R3_UI.snapshot,null);
+  assert.equal(h.api.R3_TOKEN.visibleSheetId,'');
+  assert.equal(h.api.R3_AUTO.enabled,false,'do not trigger name-only sync with two matching PCs');
+});
+test('campaign navigation clears Nier in the same extension session',()=>{
+  const h=panelHarness('Elowen');
+  h.context.window.Campaign={characters:{models:[]}};
+  h.api.r3StartUI();
+  const old=h.api.r3Empty();old.name='Nier';old.stats.hp=84;
+  h.api.R3_UI.snapshot=h.api.r3Coverage(old);
+  h.api.R3_TOKEN.active={tokenId:'nier-token',characterId:'nier-char',name:'Nier'};
+  h.api.R3_TOKEN.selectionIds=['nier-token'];
+  h.api.R3_TOKEN.snapshots.set('nier-char',{name:'Nier',snapshot:old});
+  h.api.R3_AUTO.enabled=true;h.api.R3_AUTO.name='Nier';
+  h.api.R3_AUTO.characterId='nier-char';h.api.R3_AUTO.origin='token';
+  h.context.location.search='?id=456';
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_UI.snapshot,null);
+  assert.equal(h.api.R3_TOKEN.active,null);
+  assert.equal(h.api.R3_TOKEN.snapshots.size,0);
+  assert.equal(h.api.R3_AUTO.name,'');
+  assert.equal(h.api.R3_UI.campaignKey,'roll20-embetterment-v3:456');
+  assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/Nier/);
+});
 test('real importer panel initializes and both scan buttons become enabled when a sheet appears',()=>{
   const h=panelHarness();
   h.api.r3StartEditorBridge();
@@ -829,8 +880,10 @@ test('older stored zero-count items are hidden and discarded on load',()=>{
   ];
   h.store.set('roll20-embetterment-v3:123',JSON.stringify({schema:3,snapshot:saved}));
   h.api.r3StartUI();
-  assert.deepEqual([...h.api.R3_UI.snapshot.inventory.map(x=>x.name)],['Rope']);
-  assert.equal(h.api.R3_UI.snapshot.coverage.inventory,1);
+  assert.equal(h.api.R3_UI.snapshot,null,'old character is hidden until verified');
+  const restored=vm.runInContext('r3TokenSnapshotFor({characterId:"char-nier",name:"NIER"})',h.context);
+  assert.deepEqual([...restored.inventory.map(x=>x.name)],['Rope']);
+  assert.equal(restored.coverage.inventory,1);
 });
 
 test('Inventory debug calls out a previously silent unknown quantity next to a detected switch',()=>{
@@ -968,6 +1021,10 @@ test('Nier previous export promotes exact labeled AC/speed to the redesigned HUD
   ];
   h.store.set('roll20-embetterment-v3:123',JSON.stringify({schema:3,snapshot:save}));
   h.api.r3StartUI();
+  assert.equal(h.api.R3_UI.snapshot,null,
+    'unverified old Nier data must not appear even when the local browser cache is populated');
+  const verified=vm.runInContext('r3TokenSnapshotFor({characterId:"char-nier",name:"Nier"})',h.context);
+  h.api.R3_UI.snapshot=h.api.r3Coverage(verified);h.api.r3HudRender();
   const html=h.nodes.get('r3-hud').innerHTML;
   assert.match(html,/AC<\/span><strong>17/);
   assert.match(html,/SPEED<\/span><strong>55 ft/);
