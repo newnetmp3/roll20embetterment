@@ -76,8 +76,82 @@ function panelHarness(character='NIER'){
       data:{protocol:'r20eb:import:v3',type,id:msg.id,snapshot,error:'Simulated sheet failure'}
     });
   }
-  return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,timeouts,windowListeners,frameWindow,click,respond};
+  return {context,api:context.uiApi,nodes,shadow,document,sent,store,intervals,timeouts,windowListeners,frame,frameWindow,click,respond};
 }
+function dmDialogRig(name='Rondez the Green Mage',id='-P54Bj0r75QLCHBmWYAJ'){
+  const h=panelHarness('Character sheet for '+name);
+  const dialog={
+    getAttribute(k){return k==='data-characterid'?id:null;},
+    querySelector(sel){return sel==='.asv__header__name'?{textContent:name}:null;}
+  };
+  h.frame.closest=selector=>
+    /\\.characterdialog/.test(selector)?dialog:null;
+  // Exact observed Roll20 HTML structure:
+  // iframe#advanced-charsheet-dialog__charsheet inside
+  // .characterdialog[data-characterid] with .asv__header__name,
+  // no requirement for window.Campaign.characters.models.
+  h.frame.id='advanced-charsheet-dialog__charsheet';
+  return {h,dialog};
+}
+test('DM-opened Roll20 2024 dialog imports its PC without hydrated Campaign characters',async()=>{
+  const {h}=dmDialogRig();
+  const old=h.api.r3Empty();old.name='Nier';old.stats.hp=84;
+  h.store.set('roll20-embetterment-v3:123',JSON.stringify({schema:3,snapshot:old}));
+  h.api.r3StartEditorBridge();h.api.r3StartUI();
+  assert.equal(h.api.R3_UI.snapshot,null,'do not show stored Nier before verifying active sheet');
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.active,null,'manual DM sheet must not forge controlled token');
+  assert.equal(h.api.R3_TOKEN.visibleSheetId,'-P54Bj0r75QLCHBmWYAJ');
+  assert.equal(h.api.R3_UI.snapshot.name,'Rondez the Green Mage');
+  assert.equal(h.api.R3_AUTO.origin,'visible');
+  assert.equal(h.api.R3_AUTO.characterId,'-P54Bj0r75QLCHBmWYAJ');
+  assert.equal(h.sent.length,1,'auto-read the already open official sheet');
+  assert.equal(h.sent[0].message.mode,'current','never navigate manually opened sheet tabs');
+  const sheet=h.api.r3Empty();sheet.name='Rondez the Green Mage';
+  sheet.stats.hp=42;sheet.stats.maxHp=42;sheet.stats.ac=16;
+  h.respond(h.api.r3Coverage(sheet));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.api.R3_UI.snapshot.stats.hp,42);
+  assert.equal(h.api.R3_UI.snapshot.stats.ac,16);
+  assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/Nier/);
+  assert.equal(h.api.R3_TOKEN.active,null,'reading a DM sheet confers no map-token authority');
+});
+test('open DM sheet wins over stale selected-character display without pretending token control',()=>{
+  const {h}=dmDialogRig();
+  h.api.r3StartUI();
+  h.api.R3_TOKEN.active={tokenId:'old-token',characterId:'old-nier',name:'Nier'};
+  const old=h.api.r3Empty();old.name='Nier';h.api.R3_UI.snapshot=old;
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.active,null);
+  assert.equal(h.api.R3_UI.snapshot.name,'Rondez the Green Mage');
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_UI.snapshot.name,'Rondez the Green Mage');
+});
+test('a DM sheet without a character dialog ID cannot invent a current character',()=>{
+  const {h}=dmDialogRig('Rondez the Green Mage','');
+  h.api.r3StartUI();h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.visibleSheetId,'');
+  assert.equal(h.api.R3_UI.snapshot,null);
+  assert.equal(h.api.R3_AUTO.enabled,false);
+});
+test('DM sheet with contradictory official title and header fails identity matching',()=>{
+  const {h,dialog}=dmDialogRig();
+  dialog.querySelector=sel=>sel==='.asv__header__name'?
+    {textContent:'Another Player Character'}:null;
+  h.api.r3StartUI();h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.visibleSheetId,'');
+  assert.equal(h.api.R3_UI.snapshot,null);
+});
+test('closing DM dialog drops its snapshot and invalidates pending auto-reader',()=>{
+  const {h}=dmDialogRig();
+  h.api.r3StartUI();h.api.r3TokenPoll();
+  assert.equal(h.api.R3_AUTO.origin,'visible');
+  h.frame.closest=()=>null;
+  for(let i=0;i<4;i++)h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.visibleSheetId,'');
+  assert.equal(h.api.R3_UI.snapshot,null);
+  assert.equal(h.api.R3_AUTO.enabled,false);
+});
 test('new DM campaign never displays cached Nier until its identity is verified',()=>{
   const h=panelHarness('Elowen');
   const old=h.api.r3Empty();old.name='Nier';old.stats.hp=84;
