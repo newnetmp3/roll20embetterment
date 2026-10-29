@@ -4,6 +4,14 @@
 **Latest merged feature source:** PR #110 (native action catalog, MISC and consolidated Debug) is included in the requested **v3.10.0 Milestone Completion build**. Check the update feed for actual signed publication before installing.  
 **Chrome and optional userscript:** independently versioned v3.4.0.
 
+## DM and Player Character modes
+
+**Player Character** mode requires a selected source-verified controlled token. Native actions and private full-tab background import remain subject to their original Roll20 permission and reader-ownership checks.
+
+**DM Sheet · Read-only** mode follows a uniquely opened official 2024 character sheet, even if the selected token is absent and Roll20's character collection is not hydrated. It reads the currently visible sheet tab and never navigates/hides that manual sheet or grants token authority. The status bar and Debug show the active source mode; there is no automatic inference that the user's Roll20 account is a DM.
+
+See [architecture](../../docs/ARCHITECTURE.md) and [audit](../../docs/CODEBASE_REVIEW.md). Full private all-tab DM sync remains unimplemented.
+
 ## Install
 
 Download the [latest signed Firefox XPI](https://github.com/newnetmp3/roll20embetterment/releases) and open it in Firefox or Floorp. The extension declares the stable Gecko ID `roll20-embetterment@newnetmp3.github.io`. Install the signed file, not the unsigned CI ZIP, for permanent Firefox use. Disable the older Tampermonkey script or duplicated extension first, then reload Roll20.
