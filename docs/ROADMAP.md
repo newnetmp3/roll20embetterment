@@ -1,3 +1,13 @@
+## 2026-10-28 — Jumpgate Webpack module ID relocation (Firefox v3.10.21 candidate)
+
+- [x] Use user v3.10.20 Debug to identify confirmed absence of old VTTEngine module 73210, rather than another minifier-string failure.
+- [x] Preserve fixed known-ID fast path, add bounded read-only Webpack factory-source lookup for one unique source-verified selector, with a strict factory size/registry byte/entry budget.
+- [x] Only execute a factory after uniquely matching VTTEngine export, selector delegation, selection children and scene model link; reject missing/ambiguous/unsupported sources with precise Debug reason. Keep read-only getter and Controlled By gates.
+- [x] Retry late registration on normal poll up to three times; avoid duplicate scanning after successful module resolution.
+- [x] Add relocated/missing/ambiguous module regression tests, preserve existing movement tests and regenerated optional userscript.
+- [ ] Merge after green PR CI; publish Mozilla-signed Firefox v3.10.21 and verify update manifest SHA-256.
+- [ ] Confirm actual Roll20 build `775403f71ba36dde7775` supports the discovered selector and movement after a token selection. If no unique matching factory, obtain latest Roll20 JS source to update exact capability model rather than guessing.
+
 ## 2026-10-28 — restore Jumpgate selection/movement and make cascades click-only (Firefox v3.10.20 candidate)
 
 - [x] Diagnose user export: new Jumpgate build, no selected token or coordinates despite valid Campaign/page scale; selection interface rejected by hardcoded source signature.
