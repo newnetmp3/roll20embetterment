@@ -570,12 +570,25 @@ function r3TokenSaveCache(){
 }
 function r3TokenRecordSnapshot(snapshot){
   if(snapshot?.schema!==3||!snapshot.name)return;
-  R3_TOKEN.legacy=snapshot;
-  const active=R3_TOKEN.active;
-  // Do not associate a new character's snapshot with an unrelated selected
-  // token, even when it arrived after a manual import or stale async scan.
+  const active=R3_TOKEN.active,dmId=R3_TOKEN.visibleSheetId;
+  // A DM's manually opened sheet is read-only but still has an exact
+  // Roll20 character ID. Cache it under that ID in this campaign, never
+  // as an unscoped name-only legacy profile that could be adopted by
+  // a different PC. This does not grant ownership or enable native actions.
+  if(!active&&dmId){
+    if(R3_AUTO?.origin!=='visible'||R3_AUTO.characterId!==dmId||
+       R3_AUTO.name.toLowerCase()!==snapshot.name.toLowerCase())return;
+    R3_TOKEN.snapshots.set(dmId,{name:R3_AUTO.name,
+      snapshot:r3InventoryPrune(snapshot)});
+    r3TokenSaveCache();
+    return;
+  }
+  // Only a source-verified Player Character may update the legacy migration
+  // candidate. A manually imported or DM-read same-name sheet must not
+  // silently become a different token's cached profile.
   if(!active||active.name.toLowerCase()!==snapshot.name.toLowerCase()||
      !r3TokenUnambiguousName(snapshot.name))return;
+  R3_TOKEN.legacy=snapshot;
   R3_TOKEN.snapshots.set(active.characterId,{name:active.name,
     snapshot:r3InventoryPrune(snapshot)});
   r3TokenSaveCache();
