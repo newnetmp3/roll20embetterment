@@ -148,6 +148,21 @@ function r3MoveDisconnect(){
   t.model=null;t.object=null;t.handler=null;t.objectHandler=null;
   t.objectModifiedHandler=null;t.dragging=false;
 }
+function r3MoveConnect(info){
+  const tracker=R3_MOVE;
+  tracker.model=info.model;tracker.object=info.object;
+  if(typeof info.model.on==='function'){
+    tracker.handler=()=>r3MoveMeasure('change');
+    try{info.model.on('change',tracker.handler);}catch{tracker.handler=null;}
+  }
+  if(info.object!==info.model&&typeof info.object?.on==='function'){
+    tracker.objectHandler=()=>r3MoveMeasure('moving');
+    tracker.objectModifiedHandler=()=>r3MoveMeasure('modified');
+    try{info.object.on('moving',tracker.objectHandler);
+      info.object.on('modified',tracker.objectModifiedHandler);
+    }catch{tracker.objectHandler=null;}
+  }
+}
 function r3MoveRebase(){
   r3MoveDisconnect();
   Object.assign(R3_MOVE,{tokenId:'',characterId:'',pageId:'',last:null,
@@ -277,28 +292,28 @@ function r3MoveMeasure(signal='poll'){
   }
   const scale=r3MoveScale(info.page),signature=scale?.signature||null;
   const changedToken=tracker.tokenId!==info.tokenId||
-    tracker.characterId!==info.characterId||tracker.pageId!==info.pageId||
-    tracker.model!==info.model;
+    tracker.characterId!==info.characterId||tracker.pageId!==info.pageId;
+  // Jumpgate can recreate the scene-node wrapper or Backbone model while
+  // retaining the exact same controlled token. Rebind listeners, but never
+  // discard the last confirmed position just because object identity changed.
+  const changedSource=tracker.model!==info.model||tracker.object!==info.object;
   if(changedToken){
     r3MoveDisconnect();
     Object.assign(tracker,{tokenId:info.tokenId,characterId:info.characterId,
-      pageId:info.pageId,model:info.model,object:info.object,last:sample,
+      pageId:info.pageId,last:sample,
       scale:signature,lastMove:r3MoveGet(info.model,'lastmove')||'',
       source:info.source,pending:null,nativeReadout:null,measurementSource:'none',dragging:false});
-    if(typeof info.model.on==='function'){
-      tracker.handler=()=>r3MoveMeasure('change');
-      try{info.model.on('change',tracker.handler);}catch{tracker.handler=null;}
-    }
-    if(info.object!==info.model&&typeof info.object?.on==='function'){
-      tracker.objectHandler=()=>r3MoveMeasure('moving');
-      tracker.objectModifiedHandler=()=>r3MoveMeasure('modified');
-      try{info.object.on('moving',tracker.objectHandler);
-        info.object.on('modified',tracker.objectModifiedHandler);
-      }catch{tracker.objectHandler=null;}
-    }
+    r3MoveConnect(info);
     r3MoveReport('Movement tracker connected',
       'Watching Roll20 ruler; page '+(signature||'scale unavailable'));
     return;
+  }
+  if(changedSource){
+    // A new wrapper for this same verified token is not a new movement
+    // baseline. The next observation can still finish a pending move.
+    r3MoveDisconnect();
+    r3MoveConnect(info);
+    tracker.source=info.source;
   }
   const previous=tracker.last,oldScale=tracker.scale;
   tracker.scale=signature;
@@ -317,8 +332,18 @@ function r3MoveMeasure(signal='poll'){
     return;
   }
   if(!tracker.pending&&Math.hypot(sample.x-previous.x,sample.y-previous.y)>=0.05)
-    tracker.pending={start:previous,end:sample};
-  else if(tracker.pending)tracker.pending.end=sample;
+    tracker.pending={start:previous,end:sample,stablePolls:0};
+  else if(tracker.pending){
+    const prior=tracker.pending.end;
+    const changing=Math.hypot(sample.x-prior.x,sample.y-prior.y)>=0.05;
+    tracker.pending.end=sample;
+    // Jumpgate can publish coordinates without a Backbone 'change' or
+    // Fabric 'modified' callback. On the normal 400ms token watcher, count
+    // only after two *subsequent* unchanged position polls. Motion or an
+    // explicit moving event resets the quiet-poll counter.
+    tracker.pending.stablePolls=signal==='poll'&&!changing?
+      tracker.pending.stablePolls+1:0;
+  }
   // Capture the *latest* displayed total, never sum intermediate frames.
   // A moving/visual poll does not spend movement until the model commits,
   // or a Fabric modified event confirms token drop.
@@ -327,11 +352,13 @@ function r3MoveMeasure(signal='poll'){
   if(readout&&tracker.pending)tracker.nativeReadout=readout;
   // Backbone change events may fire DURING a Fabric drag. Count only the
   // matching modified/drop notification once that dragging was observed.
-  if((signal!=='change'&&signal!=='modified')||
+  const settled=signal==='poll'&&!tracker.dragging&&
+    tracker.pending?.stablePolls>=2;
+  if((signal!=='change'&&signal!=='modified'&&!settled)||
     (tracker.dragging&&signal!=='modified')){
     if(tracker.pending)r3MoveReport('Watching Roll20 movement',
       tracker.nativeReadout?'Native ruler currently '+tracker.nativeReadout.label:
-        'Waiting for token drop; no readable ruler label yet');
+        'Waiting for token drop or stable position; no readable ruler label yet');
     return;
   }
   if(!tracker.pending){

@@ -91,6 +91,14 @@ test('real importer panel initializes and both scan buttons become enabled when 
   assert.equal(h.nodes.get('r3-all').disabled,false);
 });
 
+test('cascade section changes require a click; pointer hover never dispatches',()=>{
+  const h=panelHarness();h.api.r3StartUI();
+  assert.equal(h.shadow.handlers.has('pointerover'),false,
+    'hover must not synthesize click events to change cascade branches');
+  assert.equal(h.api.R3_HUD.flyout,'');
+  h.shadow.handlers.get('click')({target:{dataset:{hudFlyout:'spells'}}});
+  assert.equal(h.api.R3_HUD.flyout,'spells','explicit click still opens the category');
+});
 test('Attack flyout requires no private-reader toggle or permission warning',()=>{
   const h=panelHarness();h.api.r3StartUI();
   const snapshot=h.api.r3Empty();snapshot.name='Elowen';

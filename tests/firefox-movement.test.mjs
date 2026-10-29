@@ -50,6 +50,38 @@ function rig(options={}){
   const api=ctx.api;api.r3TurnLoad();
   return {api,ctx,elf,make,store,renders,pageAttrs,page,listeners};
 }
+test('Jumpgate coordinate-only movement settles after two unchanged polls without an event',()=>{
+  const h=rig();h.api.r3TurnStart();h.api.r3MovePoll();
+  h.elf.attrs.left=210;
+  h.api.r3MovePoll(); // position changed without a model change event
+  assert.equal(h.api.R3_TURN.movementUsed,0,'do not spend movement on an in-progress drag');
+  h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,0,'first settled poll still waits');
+  h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,5,'second stable poll completes the move');
+  h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,5,'no repeated counting after settlement');
+  h.elf.attrs.left=280;
+  h.api.r3MovePoll();
+  h.elf.attrs.left=350;h.api.r3MovePoll(); // a moving token resets quiet polls
+  h.api.r3MovePoll();h.api.r3MovePoll();
+  assert.equal(h.api.R3_TURN.movementUsed,15,'continuous movement is one path, not a series of jitter moves');
+});
+test('same-token scene model replacement preserves movement baseline and rebinds listener',()=>{
+  const h=rig();h.api.r3TurnStart();h.api.r3MovePoll();
+  const replacement={id:'token-elf',get(k){return h.elf.attrs[k];},
+    on(name,cb){h.listeners.set('replacement',cb);},
+    off(name,cb){if(h.listeners.get('replacement')===cb)h.listeners.delete('replacement');}};
+  h.elf.object.model=replacement;
+  h.api.r3MovePoll(); // same character and same graphic ID, new model reference
+  assert.equal(h.api.R3_MOVE.model,replacement);
+  assert.equal(h.api.R3_TURN.movementUsed,0);
+  h.elf.attrs.left=210;
+  h.listeners.get('replacement')();
+  assert.equal(h.api.R3_TURN.movementUsed,5,'listener follows the refreshed model');
+  assert.equal(h.listeners.has('token-elf'),false,'old listener detached');
+});
+
 test('movement sums successive distances, including backtracking, with actual page scale',()=>{
   const h=rig(),t=h.api.R3_TURN;
   h.api.r3TurnStart();h.api.r3MovePoll();
@@ -643,6 +675,32 @@ test('both different Jumpgate build hashes accept the same proven selection inte
     assert.equal(diagnose().eligible,false);
   }
 });
+test('changed Jumpgate minifier formatting still passes a verified read-only selector',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  const campaign=h.ctx.window.Campaign;
+  campaign.characters={get(id){return id==='char-elf'?{
+    id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
+  }:null;}};
+  h.ctx.window.d20=undefined;
+  h.ctx.window.d20_player_id='player-elf';
+  const selected=[{id:'scene-node',dataWrapper:{model:h.elf.model}}];
+  const old=jumpgateSelectionFactory(h.ctx);
+  const varied=Function.prototype.toString.call(old)
+    .replace('getSelection(){return this.tabletop.getSelection()}',
+      'getSelection() { return this.tabletop.getSelection(); }')
+    .replace('getSelection(){var U,se;return(se=(U=this.state)==null?void 0:U.children)!=null?se:[]}',
+      'getSelection() { const state=this.state; return state && state.children || []; }');
+  assert.notEqual(varied,Function.prototype.toString.call(old));
+  const factory=vm.runInContext(varied,h.ctx);
+  const requireModule=jumpgateSelectionRequire(factory,jumpgateSelectionTable(selected),
+    '775403f71ba36dde7775');
+  jumpgateSelectionInstall(h,requireModule);
+  vm.runInContext(watch,h.ctx);
+  const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+  assert.equal(diag.eligible,true,'existing proven getter can survive factory formatting changes');
+  assert.equal(diag.selectionCount,1);
+  assert.equal(requireModule.getCalls(),1);
+});
 test('unknown source signature cannot execute a Jumpgate module',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   h.ctx.window.d20=undefined;h.ctx.window.vttEngine='jumpgate';
@@ -656,7 +714,7 @@ test('unknown source signature cannot execute a Jumpgate module',()=>{
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(called,0);
   assert.equal(diag.nativeState,'unsupported Jumpgate selection interface');
-  assert.equal(diag.moduleSignature,'selection interfaces differ');
+  assert.match(diag.moduleSignature,/selection interfaces differ: module size outside verified bounds/);
   assert.equal(diag.eligible,false);
 });
 test('source-compatible module with changed getter fails closed',()=>{

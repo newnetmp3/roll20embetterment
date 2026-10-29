@@ -1455,14 +1455,9 @@ function r3StartUI(){
     if(!path.includes(R3_UI.host))
       r3BattlefieldClick({dataset:{bfAction:'cascade-close'}});
   },true);
-  // Only the R20eb menu rail responds to hover. Never hover-trigger a
-  // Roll20 sheet control, an attack, a spell cast, or an item use.
-  root.addEventListener('pointerover',event=>{
-    if(typeof r3BattlefieldClick!=='function')return;
-    const button=event.target?.closest?.('.r3-cascade-rail .r3-cascade-entry[aria-haspopup="true"]');
-    if(!button||button.getAttribute?.('aria-expanded')==='true')return;
-    button.click?.();
-  });
+  // Section navigation is click-only. Pointer hover may apply CSS focus
+  // styling, but must never activate a category or replace the current
+  // branch while the player moves between menu entries.
   root.addEventListener('pointerdown',event=>{
     if(typeof R3_BF!=='object')return;
     if(!(R3_BF.contextOpen||R3_BF.menuPane||R3_HUD.flyout||
@@ -3852,29 +3847,45 @@ const R3_JUMPGATE_RUNTIME={
   moduleId:73210,tried:0,lastTry:0,engineClass:null,status:'not inspected',
   activeBuild:'unavailable',signature:'not checked'
 };
-function r3JumpgateFactorySupported(factory){
+function r3JumpgateFactoryProbe(factory){
+  // Probe only the previously established VTTEngine Webpack module ID. Its
+  // minifier output is not stable across Roll20 deployments; do not pin
+  // variable names, an exact emitted getter, or export position.
   try{
-    if(typeof factory!=='function')return false;
+    if(typeof factory!=='function')
+      return {supported:false,reason:'expected module factory absent'};
     const source=Function.prototype.toString.call(factory);
-    // Fast bounded check on the module entry followed by only stable,
-    // source-verified selection code. No whole-file hash or length.
-    if(source.length<50000||source.length>2000000)return false;
-    return /VTTEngine:\(\)=>[\w$]+/.test(source.slice(0,160))&&
-      source.includes('getSelection(){return this.tabletop.getSelection()}')&&
-      /getSelection\(\)\{var [\w$]+,[\w$]+;return[^}]{0,180}\.children[^}]{0,80}\}/.test(source)&&
-      source.includes('dataWrapper.model');
-  }catch{return false;}
+    if(source.length<50000||source.length>2000000)
+      return {supported:false,reason:'module size outside verified bounds'};
+    if(!/VTTEngine:\s*\(\)\s*=>\s*[\w$]+/.test(source.slice(0,1024)))
+      return {supported:false,reason:'VTTEngine export signature changed'};
+    // Require both an engine selection delegate and an identifiable
+    // multi-select reader, in addition to the exact scene-node model link.
+    // Unknown methods remain fail-closed before require(moduleId) executes.
+    if(!/getSelection\(\)\s*\{\s*return\s+this\.tabletop\.getSelection\(\)\s*;?\s*\}/.test(source))
+      return {supported:false,reason:'VTTEngine selection delegate changed'};
+    if(!/getSelection\(\)\s*\{[^}]{0,550}\.children[^}]{0,200}\}/.test(source))
+      return {supported:false,reason:'tabletop selection children reader changed'};
+    if(!source.includes('dataWrapper.model'))
+      return {supported:false,reason:'scene-node token model bridge changed'};
+    return {supported:true,reason:'selection factory capability matched'};
+  }catch{return {supported:false,reason:'module factory inspection failed'};}
+}
+function r3JumpgateFactorySupported(factory){
+  return r3JumpgateFactoryProbe(factory).supported;
 }
 function r3JumpgateGetterSupported(getter){
   try{
     if(typeof getter!=='function'||getter.length!==0)return false;
     const source=Function.prototype.toString.call(getter);
-    // Both inspected builds expose a non-mutating zero-arg method that
-    // returns the multi-select holder's children, or [].
-    return source.length<=250&&
-      /^getSelection\(\)\{/.test(source)&&
-      source.includes('return')&&source.includes('.children')&&
-      source.endsWith('}');
+    // Read-only zero-argument getter, returning the selection holder's
+    // children or an empty array. Require no assignment or invocation in
+    // the method body, except the syntax of permitted optional chaining.
+    return source.length<=600&&
+      /^getSelection\(\)\s*\{/.test(source)&&
+      /\breturn\b/.test(source)&&/\.children\b/.test(source)&&
+      source.endsWith('}')&&
+      !/(?:\+\+|--|\b(?:delete|new|await|throw|yield)\b|\.\s*(?:add|set|push|splice|remove|clear|delete)\s*\()/.test(source);
   }catch{return false;}
 }
 // Install the observer during MAIN-world document_start, well before
@@ -3959,8 +3970,9 @@ function r3JumpgateSelection(){
             // Require only the source-verified selection module. A changed
             // unrelated module is never examined; unknown signatures fail
             // before a module loader is invoked.
-            if(!r3JumpgateFactorySupported(require?.m?.[state.moduleId])){
-              state.signature='selection interfaces differ';
+            const check=r3JumpgateFactoryProbe(require?.m?.[state.moduleId]);
+            if(!check.supported){
+              state.signature='selection interfaces differ: '+check.reason;
               state.status='unsupported Jumpgate selection interface';
               state.tried=3;return;
             }

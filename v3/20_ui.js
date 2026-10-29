@@ -378,14 +378,9 @@ function r3StartUI(){
     if(!path.includes(R3_UI.host))
       r3BattlefieldClick({dataset:{bfAction:'cascade-close'}});
   },true);
-  // Only the R20eb menu rail responds to hover. Never hover-trigger a
-  // Roll20 sheet control, an attack, a spell cast, or an item use.
-  root.addEventListener('pointerover',event=>{
-    if(typeof r3BattlefieldClick!=='function')return;
-    const button=event.target?.closest?.('.r3-cascade-rail .r3-cascade-entry[aria-haspopup="true"]');
-    if(!button||button.getAttribute?.('aria-expanded')==='true')return;
-    button.click?.();
-  });
+  // Section navigation is click-only. Pointer hover may apply CSS focus
+  // styling, but must never activate a category or replace the current
+  // branch while the player moves between menu entries.
   root.addEventListener('pointerdown',event=>{
     if(typeof R3_BF!=='object')return;
     if(!(R3_BF.contextOpen||R3_BF.menuPane||R3_HUD.flyout||
