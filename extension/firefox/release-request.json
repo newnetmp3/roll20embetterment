@@ -1,6 +1,6 @@
 {
-  "version": "3.10.24",
+  "version": "3.10.25",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Fix GM/DM manual Roll20 2024 character sheets not syncing when Campaign.characters model is not hydrated: validate an exact visible official dialog data-characterid and consistent sheet name, bind read-only HUD display/import to that ID, prevent older selected tokens from overriding the open sheet, and expire identity when dialog closes. Do not confer token permission or navigate manual sheet tabs."
+  "reason": "Refactor entire shipped v3 runtime into shared Jumpgate/cache, Player Character selection, read-only DM visible-sheet view, and sole session coordinator; isolate cross-mode auto-reader candidates and Sync toggles, preserve explicit token precedence, prevent name-only DM snapshot migration, clear stale reader/turn state across campaign navigation, label mode in HUD/Debug, update builds/docs and tests."
 }
