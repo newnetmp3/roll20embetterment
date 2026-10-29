@@ -537,6 +537,26 @@ function r3ToggleAuto(){
     r3AutoDisplay('Selected-token private sheet sync is automatic');
     return;
   }
+  // DM sheet sync is scoped to this open dialog, not a persistent
+  // name-only manual importer. Toggling it off/on must never reinterpret
+  // the DM viewer as a Player Character private-reader session.
+  if(R3_TOKEN.visibleSheetId&&!R3_TOKEN.active){
+    const same=R3_AUTO.origin==='visible'&&
+      R3_AUTO.characterId===R3_TOKEN.visibleSheetId;
+    const enabled=same&&R3_AUTO.enabled;
+    R3_AUTO.generation++;
+    if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
+    R3_AUTO.dirtyTimer=null;
+    R3_AUTO.enabled=!enabled;R3_AUTO.origin='visible';
+    R3_AUTO.characterId=R3_TOKEN.visibleSheetId;
+    R3_AUTO.name=r3String(R3_UI.snapshot?.name,120);
+    if(R3_AUTO.enabled){
+      R3_AUTO.lastScan=0;
+      r3AutoDisplay('Following current DM sheet: '+R3_AUTO.name);
+      r3AutoTick();
+    }else r3AutoDisplay('DM sheet sync paused for this open sheet');
+    return;
+  }
   if(R3_AUTO.enabled){
     R3_AUTO.enabled=false;R3_AUTO.explicitlyDisabled=true;
     R3_AUTO.generation++;
