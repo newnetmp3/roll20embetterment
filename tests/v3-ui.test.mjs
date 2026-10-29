@@ -152,6 +152,30 @@ test('closing DM dialog drops its snapshot and invalidates pending auto-reader',
   assert.equal(h.api.R3_UI.snapshot,null);
   assert.equal(h.api.R3_AUTO.enabled,false);
 });
+test('session modes are exclusive and a fresh controlled token wins over an unchanged DM dialog',()=>{
+  const {h}=dmDialogRig('Example Level Seven Mage','-P5ExampleSheetABC123');
+  h.api.r3StartUI();h.api.r3TokenPoll();
+  assert.equal(vm.runInContext('r3SessionMode()',h.context),'dm-sheet');
+  assert.equal(vm.runInContext('r3SessionLabel()',h.context),'DM Sheet · Read-only');
+  assert.equal(h.api.r3AutoCandidate()?.window,h.frameWindow);
+  const tok={tokenId:'token-ally',characterId:'char-ally',name:'Ally',tokenImage:''};
+  h.api.r3TokenSwitch(tok);
+  assert.equal(vm.runInContext('r3SessionMode()',h.context),'player-character');
+  h.api.r3TokenPoll();
+  assert.equal(h.api.R3_TOKEN.active?.characterId,'char-ally',
+    'unchanged open DM dialog must not steal focus from fresh player-token selection');
+  assert.equal(h.api.R3_TOKEN.visibleSheetId,'');
+  assert.equal(h.api.R3_AUTO.origin,'token');
+});
+test('DM reader targets only current visible exact-ID dialog, not another sheet',()=>{
+  const {h,dialog}=dmDialogRig('Example Level Seven Mage','-P5ExampleSheetABC123');
+  h.api.r3StartUI();h.api.r3TokenPoll();
+  assert.equal(h.api.r3AutoCandidate()?.window,h.frameWindow);
+  // A mismatched dialog ID cannot be used to publish another character,
+  // even if an iframe happens to keep the same display name.
+  dialog.getAttribute=()=>'-P5OtherSheetXYZ';
+  assert.equal(h.api.r3AutoCandidate(),null);
+});
 test('new DM campaign never displays cached Nier until its identity is verified',()=>{
   const h=panelHarness('Elowen');
   const old=h.api.r3Empty();old.name='Nier';old.stats.hp=84;
