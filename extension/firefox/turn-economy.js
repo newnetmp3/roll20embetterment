@@ -214,7 +214,7 @@ function r3TurnMarkup(snapshot){
     ['Reaction',t.reactionSpent?'Spent':'Ready',!t.reactionSpent,'reaction',
       'Reaction persists outside your turn until your next turn begins'],
     ['Movement',remaining===null?'Unknown':r3TurnDistance(remaining)+' ft',remaining===null||remaining>0,'move-plus',
-      'Movement from Roll20 ruler when readable; otherwise grid-based distance on completed moves. Click to add 5 feet manually']
+      'Auto-tracks the selected controlled token even outside a local active turn. Resets on Start Turn. Click to add 5 feet manually']
   ];
   const states=cards.map(([label,value,ready,action,tip])=>
     '<button type="button" class="hud-turn-card '+(ready?'':'spent')+
