@@ -977,7 +977,7 @@ function r3FrameList(){
       // two contradictory non-generic identities.
       const title=r3String(frame.getAttribute('title')||'',90)
         .replace(/^Character sheet for\s+/i,'').trim();
-      const header=r3String(frame.closest('.characterdialog')?.querySelector('.asv__header__name')?.textContent||'',90).trim();
+      const header=r3String(frame.closest?.('.characterdialog')?.querySelector?.('.asv__header__name')?.textContent||'',90).trim();
       const reader=typeof R3_NATIVE==='object'?R3_NATIVE.readers.get(frame.contentWindow):null;
       const announced=r3String(reader?.name||'',90).trim();
       const generic=name=>!name||/^(?:2024 character sheet|unnamed sheet|official sheet popout)/i.test(name);
