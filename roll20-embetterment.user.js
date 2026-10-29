@@ -3842,7 +3842,7 @@ function r3HudStyles(){
 // selected token's represented character and its permissions are unavailable.
 const R3_TOKEN={
   active:null,selectionIds:[],snapshots:new Map(),legacy:null,visibleSheetId:'',
-  timer:null,started:false
+  visibleSheetSeen:'',visibleSheetMissing:0,timer:null,started:false
 };
 function r3TokenCampaign(){
   // Jumpgate's editor owns the direct Campaign Backbone model. Do not
@@ -4472,46 +4472,76 @@ function r3TokenSwitch(info){
 // to issue token-bound native actions or open a private sheet automatically.
 function r3TokenFollowVisibleSheet(){
   if(typeof r3Candidates!=='function')return false;
-  const collection=r3TokenCampaign()?.characters;
-  if(!collection)return false;
-  const candidates=r3Candidates().filter(c=>c?.visible&&c.window&&
+  const collection=r3TokenCampaign()?.characters||null;
+  const choices=r3Candidates().filter(c=>c?.visible&&c.window&&
     (c.type==='iframe'||c.type==='popout')&&
     typeof c.name==='string'&&c.name.length>0&&c.name.length<=120&&
     !/^(?:2024 character sheet|unnamed sheet|official sheet popout)/i.test(c.name)&&
     !(typeof r3NativeIsOwned==='function'&&r3NativeIsOwned(c)));
   const resolved=[];
-  for(const candidate of candidates.slice(0,20)){
+  for(const candidate of choices.slice(0,20)){
     const exactId=typeof r3AutoId==='function'?r3AutoId(candidate):'';
+    const dialog=candidate.type==='iframe'?
+      candidate.frame?.closest?.('.characterdialog[data-characterid]'):null;
+    const dialogId=r3String(dialog?.getAttribute?.('data-characterid'),110);
+    // A visible Roll20 2024 dialog is an authoritative *display* identity:
+    // the character ID and the sheet's title/header are rendered by Roll20.
+    // A DM need not be listed in "Controlled By" or even have a hydrated
+    // Campaign.characters collection. Only a frame in a real, open dialog
+    // may use the DOM-only path. This NEVER proves token control.
+    const domIdentity=dialogId&&exactId===dialogId&&
+      /^[\w-]{5,110}$/.test(dialogId);
     let model=null;
     if(exactId)model=r3TokenCharacter(exactId);
-    else if(Array.isArray(collection.models)){
+    else if(Array.isArray(collection?.models)){
       const matches=collection.models.filter(m=>
         r3String(r3TokenModelGet(m,'name'),120).toLowerCase()===candidate.name.toLowerCase());
       if(matches.length===1)model=matches[0];
     }
-    if(!model||r3String(r3TokenModelGet(model,'name'),120).toLowerCase()!==
+    if(model&&r3String(r3TokenModelGet(model,'name'),120).toLowerCase()!==
        candidate.name.toLowerCase())continue;
-    const id=r3String(model.id||r3TokenModelGet(model,'_id'),110);
-    if(id)resolved.push({candidate,model,id,name:r3String(r3TokenModelGet(model,'name'),120)});
+    if(exactId&&model&&r3String(model.id||r3TokenModelGet(model,'_id'),110)!==exactId)
+      continue;
+    if(!model&&!domIdentity)continue;
+    const id=r3String(model?.id||r3TokenModelGet(model,'_id')||
+      (domIdentity?dialogId:''),110);
+    const name=model?r3String(r3TokenModelGet(model,'name'),120):candidate.name;
+    if(id&&name)resolved.push({candidate,id,name});
   }
-  if(resolved.length!==1)return false;
-  const {candidate,id,name}=resolved[0];
-  if(R3_TOKEN.visibleSheetId===id&&!R3_TOKEN.active)return false;
+  if(resolved.length!==1){
+    // An opened sheet can temporarily unmount during a Vue tab transition.
+    // Wait four polls before clearing its display; never keep an unrelated
+    // profile displayed indefinitely after the actual dialog closes.
+    if(R3_TOKEN.visibleSheetId&&++R3_TOKEN.visibleSheetMissing>=4){
+      R3_TOKEN.visibleSheetId='';R3_TOKEN.visibleSheetSeen='';
+      R3_TOKEN.visibleSheetMissing=0;
+      if(typeof R3_AUTO==='object'&&R3_AUTO.origin==='visible'){
+        R3_AUTO.generation++;R3_AUTO.enabled=false;R3_AUTO.name='';
+        R3_AUTO.characterId='';R3_AUTO.origin='manual';
+      }
+      R3_UI.snapshot=null;R3_UI.renderedSnapshot=null;
+      if(typeof r3HudLoad==='function')r3HudLoad();
+      if(typeof r3UIRefresh==='function')r3UIRefresh();
+    }
+    if(!choices.length)R3_TOKEN.visibleSheetSeen='';
+    return false;
+  }
+  R3_TOKEN.visibleSheetMissing=0;
+  const {candidate,id,name}=resolved[0],seen=candidate.key+':'+id;
+  // A newly opened sheet wins over a stale token; a subsequent explicit
+  // map-token selection can win back without the same sheet stealing focus
+  // on every 400ms poll.
+  if(R3_TOKEN.visibleSheetSeen===seen)return false;
+  R3_TOKEN.visibleSheetSeen=seen;
   if(R3_TOKEN.active?.characterId===id)return false;
-  // A sheet opened by the player is an explicit selection even without a
-  // map token, but it cannot confer ownership on any map graphic. Release a
-  // previously followed map token when a different official sheet becomes
-  // the explicit no-token selection.
   if(R3_TOKEN.active&&typeof r3HudSave==='function')r3HudSave();
   R3_TOKEN.active=null;R3_TOKEN.visibleSheetId=id;
   const snap=r3Empty();snap.name=name;
-  snap.diagnostics.notes.push('Viewing an official character sheet in this campaign. Token-bound actions require selecting a controlled token.');
+  snap.diagnostics.notes.push('Viewing a manually opened official Roll20 sheet in this campaign; map-token ownership is not inferred.');
   R3_UI.snapshot=r3Coverage(snap);
   R3_UI.view='summary';R3_UI.selected=candidate.key;
   R3_UI.renderedSnapshot=null;R3_HUD.flyout='';R3_HUD.chooser=null;
   if(typeof r3HudLoad==='function')r3HudLoad();
-  // Read the currently visible tab only. Never switch a manually opened
-  // Roll20 sheet's tabs or open an arbitrary character's Journal entry.
   if(typeof R3_AUTO==='object'){
     R3_AUTO.generation++;
     R3_AUTO.enabled=true;R3_AUTO.origin='visible';
@@ -4519,7 +4549,7 @@ function r3TokenFollowVisibleSheet(){
     R3_AUTO.lastScan=0;R3_AUTO.lastFull=0;R3_AUTO.lastOpenAttempt=0;
   }
   if(typeof r3UIStatus==='function')
-    r3UIStatus('Showing '+name+' from the current campaign’s official sheet; reading its visible tab.');
+    r3UIStatus('Following open Roll20 sheet: '+name+'; importing its visible tab.');
   if(typeof r3UIRefresh==='function')r3UIRefresh();
   if(typeof r3AutoTick==='function')r3AutoTick();
   return true;
@@ -4542,6 +4572,7 @@ function r3TokenCheckCampaign(){
     R3_AUTO.dirtyTimer=null;
   }
   R3_TOKEN.active=null;R3_TOKEN.selectionIds=[];R3_TOKEN.visibleSheetId='';
+  R3_TOKEN.visibleSheetSeen='';R3_TOKEN.visibleSheetMissing=0;
   R3_TOKEN.snapshots.clear();R3_TOKEN.legacy=null;
   R3_UI.campaignKey=current;R3_UI.snapshot=null;
   R3_UI.restoredSnapshot=null;R3_UI.selected='';R3_UI.view='summary';
@@ -4573,9 +4604,12 @@ function r3TokenPoll(){
   // its name, or permissions. Retry unresolved selections on the next poll
   // instead of permanently discarding the token ID until user deselects it.
   // Successful selections retain the old newest-token behavior.
-  const candidates=fresh.length?fresh:(!R3_TOKEN.active?tokens:[]);
+  // Roll20 can leave a previous map token selected while the DM opens a
+  // different PC sheet. A newly opened, explicitly named dialog takes
+  // display priority unless a *new* verified token selection just occurred.
+  if(!fresh.length)r3TokenFollowVisibleSheet();
+  const candidates=fresh.length?fresh:(!R3_TOKEN.active&&!R3_TOKEN.visibleSheetId?tokens:[]);
   if(!candidates.length){
-    if(!tokens.length)r3TokenFollowVisibleSheet();
     if(typeof r3MovePoll==='function')r3MovePoll();
     return;
   }
@@ -4587,7 +4621,7 @@ function r3TokenPoll(){
   }
   // The GM may select a map token not owned by a player and explicitly open
   // its sheet. Keep token-only mapping blocked, but show that visible sheet.
-  if(!switched)r3TokenFollowVisibleSheet();
+  if(!switched&&fresh.length)r3TokenFollowVisibleSheet();
   if(typeof r3MovePoll==='function')r3MovePoll();
 }
 function r3StartTokenWatch(){
