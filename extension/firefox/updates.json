@@ -3,9 +3,9 @@
     "roll20-embetterment@newnetmp3.github.io": {
       "updates": [
         {
-          "version": "3.10.21",
-          "update_link": "https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.21/r20eb-firefox-v3.10.21.xpi",
-          "update_hash": "sha256:3f848d038422f0e21f0f11c8cb54b19fa00b4d778ae1cc89f7b5d31e4799563a"
+          "version": "3.10.22",
+          "update_link": "https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.22/r20eb-firefox-v3.10.22.xpi",
+          "update_hash": "sha256:06734f55af30b59716d6a1ea7aeced76eab456c02f33f7d5f7f1f1c47dd679ae"
         }
       ]
     }
