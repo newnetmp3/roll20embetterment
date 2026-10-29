@@ -33,3 +33,18 @@ function r3TokenSwitch(info){
     'Synchronizing from Roll20 when its official sheet is available.'));
   r3UIRefresh();
 }
+
+function r3PlayerAutoAllowed(){
+  return R3_AUTO.origin==='token'&&R3_AUTO.enabled&&
+    R3_TOKEN.active?.characterId===R3_AUTO.characterId&&
+    R3_TOKEN.active?.name===R3_AUTO.name;
+}
+function r3PlayerFollowSelection(picked,tokens,ids){
+  for(const id of ids.slice().reverse()){
+    const index=tokens.lastIndexOf(id);
+    if(index<0)continue;
+    const info=r3TokenLinkedInfo(picked[index]);
+    if(info){r3TokenSwitch(info);return true;}
+  }
+  return false;
+}
