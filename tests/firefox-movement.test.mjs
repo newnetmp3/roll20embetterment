@@ -120,20 +120,39 @@ test('unknown page units/scale pause automatic measurement but preserve manual c
   h.elf.move(350,210);
   assert.equal(h.api.R3_TURN.movementUsed,10);
 });
-test('token movement outside an active turn is ignored and new turn rebases',()=>{
-  const h=rig();
+test('verified movement auto-tracks without Start Turn and after local End Turn',()=>{
+  const h=rig(),t=h.api.R3_TURN;
+  // First selection supplies a baseline, regardless of the local turn flag.
   h.api.r3MovePoll();
+  assert.equal(t.phase,'unknown');
   h.elf.move(210,210);
-  assert.equal(h.api.R3_TURN.movementUsed,0);
+  assert.equal(t.movementUsed,5,'movement automatically counts with no manual turn setup');
+  assert.equal(t.phase,'unknown','movement never fabricates a Roll20 turn');
   h.api.r3TurnStart();h.elf.move(280,210);
-  assert.equal(h.api.R3_TURN.movementUsed,5);
+  assert.equal(t.movementUsed,5);
   h.api.r3TurnApply('end');
+  assert.equal(t.phase,'ended');
   h.elf.move(350,210);
-  assert.equal(h.api.R3_TURN.movementUsed,5);
+  assert.equal(t.movementUsed,10,'manual End Turn does not disable position tracking');
+  assert.equal(t.phase,'ended','passive movement does not reset action economy');
   h.api.r3TurnStart();
-  assert.equal(h.api.R3_TURN.movementUsed,0);
+  assert.equal(t.movementUsed,0,'explicit new turn resets tracked travel');
   h.elf.move(420,210);
-  assert.equal(h.api.R3_TURN.movementUsed,5);
+  assert.equal(t.movementUsed,5);
+});
+test('Jumpgate event-free settled movement tracks after local End without duplicate accounting',()=>{
+  const h=rig(),t=h.api.R3_TURN;
+  h.api.r3TurnStart();h.api.r3TurnApply('end');
+  h.api.r3MovePoll();
+  h.elf.attrs.left=210;h.api.r3MovePoll();h.api.r3MovePoll();h.api.r3MovePoll();
+  assert.equal(t.movementUsed,5);
+  h.api.r3MovePoll();h.api.r3MovePoll();
+  assert.equal(t.movementUsed,5,'stable position polls never spend movement twice');
+  assert.equal(t.phase,'ended');
+  const before=t.movementUsed;
+  h.ctx.R3_TOKEN.active={tokenId:'different',characterId:'another'};
+  h.api.r3MovePoll();
+  assert.equal(t.movementUsed,before,'unverified token cannot contribute travel');
 });
 test('different selected controlled token never creates fictitious travel across map',()=>{
   const h=rig();h.api.r3TurnStart();h.api.r3MovePoll();
