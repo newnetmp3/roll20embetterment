@@ -1,3 +1,14 @@
+## 2026-10-28 — restore Jumpgate selection/movement and make cascades click-only (Firefox v3.10.20 candidate)
+
+- [x] Diagnose user export: new Jumpgate build, no selected token or coordinates despite valid Campaign/page scale; selection interface rejected by hardcoded source signature.
+- [x] Replace brittle exact source formatting with bounded read-only selection capability checks on the established module ID, retain getter/permission/identity fail-closed validation, and expose exact rejection reason in Debug.
+- [x] Add stable-poll fallback to detect committed coordinate changes without model callbacks; preserve drop-only accounting when Fabric dragging and avoid duplicate movement.
+- [x] Keep movement baseline across new scene/model references for same verified graphic and character; require an explicit controlled token and active turn.
+- [x] Remove pointerover-based category activation; switch menus only on click/keyboard activation.
+- [x] Add targeted regression tests and regenerate the optional userscript.
+- [ ] Verify current Roll20 build `775403f71ba36dde7775` with new signed XPI and user Debug export; unsupported selection signatures must stay fail-closed.
+- [ ] Validate real token drop/drag, 5ft map scale, waypoint/diagonal rule, 1080p/1440p UI, and native attack chat parity; finish CI/signing/feed hash checks.
+
 ## 2026-10-28 — cascading menu keyboard regression repair (Firefox v3.10.19 candidate)
 
 - [x] Retain focused first-level cascading-menu button after action status, HP, reader updates and category navigation without changing the user's scroll position.
