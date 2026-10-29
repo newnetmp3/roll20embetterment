@@ -701,6 +701,63 @@ test('changed Jumpgate minifier formatting still passes a verified read-only sel
   assert.equal(diag.selectionCount,1);
   assert.equal(requireModule.getCalls(),1);
 });
+test('relocated verified Jumpgate module restores selection for build 775403f71ba36dde7775',()=>{
+  const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  const campaign=h.ctx.window.Campaign;
+  campaign.characters={get(id){return id==='char-elf'?{
+    id,get(k){return {name:'Elf',controlledby:'player-elf'}[k];}
+  }:null;}};
+  h.ctx.window.d20=undefined;
+  h.ctx.window.d20_player_id='player-elf';
+  h.ctx.window.vttEngine='jumpgate';
+  const selected=[{id:'scene-node',dataWrapper:{model:h.elf.model}}];
+  const factory=jumpgateSelectionFactory(h.ctx);
+  class VTTEngine{}
+  VTTEngine.instance={tabletop:jumpgateSelectionTable(selected)};
+  let called=0;
+  function requireModule(id){
+    called++;assert.equal(id,84521,'load only the uniquely verified relocated factory');
+    return {VTTEngine};
+  }
+  requireModule.h=()=> '775403f71ba36dde7775';
+  requireModule.m={17:function unrelated(){},84521:factory,73211:function decoy(){}};
+  jumpgateSelectionInstall(h,requireModule);
+  vm.runInContext(watch,h.ctx);
+  const diagnose=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx);
+  const diag=diagnose();
+  assert.equal(diag.eligible,true);
+  assert.equal(vm.runInContext('r3TokenLinkedInfo(r3TokenSelected()[0]).tokenId',h.ctx),
+    'token-elf');
+  assert.equal(diag.nativeState,'verified Jumpgate selection read');
+  assert.equal(diag.moduleSignature,'verified selection capability');
+  assert.equal(diag.actualBuild,'775403f71ba36dde7775');
+  assert.equal(called,1);
+  assert.equal(vm.runInContext('R3_JUMPGATE_RUNTIME.moduleId',h.ctx),84521);
+  // Token movement is covered separately by the same source-observed
+  // selected scene-node model and completed-move tests. This test validates
+  // the relocated Webpack factory and original permission boundary.
+});
+test('missing or ambiguous Jumpgate selection modules never execute a factory',()=>{
+  const watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
+  for(const registry of [
+    {17:function unrelated(){},73211:function decoy(){}},
+    {84521:jumpgateSelectionFactory(vm.createContext({})),
+      84522:jumpgateSelectionFactory(vm.createContext({}),51000)}
+  ]){
+    const h=rig();h.ctx.window.d20=undefined;
+    let calls=0;
+    function requireModule(){calls++;throw Error('unsafe module executed');}
+    requireModule.h=()=> '775403f71ba36dde7775';
+    requireModule.m=registry;
+    jumpgateSelectionInstall(h,requireModule);
+    vm.runInContext(watch,h.ctx);
+    const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
+    assert.equal(diag.eligible,false);
+    assert.equal(diag.nativeState,'unsupported Jumpgate selection interface');
+    assert.match(diag.moduleSignature,/selection interfaces differ/);
+    assert.equal(calls,0,'unverified or ambiguous modules cannot be executed');
+  }
+});
 test('unknown source signature cannot execute a Jumpgate module',()=>{
   const h=rig(),watch=readFileSync(join(root,'v3/23_token.js'),'utf8');
   h.ctx.window.d20=undefined;h.ctx.window.vttEngine='jumpgate';
@@ -714,7 +771,7 @@ test('unknown source signature cannot execute a Jumpgate module',()=>{
   const diag=vm.runInContext('r3TokenSelectionDiagnostics',h.ctx)();
   assert.equal(called,0);
   assert.equal(diag.nativeState,'unsupported Jumpgate selection interface');
-  assert.match(diag.moduleSignature,/selection interfaces differ: module size outside verified bounds/);
+  assert.match(diag.moduleSignature,/selection interfaces differ: no verified selection factory registered; known ID: module size outside verified bounds/);
   assert.equal(diag.eligible,false);
 });
 test('source-compatible module with changed getter fails closed',()=>{
@@ -804,7 +861,7 @@ test('compatible Jumpgate module waits safely for late tabletop startup',()=>{
   const waiting=probe();
   assert.equal(waiting.nativeState,'Jumpgate tabletop not ready');
   assert.equal(waiting.eligible,false);
-  assert.equal(waiting.moduleSignature,'selection module compatible');
+  assert.equal(waiting.moduleSignature,'known selection module verified (module 73210)');
   requireModule(73210).VTTEngine.instance.tabletop=tabletop;
   const active=probe();
   assert.equal(active.nativeState,'verified Jumpgate selection read');

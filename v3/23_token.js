@@ -27,12 +27,12 @@ function r3TokenEngineMode(){
   return mode===undefined?'not present':'unexpected '+typeof mode;
 }
 
-// Verified against TWO independent user-supplied Roll20 Jumpgate bundles.
-// The Webpack full hash and large VTTEngine module change when unrelated
-// code changes. We pin the known module ID and check ONLY the exact
-// selection-specific, read-only interfaces before importing the module.
-// Never enumerate arbitrary Webpack modules, mutate selection or infer token
-// identity from appearance/name. Unknown interfaces fail closed.
+// Verified against two independent user-supplied Jumpgate bundles. Roll20
+// can renumber Webpack module IDs between deployments. First try the known
+// module ID; if missing, perform one bounded read-only inspection of registered
+// module FACTORY SOURCE (no execution). Only a unique source-verified engine
+// selector may be imported; reject ambiguous or incompatible modules. Never
+// guess a token or relax character ownership validation.
 const R3_JUMPGATE_RUNTIME={
   moduleId:73210,tried:0,lastTry:0,engineClass:null,status:'not inspected',
   activeBuild:'unavailable',signature:'not checked'
@@ -63,6 +63,51 @@ function r3JumpgateFactoryProbe(factory){
 }
 function r3JumpgateFactorySupported(factory){
   return r3JumpgateFactoryProbe(factory).supported;
+}
+// Roll20 renumbers module IDs between builds. Discover a relocated module
+// by read-only inspection of the existing registry; NEVER invoke an unknown
+// factory while probing. An ambiguous or oversized registry fails closed.
+// The match must pass ALL of the same strict selection-specific checks as
+// the original known ID, including the exact Roll20 scene-node model bridge.
+function r3JumpgateResolveSelectionFactory(require,state){
+  const registry=require?.m;
+  if(!registry||typeof registry!=='object')
+    return {id:null,reason:'Webpack module registry unavailable'};
+  const known=registry[state.moduleId];
+  const knownCheck=r3JumpgateFactoryProbe(known);
+  if(knownCheck.supported)
+    return {id:state.moduleId,reason:'known selection module verified'};
+  let ids;
+  try{ids=Object.keys(registry);}catch{
+    return {id:null,reason:'Webpack module registry unreadable'};
+  }
+  if(ids.length>16000)
+    return {id:null,reason:'Webpack module registry exceeds read-only inspection limit'};
+  const matches=[];
+  let sourceBytes=0;
+  for(const id of ids){
+    if(!/^(?:0|[1-9]\d{0,9})$/.test(id)||String(id)===String(state.moduleId))
+      continue;
+    const factory=registry[id];
+    if(typeof factory!=='function')continue;
+    let source;
+    try{source=Function.prototype.toString.call(factory);}catch{continue;}
+    sourceBytes+=source.length;
+    if(sourceBytes>64000000)
+      return {id:null,reason:'Webpack source inspection byte limit reached'};
+    if(source.length<50000||source.length>2000000||
+      !source.slice(0,1024).includes('VTTEngine')||
+      !source.includes('dataWrapper.model')||
+      !source.includes('getSelection'))continue;
+    if(!r3JumpgateFactoryProbe(factory).supported)continue;
+    matches.push(Number(id));
+    if(matches.length>1)
+      return {id:null,reason:'multiple verified selection module candidates'};
+  }
+  if(matches.length===1)
+    return {id:matches[0],reason:'relocated selection module verified'};
+  return {id:null,reason:'no verified selection factory registered; known ID: '+
+    knownCheck.reason};
 }
 function r3JumpgateGetterSupported(getter){
   try{
@@ -157,17 +202,22 @@ function r3JumpgateSelection(){
             try{hash=typeof require?.h==='function'?
               String(require.h()).slice(0,64):'';}catch{}
             state.activeBuild=hash||'unavailable';
-            // Require only the source-verified selection module. A changed
-            // unrelated module is never examined; unknown signatures fail
-            // before a module loader is invoked.
-            const check=r3JumpgateFactoryProbe(require?.m?.[state.moduleId]);
-            if(!check.supported){
-              state.signature='selection interfaces differ: '+check.reason;
+            // The former fixed ID can disappear when Jumpgate renumbers its
+            // Webpack modules. Inspect source only and import a single proven
+            // VTTEngine factory; never execute unknown candidates.
+            const match=r3JumpgateResolveSelectionFactory(require,state);
+            if(match.id===null){
+              state.signature='selection interfaces differ: '+match.reason;
               state.status='unsupported Jumpgate selection interface';
-              state.tried=3;return;
+              // If Roll20 hasn't registered the engine factory yet, retry
+              // on the next normal poll. Ambiguity is terminal, not a guess.
+              if(!match.reason.startsWith('no verified selection factory registered'))
+                state.tried=3;
+              return;
             }
+            state.moduleId=match.id;
             try{
-              const exported=require(state.moduleId)?.VTTEngine;
+              const exported=require(match.id)?.VTTEngine;
               if(typeof exported!=='function'){
                 state.status='VTTEngine export unavailable';state.tried=3;return;
               }
@@ -175,7 +225,7 @@ function r3JumpgateSelection(){
               // tabletop is initialized. Retain it and retry the getter
               // check during normal polling; do not fail permanently.
               state.engineClass=exported;
-              state.signature='selection module compatible';
+              state.signature=match.reason+' (module '+match.id+')';
               state.status='waiting for Jumpgate tabletop';
             }catch{
               state.status='VTTEngine module activation failed';
