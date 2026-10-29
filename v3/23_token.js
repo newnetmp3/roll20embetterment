@@ -539,8 +539,9 @@ function r3TokenUnambiguousName(name){
 }
 function r3TokenCacheKey(){return r3StorageKey()+':character-snapshots';}
 function r3TokenSettingsKey(){
-  return r3StorageKey()+':hud'+(R3_TOKEN.active?
-    ':character:'+encodeURIComponent(R3_TOKEN.active.characterId):'');
+  const identity=R3_TOKEN.active?.characterId||R3_TOKEN.visibleSheetId;
+  return r3StorageKey()+':hud'+
+    (identity?':character:'+encodeURIComponent(identity):'');
 }
 function r3TokenLoad(){
   R3_TOKEN.legacy=R3_UI.restoredSnapshot||R3_UI.snapshot;
@@ -632,7 +633,7 @@ function r3TokenSwitch(info){
 // read-only display/import mode, not a claim of token ownership; never use it
 // to issue token-bound native actions or open a private sheet automatically.
 function r3TokenFollowVisibleSheet(){
-  if(R3_TOKEN.active||typeof r3Candidates!=='function')return false;
+  if(typeof r3Candidates!=='function')return false;
   const collection=r3TokenCampaign()?.characters;
   if(!collection)return false;
   const candidates=r3Candidates().filter(c=>c?.visible&&c.window&&
@@ -657,10 +658,14 @@ function r3TokenFollowVisibleSheet(){
   }
   if(resolved.length!==1)return false;
   const {candidate,id,name}=resolved[0];
-  if(R3_TOKEN.visibleSheetId===id)return false;
+  if(R3_TOKEN.visibleSheetId===id&&!R3_TOKEN.active)return false;
+  if(R3_TOKEN.active?.characterId===id)return false;
   // A sheet opened by the player is an explicit selection even without a
-  // map token, but it cannot confer ownership on any map graphic.
-  R3_TOKEN.visibleSheetId=id;
+  // map token, but it cannot confer ownership on any map graphic. Release a
+  // previously followed map token when a different official sheet becomes
+  // the explicit no-token selection.
+  if(R3_TOKEN.active&&typeof r3HudSave==='function')r3HudSave();
+  R3_TOKEN.active=null;R3_TOKEN.visibleSheetId=id;
   const snap=r3Empty();snap.name=name;
   snap.diagnostics.notes.push('Viewing an official character sheet in this campaign. Token-bound actions require selecting a controlled token.');
   R3_UI.snapshot=r3Coverage(snap);
@@ -732,15 +737,19 @@ function r3TokenPoll(){
   // Successful selections retain the old newest-token behavior.
   const candidates=fresh.length?fresh:(!R3_TOKEN.active?tokens:[]);
   if(!candidates.length){
-    if(!R3_TOKEN.active)r3TokenFollowVisibleSheet();
+    if(!tokens.length)r3TokenFollowVisibleSheet();
     if(typeof r3MovePoll==='function')r3MovePoll();
     return;
   }
+  let switched=false;
   for(const id of candidates.slice().reverse()){
     const index=tokens.lastIndexOf(id);
     const info=r3TokenLinkedInfo(picked[index]);
-    if(info){r3TokenSwitch(info);break;}
+    if(info){r3TokenSwitch(info);switched=true;break;}
   }
+  // The GM may select a map token not owned by a player and explicitly open
+  // its sheet. Keep token-only mapping blocked, but show that visible sheet.
+  if(!switched)r3TokenFollowVisibleSheet();
   if(typeof r3MovePoll==='function')r3MovePoll();
 }
 function r3StartTokenWatch(){
