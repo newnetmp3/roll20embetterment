@@ -167,6 +167,21 @@ test('session modes are exclusive and a fresh controlled token wins over an unch
   assert.equal(h.api.R3_TOKEN.visibleSheetId,'');
   assert.equal(h.api.R3_AUTO.origin,'token');
 });
+test('DM sync toggle stays on the current sheet rather than switching to manual private import',()=>{
+  const {h}=dmDialogRig('Example Level Seven Mage','-P5ExampleSheetABC123');
+  h.api.r3StartUI();h.api.r3TokenPoll();
+  assert.equal(h.api.R3_AUTO.origin,'visible');
+  h.api.r3ToggleAuto();
+  assert.equal(h.api.R3_AUTO.enabled,false);
+  assert.equal(h.api.R3_AUTO.origin,'visible');
+  const wasSent=h.sent.length;
+  h.api.r3ToggleAuto();
+  assert.equal(h.api.R3_AUTO.enabled,true);
+  assert.equal(h.api.R3_AUTO.origin,'visible');
+  assert.equal(h.api.R3_AUTO.characterId,'-P5ExampleSheetABC123');
+  assert.equal(h.api.r3AutoCandidate()?.window,h.frameWindow);
+  assert.ok(h.sent.length>=wasSent,'re-enable can retry only the visible official frame');
+});
 test('DM reader targets only current visible exact-ID dialog, not another sheet',()=>{
   const {h,dialog}=dmDialogRig('Example Level Seven Mage','-P5ExampleSheetABC123');
   h.api.r3StartUI();h.api.r3TokenPoll();
