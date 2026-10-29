@@ -73,7 +73,8 @@ function r3DebugMarkup(){
     '<button type="button" data-r3-debug="close" aria-label="Close Debug window">×</button></header>'+
     '<div class="r3-debug-body">'+
     '<details class="r3-debug-operations" open><summary>HUD & sheet controls</summary>'+
-    '<p>Advanced controls live here. Normal combat actions remain in their own menus.</p>'+
+    '<p>Mode: '+r3Escape(typeof r3SessionLabel==='function'?r3SessionLabel():'Unavailable')+
+    '. Player Character mode uses a verified controlled token; DM Sheet mode reads the currently open official sheet without token authority.</p>'+
     '<div class="r3-debug-ops">'+
     '<button type="button" data-r3-debug="sync">'+(typeof R3_AUTO==='object'&&R3_AUTO.enabled?'Turn sync off':'Turn sync on')+'</button>'+
     '<button type="button" data-r3-debug="show-sheet">Show original Roll20 sheet</button>'+
@@ -85,7 +86,7 @@ function r3DebugMarkup(){
     (typeof r3TurnMarkup==='function'?r3TurnMarkup(R3_UI.snapshot):'<p>Turn tracker unavailable.</p>')+
     '</details>'+
     '<details class="r3-debug-movement"><summary>Movement tracking diagnostics</summary>'+
-    '<dl id="r3-debug-movement-values">'+r3DebugMovementRows()+'</dl><small>Move your token while Your Turn is active. Roll20 ruler feet are used when an accessible display label is available; canvas-only measurements fall back to whole map squares and the configured diagonal rule. The measurement source is shown above. Live Jumpgate parity still needs verification.</small></details>'+
+    '<dl id="r3-debug-movement-values">'+r3DebugMovementRows()+'</dl><small>Movement is tracked automatically for a verified selected token, even outside local turn markers. A DM Sheet alone does not grant movement access. Roll20 ruler feet are preferred when exposed; canvas-only measurements use whole map squares and the configured diagonal rule. Live Jumpgate parity still needs verification.</small></details>'+
     '<div class="r3-debug-toolbar"><label for="r3-debug-filter">Messages</label>'+
     '<select id="r3-debug-filter" aria-label="Filter Debug messages">'+
       ['All','Movement','Native','Importer','Help','System'].map(k=>
@@ -122,6 +123,7 @@ function r3DebugToggle(){
 function r3DebugCopyText(){
   const state=r3DebugMovement();
   return 'R20eb Debug (local; no automatic uploads)\n'+
+    'Session mode: '+(typeof r3SessionLabel==='function'?r3SessionLabel():'unavailable')+'\n'+
     'Movement:\n'+Object.entries(state).map(([k,v])=>k+': '+String(v)).join('\n')+
     '\n\nMessages:\n'+R3_DEBUG.entries.map(x=>
       x.time+' ['+x.category+'] '+x.text).join('\n');
