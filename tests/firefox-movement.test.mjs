@@ -734,7 +734,10 @@ test('relocated verified Jumpgate module restores selection for build 775403f71b
   assert.equal(called,1);
   assert.equal(vm.runInContext('R3_JUMPGATE_RUNTIME.moduleId',h.ctx),84521);
   h.api.r3TurnStart();
+  assert.equal(h.api.R3_MOVE.tokenId,'token-elf',
+    'verified relocated Jumpgate selection establishes a movement baseline');
   h.elf.move(210,210);
+  h.api.r3MovePoll();h.api.r3MovePoll();h.api.r3MovePoll();
   assert.equal(h.api.R3_TURN.movementUsed,5,'same selected graphic can be tracked after relocation');
 });
 test('missing or ambiguous Jumpgate selection modules never execute a factory',()=>{
@@ -861,7 +864,7 @@ test('compatible Jumpgate module waits safely for late tabletop startup',()=>{
   const waiting=probe();
   assert.equal(waiting.nativeState,'Jumpgate tabletop not ready');
   assert.equal(waiting.eligible,false);
-  assert.equal(waiting.moduleSignature,'selection module compatible');
+  assert.equal(waiting.moduleSignature,'known selection module verified (module 73210)');
   requireModule(73210).VTTEngine.instance.tabletop=tabletop;
   const active=probe();
   assert.equal(active.nativeState,'verified Jumpgate selection read');
