@@ -685,6 +685,7 @@ function r3TokenFollowVisibleSheet(){
 // the editor game. Do not keep the old game’s token, imported character,
 // auto-reader, cached sheet identities or character-specific UI in that case.
 function r3TokenCheckCampaign(){
+  if(typeof r3StorageKey!=='function'||typeof R3_UI!=='object')return false;
   const current=r3StorageKey();
   if(!R3_UI.campaignKey){R3_UI.campaignKey=current;return false;}
   if(R3_UI.campaignKey===current)return false;
