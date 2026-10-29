@@ -57,7 +57,7 @@ test('new production userscript bundles only v3 (not legacy profile reconciliati
   assert.match(compiled,/function r3Capture\(/);
   assert.doesNotMatch(compiled,/function autoRefreshCharacterStats\(/);
   assert.doesNotMatch(compiled,/function sheetTourFrameScan\(/);
-  assert.deepEqual(files,['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','23_token.js','25_auto.js','30_boot.js']);
+  assert.deepEqual(files,['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','23_token.js','24_dm.js','24_player.js','25_auto.js','26_session.js','30_boot.js']);
 });
 test('real official Vue inputs yield 82 of 84 HP and STR 18 even when innerText is empty',()=>{
   const inputHp=input({id:'hp-current',title:'Current Hitpoints',value:'82',ariaMax:'84'});

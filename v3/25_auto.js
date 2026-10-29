@@ -92,6 +92,9 @@ function r3AutoId(candidate){
   return r3String(candidate?.characterId||r3AutoDialogFor(candidate)?.getAttribute?.('data-characterid'),100);
 }
 function r3AutoCandidate(){
+  // The DM view owns its manual, read-only reader. Do not let a saved player
+  // background session or an old same-name popout be selected in this mode.
+  if(R3_AUTO.origin==='visible')return r3DmAutoCandidate();
   // A player-popped-out official sheet is a valid authenticated reader.
   // It has no parent dialog with a character ID, so require a unique exact
   // name. Prefer the popout when the same sheet also has an embedded frame.
@@ -350,8 +353,7 @@ function r3AutoStoreSnapshot(snapshot,mode){
     throw new Error('Sheet identity did not match the auto-sync character');
   if(R3_TOKEN.active&&R3_TOKEN.active.name.toLowerCase()!==candidateName.toLowerCase())
     throw new Error('Scan character differs from the selected controllable token');
-  if(R3_AUTO.origin==='visible'&&
-     (R3_TOKEN.active||R3_TOKEN.visibleSheetId!==R3_AUTO.characterId))
+  if(R3_AUTO.origin==='visible'&&!r3DmAutoAllowed())
     throw new Error('Manual sheet selection has changed during this import');
   if(!r3AutoHasRecognizedData(snapshot))
     throw new Error('Sheet has not populated recognizable character values yet');
@@ -385,11 +387,8 @@ async function r3AutoTick(eventTriggered=false){
   // The automatic token and visible-sheet modes require verified
   // identity. Explicitly configured legacy manual sync remains supported
   // within its original per-campaign storage key.
-  if(R3_AUTO.origin==='token'&&
-     (R3_TOKEN.active?.characterId!==R3_AUTO.characterId||
-       R3_TOKEN.active?.name!==R3_AUTO.name))return;
-  if(R3_AUTO.origin==='visible'&&
-     (R3_TOKEN.active||R3_TOKEN.visibleSheetId!==R3_AUTO.characterId))return;
+  if(R3_AUTO.origin==='token'&&!r3PlayerAutoAllowed())return;
+  if(R3_AUTO.origin==='visible'&&!r3DmAutoAllowed())return;
   const now=Date.now();
   let candidate=r3AutoCandidate();
   if(!candidate){
@@ -488,8 +487,7 @@ async function r3AutoTick(eventTriggered=false){
 function r3AutoStoreHealth(snapshot){
   if(snapshot?.schema!==3||r3String(snapshot.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())
     return false;
-  if(R3_AUTO.origin==='visible'&&
-     (R3_TOKEN.active||R3_TOKEN.visibleSheetId!==R3_AUTO.characterId))return false;
+  if(R3_AUTO.origin==='visible'&&!r3DmAutoAllowed())return false;
   if(!Object.prototype.hasOwnProperty.call(snapshot.stats||{},'hp'))return false;
   const prior=R3_UI.snapshot;
   if(!prior||r3String(prior.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())return false;
@@ -537,6 +535,26 @@ function r3ToggleAuto(){
   if(activeToken?.tokenId&&activeToken?.characterId&&activeToken?.name){
     r3AutoFollowToken(activeToken);
     r3AutoDisplay('Selected-token private sheet sync is automatic');
+    return;
+  }
+  // DM sheet sync is scoped to this open dialog, not a persistent
+  // name-only manual importer. Toggling it off/on must never reinterpret
+  // the DM viewer as a Player Character private-reader session.
+  if(R3_TOKEN.visibleSheetId&&!R3_TOKEN.active){
+    const same=R3_AUTO.origin==='visible'&&
+      R3_AUTO.characterId===R3_TOKEN.visibleSheetId;
+    const enabled=same&&R3_AUTO.enabled;
+    R3_AUTO.generation++;
+    if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
+    R3_AUTO.dirtyTimer=null;
+    R3_AUTO.enabled=!enabled;R3_AUTO.origin='visible';
+    R3_AUTO.characterId=R3_TOKEN.visibleSheetId;
+    R3_AUTO.name=r3String(R3_UI.snapshot?.name,120);
+    if(R3_AUTO.enabled){
+      R3_AUTO.lastScan=0;
+      r3AutoDisplay('Following current DM sheet: '+R3_AUTO.name);
+      r3AutoTick();
+    }else r3AutoDisplay('DM sheet sync paused for this open sheet');
     return;
   }
   if(R3_AUTO.enabled){

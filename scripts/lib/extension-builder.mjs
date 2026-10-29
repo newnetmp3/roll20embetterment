@@ -9,7 +9,9 @@ if(!['firefox','chrome'].includes(browser))throw new Error('Specify firefox or c
 const root=resolve(import.meta.dirname,'../..');
 const {version}=JSON.parse(readFileSync(join(root,'extension',browser,'package.json'),'utf8'));
 const names=readdirSync(join(root,'v3')).filter(s=>/^\d{2}_.*\.js$/.test(s)).sort();
-if(names.length!==8)throw Error('Expected all eight v3 modules');
+const required=['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','23_token.js','24_dm.js','24_player.js','25_auto.js','26_session.js','30_boot.js'];
+if(names.join('|')!==required.sort().join('|'))
+  throw Error('Unexpected v3 modules: review Player/DM/session boundaries before packaging');
 const files=browser==='firefox'?names.flatMap(n=>n==='30_boot.js'?['firefox-turn','firefox-movement','firefox-theme','firefox-debug','firefox-battlefield','firefox-drag','firefox-sheet-visibility',n]:[n]):names;
 const code='// R20 Embetterment '+version+' page-world runtime\n(()=>{\n'+
   files.map(n=>n==='firefox-turn'?
@@ -41,7 +43,7 @@ const patterns=[
 const popup=readFileSync(join(root,'extension',browser,'popup.html'),'utf8').replaceAll('@@VERSION@@',version);
 const base={
   manifest_version:3,name:'Roll20 Embetterment',version,
-  description:'Player-focused D&D 5e Roll20 combat HUD and official D&D 2024 sheet integration.',
+  description:'D&D 2024 Player Character combat HUD and read-only DM character sheet companion.',
   action:{default_title:'Roll20 Embetterment',default_popup:'popup.html',
     default_icon:{16:'icons/icon-16.png',32:'icons/icon-32.png'}},
   icons:{16:'icons/icon-16.png',32:'icons/icon-32.png',

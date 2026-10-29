@@ -2,7 +2,7 @@
 // @name         roll20 Embetterment
 // @namespace    https://github.com/newnetmp3/roll20embetterment
 // @version      3.4.0
-// @description  Player-first combat HUD backed by authenticated D&D 2024 sheet data.
+// @description  Player Character combat HUD and read-only DM sheet companion.
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
 // @match        https://app.roll20.net/editor
@@ -4408,12 +4408,25 @@ function r3TokenSaveCache(){
 }
 function r3TokenRecordSnapshot(snapshot){
   if(snapshot?.schema!==3||!snapshot.name)return;
-  R3_TOKEN.legacy=snapshot;
-  const active=R3_TOKEN.active;
-  // Do not associate a new character's snapshot with an unrelated selected
-  // token, even when it arrived after a manual import or stale async scan.
+  const active=R3_TOKEN.active,dmId=R3_TOKEN.visibleSheetId;
+  // A DM's manually opened sheet is read-only but still has an exact
+  // Roll20 character ID. Cache it under that ID in this campaign, never
+  // as an unscoped name-only legacy profile that could be adopted by
+  // a different PC. This does not grant ownership or enable native actions.
+  if(!active&&dmId){
+    if(R3_AUTO?.origin!=='visible'||R3_AUTO.characterId!==dmId||
+       R3_AUTO.name.toLowerCase()!==snapshot.name.toLowerCase())return;
+    R3_TOKEN.snapshots.set(dmId,{name:R3_AUTO.name,
+      snapshot:r3InventoryPrune(snapshot)});
+    r3TokenSaveCache();
+    return;
+  }
+  // Only a source-verified Player Character may update the legacy migration
+  // candidate. A manually imported or DM-read same-name sheet must not
+  // silently become a different token's cached profile.
   if(!active||active.name.toLowerCase()!==snapshot.name.toLowerCase()||
      !r3TokenUnambiguousName(snapshot.name))return;
+  R3_TOKEN.legacy=snapshot;
   R3_TOKEN.snapshots.set(active.characterId,{name:active.name,
     snapshot:r3InventoryPrune(snapshot)});
   r3TokenSaveCache();
@@ -4435,36 +4448,10 @@ function r3TokenSnapshotFor(info){
   blank.diagnostics.notes.push('Loading the selected token private Roll20 sheet and importing available tabs automatically.');
   return r3Coverage(blank);
 }
-function r3TokenSwitch(info){
-  const previous=R3_TOKEN.active;
-  const same=previous?.characterId===info.characterId;
-  if(same){
-    if(previous.tokenId!==info.tokenId||previous.tokenImage!==info.tokenImage){
-      R3_TOKEN.active=info;
-      R3_HUD.renderedPortrait=null;r3HudRender();
-    }
-    return;
-  }
-  if(previous)r3HudSave();
-  R3_TOKEN.active=info;R3_TOKEN.visibleSheetId='';
-  R3_UI.snapshot=r3TokenSnapshotFor(info);
-  R3_UI.view='summary';
-  R3_UI.renderedSnapshot=null;
-  R3_HUD.portraitName='';R3_HUD.portraitUrl='';R3_HUD.portraitChecked=0;
-  R3_HUD.flyout='';R3_HUD.chooser=null;
-  R3_NATIVE.preview=null;
-  R3_NATIVE.status='';
-  R3_NATIVE.revision++;
-  r3HudLoad();
-  if(typeof r3MoveRebase==='function')r3MoveRebase();
-  // The user has already selected an authorized Roll20 character; a
-  // second Auto-sync toggle or explicit first import is unnecessary.
-  if(typeof r3AutoFollowToken==='function')r3AutoFollowToken(info);
-  r3UIStatus('Selected '+info.name+'. '+(R3_UI.snapshot.coverage?.attacks?
-    'Using this character’s saved sheet.':
-    'Synchronizing from Roll20 when its official sheet is available.'));
-  r3UIRefresh();
-}
+
+// ===== v3/24_dm.js =====
+// DM sheet-view mode: display and read one explicitly opened Roll20 sheet
+// without granting token control or changing tabs in that visible sheet.
 // A DM can create/open a 2024 PC sheet before placing a controllable token.
 // Follow ONLY one visibly opened official sheet that resolves to a unique
 // current-campaign character model (or an exact character ID). This is a
@@ -4554,82 +4541,78 @@ function r3TokenFollowVisibleSheet(){
   if(typeof r3AutoTick==='function')r3AutoTick();
   return true;
 }
-// A single-page Roll20 navigation may reuse the extension host while changing
-// the editor game. Do not keep the old game’s token, imported character,
-// auto-reader, cached sheet identities or character-specific UI in that case.
-function r3TokenCheckCampaign(){
-  if(typeof r3StorageKey!=='function'||typeof R3_UI!=='object')return false;
-  const current=r3StorageKey();
-  if(!R3_UI.campaignKey){R3_UI.campaignKey=current;return false;}
-  if(R3_UI.campaignKey===current)return false;
-  if(typeof r3AutoRestoreDialog==='function')r3AutoRestoreDialog();
-  if(typeof R3_AUTO==='object'){
-    R3_AUTO.generation++;R3_AUTO.enabled=false;R3_AUTO.name='';
-    R3_AUTO.characterId='';R3_AUTO.origin='manual';
-    R3_AUTO.lastScan=0;R3_AUTO.lastFull=0;
-    if(R3_AUTO.dirtyTimer!==null&&typeof clearTimeout==='function')
-      clearTimeout(R3_AUTO.dirtyTimer);
-    R3_AUTO.dirtyTimer=null;
-  }
-  R3_TOKEN.active=null;R3_TOKEN.selectionIds=[];R3_TOKEN.visibleSheetId='';
-  R3_TOKEN.visibleSheetSeen='';R3_TOKEN.visibleSheetMissing=0;
-  R3_TOKEN.snapshots.clear();R3_TOKEN.legacy=null;
-  R3_UI.campaignKey=current;R3_UI.snapshot=null;
-  R3_UI.restoredSnapshot=null;R3_UI.selected='';R3_UI.view='summary';
-  R3_UI.renderedSnapshot=null;R3_UI.renderedView=null;
-  if(typeof R3_NATIVE==='object'){
-    R3_NATIVE.preview=null;R3_NATIVE.status='';R3_NATIVE.revision++;
-  }
-  r3Load();r3TokenLoad();
-  if(typeof r3HudLoad==='function')r3HudLoad();
-  if(typeof r3AutoLoad==='function')r3AutoLoad();
-  if(typeof r3MoveRebase==='function')r3MoveRebase();
-  if(typeof r3UIStatus==='function')
-    r3UIStatus('Campaign changed. Waiting for a selected token or visible official character sheet.');
-  if(typeof r3UIRefresh==='function')r3UIRefresh();
-  return true;
+
+function r3DmAutoAllowed(){
+  return R3_AUTO.origin==='visible'&&R3_AUTO.enabled&&
+    !R3_TOKEN.active&&!!R3_TOKEN.visibleSheetId&&
+    R3_TOKEN.visibleSheetId===R3_AUTO.characterId;
 }
-function r3TokenPoll(){
-  if(r3TokenCheckCampaign())return;
-  if(typeof r3TurnObserveInitiative==='function')r3TurnObserveInitiative();
-  const picked=r3TokenSelected();
-  const tokens=picked.map(item=>{
-    const model=r3TokenCandidateModel(item);
-    return r3String(model?.id||r3TokenModelGet(model,'_id')||
-      r3TokenGraphicId(item),110);
-  }).filter(Boolean);
-  const fresh=tokens.filter(id=>!R3_TOKEN.selectionIds.includes(id));
-  R3_TOKEN.selectionIds=tokens;
-  // A selection can arrive before Roll20 loads the represented character,
-  // its name, or permissions. Retry unresolved selections on the next poll
-  // instead of permanently discarding the token ID until user deselects it.
-  // Successful selections retain the old newest-token behavior.
-  // Roll20 can leave a previous map token selected while the DM opens a
-  // different PC sheet. A newly opened, explicitly named dialog takes
-  // display priority unless a *new* verified token selection just occurred.
-  if(!fresh.length)r3TokenFollowVisibleSheet();
-  const candidates=fresh.length?fresh:(!R3_TOKEN.active&&!R3_TOKEN.visibleSheetId?tokens:[]);
-  if(!candidates.length){
-    if(typeof r3MovePoll==='function')r3MovePoll();
+function r3DmAutoCandidate(){
+  if(!r3DmAutoAllowed())return null;
+  const id=R3_TOKEN.visibleSheetId,name=R3_AUTO.name.toLowerCase();
+  // DM mode cannot borrow the player's privately opened reader. Require
+  // the *currently visible* official sheet, its exact character ID for
+  // embedded dialogs and a stable name; never navigate or hide this window.
+  const candidates=r3Candidates().filter(c=>c?.visible&&c.window&&
+    (c.type==='iframe'||c.type==='popout')&&
+    r3String(c.name,120).toLowerCase()===name&&
+    !(typeof r3NativeIsOwned==='function'&&r3NativeIsOwned(c))&&
+    (c.type==='popout'||r3AutoId(c)===id));
+  return candidates.length===1?candidates[0]:null;
+}
+
+// ===== v3/24_player.js =====
+// Player-character mode: only source-verified controlled-token selection
+// may activate token movement, private source readers and native actions.
+function r3TokenSwitch(info){
+  const previous=R3_TOKEN.active;
+  const same=previous?.characterId===info.characterId;
+  if(same){
+    if(previous.tokenId!==info.tokenId||previous.tokenImage!==info.tokenImage){
+      R3_TOKEN.active=info;
+      R3_HUD.renderedPortrait=null;r3HudRender();
+    }
     return;
   }
-  let switched=false;
-  for(const id of candidates.slice().reverse()){
-    const index=tokens.lastIndexOf(id);
-    const info=r3TokenLinkedInfo(picked[index]);
-    if(info){r3TokenSwitch(info);switched=true;break;}
-  }
-  // The GM may select a map token not owned by a player and explicitly open
-  // its sheet. Keep token-only mapping blocked, but show that visible sheet.
-  if(!switched&&fresh.length)r3TokenFollowVisibleSheet();
-  if(typeof r3MovePoll==='function')r3MovePoll();
+  if(previous)r3HudSave();
+  R3_TOKEN.active=info;R3_TOKEN.visibleSheetId='';
+  // Keep the currently opened dialog's last-seen ID when a *new* token was
+  // explicitly selected. Otherwise the unchanged DM dialog steals focus
+  // right back on the next 400ms poll. Once the sheet actually closes the
+  // DM watcher clears this latch so reopening is treated as a new choice.
+  R3_TOKEN.visibleSheetMissing=0;
+  R3_UI.snapshot=r3TokenSnapshotFor(info);
+  R3_UI.view='summary';
+  R3_UI.renderedSnapshot=null;
+  R3_HUD.portraitName='';R3_HUD.portraitUrl='';R3_HUD.portraitChecked=0;
+  R3_HUD.flyout='';R3_HUD.chooser=null;
+  R3_NATIVE.preview=null;
+  R3_NATIVE.status='';
+  R3_NATIVE.revision++;
+  r3HudLoad();
+  if(typeof r3MoveRebase==='function')r3MoveRebase();
+  // The user has already selected an authorized Roll20 character; a
+  // second Auto-sync toggle or explicit first import is unnecessary.
+  if(typeof r3AutoFollowToken==='function')r3AutoFollowToken(info);
+  r3UIStatus('Selected '+info.name+'. '+(R3_UI.snapshot.coverage?.attacks?
+    'Using this character’s saved sheet.':
+    'Synchronizing from Roll20 when its official sheet is available.'));
+  r3UIRefresh();
 }
-function r3StartTokenWatch(){
-  if(R3_TOKEN.started)return;
-  R3_TOKEN.started=true;r3TokenPoll();
-  // Roll20's editor doesn't expose a documented browser-side selection event;
-  // cheap read-only polling works for clicks, lasso selection and keyboard ops.
-  R3_TOKEN.timer=setInterval(r3TokenPoll,400);
+
+function r3PlayerAutoAllowed(){
+  return R3_AUTO.origin==='token'&&R3_AUTO.enabled&&
+    R3_TOKEN.active?.characterId===R3_AUTO.characterId&&
+    R3_TOKEN.active?.name===R3_AUTO.name;
+}
+function r3PlayerFollowSelection(picked,tokens,ids){
+  for(const id of ids.slice().reverse()){
+    const index=tokens.lastIndexOf(id);
+    if(index<0)continue;
+    const info=r3TokenLinkedInfo(picked[index]);
+    if(info){r3TokenSwitch(info);return true;}
+  }
+  return false;
 }
 
 // ===== v3/25_auto.js =====
@@ -4727,6 +4710,9 @@ function r3AutoId(candidate){
   return r3String(candidate?.characterId||r3AutoDialogFor(candidate)?.getAttribute?.('data-characterid'),100);
 }
 function r3AutoCandidate(){
+  // The DM view owns its manual, read-only reader. Do not let a saved player
+  // background session or an old same-name popout be selected in this mode.
+  if(R3_AUTO.origin==='visible')return r3DmAutoCandidate();
   // A player-popped-out official sheet is a valid authenticated reader.
   // It has no parent dialog with a character ID, so require a unique exact
   // name. Prefer the popout when the same sheet also has an embedded frame.
@@ -4985,8 +4971,7 @@ function r3AutoStoreSnapshot(snapshot,mode){
     throw new Error('Sheet identity did not match the auto-sync character');
   if(R3_TOKEN.active&&R3_TOKEN.active.name.toLowerCase()!==candidateName.toLowerCase())
     throw new Error('Scan character differs from the selected controllable token');
-  if(R3_AUTO.origin==='visible'&&
-     (R3_TOKEN.active||R3_TOKEN.visibleSheetId!==R3_AUTO.characterId))
+  if(R3_AUTO.origin==='visible'&&!r3DmAutoAllowed())
     throw new Error('Manual sheet selection has changed during this import');
   if(!r3AutoHasRecognizedData(snapshot))
     throw new Error('Sheet has not populated recognizable character values yet');
@@ -5020,11 +5005,8 @@ async function r3AutoTick(eventTriggered=false){
   // The automatic token and visible-sheet modes require verified
   // identity. Explicitly configured legacy manual sync remains supported
   // within its original per-campaign storage key.
-  if(R3_AUTO.origin==='token'&&
-     (R3_TOKEN.active?.characterId!==R3_AUTO.characterId||
-       R3_TOKEN.active?.name!==R3_AUTO.name))return;
-  if(R3_AUTO.origin==='visible'&&
-     (R3_TOKEN.active||R3_TOKEN.visibleSheetId!==R3_AUTO.characterId))return;
+  if(R3_AUTO.origin==='token'&&!r3PlayerAutoAllowed())return;
+  if(R3_AUTO.origin==='visible'&&!r3DmAutoAllowed())return;
   const now=Date.now();
   let candidate=r3AutoCandidate();
   if(!candidate){
@@ -5123,8 +5105,7 @@ async function r3AutoTick(eventTriggered=false){
 function r3AutoStoreHealth(snapshot){
   if(snapshot?.schema!==3||r3String(snapshot.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())
     return false;
-  if(R3_AUTO.origin==='visible'&&
-     (R3_TOKEN.active||R3_TOKEN.visibleSheetId!==R3_AUTO.characterId))return false;
+  if(R3_AUTO.origin==='visible'&&!r3DmAutoAllowed())return false;
   if(!Object.prototype.hasOwnProperty.call(snapshot.stats||{},'hp'))return false;
   const prior=R3_UI.snapshot;
   if(!prior||r3String(prior.name,120).toLowerCase()!==R3_AUTO.name.toLowerCase())return false;
@@ -5174,6 +5155,26 @@ function r3ToggleAuto(){
     r3AutoDisplay('Selected-token private sheet sync is automatic');
     return;
   }
+  // DM sheet sync is scoped to this open dialog, not a persistent
+  // name-only manual importer. Toggling it off/on must never reinterpret
+  // the DM viewer as a Player Character private-reader session.
+  if(R3_TOKEN.visibleSheetId&&!R3_TOKEN.active){
+    const same=R3_AUTO.origin==='visible'&&
+      R3_AUTO.characterId===R3_TOKEN.visibleSheetId;
+    const enabled=same&&R3_AUTO.enabled;
+    R3_AUTO.generation++;
+    if(R3_AUTO.dirtyTimer!==null)clearTimeout(R3_AUTO.dirtyTimer);
+    R3_AUTO.dirtyTimer=null;
+    R3_AUTO.enabled=!enabled;R3_AUTO.origin='visible';
+    R3_AUTO.characterId=R3_TOKEN.visibleSheetId;
+    R3_AUTO.name=r3String(R3_UI.snapshot?.name,120);
+    if(R3_AUTO.enabled){
+      R3_AUTO.lastScan=0;
+      r3AutoDisplay('Following current DM sheet: '+R3_AUTO.name);
+      r3AutoTick();
+    }else r3AutoDisplay('DM sheet sync paused for this open sheet');
+    return;
+  }
   if(R3_AUTO.enabled){
     R3_AUTO.enabled=false;R3_AUTO.explicitlyDisabled=true;
     R3_AUTO.generation++;
@@ -5209,6 +5210,103 @@ function r3StartAuto(){
   if(R3_AUTO.timer===null)R3_AUTO.timer=setInterval(()=>{r3AutoTick();},3000);
   if(R3_AUTO.healthTimer===null)R3_AUTO.healthTimer=setInterval(()=>{r3AutoHealthTick();},1000);
   if(R3_AUTO.enabled)setTimeout(()=>{r3AutoTick();},180);
+}
+
+// ===== v3/26_session.js =====
+// Shared mode coordinator. This is the only module that arbitrates a
+// newly selected player-controlled map token versus an explicitly opened DM
+// character sheet. Both modes use the same bounded sheet reader and HUD.
+function r3SessionMode(){
+  if(R3_TOKEN.active?.characterId)return 'player-character';
+  if(R3_TOKEN.visibleSheetId)return 'dm-sheet';
+  return 'unbound';
+}
+function r3SessionLabel(){
+  const mode=r3SessionMode();
+  return mode==='dm-sheet'?'DM Sheet · Read-only':
+    mode==='player-character'?'Player Character':'No character linked';
+}
+// A single-page Roll20 navigation may reuse the extension host while changing
+// the editor game. Do not keep the old game’s token, imported character,
+// auto-reader, cached sheet identities or character-specific UI in that case.
+function r3TokenCheckCampaign(){
+  if(typeof r3StorageKey!=='function'||typeof R3_UI!=='object')return false;
+  const current=r3StorageKey();
+  if(!R3_UI.campaignKey){R3_UI.campaignKey=current;return false;}
+  if(R3_UI.campaignKey===current)return false;
+  if(typeof r3AutoRestoreDialog==='function')r3AutoRestoreDialog();
+  if(typeof R3_AUTO==='object'){
+    R3_AUTO.generation++;R3_AUTO.enabled=false;R3_AUTO.name='';
+    R3_AUTO.characterId='';R3_AUTO.origin='manual';
+    R3_AUTO.lastScan=0;R3_AUTO.lastFull=0;
+    if(R3_AUTO.dirtyTimer!==null&&typeof clearTimeout==='function')
+      clearTimeout(R3_AUTO.dirtyTimer);
+    R3_AUTO.dirtyTimer=null;
+  }
+  R3_TOKEN.active=null;R3_TOKEN.selectionIds=[];R3_TOKEN.visibleSheetId='';
+  R3_TOKEN.visibleSheetSeen='';R3_TOKEN.visibleSheetMissing=0;
+  R3_TOKEN.snapshots.clear();R3_TOKEN.legacy=null;
+  R3_UI.campaignKey=current;R3_UI.snapshot=null;
+  R3_UI.restoredSnapshot=null;R3_UI.selected='';R3_UI.view='summary';
+  R3_UI.renderedSnapshot=null;R3_UI.renderedView=null;
+  if(typeof R3_NATIVE==='object'){
+    R3_NATIVE.preview=null;R3_NATIVE.status='';R3_NATIVE.revision++;
+    R3_NATIVE.readers?.clear?.();
+  }
+  // A same-document game switch must not reuse authenticated popout windows
+  // or old sheet-dialog handles from the previous campaign.
+  if(typeof R3_POPOUTS==='object')R3_POPOUTS.clear();
+  if(typeof R3_NATIVE_BG==='object'){
+    R3_NATIVE_BG.sessions?.clear?.();
+    R3_NATIVE_BG.characterId='';R3_NATIVE_BG.name='';
+  }
+  r3Load();r3TokenLoad();
+  if(typeof r3HudLoad==='function')r3HudLoad();
+  if(typeof r3AutoLoad==='function')r3AutoLoad();
+  if(typeof r3TurnLoad==='function')r3TurnLoad();
+  if(typeof r3BattlefieldLoad==='function')r3BattlefieldLoad();
+  if(typeof r3MoveRebase==='function')r3MoveRebase();
+  if(typeof r3UIStatus==='function')
+    r3UIStatus('Campaign changed. Waiting for a selected token or visible official character sheet.');
+  if(typeof r3UIRefresh==='function')r3UIRefresh();
+  return true;
+}
+function r3TokenPoll(){
+  if(r3TokenCheckCampaign())return;
+  if(typeof r3TurnObserveInitiative==='function')r3TurnObserveInitiative();
+  const picked=r3TokenSelected();
+  const tokens=picked.map(item=>{
+    const model=r3TokenCandidateModel(item);
+    return r3String(model?.id||r3TokenModelGet(model,'_id')||
+      r3TokenGraphicId(item),110);
+  }).filter(Boolean);
+  const fresh=tokens.filter(id=>!R3_TOKEN.selectionIds.includes(id));
+  R3_TOKEN.selectionIds=tokens;
+  // A selection can arrive before Roll20 loads the represented character,
+  // its name, or permissions. Retry unresolved selections on the next poll
+  // instead of permanently discarding the token ID until user deselects it.
+  // Successful selections retain the old newest-token behavior.
+  // Roll20 can leave a previous map token selected while the DM opens a
+  // different PC sheet. A newly opened, explicitly named dialog takes
+  // display priority unless a *new* verified token selection just occurred.
+  if(!fresh.length)r3TokenFollowVisibleSheet();
+  const candidates=fresh.length?fresh:(!R3_TOKEN.active&&!R3_TOKEN.visibleSheetId?tokens:[]);
+  if(!candidates.length){
+    if(typeof r3MovePoll==='function')r3MovePoll();
+    return;
+  }
+  const switched=r3PlayerFollowSelection(picked,tokens,candidates);
+  // The GM may select a map token not owned by a player and explicitly open
+  // its sheet. Keep token-only mapping blocked, but show that visible sheet.
+  if(!switched&&fresh.length)r3TokenFollowVisibleSheet();
+  if(typeof r3MovePoll==='function')r3MovePoll();
+}
+function r3StartTokenWatch(){
+  if(R3_TOKEN.started)return;
+  R3_TOKEN.started=true;r3TokenPoll();
+  // Roll20's editor doesn't expose a documented browser-side selection event;
+  // cheap read-only polling works for clicks, lasso selection and keyboard ops.
+  R3_TOKEN.timer=setInterval(r3TokenPoll,400);
 }
 
 // ===== v3/30_boot.js =====

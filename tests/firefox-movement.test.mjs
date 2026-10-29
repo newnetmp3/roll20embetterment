@@ -374,7 +374,11 @@ test('selected token is retried when linked character loads after initial select
     id,get(key){return {name:'Elf',controlledby:'player-elf'}[key];}
   }:null;}};
   vm.runInContext(watch,h.ctx);
+  vm.runInContext(['24_dm.js','24_player.js','26_session.js'].map(n=>
+    readFileSync(join(root,'v3',n),'utf8')).join('\n'),h.ctx);
   h.ctx.seenSwitches=[];
+  // Replace the Player mode activation only after all extracted functions
+  // have loaded; this test isolates selection/retry from the full HUD.
   vm.runInContext('r3TokenSwitch=function(info){globalThis.seenSwitches.push(info);R3_TOKEN.active=info;};',h.ctx);
   const poll=vm.runInContext('r3TokenPoll',h.ctx);
   poll();

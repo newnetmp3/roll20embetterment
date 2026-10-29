@@ -1,45 +1,59 @@
-# R20eb runtime architecture and known integration limits
+# R20eb architecture — shared runtime, Player Character, and DM Sheet
 
-**Updated:** 2026-10-11 · **Status:** v2.3.10 stabilization CI verified (169 tests); Roll20 browser integration still needs validation.
+**Updated:** 2026-10-29 · **Target:** Firefox v3.10.25 source refactor · **Browser QA:** pending.  
+The shipped Firefox runtime is built from `v3/` plus `extension/firefox/`. The older `src/` tree and its v2-style sheet/radial HUD code are retained for historic tests and compatibility work; **they are not bundled in the current Firefox or Chrome v3 extensions**.
 
-## Source organization
+## Modes are data-source contexts, not inferred Roll20 roles
 
-Production `scripts/build.mjs` concatenates all `src/NN_*.js` modules in lexical order into one Tampermonkey IIFE. Definitions across modules share one scope. Source import order is significant for top-level initialization; function declarations can safely reference later declarations at runtime.
+| Mode | How it becomes active | Permitted data/action scope |
+| --- | --- | --- |
+| `player-character` | Most recently selected token whose represented character and **Controlled By** permission are verified via the Roll20 editor | Source-bound token position/movement; character-specific private official sheet reader; existing, verified Roll20 native actions only |
+| `dm-sheet` | One explicitly opened, visible, uniquely identified official 2024 PC sheet/dialog; may be available even when `Campaign.characters` is not hydrated | **Read-only** current visible sheet tab and HUD display. No inferred token control; do not navigate or hide manually opened sheet, open Journal entries, or invoke privileged DM APIs |
+| `unbound` | No verified selected token or uniquely open sheet | No imported character is assumed. Previously stored snapshots remain staged, not rendered |
 
-| Module | Responsibility |
+A person who is a GM can still select a verified token; a player can still open a sheet. The source mode indicates what R20eb can *verify*, **not** whether the browser user holds Roll20's GM role. The UI labels the active source. Source mode does not bypass independent native-action permission checks.
+
+## v3 modules, in compiled order
+
+| File | Responsibility |
 | --- | --- |
-| `00_core`, `10_roll20_bridge` | Profile storage, settings and Roll20 chat bridge |
-| `14_beacon_dom`, `15_sheet_link`, `16_beacon_visible`, `17_frame_bridge` | Read-only sheet extraction and authenticated official 2024 frame messages |
-| `18_sheet_access` | Find linked character and open via supported native methods; preserve hidden helper ownership |
-| `18_sheet_tour` | Explicit tab imports, controlled-token discovery, profile assignment and helper lifecycle coordination |
-| `18_stats_sync` | Merge cached attributes, explicit/linked token HP bar and read-only visible sheet snapshots |
-| `19_radial_hud`, `20_ui`, `25_bg3_theme`, `30_events` | Combat wheel rendering, companion UI, styling and event handlers |
+| `00_capture.js` | Bounded read-only extraction/normalization, provenance, safe DOM values |
+| `10_reader.js` | Authenticated cross-origin official 2024 sheet reader and message/ready bridge |
+| `20_ui.js` | Shared importer panel, current-game storage, snapshot staging, render lifecycle |
+| `21_native.js` | Verified Roll20 action adapters and authenticated private sheet ownership; must not forge game actions |
+| `22_hud.js` | Shared HUD, entries, rendering, controls, keyboard and menu state |
+| `23_token.js` | **Shared** Jumpgate selection discovery, source model/permission checks, game-scoped exact-ID character snapshot cache; no mode arbitration |
+| `24_dm.js` | **DM Sheet**: recognize explicitly visible official character dialogs, bind exact-ID display, invalidate closed dialogs; choose only that reader and gate read-only sync |
+| `24_player.js` | **Player Character**: apply verified token selection, rebase movement, isolate character HUD/settings, choose only permitted private sync |
+| `25_auto.js` | **Shared importer engine**: cache-safe merge, authenticated scan, timers/health refresh; dispatches reader choice and identity guards into role modules; manual opt-in fallback retained |
+| `26_session.js` | **Only mode coordinator**: selection precedence, session mode/label, campaign navigation and cleanup, polling entry point |
+| `30_boot.js` | Editor/official-sheet boot; starts bridge, UI, auto-import and token watcher after modules load |
 
-Full-runtime integration tests use `tests/_runtime.mjs` to load modules in exactly the same order as production. Some smaller tests intentionally load a subset to test lower-level isolation.
+All definitions live in one build-time IIFE in the specified order; this is **not** an ES-module import system. Each role module names only its role's behavior, with the coordinator deciding when to invoke it. Do not add new DM branches into the Jumpgate low-level adapter or scatter selected-token logic through the sheet reader.
 
-## Sheet-opening contract
+## Session transitions and privacy
 
-1. Resolve character identity only from an active profile, its linked character/assignment or a unique controlled-character match. A selected token owned by a different profile is **not** a fallback.
-2. Use a supported native Roll20 browser-side `showDialog` method when available.
-3. If no native method works, return **false** and reveal a real clickable Journal link/instructions. Never simulate a hidden link click and claim success: the Roll20 VTT handler might not receive it.
-4. An explicit player opening must reclaim, rather than close, an active auto-import helper.
+- A **fresh verified token** takes precedence over an unchanged DM dialog. An explicitly opened **new** DM dialog can supersede an unchanged older map-token selection. A last-seen dialog latch prevents 400-ms flip-flopping. Closing and reopening that dialog is a new selection.
+- On campaign change, discard active token, visible DM ID, pending role targeting, per-character in-memory caches, authenticated reader/popout registrations, native preview, and local turn/movement context. Load only new-game settings. No source cross-game reuse.
+- An imported DM sheet is cached using its verified **game + exact character ID + matching name**, never promoted to a name-only legacy player snapshot. A player token verifies the character ID before reusing its cached values.
+- Each async scan checks its generation and source identity before publishing. Manual DM reads never switch official sheet tabs, hide a dialog or silently borrow an earlier player-private reader. Scans can fail closed if official reader identity is missing.
+- Player sync can navigate **only** a reader opened and owned by R20eb for that verified character; a manually opened official sheet is not an owned helper.
+- UI indicators for Action, Bonus, Reaction and End Turn remain local, not Roll20 initiative controls. Movement tracks a selected verified token even after local End Turn; in DM sheet mode, no map movement access is inferred.
 
-## Stat-source contract
+## Firefox-only modules
 
-- All reads are local and read-only. No original character/health/AC fields are modified.
-- A loaded character attribute model may be incomplete or stale; do not treat it as definitively authoritative.
-- Auto HP-bar choice accepts only a linked attribute with a positively recognized HP name. Unlinked bars require explicit user selection.
-- The visible official 2024 sheet is read without navigating tabs during background scanning. A recent visible-sheet scan temporarily protects its mapped values against stale model refreshes; source priority requires browser verification.
-- Missing/nonnumeric values must not replace the previous stat, and partial reads must never discard imported attacks, spells or native action controls.
-- In R20eb Sheet, Health source and Current sources provide diagnostics. Test live data before adding new field aliases.
+The build inserts `extension/firefox/turn-economy.js`, `movement-tracker.js`, `theme-manager.js`, `debug-window.js`, `battlefield-layout.js`, `panel-drag.js`, and `sheet-visibility.js` **before** `30_boot.js`. They own local turn/movement/UI state, themes and styling, consolidated Debug and safe manual-sheet visibility. Preserve original theme selection, taskbar orientation, click-only cascading menus, focused action-list scroll, and separately draggable panels.
 
-## Remaining QA blockers
+## Build and test boundaries
 
-- Confirm a manual Journal link click is handled by the active Roll20 editor in both Jumpgate and legacy UI.
-- With a real player-owned, controlled Nier token, compare current HP and max HP, AC, speed, initiative and all six abilities to the values visible in the original sheet.
-- Verify model attribute names and timestamp/freshness against the official sheet; inspect which token bar (if any) is explicitly linked to HP.
-- Test iframe, popout, closed helper, manual import and native roll buttons separately. Automated mocks cannot verify Roll20's private UI event routing.
+- `scripts/build.mjs` builds the separately versioned optional userscript from v3. `scripts/lib/extension-builder.mjs` builds Firefox and Chrome. Both enforce the **same explicitly reviewed ordered list of v3 source files**; a new module requires a deliberate bundler update.
+- `npm run check:firefox` builds both userscript and Firefox unsigned package, runs all Node tests, validates generated JavaScript. CI checks that the committed userscript matches the generated one.
+- The `src/` tree is a separate **legacy** implementation. Legacy tests still run, but new work must target `v3/` and Firefox-specific modules, **not** silently mix old v2 bridge/profile behavior into v3.
+- Mozilla unlisted signing, signed XPI publication, and `updates.json` digest are separate from CI. Green CI is not proof of real Roll20 Jumpgate, native roll, or DM browser acceptance.
 
-## Visible-stat precedence (v2.3.11)
+## Follow-up design work
 
-Named-first merging is retained for ordinary/legacy imports. When a verified official 2024 iframe or visible sheet is actively being read, the caller sets `preferVisibleStats`. Only fields actually reported in the visible snapshot override cached named attributes; an explicitly linked or selected token HP bar fills gaps but must not replace an HP value visible on the sheet. `visibleStatKeys` tracks only fields genuinely returned by the visible reader to protect them from the background five-second model scan for a short interval. An ID-less iframe is eligible for current-player data only on a unique exact-name candidate and unique controlled-character match. This prevents accidentally binding an NPC or another same-name character.
+1. Verify current-player and GM scenarios in real Roll20: selected token changes, DM-opened level-7 sheet, same-name PCs, close/reopen, two simultaneous dialogs, and no cross-game cache.
+2. To import **all** DM sheet tabs without interfering with a manually open sheet, design a distinct authenticated, character-ID-bound *DM-owned private reader* with explicit lifecycle, permission and duplicate-session tests. **Not implemented.**
+3. Native action parity requires real source-bound evidence. Never silently turn unsupported buttons into fake sheet actions. Track unmapped calls in the Debug window and live test each.
+4. Consider deprecating the non-shipped `src/` tree only after confirming the remaining legacy tests/documentation have replacements; do not remove during a role-splitting release.

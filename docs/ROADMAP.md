@@ -1,3 +1,17 @@
+## 2026-10-29 — DM/Player Character source modes and codebase audit (Firefox v3.10.25 candidate)
+
+- [x] Inventory shipped v3, Firefox-only UI/turn/movement modules, Chrome/userscript packaging, test tree and non-shipped legacy src/.
+- [x] Extract low-level Jumpgate + cache, Player Character activation, DM sheet display/read and session arbitration into distinct ordered source modules.
+- [x] Enforce mode-specific auto-reader eligibility; prevent DM on/off Sync toggles from falling back to player private sheet opening.
+- [x] Preserve fresh controlled-token selection over unchanged DM sheet and allow close/reopen to reactivate sheet viewing.
+- [x] Cache read-only DM sheet data only under source-verified game + character ID; never name-only legacy migration.
+- [x] Clean campaign-reader/popout/native sessions and reset turn/movement/layout state across single-page game navigation.
+- [x] Show explicit source mode in taskbar and Debug; correct obsolete movement diagnostic instructions.
+- [x] Update both bundlers' reviewed v3 file order, add role-regression tests, rewrite architecture and record codebase-review findings.
+- [ ] Green branch/PR/main Firefox CI; Mozilla-signed v3.10.25 XPI and update-feed digest verified.
+- [ ] Live DM 2024 and Player Character acceptance, preserving native Roll20 sheet visibility and correct actions, and signed installation.
+- [ ] Later: independent authorized DM-owned *private* all-tab reader; more robust action-parity QA; consider splitting oversized shared HUD/CSS after visual tests.
+
 ## 2026-10-29 — DM opened sheet DOM identity (Firefox v3.10.24 candidate)
 
 - [x] Inspect real provided DM editor HTML; identify visible `.characterdialog[data-characterid]` and official iframe title/header. Distinguish unrelated settings/preload sheet iframes.

@@ -2,13 +2,15 @@ import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const files=readdirSync(join(root,'v3')).filter(n=>/^\d{2}_.*\.js$/.test(n)).sort();
-if(files.length!==8)throw new Error('Missing v3 modules (expected capture, reader, UI, native bridge, HUD, token watcher, auto and boot)');
+const required=['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','23_token.js','24_dm.js','24_player.js','25_auto.js','26_session.js','30_boot.js'];
+if(files.join('|')!==required.sort().join('|'))
+  throw new Error('v3 runtime source modules changed; review mode boundaries and update the explicit build list');
 const header=[
 '// ==UserScript==',
 '// @name         roll20 Embetterment',
 '// @namespace    https://github.com/newnetmp3/roll20embetterment',
 '// @version      3.4.0',
-'// @description  Player-first combat HUD backed by authenticated D&D 2024 sheet data.',
+'// @description  Player Character combat HUD and read-only DM sheet companion.',
 '// @author       roll20 Embetterment contributors',
 '// @match        https://app.roll20.net/editor/*',
 '// @match        https://app.roll20.net/editor',
