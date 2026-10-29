@@ -6,18 +6,18 @@ Player-focused D&D 2024 combat HUD and read-only Roll20 sheet companion. R20eb u
 
 | Distribution | Status |
 | --- | --- |
-| **Firefox / Floorp** | **v3.10.20** Mozilla-signed and published; v3.10.21 relocated Jumpgate selector repair in development |
+| **Firefox / Floorp** | **v3.10.21** Mozilla-signed and published; v3.10.22 automatic movement correction in development |
 | **Chrome / Chromium** | **v3.4.0**; independently versioned and not feature-parity guaranteed |
 | **Optional userscript** | **v3.4.0** metadata; built from `v3/` independently of Firefox releases |
 
-- [Firefox v3.10.20 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.20/r20eb-firefox-v3.10.20.xpi)
+- [Firefox v3.10.21 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.21/r20eb-firefox-v3.10.21.xpi)
 - [Firefox updates.json](extension/firefox/updates.json)
 - [Firefox installation and signing guide](extension/firefox/README.md)
 - [GitHub Actions](https://github.com/newnetmp3/roll20embetterment/actions)
 
 Disable any previous R20eb userscript or duplicate extension when using the signed Firefox add-on. Keep the native Roll20 chat panel accessible when running actions; R20eb does not overwrite an unsent chat draft.
 
-Firefox v3.10.20 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+Firefox v3.10.21 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
 
 ## Native-action and UI milestone (PR #110 — released in Firefox v3.10.0)
 
@@ -25,7 +25,7 @@ The **Milestone Completion** build extends native action discovery beyond existi
 
 The Firefox battlefield HUD replaces the former six-button utility toolbar with one **Debug** entry in the turn strip. Debug contains the manual turn corrections, original-sheet controls, automatic private reader status, layout reset, HUD visibility, importer and movement logs. Panels remain movable and keyboard-nudgeable. The layout scales to browser/monitor viewport size and accounts for Roll20 chat/sidebar space.
 
-**Firefox v3.10.20 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
+**Firefox v3.10.21 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
 
 ## Firefox v3.10.3 background import (signed; live QA pending)
 
@@ -65,7 +65,11 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
-## Firefox v3.10.21 — Relocated Jumpgate selection module (candidate)
+## Firefox v3.10.22 — Movement tracks without manually starting a turn (candidate)
+
+The user's current Jumpgate Debug confirms native selection, controlled character and token coordinates work, but the local `Turn Ended` marker was blocking every movement update. R20eb now automatically tracks distance from an explicitly selected, controllable token even if the local turn marker is `unknown` or `ended`. Neither that movement nor a manual End Turn changes Roll20's actual initiative. The distance counter resets only when R20eb's Start Turn button is clicked or when a new turn is genuinely observed in Roll20 initiative. This counter therefore represents **travel since the last reset**, even outside combat. Source-verified model and token checks, grid/diagonal rules, native ruler fallback and completed-move deduplication remain in place.
+
+## Firefox v3.10.21 — Relocated Jumpgate selection module (signed)
 
 The latest Jumpgate build `775403f71ba36dde7775` no longer registers the previously verified selector at Webpack module ID `73210`. R20eb now searches the loaded *factory source text* (not arbitrary module execution), accepts only one exact capability-matched selection engine module, and preserves strict player-control validation. This restores the ability to find a compatible selector even when Roll20 renumbers modules, without hardcoding an unsupported new ID. Debug reports a specific failure if the current interface differs more substantially. **Real Roll20 movement still requires a signed-browser acceptance test.**
 
