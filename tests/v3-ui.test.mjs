@@ -113,6 +113,10 @@ test('DM-opened Roll20 2024 dialog imports its PC without hydrated Campaign char
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(h.api.R3_UI.snapshot.stats.hp,42);
   assert.equal(h.api.R3_UI.snapshot.stats.ac,16);
+  assert.equal(h.api.R3_TOKEN.snapshots.get('-P5ExampleSheetABC123')?.name,
+    'Example Level Seven Mage','DM data must cache only under its verified sheet ID');
+  assert.equal(h.api.R3_TOKEN.legacy?.name,'Nier',
+    'an imported DM sheet must not become a name-only legacy token profile');
   assert.doesNotMatch(h.nodes.get('r3-hud').innerHTML,/Nier/);
   assert.equal(h.api.R3_TOKEN.active,null,'reading a DM sheet confers no map-token authority');
 });
