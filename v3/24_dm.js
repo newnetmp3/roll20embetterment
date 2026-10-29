@@ -89,3 +89,22 @@ function r3TokenFollowVisibleSheet(){
   if(typeof r3AutoTick==='function')r3AutoTick();
   return true;
 }
+
+function r3DmAutoAllowed(){
+  return R3_AUTO.origin==='visible'&&R3_AUTO.enabled&&
+    !R3_TOKEN.active&&!!R3_TOKEN.visibleSheetId&&
+    R3_TOKEN.visibleSheetId===R3_AUTO.characterId;
+}
+function r3DmAutoCandidate(){
+  if(!r3DmAutoAllowed())return null;
+  const id=R3_TOKEN.visibleSheetId,name=R3_AUTO.name.toLowerCase();
+  // DM mode cannot borrow the player's privately opened reader. Require
+  // the *currently visible* official sheet, its exact character ID for
+  // embedded dialogs and a stable name; never navigate or hide this window.
+  const candidates=r3Candidates().filter(c=>c?.visible&&c.window&&
+    (c.type==='iframe'||c.type==='popout')&&
+    r3String(c.name,120).toLowerCase()===name&&
+    !(typeof r3NativeIsOwned==='function'&&r3NativeIsOwned(c))&&
+    (c.type==='popout'||r3AutoId(c)===id));
+  return candidates.length===1?candidates[0]:null;
+}
