@@ -6,18 +6,26 @@ Player-focused D&D 2024 combat HUD and read-only Roll20 sheet companion. R20eb u
 
 | Distribution | Status |
 | --- | --- |
-| **Firefox / Floorp** | **v3.10.23** Mozilla-signed and published; v3.10.24 DM visible-sheet identity repair in development |
+| **Firefox / Floorp** | **v3.10.24** Mozilla-signed and published; v3.10.25 role-isolation refactor in development |
 | **Chrome / Chromium** | **v3.4.0**; independently versioned and not feature-parity guaranteed |
 | **Optional userscript** | **v3.4.0** metadata; built from `v3/` independently of Firefox releases |
 
-- [Firefox v3.10.23 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.23/r20eb-firefox-v3.10.23.xpi)
+- [Firefox v3.10.24 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.24/r20eb-firefox-v3.10.24.xpi)
 - [Firefox updates.json](extension/firefox/updates.json)
 - [Firefox installation and signing guide](extension/firefox/README.md)
 - [GitHub Actions](https://github.com/newnetmp3/roll20embetterment/actions)
 
 Disable any previous R20eb userscript or duplicate extension when using the signed Firefox add-on. Keep the native Roll20 chat panel accessible when running actions; R20eb does not overwrite an unsent chat draft.
 
-Firefox v3.10.23 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+Firefox v3.10.24 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+
+## Playing as a DM vs Player Character — source-aware modes (v3.10.25 candidate)
+
+R20eb separates **data-source modes** rather than guessing that a Roll20 account is a GM. A selected, explicitly controlled token activates **Player Character** mode with source-verified movement and character-specific private sheet import. Opening a uniquely identified official 2024 sheet without an active controlled token activates **DM Sheet · Read-only** mode, with automatic import of its **current visible tab** and no inferred map-token control, privileged DM operation or tab switching. Unbound mode displays no unverified historical character. The status bar and Debug show the active mode.
+
+The shared reader and HUD remain common; code responsibilities are divided into `v3/23_token.js` (verified Jumpgate and cache), `24_player.js` (player-owned token/session), `24_dm.js` (opened DM sheet and safe reader), `25_auto.js` (read-only scan engine), and `26_session.js` (sole coordinator). Both bundlers compile these modules in explicit order. See [current architecture](docs/ARCHITECTURE.md) and [review findings](docs/CODEBASE_REVIEW.md).
+
+DM mode does **not** yet privately import every tab without touching a manually opened sheet. Player-controlled token background imports and native action safety remain independent. Automated source tests are not a substitute for real Roll20 gameplay testing.
 
 ## Native-action and UI milestone (PR #110 — released in Firefox v3.10.0)
 
@@ -25,7 +33,7 @@ The **Milestone Completion** build extends native action discovery beyond existi
 
 The Firefox battlefield HUD replaces the former six-button utility toolbar with one **Debug** entry in the turn strip. Debug contains the manual turn corrections, original-sheet controls, automatic private reader status, layout reset, HUD visibility, importer and movement logs. Panels remain movable and keyboard-nudgeable. The layout scales to browser/monitor viewport size and accounts for Roll20 chat/sidebar space.
 
-**Firefox v3.10.23 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
+**Firefox v3.10.24 is published as Mozilla-signed.** Roll20 still owns all game rolls and character-sheet state; R20eb does not fabricate edit calls for HP, inventory, slots, conditions or resource counters.
 
 ## Firefox v3.10.3 background import (signed; live QA pending)
 
@@ -65,7 +73,7 @@ yet demonstrated**. Slots, HP, charges and inventory mutations remain
 read-only. This milestone requires green CI, a signed release, and separate
 in-game parity checks.
 
-## Firefox v3.10.24 — DM open-sheet identity (candidate)
+## Firefox v3.10.24 — DM open-sheet identity (signed)
 
 Actual DM editor HTML confirms a visible official 2024 sheet can be wrapped by `.characterdialog[data-characterid]` with an exact title and name but **without a hydrated `Campaign.characters` model**. R20eb previously ignored that sheet. The new read-only fallback follows the already opened, uniquely ID-bearing official dialog, ignores settings/preload frames, and imports the **current visible tab** automatically. It does not infer token ownership or invoke privileged DM APIs. Later explicit map-token selection still works; closing the sheet clears its active HUD identity. Importing *every* tab invisibly without touching the DM's manually opened sheet requires a separate verified private reader and is **not implemented** by this fix.
 
