@@ -311,11 +311,12 @@ function r3BattlefieldMarkup(snapshot){
   const left=total===null?'Unknown':r3TurnDistance(total-t.movementUsed)+' / '+r3TurnDistance(total)+' ft';
   const fill=total>0?Math.min(100,Math.round(100*t.movementUsed/total)):0;
   const phase=t.phase==='active'?'Your Turn':t.phase==='ended'?'Turn Ended':'Turn Tracking';
+  const role=typeof r3SessionLabel==='function'?r3SessionLabel():'No character linked';
   const status=t.noteSource==='observed'?'Initiative observed':'Local markers';
   const vertical=R3_BF.orientation==='left'||R3_BF.orientation==='right';
   const hp=r3HudValue(snapshot?.stats?.hp),maxHp=r3HudValue(snapshot?.stats?.maxHp);
   const ac=r3HudValue(snapshot?.stats?.ac);
-  const statusTitle=name+' · HP '+hp+' / '+maxHp+' · AC '+ac+
+  const statusTitle=name+' · '+role+' · HP '+hp+' / '+maxHp+' · AC '+ac+
     ' · Move '+left+' · '+phase+
     (R3_NATIVE.status?' · '+r3String(R3_NATIVE.status,110):'');
   const ring=[
@@ -374,6 +375,7 @@ function r3BattlefieldMarkup(snapshot){
       '<span aria-hidden="true">HP</span><strong aria-hidden="true">'+r3Escape(hp)+'</strong></button>':
       '<div class="r3-bf-taskbar-status" role="status" aria-live="off">'+
       '<span class="r3-bf-status-character">'+r3Escape(name)+'</span>'+
+      '<span class="r3-bf-status-role" title="Character source and access mode">'+r3Escape(role)+'</span>'+
       '<span>HP '+r3Escape(hp)+' / '+r3Escape(maxHp)+'</span>'+
       '<span>AC '+r3Escape(ac)+'</span>'+
       '<span>Move '+r3Escape(left)+'</span>'+
