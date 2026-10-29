@@ -85,7 +85,7 @@ function dmDialogRig(name='Rondez the Green Mage',id='-P54Bj0r75QLCHBmWYAJ'){
     querySelector(sel){return sel==='.asv__header__name'?{textContent:name}:null;}
   };
   h.frame.closest=selector=>
-    /\\.characterdialog/.test(selector)?dialog:null;
+    /\.characterdialog/.test(selector)?dialog:null;
   // Exact observed Roll20 HTML structure:
   // iframe#advanced-charsheet-dialog__charsheet inside
   // .characterdialog[data-characterid] with .asv__header__name,
