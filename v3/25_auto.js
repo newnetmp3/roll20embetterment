@@ -457,7 +457,10 @@ async function r3AutoTick(eventTriggered=false){
     // Only the exact reader for this character/generation may contribute.
     const quickTabs=/^(?:Current view|Combat|Features\s*(?:&|and)\s*Traits|Inventory|Spells)$/i;
     const published=new Set();
-    const onProgress=mode==='all'&&background?(partial,tab)=>{
+    const onProgress=mode==='all'&&background?(partial,tab,metadata)=>{
+      if(typeof r3RosterTabProgress==='function'&&
+         R3_AUTO.characterId===r3AutoId(candidate))
+        r3RosterTabProgress(R3_AUTO.characterId,tab,metadata);
       if(!quickTabs.test(tab)||published.has(tab.toLowerCase()))return;
       if(!R3_AUTO.enabled||generation!==R3_AUTO.generation||
          R3_AUTO.characterId!==r3AutoId(candidate)||
@@ -475,7 +478,12 @@ async function r3AutoTick(eventTriggered=false){
     if(!R3_AUTO.enabled||R3_AUTO.generation!==generation)return;
     r3AutoStoreSnapshot(snapshot,mode);
     R3_AUTO.lastScan=Date.now();
-    if(mode==='all')R3_AUTO.lastFull=R3_AUTO.lastScan;
+    if(mode==='all'){
+      R3_AUTO.lastFull=R3_AUTO.lastScan;
+      if(typeof r3RosterComplete==='function'&&
+         R3_AUTO.characterId===r3AutoId(candidate))
+        r3RosterComplete(R3_AUTO.characterId,snapshot);
+    }
     r3AutoDisplay((candidate.type==='popout'?'Popout sheet':background?'Background':'Visible sheet')+' '+mode+
       ' import updated '+new Date(R3_AUTO.lastScan).toLocaleTimeString());
   }catch(e){
