@@ -245,3 +245,7 @@ The preload indicator is no longer a full-window header. It uses actual Roll20 t
 ## Firefox v3.10.29 — DM private reader cleanup (candidate)
 
 Fixes incorrect owned-dialog close handling during the DM Journal preload queue. Only script-owned, exact-ID verified Roll20 dialogs may be closed; manual character sheets remain untouched. The original import error is preserved in the progress Details instead of being replaced by a generic close failure. Real DM live verification is pending.
+
+## Firefox v3.10.30 — DM sheet reader handshake (candidate)
+
+A newly opened Journal iframe may appear before its official sheet reader script is ready. The editor now completes an authenticated readiness handshake before submitting a full-tab scan rather than losing an early message and reporting a generic 40-second timeout. The original source/character identity checks remain in place. A missing extension reader and a stalled scan are reported separately in Details. Real GM session verification is still required.
