@@ -41,9 +41,8 @@ async function r3CollectAllTabs(progress,shouldCancel=()=>false){
   let visited=0;
   const plan=items=>{
     for(const item of items)if(item.key)planned.add(item.key);
-    // 32 is the existing source-reader safety bound.
-    progress?.('Planning',r3Coverage(acc),{totalTabs:Math.min(32,planned.size),
-      completedTabs:visited});
+    // Plan metadata is attached to the next real tab progress event.
+    // Never emit a synthetic tab that confuses existing importer callers.
   };
   const primaryLabel=/^(combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
   const collect=label=>{
