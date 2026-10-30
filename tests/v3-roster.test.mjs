@@ -21,7 +21,7 @@ function fixture(gm=false){
   }};
   const nodes=new Map();
   const elements={
-    'r3-loading-strip':{hidden:false},
+    'r3-loading-strip':{hidden:false,style:{}},
     'r3-loading-label':{textContent:''},
     'r3-loading-percentage':{textContent:''},
     'r3-loading-meter':{value:0},
@@ -33,7 +33,7 @@ function fixture(gm=false){
   for(const [k,v] of Object.entries(elements))nodes.set(k,v);
   const rootNode={getElementById(id){return nodes.get(id)||null;}};
   const ctx={
-    window:{is_gm:gm},
+    window:{is_gm:gm,innerWidth:1600,innerHeight:900},
     document:{querySelector(sel){return sel==='#journalfolderroot'?journal:null;},
       createElement(){return {textContent:''};}},
     R3_UI:{root:rootNode,busy:false,campaignKey:'roll20-embetterment-v3:demo'},
@@ -275,4 +275,74 @@ test('Journal watcher attaches when panel mounts late and reconnects on replacem
   assert.equal(disconnected,1);
   h.api.reset();
   assert.equal(disconnected,2);
+});
+
+test('progress CSS is a compact tabletop overlay, never a page-wide top blocker',()=>{
+  const h=fixture(true);
+  const css=vm.runInContext('r3ProgressStyles()',h.ctx);
+  assert.match(css,/#r3-loading-strip\\{position:fixed;top:60px;left:124px;right:auto;/);
+  assert.match(css,/width:360px;box-sizing:border-box;/);
+  assert.match(css,/max-height:min\\(180px,35vh\\)/);
+  assert.doesNotMatch(css,/top:0;left:0;right:0/);
+});
+test('progress remains centered between Roll20 toolbar and chat/Journal sidebar',()=>{
+  const h=fixture(true);h.api.discover();
+  h.ctx.window.innerWidth=1920;h.ctx.window.innerHeight=1080;
+  const rects={
+    '#floatingtoolbar':{left:0,right:180,width:180,height:740},
+    '#rightsidebar':{left:1465,right:1920,width:455,height:920}
+  };
+  h.ctx.document.querySelector=selector=>selector==='#journalfolderroot'?h.journal:
+    rects[selector]?{getBoundingClientRect:()=>rects[selector]}:null;
+  const bounds=vm.runInContext('r3ProgressLayout()',h.ctx);
+  assert.ok(bounds.left>=194,'clears the native left toolbar');
+  assert.ok(bounds.left+bounds.width<=1451,'clears chat/Journal tabs');
+  assert.ok(bounds.width<=420,'never spans browser width');
+  assert.ok(bounds.top>=52,'stays below Roll20 upper controls');
+  h.api.refresh();
+  assert.equal(h.nodes.get('r3-loading-strip').style.width,bounds.width+'px');
+  assert.equal(h.nodes.get('r3-loading-strip').style.left,bounds.left+'px');
+});
+test('progress repositions when Roll20 expands its Journal or resizes',()=>{
+  const h=fixture(true);h.api.discover();
+  let chatLeft=1230;
+  h.ctx.window.innerWidth=1560;
+  h.ctx.document.querySelector=selector=>selector==='#journalfolderroot'?h.journal:
+    selector==='#rightsidebar'?{getBoundingClientRect:()=>({
+      left:chatLeft,right:1560,width:1560-chatLeft,height:800})}:null;
+  h.api.refresh();
+  const oldX=Number.parseInt(h.nodes.get('r3-loading-strip').style.left);
+  chatLeft=840;
+  h.api.refresh();
+  const host=h.nodes.get('r3-loading-strip');
+  assert.ok(Number.parseInt(host.style.left)<oldX);
+  assert.ok(Number.parseInt(host.style.left)+Number.parseInt(host.style.width)<=826);
+  assert.equal(host.hidden,false);
+});
+test('progress hides safely instead of covering Roll20 tools on crowded/narrow screens',()=>{
+  const h=fixture(true);h.api.discover();
+  h.ctx.window.innerWidth=480;h.ctx.window.innerHeight=600;
+  h.ctx.document.querySelector=selector=>selector==='#journalfolderroot'?h.journal:
+    selector==='#rightsidebar'?{getBoundingClientRect:()=>({
+      left:205,right:480,width:275,height:590})}:null;
+  assert.equal(vm.runInContext('r3ProgressLayout()',h.ctx),null);
+  h.api.refresh();
+  assert.equal(h.nodes.get('r3-loading-strip').hidden,true);
+  assert.equal(h.api.state().complete,false,
+    'preloading still occurs; only unsafe overlay placement is suppressed');
+  // On resizing wider, the indicator is restored with existing progress.
+  h.ctx.window.innerWidth=1200;
+  h.ctx.document.querySelector=selector=>selector==='#journalfolderroot'?h.journal:null;
+  h.api.refresh();
+  assert.equal(h.nodes.get('r3-loading-strip').hidden,false);
+});
+test('a full-width Roll20 header is not mistaken for a native left toolbar',()=>{
+  const h=fixture(true);
+  h.ctx.document.querySelector=selector=>selector==='#journalfolderroot'?h.journal:
+    selector==='#floatingtoolbar'?{getBoundingClientRect:()=>({
+      left:0,right:1570,width:1570,height:55})}:null;
+  const b=vm.runInContext('r3ProgressLayout()',h.ctx);
+  assert.ok(b);
+  assert.ok(b.left>=124);
+  assert.ok(b.left+b.width<=1600-330-14);
 });
