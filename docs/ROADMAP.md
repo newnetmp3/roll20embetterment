@@ -1,5 +1,6 @@
 ## 2026-10-30 — DM Journal reader handshake (v3.10.30 candidate)
 
+- [x] Make packaged Firefox/Chrome sheet-host matching tolerant of path variants while keeping runtime D&D 2024 checks; preserve immediate manual-sheet scans.
 - [x] Avoid one-shot scan before verified official sheet iframe reader readiness.
 - [x] Preserve source/session and character-name authorization and manual sheet ownership arbitration.
 - [x] Separate missing reader initialization from scan execution timeout diagnostics.
