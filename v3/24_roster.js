@@ -8,7 +8,8 @@ const R3_ROSTER={
   active:false,timer:null,observer:null,observerTimer:null,
   lastDiscovery:0,done:0,failed:0,scans:0,source:'none',generation:0,
   maxCandidates:160,maxDeep:160,maxAttempts:2,lastError:'',
-  currentId:'',tabProgress:new Map(),errors:new Map(),idleAt:0
+  currentId:'',tabProgress:new Map(),errors:new Map(),idleAt:0,
+  modelCollection:null,lastChanged:new Map()
 };
 function r3RosterIsGm(){
   return window.is_gm===true;
@@ -175,6 +176,17 @@ async function r3RosterPrewarm(){
     const progress=R3_ROSTER.tabProgress.get(entry.id)||{total:1};
     R3_ROSTER.tabProgress.set(entry.id,{total:progress.total,done:progress.total});
     R3_ROSTER.done++;R3_ROSTER.scans++;
+    // A deliberately selected Journal preview becomes useful immediately
+    // when its background sheet finishes, without a second user click.
+    if(R3_TOKEN.rosterPreviewId===entry.id&&!R3_TOKEN.active&&
+       !R3_TOKEN.visibleSheetId){
+      R3_UI.snapshot=r3InventoryPrune(snap);
+      R3_UI.renderedSnapshot=null;
+      if(typeof r3UIRefresh==='function')r3UIRefresh();
+    }else if(typeof R3_BF==='object'&&R3_BF.menuPane==='profile'){
+      R3_BF.revision++;
+      if(typeof r3HudRender==='function')r3HudRender();
+    }
     return true;
   }catch(e){
     R3_ROSTER.failed++;R3_ROSTER.lastError=r3String(e?.message||e,150);
@@ -197,6 +209,9 @@ async function r3RosterPrewarm(){
   }
 }
 function r3RosterReset(){
+  R3_ROSTER.modelCollection?.off?.('change',r3RosterModelChanged);
+  R3_ROSTER.modelCollection?.off?.('add remove',r3RosterCollectionChanged);
+  R3_ROSTER.modelCollection=null;R3_ROSTER.lastChanged.clear();
   R3_ROSTER.generation++;
   R3_ROSTER.entries.clear();R3_ROSTER.queue=[];
   R3_ROSTER.attempted.clear();R3_ROSTER.errors.clear();
@@ -204,14 +219,45 @@ function r3RosterReset(){
   R3_ROSTER.running=false;R3_ROSTER.done=0;R3_ROSTER.failed=0;
   R3_ROSTER.scans=0;R3_ROSTER.lastDiscovery=0;
 }
+// Backbone collection events are local, cheap change hints. A changed
+// NPC/PC is requeued for source verification; we do not use untrusted raw
+// model attributes to overwrite imported official 2024 sheet values.
+function r3RosterModelChanged(model){
+  const id=r3RosterId(model?.id||r3TokenModelGet(model,'_id'));
+  const entry=R3_ROSTER.entries.get(id);
+  if(!entry||R3_ROSTER.currentId===id)return;
+  const now=Date.now();
+  if(now-(R3_ROSTER.lastChanged.get(id)||0)<1500)return;
+  R3_ROSTER.lastChanged.set(id,now);
+  entry.complete=false;R3_ROSTER.attempted.delete(id);
+  R3_ROSTER.errors.delete(id);R3_ROSTER.tabProgress.delete(id);
+  if(!R3_ROSTER.queue.includes(id))R3_ROSTER.queue.push(id);
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+}
+function r3RosterCollectionChanged(){
+  R3_ROSTER.lastDiscovery=0;
+  r3RosterDiscover();
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+}
+function r3RosterListenModels(){
+  const current=r3TokenCampaign()?.characters;
+  if(current===R3_ROSTER.modelCollection)return;
+  R3_ROSTER.modelCollection?.off?.('change',r3RosterModelChanged);
+  R3_ROSTER.modelCollection?.off?.('add remove',r3RosterCollectionChanged);
+  R3_ROSTER.modelCollection=null;
+  if(typeof current?.on!=='function')return;
+  current.on('change',r3RosterModelChanged);
+  current.on('add remove',r3RosterCollectionChanged);
+  R3_ROSTER.modelCollection=current;
+}
 function r3RosterStart(){
   if(R3_ROSTER.active)return;
   R3_ROSTER.active=true;
-  r3RosterDiscover();
+  r3RosterDiscover();r3RosterListenModels();
   // Periodic discovery is cheap; full official sheet scans are serialized,
   // capped and suspend while active character or manual sheet is in use.
   if(R3_ROSTER.timer===null)R3_ROSTER.timer=setInterval(()=>{
-    r3RosterDiscover();void r3RosterPrewarm();
+    r3RosterListenModels();r3RosterDiscover();void r3RosterPrewarm();
     if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
   },1400);
   const root=document.querySelector?.('#journalfolderroot');
