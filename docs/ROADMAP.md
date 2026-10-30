@@ -1,3 +1,13 @@
+## 2026-10-30 — delayed DM sheet resource loading (v3.10.32 candidate)
+
+- [x] Accommodate ~10-second delayed resource mount without treating early empty data as final.
+- [x] Bound private hydration at ~26 seconds, keep manual sheet reads fast, and preserve cancellation.
+- [x] Distinguish “Waiting for Roll20 resources” from actual imported tab progress.
+- [x] Extend authorized full-scan timeout to include delayed initialization and tab traversal.
+- [x] Regression tests for loading delay, countdown, cancellation-safe timeout and progress.
+- [ ] Green Firefox/Chrome CI, merge, sign v3.10.32 and verify update-feed hash.
+- [ ] Live GM test of Owust Ofo / Rondez the Green Mage, including partial resource availability.
+
 ## 2026-10-30 — DM 50% preload validation failure (v3.10.31 candidate)
 
 - [x] Wait boundedly for official Vue sheet data before a private all-tab read.
