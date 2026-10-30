@@ -426,9 +426,8 @@ test('official private reader handshake waits for authenticated ready before fir
   vm.createContext(ctx);
   vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
   let passes=0;
-  ctx.r3Pause=async()=>{if(++passes===2)
-    ctx.R3_NATIVE.readers.set(win,{name:'Example NPC',session:'sheet-session-123'});};
-  const promise=vm.runInContext('r3SendScan({window:globalThis.sheetWindow,visible:true,name:"Example NPC"},"all")',
+  vm.runInContext('r3Pause=async function(){globalThis.passes++;if(globalThis.passes===2)R3_NATIVE.readers.set(globalThis.sheetWindow,{name:"Example NPC",session:"sheet-session-123"});}',Object.assign(ctx,{passes:0,sheetWindow:win}));
+  const promise=vm.runInContext('r3SendScan({window:globalThis.sheetWindow,visible:true,name:"Example NPC"},"all",null,true)',
     Object.assign(ctx,{sheetWindow:win}));
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(messages.filter(m=>m.type==='scan').length,1);
@@ -453,7 +452,7 @@ test('official reader handshake rejects contradictory character names',async()=>
   vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
   ctx.sheetWindow=win;
   await assert.rejects(vm.runInContext(
-    'r3SendScan({window:sheetWindow,visible:true,name:"Example NPC"},"all")',ctx),
+    'r3SendScan({window:sheetWindow,visible:true,name:"Example NPC"},"all",null,true)',ctx),
     /different character name/);
   assert.equal(messages.some(m=>m.type==='scan'),false);
 });
