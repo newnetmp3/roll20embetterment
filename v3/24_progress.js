@@ -1,7 +1,8 @@
 // A small, independent progress surface. Counts authorized Journal sheets
 // and reader-reported tab visits; no fake timer, no external requests.
 // It disappears only after every discovered sheet finished successfully.
-const R3_PROGRESS={lastPercent:-1,detailSignature:'',hidden:false};
+const R3_PROGRESS={lastPercent:-1,detailSignature:'',hidden:false,
+  layoutObserver:null,layoutNodes:[]};
 function r3ProgressState(){
   const roster=typeof R3_ROSTER==='object'?R3_ROSTER:null;
   const entries=roster?[...roster.entries.values()]:[];
@@ -76,6 +77,23 @@ function r3ProgressLayout(){
   return {left:Math.round(left+(available-barWidth)/2),
     top:Math.min(70,Math.max(52,Math.round(height*.075))),width:barWidth};
 }
+// Respond immediately to Roll20 resizing its native chat/sidebar or action
+// toolbar, not just to the window resize and the regular preload refresh.
+function r3ProgressWatchLayout(){
+  if(typeof ResizeObserver!=='function')return;
+  const nodes=[
+    '#rightsidebar','#sidebar','#textchatcontainer','.rightsidebar',
+    '#floatingtoolbar','#toolbox','#tools','#editingtoolbar','#main-toolbar'
+  ].map(selector=>document.querySelector?.(selector)).filter(Boolean);
+  const previous=R3_PROGRESS.layoutNodes;
+  if(nodes.length===previous.length&&
+     nodes.every((node,index)=>node===previous[index]))return;
+  if(!R3_PROGRESS.layoutObserver)
+    R3_PROGRESS.layoutObserver=new ResizeObserver(()=>r3ProgressRefresh());
+  R3_PROGRESS.layoutObserver.disconnect();
+  R3_PROGRESS.layoutNodes=nodes;
+  for(const node of nodes)R3_PROGRESS.layoutObserver.observe(node);
+}
 function r3ProgressStyles(){
   return '#r3-loading-strip{position:fixed;top:60px;left:124px;right:auto;'+
     'width:360px;box-sizing:border-box;max-width:none;z-index:2147483100;'+
@@ -111,6 +129,7 @@ function r3ProgressMount(){
 function r3ProgressRefresh(){
   const root=R3_UI.root,host=root?.getElementById?.('r3-loading-strip');
   if(!host)return;
+  r3ProgressWatchLayout();
   const state=r3ProgressState();
   const bounds=state.complete?null:r3ProgressLayout();
   host.hidden=state.complete||!bounds;
