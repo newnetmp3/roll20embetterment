@@ -88,7 +88,9 @@ function r3RosterIdentityForPreload(id,name){
   // Only the current local journal entry can authorize a GM preview.
   if(!r3RosterJournal().some(x=>x.id===id&&x.name===name))return null;
   const identity=r3RosterAuthorized(id,name);
-  return identity&&r3RosterIsGm()?identity:null;
+  // The authorization helper already requires Controlled By for players
+  // and an exact matching current-campaign model for GMs.
+  return identity||null;
 }
 function r3RosterCloseOwned(id){
   const bg=R3_NATIVE_BG;
@@ -111,7 +113,8 @@ async function r3RosterPrewarm(){
      R3_UI.busy||R3_NATIVE.busy||R3_NATIVE_BG.opening)return false;
   if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())return false;
   // Active character scans and manual sessions always take priority.
-  if(R3_AUTO.enabled&&R3_AUTO.name&&r3AutoCandidate())return false;
+  if(R3_AUTO.enabled&&R3_AUTO.name&&
+     (r3AutoCandidate()||!R3_AUTO.lastFull))return false;
   const now=Date.now();
   if(now-R3_ROSTER.lastDiscovery>8000)r3RosterDiscover();
   const entry=R3_ROSTER.queue.map(id=>R3_ROSTER.entries.get(id)).find(x=>
@@ -139,7 +142,8 @@ async function r3RosterPrewarm(){
     candidate=await open;
     if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
-       r3AutoId(candidate)!==entry.id)return false;
+       r3AutoId(candidate)!==entry.id)
+      throw new Error('Journal preload identity changed while opening an owned reader');
     const tabs=new Set();
     const snap=await r3SendScan(candidate,'all',(_part,tab,meta)=>{
       if(!R3_ROSTER.active||generation!==R3_ROSTER.generation)return;
@@ -154,7 +158,8 @@ async function r3RosterPrewarm(){
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
        r3AutoId(candidate)!==entry.id||
        r3String(snap?.name,120).toLowerCase()!==entry.name.toLowerCase()||
-       !r3AutoHasRecognizedData(snap))return false;
+       !r3AutoHasRecognizedData(snap))
+      throw new Error('Preload result did not verify source ID, name and actual sheet data');
     R3_TOKEN.snapshots.set(entry.id,{name:entry.name,snapshot:r3InventoryPrune(snap)});
     r3TokenSaveCache();
     const current=R3_ROSTER.entries.get(entry.id);
@@ -173,11 +178,13 @@ async function r3RosterPrewarm(){
       attempts:prior.attempts+1});
     return false;
   }finally{
-    if(candidate&&r3NativeIsOwned(candidate)&&!r3RosterCloseOwned(entry.id)){
+    if(R3_NATIVE_BG.characterId===entry.id&&
+       !r3RosterCloseOwned(entry.id)){
       // A browser may not expose its own dialog close button. Do not
       // risk closing a manual dialog; the existing bounded session cap
       // prevents unbounded hidden frames.
       R3_ROSTER.lastError='Owned reader cannot be closed safely; bounded session retained';
+      R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
     }
     R3_ROSTER.running=false;R3_ROSTER.currentId='';
     if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
