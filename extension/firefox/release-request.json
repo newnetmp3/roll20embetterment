@@ -1,6 +1,6 @@
 {
-  "version": "3.10.25",
+  "version": "3.10.26",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Refactor entire shipped v3 runtime into shared Jumpgate/cache, Player Character selection, read-only DM visible-sheet view, and sole session coordinator; isolate cross-mode auto-reader candidates and Sync toggles, preserve explicit token precedence, prevent name-only DM snapshot migration, clear stale reader/turn state across campaign navigation, label mode in HUD/Debug, update builds/docs and tests."
+  "reason": "Index Journal exact-ID characters for DM and controlled-player sessions, silently preload verified NPC/PC 2024 sheet tabs with a bounded private reader, update cached profiles locally, add a top sheet/tab percentage loading bar that hides only after all successfully complete and retains failures in Details; include read-only roster chooser and source authorization tests."
 }

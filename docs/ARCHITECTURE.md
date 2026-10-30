@@ -1,6 +1,6 @@
 # R20eb architecture — shared runtime, Player Character, and DM Sheet
 
-**Updated:** 2026-10-29 · **Target:** Firefox v3.10.25 source refactor · **Browser QA:** pending.  
+**Updated:** 2026-10-29 · **Target:** Firefox v3.10.26 Journal preloading · **Browser QA:** pending.  
 The shipped Firefox runtime is built from `v3/` plus `extension/firefox/`. The older `src/` tree and its v2-style sheet/radial HUD code are retained for historic tests and compatibility work; **they are not bundled in the current Firefox or Chrome v3 extensions**.
 
 ## Modes are data-source contexts, not inferred Roll20 roles
@@ -25,11 +25,21 @@ A person who is a GM can still select a verified token; a player can still open 
 | `23_token.js` | **Shared** Jumpgate selection discovery, source model/permission checks, game-scoped exact-ID character snapshot cache; no mode arbitration |
 | `24_dm.js` | **DM Sheet**: recognize explicitly visible official character dialogs, bind exact-ID display, invalidate closed dialogs; choose only that reader and gate read-only sync |
 | `24_player.js` | **Player Character**: apply verified token selection, rebase movement, isolate character HUD/settings, choose only permitted private sync |
+| `24_progress.js` | **Loading UI**: top-of-window percentage from actual sheet/tab progress, auto-hide on successful 100%, Details dropdown for failures |
+| `24_roster.js` | **Journal registry**: exact-ID DM/controlled-player discovery, serialized private sheet prewarming, bounded retries and source-change listener, read-only roster snapshots |
 | `25_auto.js` | **Shared importer engine**: cache-safe merge, authenticated scan, timers/health refresh; dispatches reader choice and identity guards into role modules; manual opt-in fallback retained |
 | `26_session.js` | **Only mode coordinator**: selection precedence, session mode/label, campaign navigation and cleanup, polling entry point |
 | `30_boot.js` | Editor/official-sheet boot; starts bridge, UI, auto-import and token watcher after modules load |
 
 All definitions live in one build-time IIFE in the specified order; this is **not** an ES-module import system. Each role module names only its role's behavior, with the coordinator deciding when to invoke it. Do not add new DM branches into the Jumpgate low-level adapter or scatter selected-token logic through the sheet reader.
+
+## Journal preloading and progress
+
+- The live Journal lists character sheets under `#journalfolderroot li.journalitem.character[data-itemid]`. Matching a name alone never grants access. GM Journal rows may be used through the native exact-row opener only with a verified Roll20 GM flag and a newly claimed matching private dialog; non-GM requires a matching current Campaign character model and Controlled By permission.
+- After discovering eligible rows, each reader is opened **one at a time**, pinned to an exact current-game character ID and checked against a new script-owned dialog. A successful full all-tab read is cached under character ID; a manual user-opened sheet is never hidden or navigated by the preloader.
+- The progress strip counts known Journal sheets plus reported tab visits, not elapsed time. It hides only if the eligible set is nonempty, all are confirmed complete and there are zero errors. Errors remain in the Details dropdown. New Journal rows or changed character models can requeue sheets.
+- The importer and Firefox Profile cascade expose the loaded Journal roster; selecting a cached sheet changes the HUD locally in **read-only Journal preview mode**, with native Roll20 action execution disabled.
+- First full import of the selected Player Character counts toward the Journal queue; 500ms HP-only checks and event-driven dirty hints take priority over slower full imports. Heavy scans are intentionally rate limited to prevent stalls.
 
 ## Session transitions and privacy
 

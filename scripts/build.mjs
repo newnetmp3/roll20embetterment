@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const files=readdirSync(join(root,'v3')).filter(n=>/^\d{2}_.*\.js$/.test(n)).sort();
-const required=['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','23_token.js','24_dm.js','24_player.js','25_auto.js','26_session.js','30_boot.js'];
+const required=['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','23_token.js','24_dm.js','24_player.js','24_progress.js','24_roster.js','25_auto.js','26_session.js','30_boot.js'];
 if(files.join('|')!==required.sort().join('|'))
   throw new Error('v3 runtime source modules changed; review mode boundaries and update the explicit build list');
 const header=[

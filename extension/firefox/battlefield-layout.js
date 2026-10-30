@@ -149,6 +149,14 @@ function r3BattlefieldClick(target){
       R3_BF.options=!R3_BF.options;break;
     case 'status':
       R3_BF.statusOpen=!R3_BF.statusOpen;break;
+    case 'roster-choose': {
+      const id=target?.dataset?.bfItem||
+        target?.closest?.('[data-bf-item]')?.dataset?.bfItem;
+      if(typeof r3RosterChoose==='function'&&r3RosterChoose(id)){
+        R3_BF.menuPane='profile';R3_BF.revision++;r3HudRender();
+      }
+      return true;
+    }
     case 'show-roll20-sheet':
       if(typeof r3SheetRevealAll==='function')r3SheetRevealAll();
       return true;
@@ -210,6 +218,14 @@ function r3BattlefieldSidebar(snapshot,only=''){
   const focus=R3_TURN.concentration===true?'Active (manual)':
     R3_TURN.concentration===false?'None (manual)':'Not tracked';
   const resources=r3HudResourceBar(snapshot);
+  const roster=typeof r3RosterOptions==='function'?r3RosterOptions():[];
+  const rosterList=roster.length?'<details class="r3-bf-journal-chooser">'+
+    '<summary>Journal characters ('+roster.length+')</summary>'+
+    '<div style="max-height:170px;overflow:auto">'+roster.slice(0,80).map(e=>
+      '<button type="button" data-bf-action="roster-choose" data-bf-item="'+
+      r3Escape(e.id)+'" title="Show previously imported official sheet data">'+
+      r3Escape(e.name)+' · '+r3Escape(e.kind)+(e.ready?' · Ready':' · Loading')+
+      '</button>').join('')+'</div></details>':'';
   return '<aside class="r3-bf-sidebar" aria-label="Character quick overview">'+
     (R3_BF.visible.profile&&(!only||only==='profile')?'<section class="r3-bf-profile r3-bf-section" data-bf-panel="profile">'+
     ''+
@@ -222,7 +238,7 @@ function r3BattlefieldSidebar(snapshot,only=''){
       '<small>Selected Roll20 character</small>')+
     '</div><button type="button" class="r3-bf-panel-button" data-bf-action="sidebar" '+
     'aria-label="Hide character overview" title="Hide character overview">×</button>'+
-    '</div><div class="r3-bf-profile-hp">'+r3HudHp(snapshot)+'</div>'+
+    '</div>'+rosterList+'<div class="r3-bf-profile-hp">'+r3HudHp(snapshot)+'</div>'+
     '<div class="r3-bf-stats">'+
     r3HudStat('AC',stats.ac)+r3HudStat('Speed',stats.speed,' ft')+
     r3HudStat('Init',stats.initiative)+

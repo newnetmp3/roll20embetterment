@@ -1,8 +1,8 @@
 # R20eb — Firefox/Floorp installation and releases
 
-**Last verified published Firefox update feed before milestone signing:** v3.9.19.  
-**Latest merged feature source:** PR #110 (native action catalog, MISC and consolidated Debug) is included in the requested **v3.10.0 Milestone Completion build**. Check the update feed for actual signed publication before installing.  
-**Chrome and optional userscript:** independently versioned v3.4.0.
+**Last verified Mozilla-signed Firefox version:** v3.10.25.  
+**Current candidate:** v3.10.26 Journal preloading, local refresh and top progress.  
+**Chrome and optional userscript:** independently versioned v3.4.0; Firefox-only UI not guaranteed in Chrome.
 
 ## DM and Player Character modes
 
@@ -11,6 +11,12 @@
 **DM Sheet · Read-only** mode follows a uniquely opened official 2024 character sheet, even if the selected token is absent and Roll20's character collection is not hydrated. It reads the currently visible sheet tab and never navigates/hides that manual sheet or grants token authority. The status bar and Debug show the active source mode; there is no automatic inference that the user's Roll20 account is a DM.
 
 See [architecture](../../docs/ARCHITECTURE.md) and [audit](../../docs/CODEBASE_REVIEW.md). Full private all-tab DM sync remains unimplemented.
+
+## Background Journal preloading and status
+
+R20eb reads exact-ID character entries from the existing Journal DOM without switching the Journal tab. DM rows may be preloaded through Roll20's verified opener with explicit GM role; player rows require Controlled By verification. It uses only script-owned private dialogs and does not hide or navigate manually opened original sheets. If Roll20 has not hydrated the character collection, the DM can still use an exact current-Journal entry; player authorization does not gain this fallback.
+
+A narrow progress strip appears at the top while scanning, counting actually discovered sheets and visited official tabs. It **hides automatically at error-free 100%**; any failures stay visible under Details. The Profile cascade and importer can show cached Journal snapshots as read-only previews, not as token control or authorization for native rolls.
 
 ## Install
 

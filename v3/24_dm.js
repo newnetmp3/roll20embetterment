@@ -71,6 +71,7 @@ function r3TokenFollowVisibleSheet(){
   if(R3_TOKEN.active?.characterId===id)return false;
   if(R3_TOKEN.active&&typeof r3HudSave==='function')r3HudSave();
   R3_TOKEN.active=null;R3_TOKEN.visibleSheetId=id;
+  R3_TOKEN.rosterPreviewId='';
   const snap=r3Empty();snap.name=name;
   snap.diagnostics.notes.push('Viewing a manually opened official Roll20 sheet in this campaign; map-token ownership is not inferred.');
   R3_UI.snapshot=r3Coverage(snap);

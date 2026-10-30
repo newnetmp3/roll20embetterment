@@ -4,7 +4,7 @@
 // selected token's represented character and its permissions are unavailable.
 const R3_TOKEN={
   active:null,selectionIds:[],snapshots:new Map(),legacy:null,visibleSheetId:'',
-  visibleSheetSeen:'',visibleSheetMissing:0,timer:null,started:false
+  visibleSheetSeen:'',visibleSheetMissing:0,rosterPreviewId:'',timer:null,started:false
 };
 function r3TokenCampaign(){
   // Jumpgate's editor owns the direct Campaign Backbone model. Do not
@@ -539,7 +539,7 @@ function r3TokenUnambiguousName(name){
 }
 function r3TokenCacheKey(){return r3StorageKey()+':character-snapshots';}
 function r3TokenSettingsKey(){
-  const identity=R3_TOKEN.active?.characterId||R3_TOKEN.visibleSheetId;
+  const identity=R3_TOKEN.active?.characterId||R3_TOKEN.visibleSheetId||R3_TOKEN.rosterPreviewId;
   return r3StorageKey()+':hud'+
     (identity?':character:'+encodeURIComponent(identity):'');
 }

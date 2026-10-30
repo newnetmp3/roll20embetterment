@@ -790,6 +790,11 @@ async function r3NativeReaderHandle(peer,data){
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
   original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,preOverlays:null,opening:null,sessions:new Map(),abortEpoch:0};
 function r3NativeBgResolve(name){
+  // A Journal roster preview is informational, even if another same-name
+  // controlled token happens to remain selected behind the HUD. All native
+  // actions still require switching to that verified Player Character.
+  if(R3_TOKEN.rosterPreviewId)
+    return {reason:'Journal preview is read-only. Select a verified controlled token before sending native Roll20 actions.'};
   const wanted=r3String(name,120).trim().toLowerCase();
   if(!wanted)return {reason:'No imported character name is available in the HUD.'};
   const chars=r3TokenCampaign()?.characters;
@@ -964,12 +969,28 @@ function r3NativeBgJournal(identity){
   ].includes(identity.id));
   return exact.length===1?exact[0]:null;
 }
-async function r3NativeBgOpen(name){
+async function r3NativeBgOpen(name,rosterRequest=null){
   const bg=R3_NATIVE_BG;
   if(typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())
     throw new Error('The original Roll20 sheet is being opened. Background reading resumes automatically after manual sheet access settles.');
-  const resolution=r3NativeBgResolve(name);
-  if(!resolution.model)throw new Error(resolution.reason||
+  // Roster preload has an exact Journal-backed character ID. GM reads
+  // additionally require Roll20's explicit is_gm flag. A regular player
+  // may preload only a model they are verified to control. Never use a
+  // matching name as permission to open another Journal entry.
+  const roster=rosterRequest&&
+    typeof r3RosterIdentityForPreload==='function'?
+    r3RosterIdentityForPreload(rosterRequest.id,rosterRequest.name):null;
+  const resolution=rosterRequest?roster:r3NativeBgResolve(name);
+  if(rosterRequest&&(!resolution||
+     resolution.id!==rosterRequest.id||
+     resolution.name.toLowerCase()!==name.toLowerCase()||
+     (!resolution.model&&!r3RosterIsGm())))
+    throw new Error('No authorized exact-ID Journal character for this background sheet');
+  // Preserve every original Player Character Controlled By diagnostic. A DM
+  // with no hydrated model may request ONLY a current exact-ID Journal row;
+  // r3NativeBgJournal() then supplies the native Roll20 opener, and a
+  // newly created matching dialog must be claimed before any sheet scan.
+  if(!rosterRequest&&!resolution?.model)throw new Error(resolution?.reason||
     'Unable to verify a player-controlled character for the background sheet.');
   const identity=resolution;
   if(bg.dialog&&bg.characterId===identity.id){
@@ -1038,9 +1059,9 @@ async function r3NativeBgOpen(name){
     observer?.disconnect();
   }
 }
-async function r3NativeBgEnsure(name){
+async function r3NativeBgEnsure(name,rosterRequest=null){
   if(R3_NATIVE_BG.opening)return R3_NATIVE_BG.opening;
-  const task=r3NativeBgOpen(name);
+  const task=r3NativeBgOpen(name,rosterRequest);
   R3_NATIVE_BG.opening=task;
   try{return await task;}
   finally{if(R3_NATIVE_BG.opening===task)R3_NATIVE_BG.opening=null;}

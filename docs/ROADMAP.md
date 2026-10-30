@@ -1,3 +1,17 @@
+## 2026-10-29 — fast Journal preloading and loading UX (Firefox v3.10.26 candidate)
+
+- [x] Build exact-ID Journal registry from live DOM without activating Journal tab.
+- [x] DM-only exact Journal entry fallback when Roll20 Campaign characters are not yet hydrated; non-GM only controllable exact-ID models, never read other PCs.
+- [x] Serialized, bounded private all-tab preload queue with exact ID/name verification, cancellation generation and safe cleanup of script-owned dialogs.
+- [x] Store snapshots by game+character ID for instant later NPC/PC HUD previews; add Journal character chooser to importer and Profile cascade.
+- [x] Make Journal preview read-only for all native roll calls unless the user subsequently selects a verified controlled token.
+- [x] Watch Journal DOM and local Backbone model changes; requeue changed sheets. Half-second HP polling; preserve deliberate heavier full-tab read throttles and priority.
+- [x] Top-of-window progress bar computes real percentages from discovered Journal sheets and reader-reported planned/visited tabs. Hide automatically at error-free 100%; retain a Details dropdown on failures; reappear for newly discovered/changed sheets.
+- [x] Add authorization, roster, preload, progress, error, and regression coverage; update both module bundlers.
+- [ ] Merge only after green Firefox and Chrome CI, validate post-merge signed XPI/update feed.
+- [ ] Live DM NPC and Player Character verification under Jumpgate, Journal availability, private owned reader cleanup and no disruption to visible original sheets.
+- [ ] Optional later enhancements: trusted native GM NPC actions where Roll20 exposes verifiable mappings; independent background synchronization beyond unmounted/virtualized sheet rows.
+
 ## 2026-10-29 — DM/Player Character source modes and codebase audit (Firefox v3.10.25 candidate)
 
 - [x] Inventory shipped v3, Firefox-only UI/turn/movement modules, Chrome/userscript packaging, test tree and non-shipped legacy src/.
