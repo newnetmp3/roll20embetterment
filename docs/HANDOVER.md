@@ -1,3 +1,11 @@
+## 2026-10-30 — slow DM resource loading (v3.10.32 candidate)
+
+- User observed that some Roll20 non-premium DM sessions have a ~10-second loading timer before all resources are present. Treat this as a real delayed-resource case, not proof that Roll20 imposes a universal subscription-specific timer.
+- The prior six-second Vue hydration window in v3.10.31 can finish before delayed sheet resources mount. Script-owned Journal preload now samples observed 2024 sheet values every 500ms, requires at least 12 seconds of initial resource grace, and allows a bounded ~26-second hydration period if data is still missing. It waits out detected visible sheet countdowns and requires stable recognized values before taking the official all-tab snapshot.
+- Manual sheet scans do not inherit the private-preload minimum and remain responsive. Full-tab timeout extended to 65 seconds to accommodate delayed hydration plus real tab traversal. Cancellation on manual sheet access remains active; empty sheets still fail rather than being cached.
+- The authenticated reader reports a waiting/ready phase to the editor while preserving exact postMessage source/session verification. The progress surface says “Waiting for Roll20 resources” during hydration, with no synthetic tab visits or fake percentage progress.
+- Added tests for delayed resource appearance, countdown, fast manual read, bounded timeout and honest DM progress. Run Firefox and Chrome CI; sign release only after both pass. Live Floorp/Roll20 acceptance remains pending.
+
 ## 2026-10-30 — DM reader returns data but verification fails (v3.10.31 candidate)
 
 - Screenshot shows both GM-authorized Journal sheets at 0/2 despite 50% tab-count progress. Underlying error: `Preload result did not verify source ID, name and actual sheet data`.
