@@ -249,3 +249,7 @@ Fixes incorrect owned-dialog close handling during the DM Journal preload queue.
 ## Firefox v3.10.30 — DM sheet reader handshake (candidate)
 
 A newly opened Journal iframe may appear before its official sheet reader script is ready. The editor now completes an authenticated readiness handshake before submitting a full-tab scan rather than losing an early message and reporting a generic 40-second timeout. The original source/character identity checks remain in place. A missing extension reader and a stalled scan are reported separately in Details. Real GM session verification is still required.
+
+## Firefox v3.10.31 — DM preload validation (candidate)
+
+Background Journal preload waits briefly for actual Vue sheet values before scanning and reports which verification failed rather than the generic ID/name/data error. The bar may report partial tab progress even when zero sheets successfully import. No empty or incorrectly identified snapshot is cached.
