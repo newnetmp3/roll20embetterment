@@ -482,3 +482,96 @@ test('DM preload identifies document-title mismatch without accepting another ch
   assert.match(h.api.roster.errors.get('npc-one'),/identity mismatch/);
   assert.equal(h.ctx.R3_TOKEN.snapshots.size,0);
 });
+
+test('DM private preload waits through a 10-second delayed resource mount',async()=>{
+  const sent=[],frame={postMessage(message){sent.push(message);}};
+  const ctx={
+    window:{},document:{body:{},querySelectorAll(){return []}},
+    crypto:{randomUUID:()=> 'test-session-456'},Date,Math,Map,Set,Promise,
+    setTimeout(){return 1},clearTimeout(){},setInterval(){return 1},
+    clearInterval(){},R3_ORIGIN:'https://advanced-sheets.production.roll20preflight.net',
+    R3_EDITOR:'https://app.roll20.net',R3_PROTOCOL:'r20eb:import:v3',
+    R3_NATIVE:{readers:new Map()},r3String(v,n=120){return String(v??'').slice(0,n);},
+    r3Shown(){return true;},r3Text(el){return el.textContent||'';}
+  };
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
+  let polls=0;
+  ctx.r3Capture=()=>({stats:{hp:22},coverage:{stats:1,resources:polls>=21?2:0}});
+  vm.runInContext('r3Pause=async()=>{globalThis.polls++}',Object.assign(ctx,{polls:0}));
+  const success=await vm.runInContext('r3ReaderWaitHydrated(()=>false,true)',ctx);
+  assert.equal(success,true);
+  assert.ok(ctx.polls>=24,'the initial private preload must outlast a 10-second resource gate');
+  assert.equal(ctx.r3Capture().coverage.resources,2,
+    'late resources must be present before declaring the sheet hydrated');
+});
+test('manual official scans skip the private 12-second resource grace',async()=>{
+  const ctx={
+    window:{},document:{body:{},querySelectorAll(){return []}},
+    crypto:{randomUUID:()=> 'test-session-456'},Date,Math,Map,Set,Promise,
+    setTimeout(){return 1},clearTimeout(){},setInterval(){return 1},
+    clearInterval(){},r3String(v,n=120){return String(v??'').slice(0,n);},
+    r3Shown(){return true;},r3Text(){return '';}
+  };
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
+  ctx.r3Capture=()=>({stats:{hp:22},coverage:{stats:1}});
+  vm.runInContext('r3Pause=async()=>{globalThis.polls++}',Object.assign(ctx,{polls:0}));
+  assert.equal(await vm.runInContext('r3ReaderWaitHydrated(()=>false,false)',ctx),true);
+  assert.ok(ctx.polls<8,'manual sheet reads should remain responsive');
+});
+test('official countdown keeps a private preload waiting until it clears',async()=>{
+  const clock={textContent:'00:10'};
+  const ctx={
+    window:{},document:{body:{},querySelectorAll(){return [clock]}},
+    crypto:{randomUUID:()=> 'test-session-456'},Date,Math,Map,Set,Promise,
+    setTimeout(){return 1},clearTimeout(){},setInterval(){return 1},
+    clearInterval(){},r3String(v,n=120){return String(v??'').slice(0,n);},
+    r3Shown(){return true;},r3Text(el){return el.textContent;}
+  };
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
+  ctx.r3Capture=()=>({stats:{hp:22},coverage:{stats:1}});
+  vm.runInContext('r3Pause=async()=>{globalThis.polls++;if(globalThis.polls>=29)globalThis.clock.textContent="00:00"}',
+    Object.assign(ctx,{polls:0,clock}));
+  assert.equal(await vm.runInContext('r3ReaderWaitHydrated(()=>false,true)',ctx),true);
+  assert.ok(ctx.polls>=29);
+});
+test('private preload reports genuinely unpopulated sheet instead of accepting it',async()=>{
+  const ctx={
+    window:{},document:{body:{},querySelectorAll(){return []}},
+    crypto:{randomUUID:()=> 'test-session-456'},Date,Math,Map,Set,Promise,
+    setTimeout(){return 1},clearTimeout(){},setInterval(){return 1},
+    clearInterval(){},r3String(v,n=120){return String(v??'').slice(0,n);},
+    r3Shown(){return true;},r3Text(){return '';}
+  };
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
+  ctx.r3Capture=()=>({stats:{},coverage:{stats:0}});
+  vm.runInContext('r3Pause=async()=>{globalThis.polls++}',Object.assign(ctx,{polls:0}));
+  await assert.rejects(vm.runInContext('r3ReaderWaitHydrated(()=>false,true)',ctx),
+    /after 26 seconds/);
+  assert.equal(ctx.polls,52);
+});
+test('DM progress displays resource waiting without fabricating tab visits',async()=>{
+  const h=fixture(true);h.api.discover();h.api.roster.active=true;
+  let continueScan;
+  h.ctx.r3NativeBgEnsure=async(name,request)=>({
+    id:request.id,window:{},visible:true,type:'iframe'});
+  h.ctx.r3SendScan=async(_candidate,_mode,onProgress)=>{
+    onProgress(null,'',{phase:'waiting'});
+    await new Promise(resolve=>{continueScan=resolve;});
+    onProgress(null,'',{phase:'ready'});
+    return {schema:3,name:'Example NPC',stats:{hp:20}};
+  };
+  const promise=h.api.prewarm();
+  await new Promise(resolve=>setImmediate(resolve));
+  const status=h.api.state();
+  assert.match(status.status,/Waiting for Roll20 resources/);
+  assert.equal(status.percent,0);
+  assert.equal(h.api.roster.tabProgress.size,0);
+  continueScan();
+  assert.equal(await promise,true);
+  assert.equal(h.api.roster.currentPhase,'');
+  assert.equal(h.api.roster.done,1);
+});
