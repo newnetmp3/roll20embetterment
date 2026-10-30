@@ -1,3 +1,11 @@
+## 2026-10-30 — DM Journal private-reader cleanup (v3.10.29 candidate)
+
+- [x] Correct verified script-owned wrapper closing and safe handling of already-detached dialogs.
+- [x] Preserve original preload errors and avoid false close errors when the native opener never claimed a dialog.
+- [x] Keep GM exact-Journal-ID preloading distinct from Player Character Controlled By authorization.
+- [x] Add regression coverage for ownership, manual dialog isolation and error preservation.
+- [ ] Pass CI, merge and publish signed Firefox v3.10.29; validate actual DM session results.
+
 ## 2026-10-30 — safe tabletop preload progress layout (Firefox v3.10.28 candidate)
 
 - [x] Replace fixed full-viewport top bar with compact indicator capped at 420px within Roll20's usable tabletop.
