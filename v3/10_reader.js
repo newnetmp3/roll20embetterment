@@ -37,13 +37,21 @@ async function r3CollectAllTabs(progress,shouldCancel=()=>false){
   // and stable tablist identities, NOT stale element references.
   const descriptors=()=>r3Tabs().map(tab=>({key:r3TabKey(tab),label:r3TabLabel(tab)}));
   const original=r3Tabs().filter(r3Active).map(tab=>({key:r3TabKey(tab),label:r3TabLabel(tab)}));
-  const acc=r3Empty(),seen=new Set();
+  const acc=r3Empty(),seen=new Set(),planned=new Set();
   let visited=0;
+  const plan=items=>{
+    for(const item of items)if(item.key)planned.add(item.key);
+    // 32 is the existing source-reader safety bound.
+    progress?.('Planning',null,{totalTabs:Math.min(32,planned.size),
+      completedTabs:visited});
+  };
   const primaryLabel=/^(combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
   const collect=label=>{
     check();
     r3Merge(acc,r3Capture(document.body,label));visited++;
-    progress?.(label,r3Coverage(acc));
+    progress?.(label,r3Coverage(acc),{
+      totalTabs:Math.min(32,Math.max(visited,planned.size)),
+      completedTabs:visited});
   };
   const visit=async ({key,label})=>{
     check();
@@ -64,6 +72,7 @@ async function r3CollectAllTabs(progress,shouldCancel=()=>false){
     check();
     collect(r3CurrentTabLabel());
     const initial=descriptors();
+    plan(initial);
     // Put useful actionable data first. A 2024 sheet can have many nested
     // filter tabs; their repeated 290ms renders previously delayed *every*
     // resource and spell until the entire traversal completed.
@@ -82,6 +91,7 @@ async function r3CollectAllTabs(progress,shouldCancel=()=>false){
       // Capture these same top-level tabs for the HUD before expensive
       // secondary filters. Deferred children are revisited below.
       const children=descriptors().filter(x=>!primaryLabel.test(x.label)&&!seen.has(x.key));
+      plan(children);
       for(const child of children.slice(0,20))
         deferred.push({parent:mainTab,child});
     }
@@ -155,7 +165,7 @@ async function r3ReaderReceive(event){
   R3_READER_ACTIVE.add(data.id);
   try{
     const cancelled=()=>R3_READER_CANCELLED.has(data.id);
-    const snap=await r3ReaderScan(data.mode,(tab,coverage)=>{
+    const snap=await r3ReaderScan(data.mode,(tab,coverage,metadata)=>{
       if(!cancelled()){
         // Detailed snapshots for only the high-value panels. Sending large
         // inventory/control arrays for 20+ secondary filters on every visit
@@ -164,7 +174,8 @@ async function r3ReaderReceive(event){
         const fast=priority.test(tab)&&coverage?.schema===3;
         peer.postMessage(r3Msg('progress',{
           id:data.id,tab,coverage:fast?coverage.coverage:undefined,
-          snapshot:fast?coverage:undefined
+          snapshot:fast?coverage:undefined,
+          totalTabs:metadata?.totalTabs,completedTabs:metadata?.completedTabs
         }),R3_EDITOR);
       }
     },cancelled);
@@ -310,9 +321,11 @@ function r3Listen(event){
     r3UIStatus?.('Reading '+r3String(data.tab,65)+'…',data.coverage);
     // A partial result belongs only to the exact pending frame/scan ID,
     // already checked above. This is not an external or unverified sheet.
-    if(pending.mode==='all'&&typeof pending.onProgress==='function'&&
-       data.snapshot?.schema===3)
-      pending.onProgress(data.snapshot,r3String(data.tab,65));
+    if(pending.mode==='all'&&typeof pending.onProgress==='function')
+      pending.onProgress(data.snapshot?.schema===3?data.snapshot:null,
+        r3String(data.tab,65),{
+          totalTabs:data.totalTabs,completedTabs:data.completedTabs
+        });
     return;
   }
   if(!['result','failure'].includes(data.type))return;
