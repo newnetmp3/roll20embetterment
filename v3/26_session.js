@@ -4,12 +4,15 @@
 function r3SessionMode(){
   if(R3_TOKEN.active?.characterId)return 'player-character';
   if(R3_TOKEN.visibleSheetId)return 'dm-sheet';
+  if(R3_TOKEN.rosterPreviewId)return r3RosterIsGm()?'dm-journal':'player-journal';
   return 'unbound';
 }
 function r3SessionLabel(){
   const mode=r3SessionMode();
   return mode==='dm-sheet'?'DM Sheet · Read-only':
-    mode==='player-character'?'Player Character':'No character linked';
+    mode==='player-character'?'Player Character':
+    mode==='dm-journal'?'DM Journal · Preloaded':
+    mode==='player-journal'?'Player Journal · Preloaded':'No character linked';
 }
 // A single-page Roll20 navigation may reuse the extension host while changing
 // the editor game. Do not keep the old game’s token, imported character,
@@ -31,6 +34,7 @@ function r3TokenCheckCampaign(){
   }
   R3_TOKEN.active=null;R3_TOKEN.selectionIds=[];R3_TOKEN.visibleSheetId='';
   R3_TOKEN.visibleSheetSeen='';R3_TOKEN.visibleSheetMissing=0;
+  R3_TOKEN.rosterPreviewId='';
   R3_TOKEN.snapshots.clear();R3_TOKEN.legacy=null;
   R3_UI.campaignKey=current;R3_UI.snapshot=null;
   R3_UI.restoredSnapshot=null;R3_UI.selected='';R3_UI.view='summary';
@@ -78,7 +82,8 @@ function r3TokenPoll(){
   // different PC sheet. A newly opened, explicitly named dialog takes
   // display priority unless a *new* verified token selection just occurred.
   if(!fresh.length)r3TokenFollowVisibleSheet();
-  const candidates=fresh.length?fresh:(!R3_TOKEN.active&&!R3_TOKEN.visibleSheetId?tokens:[]);
+  const candidates=fresh.length?fresh:
+    (!R3_TOKEN.active&&!R3_TOKEN.visibleSheetId&&!R3_TOKEN.rosterPreviewId?tokens:[]);
   if(!candidates.length){
     if(typeof r3MovePoll==='function')r3MovePoll();
     return;
