@@ -220,3 +220,37 @@ function r3RosterStart(){
       attributeFilter:['data-itemid','class']});
   }
 }
+
+// A deliberate UI selection presents only previously verified Journal data.
+// It never turns a GM's NPC preview into a controlled token or sends a roll.
+function r3RosterChoose(id){
+  const entry=R3_ROSTER.entries.get(r3RosterId(id));
+  if(!entry||!r3RosterAuthorized(entry.id,entry.name))return false;
+  if(typeof r3AutoRestoreDialog==='function')r3AutoRestoreDialog();
+  if(typeof R3_AUTO==='object'){
+    R3_AUTO.generation++;
+    R3_AUTO.enabled=false;R3_AUTO.characterId='';
+    R3_AUTO.name='';R3_AUTO.origin='manual';
+  }
+  R3_TOKEN.active=null;R3_TOKEN.visibleSheetId='';
+  R3_TOKEN.visibleSheetSeen='';
+  R3_TOKEN.rosterPreviewId=entry.id;
+  const saved=r3RosterSnapshot(entry.id);
+  const blank=r3Empty();blank.name=entry.name;
+  blank.diagnostics.notes.push('Journal preview is read-only. Map-token and native action permissions are not inferred.');
+  R3_UI.snapshot=saved||r3Coverage(blank);
+  R3_UI.view='summary';R3_UI.renderedSnapshot=null;
+  R3_HUD.flyout='';R3_HUD.chooser=null;
+  R3_NATIVE.preview=null;R3_NATIVE.revision++;
+  if(typeof r3HudLoad==='function')r3HudLoad();
+  if(typeof r3UIStatus==='function')r3UIStatus('Journal preview: '+entry.name+
+    (saved?' (preloaded)':' (waiting for silent preload)'));
+  if(typeof r3UIRefresh==='function')r3UIRefresh();
+  return true;
+}
+function r3RosterOptions(){
+  return [...R3_ROSTER.entries.values()].map(entry=>({
+    id:entry.id,name:entry.name,kind:entry.kind,
+    ready:entry.complete||entry.warmed
+  }));
+}
