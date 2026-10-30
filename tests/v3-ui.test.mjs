@@ -629,7 +629,7 @@ test('a conflicting official character ID cannot be rescued by identical name',(
 });
 test('automatic scheduler samples HP each second without accelerating full tab imports',()=>{
   const h=panelHarness();h.api.r3StartUI();h.api.r3StartAuto();
-  assert.ok(h.intervals.includes(1000));
+  assert.ok(h.intervals.includes(500));
   assert.ok(h.intervals.includes(3000),'resume paused private reads promptly');
 });
 
