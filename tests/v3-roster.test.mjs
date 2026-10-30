@@ -280,9 +280,9 @@ test('Journal watcher attaches when panel mounts late and reconnects on replacem
 test('progress CSS is a compact tabletop overlay, never a page-wide top blocker',()=>{
   const h=fixture(true);
   const css=vm.runInContext('r3ProgressStyles()',h.ctx);
-  assert.match(css,/#r3-loading-strip\\{position:fixed;top:60px;left:124px;right:auto;/);
+  assert.ok(css.includes('#r3-loading-strip{position:fixed;top:60px;left:124px;right:auto;'));
   assert.match(css,/width:360px;box-sizing:border-box;/);
-  assert.match(css,/max-height:min\\(180px,35vh\\)/);
+  assert.ok(css.includes('max-height:min(180px,35vh)'));
   assert.doesNotMatch(css,/top:0;left:0;right:0/);
 });
 test('progress remains centered between Roll20 toolbar and chat/Journal sidebar',()=>{
