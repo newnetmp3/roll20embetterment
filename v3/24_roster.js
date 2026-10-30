@@ -7,7 +7,8 @@ const R3_ROSTER={
   entries:new Map(),queue:[],attempted:new Map(),running:false,
   active:false,timer:null,observer:null,observerTimer:null,
   lastDiscovery:0,done:0,failed:0,scans:0,source:'none',generation:0,
-  maxCandidates:160,maxDeep:64,maxAttempts:2,lastError:''
+  maxCandidates:160,maxDeep:160,maxAttempts:2,lastError:'',
+  currentId:'',tabProgress:new Map(),errors:new Map(),idleAt:0
 };
 function r3RosterIsGm(){
   return window.is_gm===true;
@@ -55,11 +56,18 @@ function r3RosterDiscover(){
   const changed=next.size!==before.size||[...next].some(([id,x])=>
     before.get(id)?.name!==x.name||before.get(id)?.warmed!==x.warmed);
   R3_ROSTER.entries=next;
+  // Invalidate pending results for a character that disappears or changes
+  // identity in the Journal. Never preserve progress for an old name.
+  for(const id of [...R3_ROSTER.attempted.keys()])
+    if(!next.has(id)||next.get(id).name!==before.get(id)?.name){
+      R3_ROSTER.attempted.delete(id);R3_ROSTER.errors.delete(id);
+      R3_ROSTER.tabProgress.delete(id);
+    }
   R3_ROSTER.source=gm?'dm-journal':'controlled-journal';
   R3_ROSTER.lastDiscovery=Date.now();
   if(changed){
     R3_ROSTER.queue=[...next.values()].filter(e=>!e.complete&&
-      (!e.warmed||R3_ROSTER.attempted.get(e.id)!=='done'))
+      R3_ROSTER.attempted.get(e.id)?.status!=='done')
       .map(e=>e.id);
     if(typeof r3DebugLog==='function')
       r3DebugLog('Importer','Journal registry: '+next.size+
@@ -107,7 +115,8 @@ async function r3RosterPrewarm(){
   const now=Date.now();
   if(now-R3_ROSTER.lastDiscovery>8000)r3RosterDiscover();
   const entry=R3_ROSTER.queue.map(id=>R3_ROSTER.entries.get(id)).find(x=>
-    x&&!x.complete&&(R3_ROSTER.attempted.get(x.id)?.attempts||0)<R3_ROSTER.maxAttempts&&
+    x&&!x.complete&&R3_ROSTER.attempted.get(x.id)?.status!=='done'&&
+    (R3_ROSTER.attempted.get(x.id)?.attempts||0)<R3_ROSTER.maxAttempts&&
     now-(R3_ROSTER.attempted.get(x.id)?.at||0)>20000);
   if(!entry)return false;
   const identity=r3RosterAuthorized(entry.id,entry.name);
@@ -116,7 +125,9 @@ async function r3RosterPrewarm(){
   const generation=R3_ROSTER.generation,game=R3_UI.campaignKey;
   R3_ROSTER.running=true;
   const prior=R3_ROSTER.attempted.get(entry.id)||{attempts:0,at:0};
-  R3_ROSTER.attempted.set(entry.id,{attempts:prior.attempts+1,at:now});
+  R3_ROSTER.attempted.set(entry.id,{attempts:prior.attempts+1,at:now,status:'reading'});
+  R3_ROSTER.currentId=entry.id;
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
   let candidate=null;
   try{
     // A preload never adopts a user's visible official sheet. The shared
@@ -129,7 +140,16 @@ async function r3RosterPrewarm(){
     if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
        r3AutoId(candidate)!==entry.id)return false;
-    const snap=await r3SendScan(candidate,'all');
+    const tabs=new Set();
+    const snap=await r3SendScan(candidate,'all',(_part,tab,meta)=>{
+      if(!R3_ROSTER.active||generation!==R3_ROSTER.generation)return;
+      if(tab&&tab!=='Planning')tabs.add(tab);
+      const prior=R3_ROSTER.tabProgress.get(entry.id)||{done:0,total:1};
+      const total=Math.min(32,Math.max(prior.total,Number(meta?.totalTabs)||1,tabs.size));
+      const done=Math.min(total,Math.max(prior.done,Number(meta?.completedTabs)||tabs.size));
+      R3_ROSTER.tabProgress.set(entry.id,{done,total});
+      if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+    });
     if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
        r3AutoId(candidate)!==entry.id||
@@ -139,11 +159,18 @@ async function r3RosterPrewarm(){
     r3TokenSaveCache();
     const current=R3_ROSTER.entries.get(entry.id);
     if(current){current.warmed=true;current.complete=true;current.snapshot=snap;}
-    R3_ROSTER.attempted.set(entry.id,'done');
+    R3_ROSTER.attempted.set(entry.id,{status:'done',at:Date.now(),
+      attempts:prior.attempts+1});
+    R3_ROSTER.errors.delete(entry.id);
+    const progress=R3_ROSTER.tabProgress.get(entry.id)||{total:1};
+    R3_ROSTER.tabProgress.set(entry.id,{total:progress.total,done:progress.total});
     R3_ROSTER.done++;R3_ROSTER.scans++;
     return true;
   }catch(e){
     R3_ROSTER.failed++;R3_ROSTER.lastError=r3String(e?.message||e,150);
+    R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
+    R3_ROSTER.attempted.set(entry.id,{status:'error',at:Date.now(),
+      attempts:prior.attempts+1});
     return false;
   }finally{
     if(candidate&&r3NativeIsOwned(candidate)&&!r3RosterCloseOwned(entry.id)){
@@ -152,14 +179,16 @@ async function r3RosterPrewarm(){
       // prevents unbounded hidden frames.
       R3_ROSTER.lastError='Owned reader cannot be closed safely; bounded session retained';
     }
-    R3_ROSTER.running=false;
+    R3_ROSTER.running=false;R3_ROSTER.currentId='';
+    if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
     if(typeof r3DebugRefresh==='function')r3DebugRefresh();
   }
 }
 function r3RosterReset(){
   R3_ROSTER.generation++;
   R3_ROSTER.entries.clear();R3_ROSTER.queue=[];
-  R3_ROSTER.attempted.clear();
+  R3_ROSTER.attempted.clear();R3_ROSTER.errors.clear();
+  R3_ROSTER.tabProgress.clear();R3_ROSTER.currentId='';
   R3_ROSTER.running=false;R3_ROSTER.done=0;R3_ROSTER.failed=0;
   R3_ROSTER.scans=0;R3_ROSTER.lastDiscovery=0;
 }
@@ -171,7 +200,8 @@ function r3RosterStart(){
   // capped and suspend while active character or manual sheet is in use.
   if(R3_ROSTER.timer===null)R3_ROSTER.timer=setInterval(()=>{
     r3RosterDiscover();void r3RosterPrewarm();
-  },1800);
+    if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+  },1400);
   const root=document.querySelector?.('#journalfolderroot');
   if(root&&typeof MutationObserver==='function'){
     R3_ROSTER.observer=new MutationObserver(()=>{
