@@ -213,26 +213,37 @@ async function r3RosterPrewarm(){
     }
     return true;
   }catch(e){
-    R3_ROSTER.failed++;R3_ROSTER.lastError=r3String(e?.message||e,150);
-    R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
-    R3_ROSTER.attempted.set(entry.id,{status:'error',at:Date.now(),
-      attempts:prior.attempts+1});
+    // Delayed responses must not touch a new campaign's attempt ledger.
+    if(R3_ROSTER.active&&generation===R3_ROSTER.generation&&
+       runId===R3_ROSTER.runId&&game===R3_UI.campaignKey&&
+       R3_ROSTER.entries.get(entry.id)?.name===entry.name){
+      R3_ROSTER.failed++;R3_ROSTER.lastError=r3String(e?.message||e,150);
+      R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
+      R3_ROSTER.attempted.set(entry.id,{status:'error',at:Date.now(),
+        attempts:prior.attempts+1});
+    }
     return false;
   }finally{
-    if(R3_NATIVE_BG.characterId===entry.id&&
-       !r3RosterCloseOwned(entry.id)){
-      // A browser may not expose its own dialog close button. Do not
-      // risk closing a manual dialog; the existing bounded session cap
-      // prevents unbounded hidden frames.
-      R3_ROSTER.lastError='Owned reader cannot be closed safely; bounded session retained';
-      R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
+    // Another import may already be running after a reset, even for the
+    // same character ID. Never close its reader or unlock its queue.
+    if(generation===R3_ROSTER.generation&&runId===R3_ROSTER.runId&&
+       game===R3_UI.campaignKey){
+      if(R3_NATIVE_BG.characterId===entry.id&&
+          !r3RosterCloseOwned(entry.id)){
+        R3_ROSTER.lastError='Owned reader cannot be closed safely; bounded session retained';
+        R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
+      }
+      R3_ROSTER.running=false;R3_ROSTER.currentId='';
+      if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+      if(typeof r3DebugRefresh==='function')r3DebugRefresh();
     }
-    R3_ROSTER.running=false;R3_ROSTER.currentId='';
-    if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
-    if(typeof r3DebugRefresh==='function')r3DebugRefresh();
   }
 }
 function r3RosterReset(){
+  R3_ROSTER.observer?.disconnect?.();R3_ROSTER.observer=null;
+  R3_ROSTER.journalRoot=null;
+  if(R3_ROSTER.observerTimer!==null)clearTimeout(R3_ROSTER.observerTimer);
+  R3_ROSTER.observerTimer=null;
   R3_ROSTER.modelCollection?.off?.('change',r3RosterModelChanged);
   R3_ROSTER.modelCollection?.off?.('add remove',r3RosterCollectionChanged);
   R3_ROSTER.modelCollection=null;R3_ROSTER.lastChanged.clear();
@@ -274,26 +285,33 @@ function r3RosterListenModels(){
   current.on('add remove',r3RosterCollectionChanged);
   R3_ROSTER.modelCollection=current;
 }
+function r3RosterObserveJournal(){
+  const root=document.querySelector?.('#journalfolderroot')||null;
+  if(root===R3_ROSTER.journalRoot)return;
+  R3_ROSTER.observer?.disconnect?.();R3_ROSTER.observer=null;
+  if(R3_ROSTER.observerTimer!==null)clearTimeout(R3_ROSTER.observerTimer);
+  R3_ROSTER.observerTimer=null;R3_ROSTER.journalRoot=root;
+  // Roll20 can mount the Journal after boot, or replace the root entirely.
+  if(!root||typeof MutationObserver!=='function')return;
+  R3_ROSTER.observer=new MutationObserver(()=>{
+    if(R3_ROSTER.observerTimer!==null)clearTimeout(R3_ROSTER.observerTimer);
+    R3_ROSTER.observerTimer=setTimeout(()=>{R3_ROSTER.observerTimer=null;
+      r3RosterDiscover();},180);
+  });
+  R3_ROSTER.observer.observe(root,{subtree:true,childList:true,attributes:true,
+    attributeFilter:['data-itemid','class']});
+}
 function r3RosterStart(){
   if(R3_ROSTER.active)return;
   R3_ROSTER.active=true;
-  r3RosterDiscover();r3RosterListenModels();
+  r3RosterDiscover();r3RosterListenModels();r3RosterObserveJournal();
   // Periodic discovery is cheap; full official sheet scans are serialized,
   // capped and suspend while active character or manual sheet is in use.
   if(R3_ROSTER.timer===null)R3_ROSTER.timer=setInterval(()=>{
-    r3RosterListenModels();r3RosterDiscover();void r3RosterPrewarm();
+    r3RosterListenModels();r3RosterObserveJournal();
+    r3RosterDiscover();void r3RosterPrewarm();
     if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
   },1400);
-  const root=document.querySelector?.('#journalfolderroot');
-  if(root&&typeof MutationObserver==='function'){
-    R3_ROSTER.observer=new MutationObserver(()=>{
-      if(R3_ROSTER.observerTimer!==null)clearTimeout(R3_ROSTER.observerTimer);
-      R3_ROSTER.observerTimer=setTimeout(()=>{R3_ROSTER.observerTimer=null;
-        r3RosterDiscover();},180);
-    });
-    R3_ROSTER.observer.observe(root,{subtree:true,childList:true,attributes:true,
-      attributeFilter:['data-itemid','class']});
-  }
 }
 
 // An already selected Player Character's native full import counts toward
