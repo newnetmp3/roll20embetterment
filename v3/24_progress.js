@@ -67,14 +67,14 @@ function r3ProgressRefresh(){
   if(!host)return;
   const state=r3ProgressState();
   host.hidden=state.complete;
-  if(state.complete){R3_PROGRESS.hidden=true;return;}
-  R3_PROGRESS.hidden=false;
+  R3_PROGRESS.hidden=state.complete;
   const label=root.getElementById('r3-loading-label');
   const percent=root.getElementById('r3-loading-percentage');
   const meter=root.getElementById('r3-loading-meter');
   if(label&&label.textContent!==state.status)label.textContent=state.status;
   if(percent)percent.textContent=state.percent+'%';
   if(meter)meter.value=state.percent;
+  if(state.complete)return;
   const details=root.getElementById('r3-loading-details');
   const summary=details?.querySelector?.('summary');
   if(summary)summary.textContent=state.errors.length?
