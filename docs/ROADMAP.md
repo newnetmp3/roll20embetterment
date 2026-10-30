@@ -1,3 +1,10 @@
+## 2026-10-30 — DM 50% preload validation failure (v3.10.31 candidate)
+
+- [x] Wait boundedly for official Vue sheet data before a private all-tab read.
+- [x] Separate source identity, permissions, ownership and empty-data diagnostics.
+- [x] Refuse unverified/empty DM snapshots and preserve correct live tab-progress semantics.
+- [ ] CI and signed build; real DM Journal verification with Owust Ofo and Rondez the Green Mage.
+
 ## 2026-10-30 — DM Journal reader handshake (v3.10.30 candidate)
 
 - [x] Make packaged Firefox/Chrome sheet-host matching tolerant of path variants while keeping runtime D&D 2024 checks; preserve immediate manual-sheet scans.

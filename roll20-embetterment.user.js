@@ -873,8 +873,26 @@ function r3CurrentTabLabel(){
   const active=r3Tabs().filter(r3Active);
   return active.map(r3TabLabel).find(name=>main.test(name))||'Current view';
 }
+// Roll20's 2024 Vue iframe may announce ready before its character fields
+// have mounted. Wait briefly for actual source-observed values, not simply
+// a successful postMessage or an arbitrary page-ready event.
+async function r3ReaderWaitHydrated(shouldCancel=()=>false){
+  for(let i=0;i<24;i++){
+    if(shouldCancel())throw new Error('Private reader cancelled while Vue loaded');
+    const snapshot=r3Capture(document.body,r3CurrentTabLabel());
+    const populated=typeof r3AutoHasRecognizedData==='function'?
+      r3AutoHasRecognizedData(snapshot):
+      Object.keys(snapshot.stats||{}).length>0;
+    if(populated)return true;
+    await r3Pause(250);
+  }
+  return false;
+}
 async function r3ReaderScan(mode,sendProgress,shouldCancel){
-  if(mode==='all')return r3CollectAllTabs(sendProgress,shouldCancel);
+  if(mode==='all'){
+    if(r3SheetContext())await r3ReaderWaitHydrated(shouldCancel);
+    return r3CollectAllTabs(sendProgress,shouldCancel);
+  }
   if(mode==='hp')return r3CaptureHealth(document.body);
   return r3Capture(document.body,r3CurrentTabLabel());
 }
@@ -5103,12 +5121,22 @@ async function r3RosterPrewarm(){
       if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
     },true);
     if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
-       game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
-       r3AutoId(candidate)!==entry.id||
-       r3String(snap?.name,120).toLowerCase()!==entry.name.toLowerCase()||
-       !r3RosterIdentityForPreload(entry.id,entry.name)||
-       !r3AutoHasRecognizedData(snap))
-      throw new Error('Preload result did not verify source ID, name and actual sheet data');
+       game!==R3_UI.campaignKey)
+      throw new Error('DM preload was cancelled when the campaign or Journal changed');
+    if(!r3NativeIsOwned(candidate)||r3AutoId(candidate)!==entry.id)
+      throw new Error('DM preload lost exact-ID ownership of its private Roll20 sheet');
+    if(!r3RosterIdentityForPreload(entry.id,entry.name))
+      throw new Error('Journal entry or DM permission changed while reading the sheet');
+    const actualName=r3String(snap?.name,120);
+    if(actualName.toLowerCase()!==entry.name.toLowerCase()){
+      const missing=/^(?:unnamed sheet|2024 character sheet|character sheet|current view|d&d 2024)/i.test(actualName);
+      throw new Error(missing?
+        'Official sheet did not expose its character name after Vue loaded; cannot verify '+entry.name:
+        'Official sheet identity mismatch: Journal '+entry.name+'; reader '+(actualName||'(empty)'));
+    }
+    if(!r3AutoHasRecognizedData(snap))
+      throw new Error('Official sheet returned no recognizable character values for '+entry.name+
+        '. Tabs: '+r3String(snap?.diagnostics?.tabs?.join(', ')||'none',90));
     R3_TOKEN.snapshots.set(entry.id,{name:entry.name,snapshot:r3InventoryPrune(snap)});
     r3TokenSaveCache();
     const current=R3_ROSTER.entries.get(entry.id);

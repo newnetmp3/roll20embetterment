@@ -1,6 +1,6 @@
 {
-  "version": "3.10.30",
+  "version": "3.10.31",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "DM Journal 0/2: wait for authenticated official advanced-sheets iframe ready handshake before starting all-tab scans, preserve source identity checks, and distinguish reader-not-injected from later scan timeout."
+  "reason": "Fix 50% / 0-of-2 DM Journal imports: allow the authenticated Vue sheet a bounded hydration window before full traversal, and report exact verification failure (identity, ownership, authorization or missing values)."
 }

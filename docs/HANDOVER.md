@@ -1,3 +1,11 @@
+## 2026-10-30 — DM reader returns data but verification fails (v3.10.31 candidate)
+
+- Screenshot shows both GM-authorized Journal sheets at 0/2 despite 50% tab-count progress. Underlying error: `Preload result did not verify source ID, name and actual sheet data`.
+- Debug confirms GM source `dm-journal`, 2 entries queued, Jumpgate rendering valid and official sheet Current view read, but no recognizable character values at first scan. Movement without selected controlled token is expected in a DM session and is unrelated to the importer.
+- Add bounded 6-second Vue hydration wait inside the official iframe before all-tab scans; preserve cancellation and manual-sheet priority. No empty results are accepted as successful.
+- Split final verification into precise failures: changed campaign, lost private reader ownership, changed Journal access, nonmatching/missing official sheet name, and lack of actual source-observed values. Failed scan diagnostics now list visited tab names.
+- Add regressions for missing data and wrong-name refusal. Verify real DM session after signing; the screenshot alone cannot prove which validation failed.
+
 ## 2026-10-30 — DM official reader startup race (Firefox v3.10.30 candidate)
 
 - User's DM screenshot after v3.10.29 cleanup fix shows two authorized Journal characters still at 0%, now with the real underlying error: `Official sheet reader did not answer`. The prior close failure was a secondary symptom.

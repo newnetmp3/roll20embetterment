@@ -52,7 +52,15 @@ function fixture(gm=false){
     r3Coverage:s=>s,
     r3TokenSaveCache(){ctx.saves=(ctx.saves||0)+1;},
     r3SheetAllowsBackground(){return true;},
-    r3AutoHasRecognizedData(s){return s?.schema===3;},
+    // Match the production data-recognition contract. A schema tag alone
+    // does not prove that the official sheet has rendered any usable data.
+    r3AutoHasRecognizedData(s){
+      return ['stats','abilities','modifiers','saves','skills','slots'].some(k=>
+        s?.[k]&&typeof s[k]==='object'&&!Array.isArray(s[k])&&
+        Object.keys(s[k]).length>0)||
+        ['spells','attacks','inventory','features','resources'].some(k=>
+          Array.isArray(s?.[k])&&s[k].length>0);
+    },
     r3DebugRefresh(){},r3DebugLog(){},
     r3AutoCandidate(){return null;},
     r3NativeIsOwned(){return true;},
@@ -455,4 +463,22 @@ test('official reader handshake rejects contradictory character names',async()=>
     'r3SendScan({window:sheetWindow,visible:true,name:"Example NPC"},"all",null,true)',ctx),
     /different character name/);
   assert.equal(messages.some(m=>m.type==='scan'),false);
+});
+
+test('DM preload reports empty official sheet data rather than generic identity failure',async()=>{
+  const h=fixture(true);h.api.discover();h.api.roster.active=true;
+  h.ctx.r3NativeBgEnsure=async(name,request)=>({id:request.id,window:{},visible:true,type:'iframe'});
+  h.ctx.r3SendScan=async()=>({schema:3,name:'Example NPC',stats:{},
+    diagnostics:{tabs:['Current view','Combat']}});
+  assert.equal(await h.api.prewarm(),false);
+  assert.match(h.api.roster.errors.get('npc-one'),/no recognizable character values/);
+  assert.match(h.api.roster.errors.get('npc-one'),/Current view/);
+});
+test('DM preload identifies document-title mismatch without accepting another character',async()=>{
+  const h=fixture(true);h.api.discover();h.api.roster.active=true;
+  h.ctx.r3NativeBgEnsure=async(name,request)=>({id:request.id,window:{},visible:true,type:'iframe'});
+  h.ctx.r3SendScan=async()=>({schema:3,name:'Roll20 editor',stats:{hp:30}});
+  assert.equal(await h.api.prewarm(),false);
+  assert.match(h.api.roster.errors.get('npc-one'),/identity mismatch/);
+  assert.equal(h.ctx.R3_TOKEN.snapshots.size,0);
 });
