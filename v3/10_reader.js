@@ -363,11 +363,10 @@ async function r3WaitScanReader(candidate){
   }
   throw new Error('Official sheet reader never initialized in this iframe. Check that the signed R20eb extension is enabled for advanced-sheets.production.roll20preflight.net, then reload the Roll20 editor and sheet.');
 }
-async function r3SendScan(candidate,mode,onProgress=null){
-  if(!candidate?.window)throw new Error('No matching official 2024 iframe or popout');
-  if(!candidate.visible)throw new Error('Sheet iframe is hidden. Open the character sheet in Roll20 first.');
-  await r3WaitScanReader(candidate);
-  return new Promise((resolve,reject)=>{
+function r3SendScan(candidate,mode,onProgress=null,requireReady=false){
+  if(!candidate?.window)return Promise.reject(new Error('No matching official 2024 iframe or popout'));
+  if(!candidate.visible)return Promise.reject(new Error('Sheet iframe is hidden. Open the character sheet in Roll20 first.'));
+  const start=()=>new Promise((resolve,reject)=>{
     const id='r3-'+R3_SESSION.replace(/[^a-z0-9.-]/gi,'').slice(0,40)+'-'+(++r3Counter);
     const timeout=setTimeout(()=>{R3_PENDING.delete(id);reject(new Error(
       'Official sheet reader initialized, but the '+mode+' scan did not finish. Inspect the Roll20 sheet tab and reader diagnostics.'));},
@@ -377,6 +376,10 @@ async function r3SendScan(candidate,mode,onProgress=null){
     try{candidate.window.postMessage(r3Msg('scan',{id,mode}),R3_ORIGIN);}
     catch(e){R3_PENDING.delete(id);clearTimeout(timeout);reject(e);}
   });
+  // Only script-owned Journal preloads need to await a fresh reader
+  // handshake. Preserve the established immediate manual-sheet/UI read
+  // semantics; never move or navigate a manually opened Roll20 dialog.
+  return requireReady?r3WaitScanReader(candidate).then(start):start();
 }
 function r3CancelOwnedScans(){
   for(const [id,pending] of R3_PENDING){
