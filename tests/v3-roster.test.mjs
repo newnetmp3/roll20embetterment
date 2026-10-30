@@ -412,3 +412,48 @@ test('failed preload preserves reader error even when owned close also fails',as
   assert.match(h.api.roster.errors.get('npc-one'),/Official sheet failed to initialize/);
   assert.doesNotMatch(h.api.roster.errors.get('npc-one'),/bounded session retained/);
 });
+
+test('official private reader handshake waits for authenticated ready before first scan',async()=>{
+  const messages=[],win={postMessage(data){messages.push(data)}};
+  const ctx={window:{},document:{},crypto:{randomUUID:()=> 'test-session-123'},
+    R3_NATIVE:{readers:new Map()},R3_ORIGIN:'https://advanced-sheets.production.roll20preflight.net',
+    R3_EDITOR:'https://app.roll20.net',R3_PROTOCOL:'r20eb:import:v3',
+    R3_AUTO:{},Date,Math,Map,Set,Promise,URL,
+    setTimeout(){return 1},clearTimeout(){},setInterval(){return 1},clearInterval(){},
+    r3String(v,n=120){return String(v??'').slice(0,n);},
+    r3NativeIsOwned(){return true;},r3SheetAllowsBackground(){return true;}
+  };
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
+  let passes=0;
+  ctx.r3Pause=async()=>{if(++passes===2)
+    ctx.R3_NATIVE.readers.set(win,{name:'Example NPC',session:'sheet-session-123'});};
+  const promise=vm.runInContext('r3SendScan({window:globalThis.sheetWindow,visible:true,name:"Example NPC"},"all")',
+    Object.assign(ctx,{sheetWindow:win}));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(messages.filter(m=>m.type==='scan').length,1);
+  assert.ok(messages.some(m=>m.type==='hello'));
+  const scan=messages.find(m=>m.type==='scan');
+  const pending=vm.runInContext('R3_PENDING',ctx).get(scan.id);
+  pending.resolve({schema:3,name:'Example NPC'});
+  assert.equal((await promise).name,'Example NPC');
+});
+test('official reader handshake rejects contradictory character names',async()=>{
+  const messages=[],win={postMessage(data){messages.push(data)}};
+  const ctx={window:{},document:{},crypto:{randomUUID:()=> 'test-session-123'},
+    R3_NATIVE:{readers:new Map()},R3_ORIGIN:'https://advanced-sheets.production.roll20preflight.net',
+    R3_EDITOR:'https://app.roll20.net',R3_PROTOCOL:'r20eb:import:v3',
+    R3_AUTO:{},Date,Math,Map,Set,Promise,URL,setTimeout(){return 1},
+    clearTimeout(){},setInterval(){return 1},clearInterval(){},
+    r3String(v,n=120){return String(v??'').slice(0,n);},
+    r3NativeIsOwned(){return true;},r3SheetAllowsBackground(){return true;}
+  };
+  ctx.R3_NATIVE.readers.set(win,{name:'Different NPC',session:'sheet-session-123'});
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
+  ctx.sheetWindow=win;
+  await assert.rejects(vm.runInContext(
+    'r3SendScan({window:sheetWindow,visible:true,name:"Example NPC"},"all")',ctx),
+    /different character name/);
+  assert.equal(messages.some(m=>m.type==='scan'),false);
+});
