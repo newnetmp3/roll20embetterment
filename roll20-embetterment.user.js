@@ -876,21 +876,47 @@ function r3CurrentTabLabel(){
 // Roll20's 2024 Vue iframe may announce ready before its character fields
 // have mounted. Wait briefly for actual source-observed values, not simply
 // a successful postMessage or an arbitrary page-ready event.
-async function r3ReaderWaitHydrated(shouldCancel=()=>false){
-  for(let i=0;i<24;i++){
-    if(shouldCancel())throw new Error('Private reader cancelled while Vue loaded');
+function r3ReaderCountdownActive(){
+  // The official 2024 sheet can expose a loading/countdown timer before
+  // gated resources mount. Read only a few visible timer controls in this
+  // authenticated iframe; do not rely on parent-page internals.
+  const nodes=Array.from(document.querySelectorAll?.(
+    '[role="timer"],[data-testid*="countdown"],.countdown')||[]).slice(0,24);
+  return nodes.some(el=>{
+    if(!r3Shown(el))return false;
+    const value=r3Text(el,100);
+    return /(?:\b(?:[1-9]|1\d|2\d)\s*(?:seconds?|secs?|s)\b|\b0?0:0?[1-9]\b|\b0?0:[12]\d\b)/i.test(value);
+  });
+}
+async function r3ReaderWaitHydrated(shouldCancel=()=>false,privatePreload=false){
+  // The first script-owned Journal read can be delayed by Roll20's
+  // account/resource loading phase. A ready message only verifies the
+  // message listener, not that the Vue sheet's values are populated.
+  const minimumSamples=privatePreload?24:0; // 12 seconds at 500ms
+  const maxSamples=52; // bounded ~26 seconds, not indefinite waiting
+  let stable=0,previous='';
+  for(let i=0;i<maxSamples;i++){
+    if(shouldCancel())throw new Error('Private reader cancelled while Roll20 resources loaded');
     const snapshot=r3Capture(document.body,r3CurrentTabLabel());
     const populated=typeof r3AutoHasRecognizedData==='function'?
       r3AutoHasRecognizedData(snapshot):
       Object.keys(snapshot.stats||{}).length>0;
-    if(populated)return true;
-    await r3Pause(250);
+    const signature=populated?JSON.stringify(snapshot.coverage||{
+      stats:Object.keys(snapshot.stats||{}).length}):'';
+    stable=populated&&signature===previous?stable+1:0;
+    previous=signature;
+    if(populated&&i>=minimumSamples&&stable>=2&&!r3ReaderCountdownActive())return true;
+    await r3Pause(500);
   }
-  return false;
+  throw new Error('Official Roll20 sheet has not finished loading character resources after 26 seconds; no unverified data was imported.');
 }
-async function r3ReaderScan(mode,sendProgress,shouldCancel){
+async function r3ReaderScan(mode,sendProgress,shouldCancel,options={}){
   if(mode==='all'){
-    if(r3SheetContext())await r3ReaderWaitHydrated(shouldCancel);
+    if(r3SheetContext()){
+      options.onPhase?.('waiting');
+      await r3ReaderWaitHydrated(shouldCancel,options.privatePreload===true);
+      options.onPhase?.('ready');
+    }
     return r3CollectAllTabs(sendProgress,shouldCancel);
   }
   if(mode==='hp')return r3CaptureHealth(document.body);
@@ -931,7 +957,13 @@ async function r3ReaderReceive(event){
           totalTabs:metadata?.totalTabs,completedTabs:metadata?.completedTabs
         }),R3_EDITOR);
       }
-    },cancelled);
+    },cancelled,{
+      privatePreload:data.privatePreload===true,
+      onPhase:phase=>{
+        if(data.privatePreload===true&&!cancelled())
+          peer.postMessage(r3Msg('progress',{id:data.id,phase}),R3_EDITOR);
+      }
+    });
     if(cancelled())throw new Error('Private scan cancelled for manual sheet access');
     peer.postMessage(r3Msg('result',{id:data.id,snapshot:snap,session:R3_SESSION}),R3_EDITOR);
   }catch(error){
@@ -1071,6 +1103,11 @@ function r3Listen(event){
   const pending=R3_PENDING.get(data.id);
   if(!candidate||!pending||pending.window!==event.source)return;
   if(data.type==='progress'){
+    if(data.phase==='waiting'||data.phase==='ready'){
+      if(typeof pending.onProgress==='function')
+        pending.onProgress(null,'',{phase:data.phase});
+      return;
+    }
     r3UIStatus?.('Reading '+r3String(data.tab,65)+'…',data.coverage);
     // A partial result belongs only to the exact pending frame/scan ID,
     // already checked above. This is not an external or unverified sheet.
@@ -1124,10 +1161,12 @@ function r3SendScan(candidate,mode,onProgress=null,requireReady=false){
     const id='r3-'+R3_SESSION.replace(/[^a-z0-9.-]/gi,'').slice(0,40)+'-'+(++r3Counter);
     const timeout=setTimeout(()=>{R3_PENDING.delete(id);reject(new Error(
       'Official sheet reader initialized, but the '+mode+' scan did not finish. Inspect the Roll20 sheet tab and reader diagnostics.'));},
-      mode==='all'?40000:mode==='hp'?2500:12000);
+      mode==='all'?65000:mode==='hp'?2500:12000);
     R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout,mode,
       onProgress:typeof onProgress==='function'?onProgress:null});
-    try{candidate.window.postMessage(r3Msg('scan',{id,mode}),R3_ORIGIN);}
+    try{candidate.window.postMessage(r3Msg('scan',{
+      id,mode,privatePreload:requireReady&&mode==='all'
+    }),R3_ORIGIN);}
     catch(e){R3_PENDING.delete(id);clearTimeout(timeout);reject(e);}
   });
   // Only script-owned Journal preloads need to await a fresh reader
@@ -4759,6 +4798,8 @@ function r3ProgressState(){
   const percent=total?Math.min(100,Math.floor(done*100/total)):0;
   const current=roster?.entries.get(roster.currentId);
   const status=complete?'All available character sheets loaded':
+    current&&roster.currentPhase==='waiting'?
+      'Waiting for Roll20 resources · '+current.name:
     current?'Importing '+current.name+' · '+(finished+1)+' of '+entries.length:
     entries.length?('Preloading '+finished+' of '+entries.length+' character sheets'):
       'Discovering available Journal character sheets';
@@ -4768,7 +4809,8 @@ function r3ProgressState(){
       const tabs=roster.tabProgress.get(e.id)||{done:0,total:0};
       const error=roster.errors.get(e.id);
       return {name:e.name,loaded:e.complete,tabs:tabs.done||0,
-        totalTabs:tabs.total||0,error:error||''};
+        totalTabs:tabs.total||0,waiting:e.id===roster.currentId&&
+          roster.currentPhase==='waiting',error:error||''};
     })};
 }
 // Constrain the status strip to the tabletop. Roll20's Journal/Chat tabs
@@ -4898,7 +4940,8 @@ function r3ProgressRefresh(){
       const row=document.createElement('div');
       row.textContent=item.name+' — '+(item.error||(
         item.loaded?'Ready ('+item.tabs+'/'+item.totalTabs+' tabs)':
-          item.totalTabs?'Importing '+item.tabs+'/'+item.totalTabs+' tabs':'Pending'));
+          item.waiting?'Waiting for Roll20 resources':
+        item.totalTabs?'Importing '+item.tabs+'/'+item.totalTabs+' tabs':'Pending'));
       errors.appendChild(row);
     }
     if(!state.total){
@@ -4920,7 +4963,7 @@ const R3_ROSTER={
   active:false,timer:null,observer:null,observerTimer:null,
   lastDiscovery:0,done:0,failed:0,scans:0,source:'none',generation:0,
   maxCandidates:160,maxDeep:160,maxAttempts:2,lastError:'',
-  currentId:'',tabProgress:new Map(),errors:new Map(),idleAt:0,
+  currentId:'',currentPhase:'',tabProgress:new Map(),errors:new Map(),idleAt:0,
   modelCollection:null,lastChanged:new Map(),runId:0,journalRoot:null
 };
 function r3RosterIsGm(){
@@ -5095,7 +5138,7 @@ async function r3RosterPrewarm(){
   R3_ROSTER.running=true;
   const prior=R3_ROSTER.attempted.get(entry.id)||{attempts:0,at:0};
   R3_ROSTER.attempted.set(entry.id,{attempts:prior.attempts+1,at:now,status:'reading'});
-  R3_ROSTER.currentId=entry.id;
+  R3_ROSTER.currentId=entry.id;R3_ROSTER.currentPhase='';
   if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
   let candidate=null;
   try{
@@ -5112,7 +5155,14 @@ async function r3RosterPrewarm(){
       throw new Error('Journal preload identity changed while opening an owned reader');
     const tabs=new Set();
     const snap=await r3SendScan(candidate,'all',(_part,tab,meta)=>{
-      if(!R3_ROSTER.active||generation!==R3_ROSTER.generation)return;
+      if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
+         runId!==R3_ROSTER.runId||game!==R3_UI.campaignKey)return;
+      if(meta?.phase==='waiting'||meta?.phase==='ready'){
+        R3_ROSTER.currentPhase=meta.phase==='waiting'?'waiting':'';
+        if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+        return;
+      }
+      R3_ROSTER.currentPhase='';
       if(tab&&tab!=='Planning')tabs.add(tab);
       const prior=R3_ROSTER.tabProgress.get(entry.id)||{done:0,total:1};
       const total=Math.min(32,Math.max(prior.total,Number(meta?.totalTabs)||1,tabs.size));
@@ -5185,7 +5235,7 @@ async function r3RosterPrewarm(){
         if(!R3_ROSTER.errors.has(entry.id))
           R3_ROSTER.errors.set(entry.id,entry.name+': '+cleanup);
       }
-      R3_ROSTER.running=false;R3_ROSTER.currentId='';
+      R3_ROSTER.running=false;R3_ROSTER.currentId='';R3_ROSTER.currentPhase='';
       if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
       if(typeof r3DebugRefresh==='function')r3DebugRefresh();
     }
@@ -5202,7 +5252,7 @@ function r3RosterReset(){
   R3_ROSTER.generation++;R3_ROSTER.runId++;
   R3_ROSTER.entries.clear();R3_ROSTER.queue=[];
   R3_ROSTER.attempted.clear();R3_ROSTER.errors.clear();
-  R3_ROSTER.tabProgress.clear();R3_ROSTER.currentId='';
+  R3_ROSTER.tabProgress.clear();R3_ROSTER.currentId='';R3_ROSTER.currentPhase='';
   R3_ROSTER.running=false;R3_ROSTER.done=0;R3_ROSTER.failed=0;
   R3_ROSTER.scans=0;R3_ROSTER.lastDiscovery=0;
 }
