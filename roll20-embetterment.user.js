@@ -2574,10 +2574,15 @@ async function r3NativeBgOpen(name,rosterRequest=null){
   const roster=rosterRequest&&
     typeof r3RosterIdentityForPreload==='function'?
     r3RosterIdentityForPreload(rosterRequest.id,rosterRequest.name):null;
-  const resolution=rosterRequest?
-    roster:(r3NativeBgResolve(name));
-  if(!resolution?.model||resolution.name.toLowerCase()!==name.toLowerCase())
+  const resolution=rosterRequest?roster:r3NativeBgResolve(name);
+  if(rosterRequest&&(!resolution?.model||
+     resolution.id!==rosterRequest.id||
+     resolution.name.toLowerCase()!==name.toLowerCase()))
     throw new Error('No authorized exact-ID Journal character for this background sheet');
+  // Preserve all original, actionable Player Character permission diagnostics
+  // for ordinary private imports and native action mapping.
+  if(!resolution?.model)throw new Error(resolution?.reason||
+    'Unable to verify a player-controlled character for the background sheet.');
   const identity=resolution;
   if(bg.dialog&&bg.characterId===identity.id){
     const c=r3NativeBgCandidate();
