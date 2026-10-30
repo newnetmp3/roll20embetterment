@@ -1118,7 +1118,13 @@ function r3NativeReaderAnnounce(event,data,candidate){
   if(!candidate||typeof data.session!=='string'||
       !/^[\w.:-]{6,100}$/.test(data.session))return;
   const name=r3String(data.name,120);
-  if(name)R3_NATIVE.readers.set(event.source,{name,session:data.session});
+  // On first mount the authenticated official Vue reader may not know its
+  // character name yet. Record the source/session handshake regardless; a
+  // later ready announcement updates the name after Vue hydrates.
+  const previous=R3_NATIVE.readers.get(event.source);
+  R3_NATIVE.readers.set(event.source,{
+    name:name||previous?.name||'',session:data.session
+  });
 }
 async function r3NativeWaitReader(candidate,characterName,isCurrent=()=>true){
   if(!candidate?.window)throw new Error('No official character sheet reader exists.');
