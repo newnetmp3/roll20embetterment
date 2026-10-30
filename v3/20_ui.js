@@ -146,6 +146,24 @@ function r3UIRefresh(){
   const selector=frames.map(c=>'<option value="'+r3Escape(c.key)+'"'+(c.key===R3_UI.selected?' selected':'')+'>'+
     r3Escape(c.name)+' ('+c.type+(c.visible?'':' — HIDDEN')+')</option>').join('')||
     '<option value="">No official sheet detected</option>';
+  // Only exact-ID entries verified against current Journal/model access
+  // are shown here. This is a local preview, never simulated token control.
+  const roster=typeof r3RosterOptions==='function'?r3RosterOptions():[];
+  const rosterSelect=R3_UI.root.getElementById('r3-roster-picker');
+  if(rosterSelect){
+    const options='<option value="">Choose a preloaded Journal character…</option>'+
+      roster.map(x=>'<option value="'+r3Escape(x.id)+'"'+
+        (R3_TOKEN.rosterPreviewId===x.id?' selected':'')+'>'+
+        r3Escape(x.name)+' · '+r3Escape(x.kind)+(x.ready?' · Ready':' · Loading')+
+        '</option>').join('');
+    if(rosterSelect.dataset.lastChoices!==options){
+      rosterSelect.innerHTML=options;rosterSelect.dataset.lastChoices=options;
+    }
+    if(rosterSelect.value!==R3_TOKEN.rosterPreviewId)
+      rosterSelect.value=R3_TOKEN.rosterPreviewId||'';
+    const show=R3_UI.root.getElementById('r3-roster-show');
+    if(show)show.disabled=!rosterSelect.value;
+  }
   const choice=R3_UI.root.getElementById('r3-choices');
   if(R3_UI.renderedChoices!==selector){choice.innerHTML=selector;R3_UI.renderedChoices=selector;}
   if(choice.value!==R3_UI.selected)choice.value=R3_UI.selected;
@@ -229,7 +247,11 @@ function r3UIEvent(event){
     }
     r3UIRefresh();r3HudRender();
   }
-  else if(target?.id==='r3-refresh')r3UIRefresh();
+  else if(target?.id==='r3-refresh'){r3RosterDiscover?.();r3UIRefresh();}
+  else if(target?.id==='r3-roster-show'){
+    const id=R3_UI.root.getElementById('r3-roster-picker')?.value;
+    if(id&&typeof r3RosterChoose==='function')r3RosterChoose(id);
+  }
   else if(target?.id==='r3-scan')return r3StartImport('current');
   else if(target?.id==='r3-all')return r3StartImport('all');
   else if(target?.id==='r3-export')r3Export();
@@ -354,7 +376,10 @@ function r3StartUI(){
     '.notice{font-size:11px;color:#b8c5d8;line-height:1.4}label{font-weight:650}'
   ].join('')+r3HudStyles();
   root.innerHTML='<style>'+style+'</style><style id="r3-theme-style"></style><div id="r3-hud"></div><div id="r3-wrap"><button id="r3-toggle">Hide importer</button>'+
-    '<div id="r3-content"><label for="r3-choices">Official character sheet</label>'+
+    '<div id="r3-content"><label for="r3-roster-picker">Available Journal characters</label>'+
+    '<select id="r3-roster-picker"></select><div class="actions">'+
+    '<button id="r3-roster-show" type="button">Show selected character</button></div>'+
+    '<label for="r3-choices">Official character sheet</label>'+
     '<select id="r3-choices"></select><div class="actions"><button id="r3-refresh">Refresh list</button>'+
     '<button id="r3-scan">Read current tab</button><button id="r3-all">Import all tabs</button>'+
     '<button id="r3-export" disabled>Export JSON</button></div>'+
