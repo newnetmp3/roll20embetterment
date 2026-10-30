@@ -149,7 +149,7 @@ function r3ReaderCountdownActive(){
   return nodes.some(el=>{
     if(!r3Shown(el))return false;
     const value=r3Text(el,100);
-    return /(?:\\b(?:[1-9]|1\\d|2\\d)\\s*(?:seconds?|secs?|s)\\b|\\b0?0:0?[1-9]\\b|\\b0?0:[12]\\d\\b)/i.test(value);
+    return /(?:\b(?:[1-9]|1\d|2\d)\s*(?:seconds?|secs?|s)\b|\b0?0:0?[1-9]\b|\b0?0:[12]\d\b)/i.test(value);
   });
 }
 async function r3ReaderWaitHydrated(shouldCancel=()=>false,privatePreload=false){
@@ -425,7 +425,7 @@ function r3SendScan(candidate,mode,onProgress=null,requireReady=false){
     const id='r3-'+R3_SESSION.replace(/[^a-z0-9.-]/gi,'').slice(0,40)+'-'+(++r3Counter);
     const timeout=setTimeout(()=>{R3_PENDING.delete(id);reject(new Error(
       'Official sheet reader initialized, but the '+mode+' scan did not finish. Inspect the Roll20 sheet tab and reader diagnostics.'));},
-      mode==='all'?40000:mode==='hp'?2500:12000);
+      mode==='all'?65000:mode==='hp'?2500:12000);
     R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout,mode,
       onProgress:typeof onProgress==='function'?onProgress:null});
     try{candidate.window.postMessage(r3Msg('scan',{
