@@ -9,7 +9,7 @@ const R3_ROSTER={
   lastDiscovery:0,done:0,failed:0,scans:0,source:'none',generation:0,
   maxCandidates:160,maxDeep:160,maxAttempts:2,lastError:'',
   currentId:'',tabProgress:new Map(),errors:new Map(),idleAt:0,
-  modelCollection:null,lastChanged:new Map()
+  modelCollection:null,lastChanged:new Map(),runId:0,journalRoot:null
 };
 function r3RosterIsGm(){
   return window.is_gm===true||window.is_gm===1;
@@ -43,7 +43,13 @@ function r3RosterAuthorized(id,name){
 }
 function r3RosterDiscover(){
   const before=R3_ROSTER.entries;
-  const rows=r3RosterJournal(),next=new Map(),gm=r3RosterIsGm();
+  // A temporarily unmounted Journal is not a revocation. Keep previously
+  // verified rows until Roll20 remounts the panel, but recheck model access
+  // on every pass (including when the sidebar is closed).
+  const journal=document.querySelector?.('#journalfolderroot');
+  const rows=journal?r3RosterJournal():
+    [...before.values()].map(({id,name})=>({id,name}));
+  const next=new Map(),gm=r3RosterIsGm();
   for(const row of rows){
     const identity=r3RosterAuthorized(row.id,row.name);
     if(!identity)continue;
@@ -62,6 +68,28 @@ function r3RosterDiscover(){
   const changed=next.size!==before.size||[...next].some(([id,x])=>
     before.get(id)?.name!==x.name||before.get(id)?.warmed!==x.warmed);
   R3_ROSTER.entries=next;
+  // Revoked, removed or renamed Journal entries cannot leave a readable
+  // cached sheet behind, including an already selected read-only preview.
+  let purged=false;
+  for(const [id,old] of before){
+    if(next.get(id)?.name===old.name)continue;
+    if(R3_TOKEN.snapshots.delete(id))purged=true;
+  }
+  if(purged&&typeof r3TokenSaveCache==='function')r3TokenSaveCache();
+  const previewId=R3_TOKEN.rosterPreviewId;
+  if(previewId&&(!next.has(previewId)||
+      before.get(previewId)?.name!==next.get(previewId)?.name)){
+    R3_TOKEN.rosterPreviewId='';
+    if(!R3_TOKEN.active&&!R3_TOKEN.visibleSheetId){
+      R3_UI.snapshot=null;R3_UI.renderedSnapshot=null;R3_UI.selected='';
+      if(typeof R3_NATIVE==='object'){
+        R3_NATIVE.preview=null;R3_NATIVE.revision++;
+      }
+      if(typeof r3UIStatus==='function')
+        r3UIStatus('Journal character is no longer available or authorized.');
+      if(typeof r3UIRefresh==='function')r3UIRefresh();
+    }
+  }
   // Invalidate pending results for a character that disappears or changes
   // identity in the Journal. Never preserve progress for an old name.
   for(const id of [...R3_ROSTER.attempted.keys()])
@@ -128,10 +156,11 @@ async function r3RosterPrewarm(){
     (R3_ROSTER.attempted.get(x.id)?.attempts||0)<R3_ROSTER.maxAttempts&&
     now-(R3_ROSTER.attempted.get(x.id)?.at||0)>20000);
   if(!entry)return false;
-  const identity=r3RosterAuthorized(entry.id,entry.name);
+  const identity=r3RosterIdentityForPreload(entry.id,entry.name);
   if(!identity)return false;
   if(R3_ROSTER.scans>=R3_ROSTER.maxDeep)return false;
   const generation=R3_ROSTER.generation,game=R3_UI.campaignKey;
+  const runId=++R3_ROSTER.runId;
   R3_ROSTER.running=true;
   const prior=R3_ROSTER.attempted.get(entry.id)||{attempts:0,at:0};
   R3_ROSTER.attempted.set(entry.id,{attempts:prior.attempts+1,at:now,status:'reading'});
@@ -144,7 +173,7 @@ async function r3RosterPrewarm(){
     const open=typeof r3NativeBgEnsure==='function'?
       r3NativeBgEnsure(entry.name,{id:entry.id,name:entry.name,mode:
         r3RosterIsGm()?'dm-roster':'player-roster'}):null;
-    if(!open)return false;
+    if(!open)throw new Error('No verified script-owned Roll20 sheet opener is available');
     candidate=await open;
     if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
@@ -164,6 +193,7 @@ async function r3RosterPrewarm(){
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
        r3AutoId(candidate)!==entry.id||
        r3String(snap?.name,120).toLowerCase()!==entry.name.toLowerCase()||
+       !r3RosterIdentityForPreload(entry.id,entry.name)||
        !r3AutoHasRecognizedData(snap))
       throw new Error('Preload result did not verify source ID, name and actual sheet data');
     R3_TOKEN.snapshots.set(entry.id,{name:entry.name,snapshot:r3InventoryPrune(snap)});
@@ -189,30 +219,41 @@ async function r3RosterPrewarm(){
     }
     return true;
   }catch(e){
-    R3_ROSTER.failed++;R3_ROSTER.lastError=r3String(e?.message||e,150);
-    R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
-    R3_ROSTER.attempted.set(entry.id,{status:'error',at:Date.now(),
-      attempts:prior.attempts+1});
+    // Delayed responses must not touch a new campaign's attempt ledger.
+    if(R3_ROSTER.active&&generation===R3_ROSTER.generation&&
+       runId===R3_ROSTER.runId&&game===R3_UI.campaignKey&&
+       R3_ROSTER.entries.get(entry.id)?.name===entry.name){
+      R3_ROSTER.failed++;R3_ROSTER.lastError=r3String(e?.message||e,150);
+      R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
+      R3_ROSTER.attempted.set(entry.id,{status:'error',at:Date.now(),
+        attempts:prior.attempts+1});
+    }
     return false;
   }finally{
-    if(R3_NATIVE_BG.characterId===entry.id&&
-       !r3RosterCloseOwned(entry.id)){
-      // A browser may not expose its own dialog close button. Do not
-      // risk closing a manual dialog; the existing bounded session cap
-      // prevents unbounded hidden frames.
-      R3_ROSTER.lastError='Owned reader cannot be closed safely; bounded session retained';
-      R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
+    // Another import may already be running after a reset, even for the
+    // same character ID. Never close its reader or unlock its queue.
+    if(generation===R3_ROSTER.generation&&runId===R3_ROSTER.runId&&
+       game===R3_UI.campaignKey){
+      if(R3_NATIVE_BG.characterId===entry.id&&
+          !r3RosterCloseOwned(entry.id)){
+        R3_ROSTER.lastError='Owned reader cannot be closed safely; bounded session retained';
+        R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
+      }
+      R3_ROSTER.running=false;R3_ROSTER.currentId='';
+      if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+      if(typeof r3DebugRefresh==='function')r3DebugRefresh();
     }
-    R3_ROSTER.running=false;R3_ROSTER.currentId='';
-    if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
-    if(typeof r3DebugRefresh==='function')r3DebugRefresh();
   }
 }
 function r3RosterReset(){
+  R3_ROSTER.observer?.disconnect?.();R3_ROSTER.observer=null;
+  R3_ROSTER.journalRoot=null;
+  if(R3_ROSTER.observerTimer!==null)clearTimeout(R3_ROSTER.observerTimer);
+  R3_ROSTER.observerTimer=null;
   R3_ROSTER.modelCollection?.off?.('change',r3RosterModelChanged);
   R3_ROSTER.modelCollection?.off?.('add remove',r3RosterCollectionChanged);
   R3_ROSTER.modelCollection=null;R3_ROSTER.lastChanged.clear();
-  R3_ROSTER.generation++;
+  R3_ROSTER.generation++;R3_ROSTER.runId++;
   R3_ROSTER.entries.clear();R3_ROSTER.queue=[];
   R3_ROSTER.attempted.clear();R3_ROSTER.errors.clear();
   R3_ROSTER.tabProgress.clear();R3_ROSTER.currentId='';
@@ -250,26 +291,33 @@ function r3RosterListenModels(){
   current.on('add remove',r3RosterCollectionChanged);
   R3_ROSTER.modelCollection=current;
 }
+function r3RosterObserveJournal(){
+  const root=document.querySelector?.('#journalfolderroot')||null;
+  if(root===R3_ROSTER.journalRoot)return;
+  R3_ROSTER.observer?.disconnect?.();R3_ROSTER.observer=null;
+  if(R3_ROSTER.observerTimer!==null)clearTimeout(R3_ROSTER.observerTimer);
+  R3_ROSTER.observerTimer=null;R3_ROSTER.journalRoot=root;
+  // Roll20 can mount the Journal after boot, or replace the root entirely.
+  if(!root||typeof MutationObserver!=='function')return;
+  R3_ROSTER.observer=new MutationObserver(()=>{
+    if(R3_ROSTER.observerTimer!==null)clearTimeout(R3_ROSTER.observerTimer);
+    R3_ROSTER.observerTimer=setTimeout(()=>{R3_ROSTER.observerTimer=null;
+      r3RosterDiscover();},180);
+  });
+  R3_ROSTER.observer.observe(root,{subtree:true,childList:true,attributes:true,
+    attributeFilter:['data-itemid','class']});
+}
 function r3RosterStart(){
   if(R3_ROSTER.active)return;
   R3_ROSTER.active=true;
-  r3RosterDiscover();r3RosterListenModels();
+  r3RosterDiscover();r3RosterListenModels();r3RosterObserveJournal();
   // Periodic discovery is cheap; full official sheet scans are serialized,
   // capped and suspend while active character or manual sheet is in use.
   if(R3_ROSTER.timer===null)R3_ROSTER.timer=setInterval(()=>{
-    r3RosterListenModels();r3RosterDiscover();void r3RosterPrewarm();
+    r3RosterListenModels();r3RosterObserveJournal();
+    r3RosterDiscover();void r3RosterPrewarm();
     if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
   },1400);
-  const root=document.querySelector?.('#journalfolderroot');
-  if(root&&typeof MutationObserver==='function'){
-    R3_ROSTER.observer=new MutationObserver(()=>{
-      if(R3_ROSTER.observerTimer!==null)clearTimeout(R3_ROSTER.observerTimer);
-      R3_ROSTER.observerTimer=setTimeout(()=>{R3_ROSTER.observerTimer=null;
-        r3RosterDiscover();},180);
-    });
-    R3_ROSTER.observer.observe(root,{subtree:true,childList:true,attributes:true,
-      attributeFilter:['data-itemid','class']});
-  }
 }
 
 // An already selected Player Character's native full import counts toward

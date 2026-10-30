@@ -176,3 +176,103 @@ test('failed prewarm keeps details and does not mark a sheet complete',async()=>
   assert.equal(h.api.roster.errors.size,0);
   assert.equal(h.api.roster.entries.size,0);
 });
+
+test('revoked player control clears a selected Journal preview and cached sheet',()=>{
+  const h=fixture(false);h.api.discover();
+  h.ctx.R3_NATIVE.revision=0;
+  h.ctx.R3_TOKEN.rosterPreviewId='pc-two';
+  h.ctx.R3_TOKEN.snapshots.set('pc-two',{name:'Example Player',
+    snapshot:{schema:3,name:'Example Player',stats:{hp:22}}});
+  h.ctx.R3_UI.snapshot={schema:3,name:'Example Player',stats:{hp:22}};
+  h.models.find(m=>m.id==='pc-two').get=k=>({
+    name:'Example Player',npc:0,controlledby:''
+  })[k];
+  h.api.discover();
+  assert.equal(h.api.roster.entries.has('pc-two'),false);
+  assert.equal(h.ctx.R3_TOKEN.snapshots.has('pc-two'),false);
+  assert.equal(h.ctx.R3_TOKEN.rosterPreviewId,'');
+  assert.equal(h.ctx.R3_UI.snapshot,null);
+  assert.equal(h.ctx.saves,1);
+});
+test('temporarily unmounted Journal preserves existing authorized registry',()=>{
+  const h=fixture(false);h.api.discover();
+  h.api.roster.entries.get('pc-two').complete=true;
+  h.ctx.document.querySelector=()=>null;
+  h.api.discover();
+  assert.equal(h.api.roster.entries.get('pc-two').complete,true);
+  assert.equal(h.api.roster.entries.size,1);
+});
+test('preload completion refuses a Journal entry whose permission was revoked mid-read',async()=>{
+  const h=fixture(false);h.api.discover();h.api.roster.active=true;
+  h.ctx.r3NativeBgEnsure=async(name,request)=>{
+    h.ctx.R3_NATIVE_BG.characterId=request.id;
+    return {id:request.id,window:{},visible:true,type:'iframe'};
+  };
+  let finish;
+  h.ctx.r3SendScan=()=>new Promise(resolve=>{finish=resolve;});
+  vm.runInContext('r3RosterCloseOwned=function(){R3_NATIVE_BG.characterId="";return true;}',h.ctx);
+  const task=h.api.prewarm();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(typeof finish,'function');
+  h.models.find(m=>m.id==='pc-two').get=k=>({
+    name:'Example Player',npc:0,controlledby:''
+  })[k];
+  h.api.discover();
+  finish({schema:3,name:'Example Player',stats:{hp:15}});
+  assert.equal(await task,false);
+  assert.equal(h.ctx.R3_TOKEN.snapshots.has('pc-two'),false);
+  assert.equal(h.api.roster.errors.has('pc-two'),false);
+});
+test('old campaign preload cannot overwrite a new campaign or release its running lock',async()=>{
+  const h=fixture(true);h.api.discover();h.api.roster.active=true;
+  h.ctx.r3NativeBgEnsure=async(name,request)=>{
+    h.ctx.R3_NATIVE_BG.characterId=request.id;
+    return {id:request.id,window:{},visible:true,type:'iframe'};
+  };
+  let releaseOld,scans=0;
+  h.ctx.r3SendScan=()=>{
+    scans++;
+    if(scans===1)return new Promise(resolve=>{releaseOld=resolve;});
+    return Promise.resolve({schema:3,name:'Example NPC',stats:{hp:44}});
+  };
+  vm.runInContext('r3RosterCloseOwned=function(){R3_NATIVE_BG.characterId="";return true;}',h.ctx);
+  const first=h.api.prewarm();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(typeof releaseOld,'function');
+  h.api.reset();h.ctx.R3_UI.campaignKey='new-campaign';
+  h.api.discover();
+  assert.equal(await h.api.prewarm(),true);
+  assert.equal(h.ctx.R3_TOKEN.snapshots.get('npc-one').snapshot.stats.hp,44);
+  releaseOld({schema:3,name:'Example NPC',stats:{hp:3}});
+  assert.equal(await first,false);
+  assert.equal(h.api.roster.running,false);
+  assert.equal(h.api.roster.entries.get('npc-one').complete,true);
+  assert.equal(h.ctx.R3_TOKEN.snapshots.get('npc-one').snapshot.stats.hp,44);
+});
+test('missing private reader reports an actionable error in Details',async()=>{
+  const h=fixture(true);h.api.discover();h.api.roster.active=true;
+  assert.equal(await h.api.prewarm(),false);
+  assert.match(h.api.roster.errors.get('npc-one'),/No verified script-owned/);
+  assert.equal(h.api.state().complete,false);
+});
+test('Journal watcher attaches when panel mounts late and reconnects on replacement',()=>{
+  const h=fixture(true),observed=[];
+  let current=null,disconnected=0;
+  h.ctx.document.querySelector=()=>current;
+  h.ctx.r3TokenCampaign=()=>({characters:null});
+  h.ctx.MutationObserver=class {
+    observe(root){observed.push(root);}
+    disconnect(){disconnected++;}
+  };
+  vm.runInContext('r3RosterStart()',h.ctx);
+  assert.equal(observed.length,0);
+  current=h.journal;
+  vm.runInContext('r3RosterObserveJournal()',h.ctx);
+  assert.equal(observed.length,1);
+  current={...h.journal};
+  vm.runInContext('r3RosterObserveJournal()',h.ctx);
+  assert.equal(observed.length,2);
+  assert.equal(disconnected,1);
+  h.api.reset();
+  assert.equal(disconnected,2);
+});

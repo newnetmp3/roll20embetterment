@@ -23,6 +23,9 @@ function r3TokenCheckCampaign(){
   if(!R3_UI.campaignKey){R3_UI.campaignKey=current;return false;}
   if(R3_UI.campaignKey===current)return false;
   if(typeof r3RosterReset==='function')r3RosterReset();
+  // Restore script-owned private sheets and invalidate any pending opener
+  // before clearing session references. Never touch player-opened sheets.
+  if(typeof r3NativeBgRestoreAll==='function')r3NativeBgRestoreAll();
   if(typeof r3AutoRestoreDialog==='function')r3AutoRestoreDialog();
   if(typeof R3_AUTO==='object'){
     R3_AUTO.generation++;R3_AUTO.enabled=false;R3_AUTO.name='';

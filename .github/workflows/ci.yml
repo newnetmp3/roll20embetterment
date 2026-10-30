@@ -11,6 +11,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm run check:firefox
+      - run: npm run check:chrome
       - run: git diff --exit-code -- roll20-embetterment.user.js
       - uses: actions/upload-artifact@v4
         with:

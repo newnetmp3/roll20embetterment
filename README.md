@@ -6,18 +6,18 @@ Player-focused D&D 2024 combat HUD and read-only Roll20 sheet companion. R20eb u
 
 | Distribution | Status |
 | --- | --- |
-| **Firefox / Floorp** | **v3.10.25** Mozilla-signed and published; v3.10.26 Journal preloading/progress in development |
+| **Firefox / Floorp** | **v3.10.26** Mozilla-signed and published; v3.10.27 reliability fixes under validation |
 | **Chrome / Chromium** | **v3.4.0**; independently versioned and not feature-parity guaranteed |
 | **Optional userscript** | **v3.4.0** metadata; built from `v3/` independently of Firefox releases |
 
-- [Firefox v3.10.25 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.25/r20eb-firefox-v3.10.25.xpi)
+- [Firefox v3.10.26 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.26/r20eb-firefox-v3.10.26.xpi)
 - [Firefox updates.json](extension/firefox/updates.json)
 - [Firefox installation and signing guide](extension/firefox/README.md)
 - [GitHub Actions](https://github.com/newnetmp3/roll20embetterment/actions)
 
 Disable any previous R20eb userscript or duplicate extension when using the signed Firefox add-on. Keep the native Roll20 chat panel accessible when running actions; R20eb does not overwrite an unsent chat draft.
 
-Firefox v3.10.25 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+Firefox v3.10.26 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
 
 ## Playing as a DM vs Player Character — source-aware modes (v3.10.25 signed)
 
@@ -27,7 +27,7 @@ The shared reader and HUD remain common; code responsibilities are divided into 
 
 DM mode does **not** yet privately import every tab without touching a manually opened sheet. Player-controlled token background imports and native action safety remain independent. Automated source tests are not a substitute for real Roll20 gameplay testing.
 
-## Firefox v3.10.26 — Journal preloading, fast local updates and progress (candidate)
+## Firefox v3.10.26 — Journal preloading, fast local updates and progress (signed)
 
 R20eb silently indexes the current Roll20 Journal without switching your Journal tab. For DM use it preloads available Journal character/NPC sheets through exact-ID verified Roll20 openers; for player use it preloads only characters verified under the logged-in player's **Controlled By** permission. If Roll20 has not hydrated its character model collection, an authenticated DM Journal row may still be opened by its exact character ID. This does **not** extend a regular player's access.
 
@@ -233,3 +233,7 @@ R20eb runs in the browser and uses local imported character data and Roll20's ex
 The importer Diagnostics view includes a bounded, read-only interactive control inventory with observed source attributes, control kinds, categories and missing-capability reasons. These records do not authorize execution; supported attack/skill candidates are revalidated against the live sheet before a click. Only rendered, visible, enabled controls are scanned; virtualized or unopened content is not guaranteed complete.
 
 **Discovery fix:** the control inventory now budgets visible controls separately from hidden DOM nodes, retains named inventory owners, and recognizes skill controls and range counters. All-tab capture uses the actual initial tab to avoid duplicating it as “Current view.”
+
+## Firefox v3.10.27 — preload lifecycle hardening (candidate)
+
+This reliability update revalidates Journal character access before accepting an asynchronous preload; revoked or removed previews and their cache entries are cleared. It preserves previously verified Journal entries when the sidebar temporarily unmounts, reconnects the observer on late Journal mounting, and protects campaign switches against late background reader responses. The progress Details view now reports an unavailable private reader. These changes are subject to Firefox and Chrome CI and live DM/Player testing; candidate status does not imply a Mozilla-signed release.
