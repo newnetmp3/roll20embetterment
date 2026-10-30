@@ -21,6 +21,8 @@ function r3ProgressState(){
   const percent=total?Math.min(100,Math.floor(done*100/total)):0;
   const current=roster?.entries.get(roster.currentId);
   const status=complete?'All available character sheets loaded':
+    current&&roster.currentPhase==='waiting'?
+      'Waiting for Roll20 resources · '+current.name:
     current?'Importing '+current.name+' · '+(finished+1)+' of '+entries.length:
     entries.length?('Preloading '+finished+' of '+entries.length+' character sheets'):
       'Discovering available Journal character sheets';
@@ -30,7 +32,8 @@ function r3ProgressState(){
       const tabs=roster.tabProgress.get(e.id)||{done:0,total:0};
       const error=roster.errors.get(e.id);
       return {name:e.name,loaded:e.complete,tabs:tabs.done||0,
-        totalTabs:tabs.total||0,error:error||''};
+        totalTabs:tabs.total||0,waiting:e.id===roster.currentId&&
+          roster.currentPhase==='waiting',error:error||''};
     })};
 }
 // Constrain the status strip to the tabletop. Roll20's Journal/Chat tabs
@@ -160,7 +163,8 @@ function r3ProgressRefresh(){
       const row=document.createElement('div');
       row.textContent=item.name+' — '+(item.error||(
         item.loaded?'Ready ('+item.tabs+'/'+item.totalTabs+' tabs)':
-          item.totalTabs?'Importing '+item.tabs+'/'+item.totalTabs+' tabs':'Pending'));
+          item.waiting?'Waiting for Roll20 resources':
+        item.totalTabs?'Importing '+item.tabs+'/'+item.totalTabs+' tabs':'Pending'));
       errors.appendChild(row);
     }
     if(!state.total){
