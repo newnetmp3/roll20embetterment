@@ -195,6 +195,14 @@ test('DM reader targets only current visible exact-ID dialog, not another sheet'
   dialog.getAttribute=()=>'-P5OtherSheetXYZ';
   assert.equal(h.api.r3AutoCandidate(),null);
 });
+test('native action resolution refuses a read-only Journal preview even with same-name tokens',()=>{
+  const h=panelHarness('Elf');
+  h.api.r3StartUI();
+  h.api.R3_TOKEN.rosterPreviewId='npc-one';
+  const result=vm.runInContext('r3NativeBgResolve("Elf")',h.context);
+  assert.match(result.reason,/Journal preview is read-only/i);
+  assert.equal(result.model,undefined);
+});
 test('new DM campaign never displays cached Nier until its identity is verified',()=>{
   const h=panelHarness('Elowen');
   const old=h.api.r3Empty();old.name='Nier';old.stats.hp=84;
