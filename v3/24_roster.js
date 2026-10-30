@@ -253,7 +253,7 @@ async function r3RosterPrewarm(){
     // same character ID. Never close its reader or unlock its queue.
     if(generation===R3_ROSTER.generation&&runId===R3_ROSTER.runId&&
        game===R3_UI.campaignKey){
-      if(R3_NATIVE_BG.characterId===entry.id&&
+      if(R3_NATIVE_BG.characterId===entry.id&&R3_NATIVE_BG.dialog&&
           !r3RosterCloseOwned(entry.id)){
         const cleanup='Owned private reader remains open: Roll20 exposed no verified close control. Use Show original sheet in Debug to restore it.';
         // Preserve the *first* importer error: cleanup must never mask why
