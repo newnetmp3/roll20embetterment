@@ -75,6 +75,40 @@ test('GM Journal registry includes all named exact-ID characters but not unrelat
   assert.equal(h.api.roster.entries.get('pc-two').kind,'PC');
   assert.equal(h.api.roster.source,'dm-journal');
 });
+test('DM may index exact Journal rows before Campaign characters hydrate; player may not',()=>{
+  const gm=fixture(true);gm.models.length=0;gm.api.discover();
+  assert.deepEqual([...gm.api.roster.entries.keys()],['npc-one','pc-two']);
+  assert.equal(gm.api.roster.entries.get('npc-one').kind,'Character');
+  assert.equal(vm.runInContext('r3RosterIdentityForPreload("npc-one","Example NPC")',gm.ctx).id,
+    'npc-one');
+  const player=fixture(false);player.models.length=0;player.api.discover();
+  assert.equal(player.api.roster.entries.size,0);
+  assert.equal(vm.runInContext('r3RosterIdentityForPreload("npc-one","Example NPC")',player.ctx),null);
+});
+test('local model changes requeue a warmed character without losing other cached sheets',()=>{
+  const h=fixture(true);h.api.discover();
+  const e=h.api.roster.entries.get('npc-one');e.complete=true;
+  h.api.roster.attempted.set('npc-one',{status:'done',attempts:1,at:Date.now()});
+  h.api.roster.errors.set('npc-one','transient error');
+  vm.runInContext('r3RosterModelChanged({id:"npc-one"})',h.ctx);
+  assert.equal(e.complete,false);
+  assert.equal(h.api.roster.errors.has('npc-one'),false);
+  assert.equal(h.api.roster.attempted.has('npc-one'),false);
+  assert.ok(h.api.roster.queue.includes('npc-one'));
+});
+test('Journal chooser presents a cached character without granting a token or invoking native actions',()=>{
+  const h=fixture(true);h.api.discover();
+  h.ctx.R3_HUD={flyout:'actions',chooser:{},used:{}};
+  h.ctx.R3_NATIVE.revision=0;
+  h.ctx.R3_TOKEN.snapshots.set('npc-one',{name:'Example NPC',
+    snapshot:{schema:3,name:'Example NPC',stats:{hp:19}}});
+  const accepted=vm.runInContext('r3RosterChoose("npc-one")',h.ctx);
+  assert.equal(accepted,true);
+  assert.equal(h.ctx.R3_TOKEN.rosterPreviewId,'npc-one');
+  assert.equal(h.ctx.R3_TOKEN.active,null);
+  assert.equal(h.ctx.R3_UI.snapshot.stats.hp,19);
+  assert.equal(vm.runInContext('r3RosterChoose("secret-three")',h.ctx),false);
+});
 test('Player registry cannot enumerate DM-only NPCs or hidden Journal-only character names',()=>{
   const h=fixture(false);h.api.discover();
   assert.deepEqual([...h.api.roster.entries.keys()],['pc-two']);
