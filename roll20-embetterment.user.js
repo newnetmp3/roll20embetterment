@@ -2389,6 +2389,11 @@ async function r3NativeReaderHandle(peer,data){
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
   original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,preOverlays:null,opening:null,sessions:new Map(),abortEpoch:0};
 function r3NativeBgResolve(name){
+  // A Journal roster preview is informational, even if another same-name
+  // controlled token happens to remain selected behind the HUD. All native
+  // actions still require switching to that verified Player Character.
+  if(R3_TOKEN.rosterPreviewId)
+    return {reason:'Journal preview is read-only. Select a verified controlled token before sending native Roll20 actions.'};
   const wanted=r3String(name,120).trim().toLowerCase();
   if(!wanted)return {reason:'No imported character name is available in the HUD.'};
   const chars=r3TokenCampaign()?.characters;
@@ -2575,13 +2580,16 @@ async function r3NativeBgOpen(name,rosterRequest=null){
     typeof r3RosterIdentityForPreload==='function'?
     r3RosterIdentityForPreload(rosterRequest.id,rosterRequest.name):null;
   const resolution=rosterRequest?roster:r3NativeBgResolve(name);
-  if(rosterRequest&&(!resolution?.model||
+  if(rosterRequest&&(!resolution||
      resolution.id!==rosterRequest.id||
-     resolution.name.toLowerCase()!==name.toLowerCase()))
+     resolution.name.toLowerCase()!==name.toLowerCase()||
+     (!resolution.model&&!r3RosterIsGm())))
     throw new Error('No authorized exact-ID Journal character for this background sheet');
-  // Preserve all original, actionable Player Character permission diagnostics
-  // for ordinary private imports and native action mapping.
-  if(!resolution?.model)throw new Error(resolution?.reason||
+  // Preserve every original Player Character Controlled By diagnostic. A DM
+  // with no hydrated model may request ONLY a current exact-ID Journal row;
+  // r3NativeBgJournal() then supplies the native Roll20 opener, and a
+  // newly created matching dialog must be claimed before any sheet scan.
+  if(!rosterRequest&&!resolution?.model)throw new Error(resolution?.reason||
     'Unable to verify a player-controlled character for the background sheet.');
   const identity=resolution;
   if(bg.dialog&&bg.characterId===identity.id){
@@ -4784,10 +4792,11 @@ const R3_ROSTER={
   active:false,timer:null,observer:null,observerTimer:null,
   lastDiscovery:0,done:0,failed:0,scans:0,source:'none',generation:0,
   maxCandidates:160,maxDeep:160,maxAttempts:2,lastError:'',
-  currentId:'',tabProgress:new Map(),errors:new Map(),idleAt:0
+  currentId:'',tabProgress:new Map(),errors:new Map(),idleAt:0,
+  modelCollection:null,lastChanged:new Map()
 };
 function r3RosterIsGm(){
-  return window.is_gm===true;
+  return window.is_gm===true||window.is_gm===1;
 }
 function r3RosterId(value){
   const id=r3String(value,110);
@@ -4805,11 +4814,16 @@ function r3RosterJournal(){
     }).filter(Boolean);
 }
 function r3RosterAuthorized(id,name){
-  const model=r3TokenCharacter(id);
-  if(!model||r3String(r3TokenModelGet(model,'name'),120).toLowerCase()!==
+  const model=r3TokenCharacter(id),gm=r3RosterIsGm();
+  // A DM's rendered Journal row is enough to *request opening* that exact
+  // Roll20 sheet even while Campaign.characters is still unhydrated. The
+  // private opener then verifies a newly created dialog with the same ID.
+  // A player NEVER receives this Journal-only fallback.
+  if(!model&&!gm)return null;
+  if(model&&r3String(r3TokenModelGet(model,'name'),120).toLowerCase()!==
     name.toLowerCase())return null;
-  if(!r3RosterIsGm()&&!r3TokenControls(model))return null;
-  return {model,id,name};
+  if(!gm&&!r3TokenControls(model))return null;
+  return {model:model||null,id,name};
 }
 function r3RosterDiscover(){
   const before=R3_ROSTER.entries;
@@ -4946,6 +4960,17 @@ async function r3RosterPrewarm(){
     const progress=R3_ROSTER.tabProgress.get(entry.id)||{total:1};
     R3_ROSTER.tabProgress.set(entry.id,{total:progress.total,done:progress.total});
     R3_ROSTER.done++;R3_ROSTER.scans++;
+    // A deliberately selected Journal preview becomes useful immediately
+    // when its background sheet finishes, without a second user click.
+    if(R3_TOKEN.rosterPreviewId===entry.id&&!R3_TOKEN.active&&
+       !R3_TOKEN.visibleSheetId){
+      R3_UI.snapshot=r3InventoryPrune(snap);
+      R3_UI.renderedSnapshot=null;
+      if(typeof r3UIRefresh==='function')r3UIRefresh();
+    }else if(typeof R3_BF==='object'&&R3_BF.menuPane==='profile'){
+      R3_BF.revision++;
+      if(typeof r3HudRender==='function')r3HudRender();
+    }
     return true;
   }catch(e){
     R3_ROSTER.failed++;R3_ROSTER.lastError=r3String(e?.message||e,150);
@@ -4968,6 +4993,9 @@ async function r3RosterPrewarm(){
   }
 }
 function r3RosterReset(){
+  R3_ROSTER.modelCollection?.off?.('change',r3RosterModelChanged);
+  R3_ROSTER.modelCollection?.off?.('add remove',r3RosterCollectionChanged);
+  R3_ROSTER.modelCollection=null;R3_ROSTER.lastChanged.clear();
   R3_ROSTER.generation++;
   R3_ROSTER.entries.clear();R3_ROSTER.queue=[];
   R3_ROSTER.attempted.clear();R3_ROSTER.errors.clear();
@@ -4975,14 +5003,45 @@ function r3RosterReset(){
   R3_ROSTER.running=false;R3_ROSTER.done=0;R3_ROSTER.failed=0;
   R3_ROSTER.scans=0;R3_ROSTER.lastDiscovery=0;
 }
+// Backbone collection events are local, cheap change hints. A changed
+// NPC/PC is requeued for source verification; we do not use untrusted raw
+// model attributes to overwrite imported official 2024 sheet values.
+function r3RosterModelChanged(model){
+  const id=r3RosterId(model?.id||r3TokenModelGet(model,'_id'));
+  const entry=R3_ROSTER.entries.get(id);
+  if(!entry||R3_ROSTER.currentId===id)return;
+  const now=Date.now();
+  if(now-(R3_ROSTER.lastChanged.get(id)||0)<1500)return;
+  R3_ROSTER.lastChanged.set(id,now);
+  entry.complete=false;R3_ROSTER.attempted.delete(id);
+  R3_ROSTER.errors.delete(id);R3_ROSTER.tabProgress.delete(id);
+  if(!R3_ROSTER.queue.includes(id))R3_ROSTER.queue.push(id);
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+}
+function r3RosterCollectionChanged(){
+  R3_ROSTER.lastDiscovery=0;
+  r3RosterDiscover();
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+}
+function r3RosterListenModels(){
+  const current=r3TokenCampaign()?.characters;
+  if(current===R3_ROSTER.modelCollection)return;
+  R3_ROSTER.modelCollection?.off?.('change',r3RosterModelChanged);
+  R3_ROSTER.modelCollection?.off?.('add remove',r3RosterCollectionChanged);
+  R3_ROSTER.modelCollection=null;
+  if(typeof current?.on!=='function')return;
+  current.on('change',r3RosterModelChanged);
+  current.on('add remove',r3RosterCollectionChanged);
+  R3_ROSTER.modelCollection=current;
+}
 function r3RosterStart(){
   if(R3_ROSTER.active)return;
   R3_ROSTER.active=true;
-  r3RosterDiscover();
+  r3RosterDiscover();r3RosterListenModels();
   // Periodic discovery is cheap; full official sheet scans are serialized,
   // capped and suspend while active character or manual sheet is in use.
   if(R3_ROSTER.timer===null)R3_ROSTER.timer=setInterval(()=>{
-    r3RosterDiscover();void r3RosterPrewarm();
+    r3RosterListenModels();r3RosterDiscover();void r3RosterPrewarm();
     if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
   },1400);
   const root=document.querySelector?.('#journalfolderroot');
@@ -4997,6 +5056,33 @@ function r3RosterStart(){
   }
 }
 
+// An already selected Player Character's native full import counts toward
+// the same Journal preload; don't scan that sheet a second time just to
+// advance the bulk progress indicator.
+function r3RosterTabProgress(id,tab,metadata){
+  const entry=R3_ROSTER.entries.get(id);
+  if(!entry||!metadata||tab==='Planning')return;
+  const prev=R3_ROSTER.tabProgress.get(id)||{done:0,total:0};
+  const total=Math.min(32,Math.max(prev.total,
+    Number(metadata.totalTabs)||0,1));
+  const done=Math.min(total,Math.max(prev.done,Number(metadata.completedTabs)||0));
+  R3_ROSTER.tabProgress.set(id,{total,done});
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+}
+function r3RosterComplete(id,snapshot){
+  const entry=R3_ROSTER.entries.get(id);
+  if(!entry||snapshot?.schema!==3||
+     entry.name.toLowerCase()!==r3String(snapshot.name,120).toLowerCase()||
+     !r3RosterAuthorized(id,entry.name))return false;
+  entry.complete=true;entry.warmed=true;
+  R3_ROSTER.attempted.set(id,{status:'done',at:Date.now(),attempts:1});
+  R3_ROSTER.errors.delete(id);
+  const prev=R3_ROSTER.tabProgress.get(id)||{total:1,done:1};
+  R3_ROSTER.tabProgress.set(id,{total:Math.max(1,prev.total),
+    done:Math.max(1,prev.total)});
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+  return true;
+}
 // A deliberate UI selection presents only previously verified Journal data.
 // It never turns a GM's NPC preview into a controlled token or sends a roll.
 function r3RosterChoose(id){
@@ -5491,7 +5577,10 @@ async function r3AutoTick(eventTriggered=false){
     // Only the exact reader for this character/generation may contribute.
     const quickTabs=/^(?:Current view|Combat|Features\s*(?:&|and)\s*Traits|Inventory|Spells)$/i;
     const published=new Set();
-    const onProgress=mode==='all'&&background?(partial,tab)=>{
+    const onProgress=mode==='all'&&background?(partial,tab,metadata)=>{
+      if(typeof r3RosterTabProgress==='function'&&
+         R3_AUTO.characterId===r3AutoId(candidate))
+        r3RosterTabProgress(R3_AUTO.characterId,tab,metadata);
       if(!quickTabs.test(tab)||published.has(tab.toLowerCase()))return;
       if(!R3_AUTO.enabled||generation!==R3_AUTO.generation||
          R3_AUTO.characterId!==r3AutoId(candidate)||
@@ -5509,7 +5598,12 @@ async function r3AutoTick(eventTriggered=false){
     if(!R3_AUTO.enabled||R3_AUTO.generation!==generation)return;
     r3AutoStoreSnapshot(snapshot,mode);
     R3_AUTO.lastScan=Date.now();
-    if(mode==='all')R3_AUTO.lastFull=R3_AUTO.lastScan;
+    if(mode==='all'){
+      R3_AUTO.lastFull=R3_AUTO.lastScan;
+      if(typeof r3RosterComplete==='function'&&
+         R3_AUTO.characterId===r3AutoId(candidate))
+        r3RosterComplete(R3_AUTO.characterId,snapshot);
+    }
     r3AutoDisplay((candidate.type==='popout'?'Popout sheet':background?'Background':'Visible sheet')+' '+mode+
       ' import updated '+new Date(R3_AUTO.lastScan).toLocaleTimeString());
   }catch(e){
