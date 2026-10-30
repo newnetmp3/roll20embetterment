@@ -368,3 +368,47 @@ test('native sidebar ResizeObserver reflows strip without a manual refresh',()=>
   assert.ok(Number.parseInt(host.style.left)<oldLeft);
   assert.ok(Number.parseInt(host.style.left)+Number.parseInt(host.style.width)<=726);
 });
+
+test('private preload closes via saved owned wrapper, not only dialog.closest',()=>{
+  const h=fixture(true);let clicks=0,restores=0;
+  const button={click(){clicks++;}};
+  const wrapper={hasAttribute:key=>key==='data-r3-private-reader',
+    querySelector:sel=>sel==='.ui-dialog-titlebar-close'?button:null};
+  h.ctx.R3_NATIVE_BG.characterId='npc-one';
+  h.ctx.R3_NATIVE_BG.dialog={isConnected:true,hasAttribute:()=>false,
+    closest:()=>null};
+  h.ctx.R3_NATIVE_BG.moved=wrapper;
+  h.ctx.r3NativeBgRestore=()=>{restores++;};
+  assert.equal(vm.runInContext('r3RosterCloseOwned("npc-one")',h.ctx),true);
+  assert.equal(clicks,1);assert.equal(restores,1);
+});
+test('private preload cleanup never closes or restores an unmarked manual sheet',()=>{
+  const h=fixture(true);let called=0;
+  h.ctx.R3_NATIVE_BG.characterId='npc-one';
+  h.ctx.R3_NATIVE_BG.dialog={isConnected:true,hasAttribute:()=>false,
+    closest:()=>null};
+  h.ctx.R3_NATIVE_BG.moved={hasAttribute:()=>false,querySelector:()=>({
+    click(){called++;}
+  })};
+  h.ctx.r3NativeBgRestore=()=>{called++;};
+  assert.equal(vm.runInContext('r3RosterCloseOwned("npc-one")',h.ctx),false);
+  assert.equal(called,0);
+});
+test('already detached owned sheet is safely restored without a titlebar button',()=>{
+  const h=fixture(true);let restores=0;
+  h.ctx.R3_NATIVE_BG.characterId='npc-one';
+  h.ctx.R3_NATIVE_BG.dialog={isConnected:false,
+    hasAttribute:key=>key==='data-r3-private-reader'};
+  h.ctx.r3NativeBgRestore=()=>{restores++;};
+  assert.equal(vm.runInContext('r3RosterCloseOwned("npc-one")',h.ctx),true);
+  assert.equal(restores,1);
+});
+test('failed preload preserves reader error even when owned close also fails',async()=>{
+  const h=fixture(true);h.api.discover();h.api.roster.active=true;
+  h.ctx.r3NativeBgEnsure=async()=>{h.ctx.R3_NATIVE_BG.characterId='npc-one';
+    h.ctx.R3_NATIVE_BG.dialog={hasAttribute:key=>key==='data-r3-private-reader'};
+    throw Error('Official sheet failed to initialize');};
+  assert.equal(await h.api.prewarm(),false);
+  assert.match(h.api.roster.errors.get('npc-one'),/Official sheet failed to initialize/);
+  assert.doesNotMatch(h.api.roster.errors.get('npc-one'),/bounded session retained/);
+});
