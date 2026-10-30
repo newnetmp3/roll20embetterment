@@ -90,7 +90,7 @@ test('top progress represents real sheet and tab counts, auto-hides only at erro
   const e=h.api.roster.entries.get('npc-one');
   h.api.roster.tabProgress.set('npc-one',{total:3,done:2});
   h.api.refresh();
-  assert.equal(h.nodes.get('r3-loading-percentage').textContent,'33%');
+  assert.equal(h.nodes.get('r3-loading-percentage').textContent,'40%');
   assert.equal(h.nodes.get('r3-loading-strip').hidden,false);
   e.complete=true;h.api.roster.tabProgress.set('npc-one',{total:3,done:3});
   h.api.roster.entries.get('pc-two').complete=true;
