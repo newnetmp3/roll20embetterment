@@ -52,7 +52,15 @@ function fixture(gm=false){
     r3Coverage:s=>s,
     r3TokenSaveCache(){ctx.saves=(ctx.saves||0)+1;},
     r3SheetAllowsBackground(){return true;},
-    r3AutoHasRecognizedData(s){return s?.schema===3;},
+    // Match the production data-recognition contract. A schema tag alone
+    // does not prove that the official sheet has rendered any usable data.
+    r3AutoHasRecognizedData(s){
+      return ['stats','abilities','modifiers','saves','skills','slots'].some(k=>
+        s?.[k]&&typeof s[k]==='object'&&!Array.isArray(s[k])&&
+        Object.keys(s[k]).length>0)||
+        ['spells','attacks','inventory','features','resources'].some(k=>
+          Array.isArray(s?.[k])&&s[k].length>0);
+    },
     r3DebugRefresh(){},r3DebugLog(){},
     r3AutoCandidate(){return null;},
     r3NativeIsOwned(){return true;},
