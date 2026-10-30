@@ -38,7 +38,7 @@ const code='// R20 Embetterment '+version+' page-world runtime\n(()=>{\n'+
     '// ===== v3/'+n+' =====\n'+readFileSync(join(root,'v3',n),'utf8').trim()).join('\n\n')+'\n})();\n';
 const patterns=[
   'https://app.roll20.net/editor*',
-  'https://advanced-sheets.production.roll20preflight.net/*dnd2024byroll20/*'
+  'https://advanced-sheets.production.roll20preflight.net/*'
 ];
 const popup=readFileSync(join(root,'extension',browser,'popup.html'),'utf8').replaceAll('@@VERSION@@',version);
 const base={
