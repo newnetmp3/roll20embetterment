@@ -272,6 +272,33 @@ function r3RosterStart(){
   }
 }
 
+// An already selected Player Character's native full import counts toward
+// the same Journal preload; don't scan that sheet a second time just to
+// advance the bulk progress indicator.
+function r3RosterTabProgress(id,tab,metadata){
+  const entry=R3_ROSTER.entries.get(id);
+  if(!entry||!metadata||tab==='Planning')return;
+  const prev=R3_ROSTER.tabProgress.get(id)||{done:0,total:0};
+  const total=Math.min(32,Math.max(prev.total,
+    Number(metadata.totalTabs)||0,1));
+  const done=Math.min(total,Math.max(prev.done,Number(metadata.completedTabs)||0));
+  R3_ROSTER.tabProgress.set(id,{total,done});
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+}
+function r3RosterComplete(id,snapshot){
+  const entry=R3_ROSTER.entries.get(id);
+  if(!entry||snapshot?.schema!==3||
+     entry.name.toLowerCase()!==r3String(snapshot.name,120).toLowerCase()||
+     !r3RosterAuthorized(id,entry.name))return false;
+  entry.complete=true;entry.warmed=true;
+  R3_ROSTER.attempted.set(id,{status:'done',at:Date.now(),attempts:1});
+  R3_ROSTER.errors.delete(id);
+  const prev=R3_ROSTER.tabProgress.get(id)||{total:1,done:1};
+  R3_ROSTER.tabProgress.set(id,{total:Math.max(1,prev.total),
+    done:Math.max(1,prev.total)});
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+  return true;
+}
 // A deliberate UI selection presents only previously verified Journal data.
 // It never turns a GM's NPC preview into a controlled token or sends a roll.
 function r3RosterChoose(id){
