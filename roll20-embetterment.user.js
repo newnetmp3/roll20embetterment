@@ -1083,7 +1083,7 @@ async function r3WaitScanReader(candidate){
       (typeof r3NativeIsOwned==='function'&&!r3NativeIsOwned(candidate))))
       throw new Error('Private reader was released for a manually opened Roll20 sheet.');
     const ready=R3_NATIVE.readers.get(source);
-    if(ready?.session&&/^[\\w.:-]{6,100}$/.test(ready.session)){
+    if(ready?.session&&/^[\w.:-]{6,100}$/.test(ready.session)){
       // The sheet's authenticated reader may initially announce a generic
       // title before Vue mounts. Explicit conflicting names are not accepted.
       const name=r3String(ready.name,120);
