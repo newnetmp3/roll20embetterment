@@ -48,6 +48,8 @@ function fixture(gm=false){
     r3TokenModelGet(model,key){return model?.get?.(key);},
     r3TokenControls(m){return m?.get('controlledby')==='player-1';},
     r3InventoryPrune:s=>s,
+    r3Empty(){return {schema:3,name:'',stats:{},diagnostics:{notes:[]}};},
+    r3Coverage:s=>s,
     r3TokenSaveCache(){ctx.saves=(ctx.saves||0)+1;},
     r3SheetAllowsBackground(){return true;},
     r3AutoHasRecognizedData(s){return s?.schema===3;},
