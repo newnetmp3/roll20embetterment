@@ -43,7 +43,13 @@ function r3RosterAuthorized(id,name){
 }
 function r3RosterDiscover(){
   const before=R3_ROSTER.entries;
-  const rows=r3RosterJournal(),next=new Map(),gm=r3RosterIsGm();
+  // A temporarily unmounted Journal is not a revocation. Keep previously
+  // verified rows until Roll20 remounts the panel, but recheck model access
+  // on every pass (including when the sidebar is closed).
+  const journal=document.querySelector?.('#journalfolderroot');
+  const rows=journal?r3RosterJournal():
+    [...before.values()].map(({id,name})=>({id,name}));
+  const next=new Map(),gm=r3RosterIsGm();
   for(const row of rows){
     const identity=r3RosterAuthorized(row.id,row.name);
     if(!identity)continue;
