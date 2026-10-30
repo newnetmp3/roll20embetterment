@@ -43,7 +43,7 @@ function r3ProgressLayout(){
   let left=width>=760?124:84;
   for(const selector of [
     '#floatingtoolbar','#toolbox','#tools','.floatingtoolbar',
-    '#editingtoolbar','#main-toolbar','#actiontoolbar'
+    '#editingtoolbar','#main-toolbar','#actiontoolbar','#toolbar'
   ]){
     const rect=document.querySelector?.(selector)?.getBoundingClientRect?.();
     // Only recognize a slim, left-docked control: a horizontal header
@@ -65,7 +65,7 @@ function r3ProgressLayout(){
   ]){
     const rect=document.querySelector?.(selector)?.getBoundingClientRect?.();
     if(!rect||!Number.isFinite(rect.left)||!Number.isFinite(rect.right)||
-       rect.width<130||rect.height<120||rect.left<width*.48||
+       rect.width<130||rect.height<120||rect.left<width*.35||
        rect.left>=width-30||rect.right<width-90)continue;
     right=Math.min(right,Math.floor(rect.left)-14);
   }
@@ -83,7 +83,7 @@ function r3ProgressWatchLayout(){
   if(typeof ResizeObserver!=='function')return;
   const nodes=[
     '#rightsidebar','#sidebar','#textchatcontainer','.rightsidebar',
-    '#floatingtoolbar','#toolbox','#tools','#editingtoolbar','#main-toolbar'
+    '#floatingtoolbar','#toolbox','#tools','#editingtoolbar','#main-toolbar','#toolbar'
   ].map(selector=>document.querySelector?.(selector)).filter(Boolean);
   const previous=R3_PROGRESS.layoutNodes;
   if(nodes.length===previous.length&&
