@@ -1,3 +1,11 @@
+## 2026-10-30 — DM official reader startup race (Firefox v3.10.30 candidate)
+
+- User's DM screenshot after v3.10.29 cleanup fix shows two authorized Journal characters still at 0%, now with the real underlying error: `Official sheet reader did not answer`. The prior close failure was a secondary symptom.
+- Root cause candidate verified in source: the editor fired a one-shot `scan` message immediately after an iframe appeared, before the official sheet reader listener was known to be registered. A late reader would miss that message, producing the 40-second timeout.
+- Editor now waits for a source-matched authenticated `ready` session before sending the first scan, sending bounded idempotent `hello` probes while the iframe initializes. An early ready event is recorded even if the Vue character name is initially empty. A conflicting established sheet name fails closed; owned reader preemption is respected.
+- Diagnostics distinguish a sheet reader that never initialized (check Firefox site access for advanced-sheets.production.roll20preflight.net) from a reader that initialized but did not complete its tab scan. This is a code-level race fix; actual DM Jumpgate acceptance and extension injection still require live validation.
+- Added handshake tests, regenerate userscript, run Firefox/Chrome CI and request signed v3.10.30 after merge.
+
 ## 2026-10-30 — DM-session Journal preload cleanup correction (v3.10.29 candidate)
 
 - User screenshot confirms a DM session with two Journal character sheets at 0%, showing the same private-reader cleanup error. This is the GM-authorized exact-ID Journal path; Player Character Controlled By checks must not be substituted.
