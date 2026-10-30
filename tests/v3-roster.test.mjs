@@ -496,8 +496,7 @@ test('DM private preload waits through a 10-second delayed resource mount',async
   };
   vm.createContext(ctx);
   vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
-  let polls=0;
-  ctx.r3Capture=()=>({stats:{hp:22},coverage:{stats:1,resources:polls>=21?2:0}});
+  ctx.r3Capture=()=>({stats:{hp:22},coverage:{stats:1,resources:ctx.polls>=21?2:0}});
   vm.runInContext('r3Pause=async()=>{globalThis.polls++}',Object.assign(ctx,{polls:0}));
   const success=await vm.runInContext('r3ReaderWaitHydrated(()=>false,true)',ctx);
   assert.equal(success,true);
