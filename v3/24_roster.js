@@ -207,7 +207,7 @@ async function r3RosterPrewarm(){
       const done=Math.min(total,Math.max(prior.done,Number(meta?.completedTabs)||tabs.size));
       R3_ROSTER.tabProgress.set(entry.id,{done,total});
       if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
-    });
+    },true);
     if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
        r3AutoId(candidate)!==entry.id||
