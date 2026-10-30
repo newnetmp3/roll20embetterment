@@ -223,7 +223,7 @@ function r3ReaderChanged(event){
     if(!peer)return;
     try{peer.postMessage(r3Msg('dirty',{session:R3_SESSION,
       name:r3NameFromDocument(document)}),R3_EDITOR);}catch{}
-  },350);
+  },130);
 }
 function r3StartReader(){
   window.addEventListener('message',r3ReaderReceive);
