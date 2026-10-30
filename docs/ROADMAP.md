@@ -1,3 +1,12 @@
+## 2026-10-30 — DM Journal reader handshake (v3.10.30 candidate)
+
+- [x] Avoid one-shot scan before verified official sheet iframe reader readiness.
+- [x] Preserve source/session and character-name authorization and manual sheet ownership arbitration.
+- [x] Separate missing reader initialization from scan execution timeout diagnostics.
+- [x] Add mocked delayed readiness and conflicting identity regressions.
+- [ ] Firefox/Chrome CI, signed Firefox v3.10.30 release, update digest verification.
+- [ ] Live DM 2024 Journal preload of two NPC/PC sheets and confirmation of full-tab progress.
+
 ## 2026-10-30 — DM Journal private-reader cleanup (v3.10.29 candidate)
 
 - [x] Correct verified script-owned wrapper closing and safe handling of already-detached dialogs.
