@@ -9,7 +9,7 @@ const R3_ROSTER={
   lastDiscovery:0,done:0,failed:0,scans:0,source:'none',generation:0,
   maxCandidates:160,maxDeep:160,maxAttempts:2,lastError:'',
   currentId:'',tabProgress:new Map(),errors:new Map(),idleAt:0,
-  modelCollection:null,lastChanged:new Map()
+  modelCollection:null,lastChanged:new Map(),runId:0,journalRoot:null
 };
 function r3RosterIsGm(){
   return window.is_gm===true||window.is_gm===1;
@@ -62,6 +62,28 @@ function r3RosterDiscover(){
   const changed=next.size!==before.size||[...next].some(([id,x])=>
     before.get(id)?.name!==x.name||before.get(id)?.warmed!==x.warmed);
   R3_ROSTER.entries=next;
+  // Revoked, removed or renamed Journal entries cannot leave a readable
+  // cached sheet behind, including an already selected read-only preview.
+  let purged=false;
+  for(const [id,old] of before){
+    if(next.get(id)?.name===old.name)continue;
+    if(R3_TOKEN.snapshots.delete(id))purged=true;
+  }
+  if(purged&&typeof r3TokenSaveCache==='function')r3TokenSaveCache();
+  const previewId=R3_TOKEN.rosterPreviewId;
+  if(previewId&&(!next.has(previewId)||
+      before.get(previewId)?.name!==next.get(previewId)?.name)){
+    R3_TOKEN.rosterPreviewId='';
+    if(!R3_TOKEN.active&&!R3_TOKEN.visibleSheetId){
+      R3_UI.snapshot=null;R3_UI.renderedSnapshot=null;R3_UI.selected='';
+      if(typeof R3_NATIVE==='object'){
+        R3_NATIVE.preview=null;R3_NATIVE.revision++;
+      }
+      if(typeof r3UIStatus==='function')
+        r3UIStatus('Journal character is no longer available or authorized.');
+      if(typeof r3UIRefresh==='function')r3UIRefresh();
+    }
+  }
   // Invalidate pending results for a character that disappears or changes
   // identity in the Journal. Never preserve progress for an old name.
   for(const id of [...R3_ROSTER.attempted.keys()])
@@ -128,10 +150,11 @@ async function r3RosterPrewarm(){
     (R3_ROSTER.attempted.get(x.id)?.attempts||0)<R3_ROSTER.maxAttempts&&
     now-(R3_ROSTER.attempted.get(x.id)?.at||0)>20000);
   if(!entry)return false;
-  const identity=r3RosterAuthorized(entry.id,entry.name);
+  const identity=r3RosterIdentityForPreload(entry.id,entry.name);
   if(!identity)return false;
   if(R3_ROSTER.scans>=R3_ROSTER.maxDeep)return false;
   const generation=R3_ROSTER.generation,game=R3_UI.campaignKey;
+  const runId=++R3_ROSTER.runId;
   R3_ROSTER.running=true;
   const prior=R3_ROSTER.attempted.get(entry.id)||{attempts:0,at:0};
   R3_ROSTER.attempted.set(entry.id,{attempts:prior.attempts+1,at:now,status:'reading'});
@@ -144,7 +167,7 @@ async function r3RosterPrewarm(){
     const open=typeof r3NativeBgEnsure==='function'?
       r3NativeBgEnsure(entry.name,{id:entry.id,name:entry.name,mode:
         r3RosterIsGm()?'dm-roster':'player-roster'}):null;
-    if(!open)return false;
+    if(!open)throw new Error('No verified script-owned Roll20 sheet opener is available');
     candidate=await open;
     if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
@@ -164,6 +187,7 @@ async function r3RosterPrewarm(){
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
        r3AutoId(candidate)!==entry.id||
        r3String(snap?.name,120).toLowerCase()!==entry.name.toLowerCase()||
+       !r3RosterIdentityForPreload(entry.id,entry.name)||
        !r3AutoHasRecognizedData(snap))
       throw new Error('Preload result did not verify source ID, name and actual sheet data');
     R3_TOKEN.snapshots.set(entry.id,{name:entry.name,snapshot:r3InventoryPrune(snap)});
@@ -212,7 +236,7 @@ function r3RosterReset(){
   R3_ROSTER.modelCollection?.off?.('change',r3RosterModelChanged);
   R3_ROSTER.modelCollection?.off?.('add remove',r3RosterCollectionChanged);
   R3_ROSTER.modelCollection=null;R3_ROSTER.lastChanged.clear();
-  R3_ROSTER.generation++;
+  R3_ROSTER.generation++;R3_ROSTER.runId++;
   R3_ROSTER.entries.clear();R3_ROSTER.queue=[];
   R3_ROSTER.attempted.clear();R3_ROSTER.errors.clear();
   R3_ROSTER.tabProgress.clear();R3_ROSTER.currentId='';
