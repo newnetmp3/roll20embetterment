@@ -1,3 +1,12 @@
+## 2026-10-30 — protect native Roll20 controls from the preload progress strip (Firefox v3.10.28 candidate)
+
+- **User reported a regression in signed v3.10.27:** the progress UI covered the full top of the editor, hiding the Chat/Journal tab row on the right and native Roll20 action toolbar on the left.
+- Root cause: `v3/24_progress.js` used fixed `top:0;left:0;right:0` for its shadow-root overlay. It had no map/sidebar awareness. Remove that full-width rule and use a compact 420px maximum-width indicator positioned near the top of the *usable tabletop* instead.
+- The geometry routine conservatively reserves the left toolbar (known DOM selectors and fallback inset) and right Chat/Journal sidebar (existing Firefox safe inset and native sidebar bounding rectangles). It recalculates on preload progress, window resize and observed native sidebar/toolbar size changes; never changes Roll20 page elements. It uses a bounded scrollable Details dropdown.
+- If a narrow viewport contains no safe tabletop gap, suppress the overlay rather than block native controls; preloading and importer/Debug diagnostics continue. Preserve hide-at-clean-100%, errors/Details, DM/Player authority boundaries and all existing native-action logic.
+- Add CSS/geometry regression tests for 1920px, resized sidebar, left action toolbar, narrowed viewport, non-toolbar wide headers and sidebar ResizeObserver, and validate Firefox and Chrome builds before requesting Mozilla-signed v3.10.28.
+- Real Jumpgate visual acceptance remains required, especially resizable right-hand Journal/Chat tabs and vertically docked left toolbar.
+
 ## 2026-10-29 — Roster preload lifecycle hardening (Firefox v3.10.27 candidate)
 
 - Resume from Mozilla-signed v3.10.26. Audit the Journal preload queue, top progress bar and same-document campaign reset rather than adding another parallel importer.
