@@ -9,7 +9,7 @@ if(!['firefox','chrome'].includes(browser))throw new Error('Specify firefox or c
 const root=resolve(import.meta.dirname,'../..');
 const {version}=JSON.parse(readFileSync(join(root,'extension',browser,'package.json'),'utf8'));
 const names=readdirSync(join(root,'v3')).filter(s=>/^\d{2}_.*\.js$/.test(s)).sort();
-const required=['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','23_token.js','24_dm.js','24_player.js','25_auto.js','26_session.js','30_boot.js'];
+const required=['00_capture.js','10_reader.js','20_ui.js','21_native.js','22_hud.js','23_token.js','24_dm.js','24_player.js','24_progress.js','24_roster.js','25_auto.js','26_session.js','30_boot.js'];
 if(names.join('|')!==required.sort().join('|'))
   throw Error('Unexpected v3 modules: review Player/DM/session boundaries before packaging');
 const files=browser==='firefox'?names.flatMap(n=>n==='30_boot.js'?['firefox-turn','firefox-movement','firefox-theme','firefox-debug','firefox-battlefield','firefox-drag','firefox-sheet-visibility',n]:[n]):names;
