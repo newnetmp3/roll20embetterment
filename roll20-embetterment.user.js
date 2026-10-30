@@ -778,9 +778,8 @@ async function r3CollectAllTabs(progress,shouldCancel=()=>false){
   let visited=0;
   const plan=items=>{
     for(const item of items)if(item.key)planned.add(item.key);
-    // 32 is the existing source-reader safety bound.
-    progress?.('Planning',r3Coverage(acc),{totalTabs:Math.min(32,planned.size),
-      completedTabs:visited});
+    // Plan metadata is attached to the next real tab progress event.
+    // Never emit a synthetic tab that confuses existing importer callers.
   };
   const primaryLabel=/^(combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
   const collect=label=>{
@@ -4736,14 +4735,14 @@ function r3ProgressRefresh(){
   if(!host)return;
   const state=r3ProgressState();
   host.hidden=state.complete;
-  if(state.complete){R3_PROGRESS.hidden=true;return;}
-  R3_PROGRESS.hidden=false;
+  R3_PROGRESS.hidden=state.complete;
   const label=root.getElementById('r3-loading-label');
   const percent=root.getElementById('r3-loading-percentage');
   const meter=root.getElementById('r3-loading-meter');
   if(label&&label.textContent!==state.status)label.textContent=state.status;
   if(percent)percent.textContent=state.percent+'%';
   if(meter)meter.value=state.percent;
+  if(state.complete)return;
   const details=root.getElementById('r3-loading-details');
   const summary=details?.querySelector?.('summary');
   if(summary)summary.textContent=state.errors.length?
@@ -5403,7 +5402,7 @@ function r3AutoQueueDirty(candidate){
   const generation=R3_AUTO.generation;
   // Normal edits start a scan after ~400ms. Limit full current-tab reads
   // to once every 2 seconds during rapid typing/slider movement.
-  const ms=Math.max(180,650-(Date.now()-R3_AUTO.lastScan));
+  const ms=Math.max(400,2100-(Date.now()-R3_AUTO.lastScan));
   R3_AUTO.dirtyTimer=setTimeout(()=>{
     R3_AUTO.dirtyTimer=null;
     if(!R3_AUTO.enabled||R3_AUTO.generation!==generation||R3_UI.busy)return;
@@ -5477,7 +5476,7 @@ async function r3AutoTick(eventTriggered=false){
   // Event-triggered current-view checks bypass the periodic 12-second gate,
   // but retain a 2-second minimum between heavier DOM reads. Full-tab
   // traversal remains limited to the established background scheduler.
-  if(now-R3_AUTO.lastScan<(mode==='all'?10000:eventTriggered?650:6000))return;
+  if(now-R3_AUTO.lastScan<(mode==='all'?10000:eventTriggered?2000:12000))return;
   R3_AUTO.running=true;
   const generation=R3_AUTO.generation;
   r3UIRefresh();
