@@ -247,7 +247,10 @@ function r3UIEvent(event){
     }
     r3UIRefresh();r3HudRender();
   }
-  else if(target?.id==='r3-refresh'){r3RosterDiscover?.();r3UIRefresh();}
+  else if(target?.id==='r3-refresh'){
+    if(typeof r3RosterDiscover==='function')r3RosterDiscover();
+    r3UIRefresh();
+  }
   else if(target?.id==='r3-roster-show'){
     const id=R3_UI.root.getElementById('r3-roster-picker')?.value;
     if(id&&typeof r3RosterChoose==='function')r3RosterChoose(id);
