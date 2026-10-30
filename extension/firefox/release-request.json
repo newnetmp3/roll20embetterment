@@ -1,6 +1,6 @@
 {
-  "version": "3.10.28",
+  "version": "3.10.29",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Fix full-width top preload progress overlay obscuring the native Roll20 Chat/Journal tabs and left action toolbar. Constrain the progress and Details to a compact, dynamically measured safe tabletop region, reflow for sidebar/window resizing, and suppress only the overlay if no safe room exists; retain background preloading and clean-100% auto-hide."
+  "reason": "Fix DM Journal private reader cleanup: use the exact owned wrapper, avoid falsely reporting a close failure when no dialog was claimed, and retain the original underlying import error for diagnostics. Preserve manual sheet access and verify by regressions."
 }

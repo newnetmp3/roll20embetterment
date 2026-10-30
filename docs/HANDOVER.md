@@ -1,3 +1,11 @@
+## 2026-10-30 — DM-session Journal preload cleanup correction (v3.10.29 candidate)
+
+- User screenshot confirms a DM session with two Journal character sheets at 0%, showing the same private-reader cleanup error. This is the GM-authorized exact-ID Journal path; Player Character Controlled By checks must not be substituted.
+- The native opener records a verified, script-owned jQuery UI wrapper in `R3_NATIVE_BG.moved`, but preload cleanup previously searched only `dialog.closest('.ui-dialog')` and could miss its close button.
+- Reuse the exact ownership-marked wrapper, with an optional verified jQuery UI close fallback; treat detached owned sessions as already closed, and never close unmarked/manual sheets. Do not report cleanup failure if no dialog was claimed.
+- Preserve the original scan or opener error, rather than overwriting it with a secondary cleanup failure. This will reveal what else prevents DM NPC/PC preloading if present.
+- Add regression tests, run Firefox and Chrome checks, and request a signed v3.10.29 release. Live GM-mode verification is still required.
+
 ## 2026-10-30 — protect native Roll20 controls from the preload progress strip (Firefox v3.10.28 candidate)
 
 - **User reported a regression in signed v3.10.27:** the progress UI covered the full top of the editor, hiding the Chat/Journal tab row on the right and native Roll20 action toolbar on the left.

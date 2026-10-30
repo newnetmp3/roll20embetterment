@@ -4984,15 +4984,34 @@ function r3RosterIdentityForPreload(id,name){
 function r3RosterCloseOwned(id){
   const bg=R3_NATIVE_BG;
   if(bg.characterId!==id||!bg.dialog)return false;
-  const wrapper=bg.dialog.closest?.('.ui-dialog');
-  const button=wrapper?.querySelector?.('.ui-dialog-titlebar-close');
-  const ours=bg.dialog.hasAttribute?.('data-r3-private-reader')||
+  const dialog=bg.dialog,wrapper=bg.moved||
+    dialog.closest?.('.ui-dialog')||null;
+  // Ownership is established by the native opener's exact-ID, newly
+  // created dialog claim. Never close a manually opened Roll20 sheet.
+  const ours=dialog.hasAttribute?.('data-r3-private-reader')||
     wrapper?.hasAttribute?.('data-r3-private-reader');
-  // We only click a close control inside a specifically marked, script
-  // owned dialog. Do not close a manually opened Roll20 sheet.
-  if(!ours||!button||typeof button.click!=='function')return false;
+  if(!ours)return false;
+  // Roll20 may close an owned reader itself before the scan settles.
+  if(dialog.isConnected===false||wrapper?.isConnected===false){
+    r3NativeBgRestore();return true;
+  }
+  // The close button belongs to the jQuery UI wrapper, not necessarily
+  // the .characterdialog descendant. Prefer the opener's saved wrapper.
+  const button=wrapper?.querySelector?.('.ui-dialog-titlebar-close')||
+    dialog.closest?.('.ui-dialog')?.querySelector?.('.ui-dialog-titlebar-close');
   try{
-    button.click();
+    if(button&&typeof button.click==='function')button.click();
+    else{
+      // Some Roll20 skins omit the titlebar close icon but retain the
+      // jQuery UI dialog close API. Restrict this fallback to our own
+      // marked, exact-ID dialog; never act on an unrelated visible sheet.
+      const jq=window.jQuery;
+      if(typeof jq!=='function'||typeof jq.fn?.dialog!=='function')
+        return false;
+      const instance=jq(dialog).dialog('instance');
+      if(!instance)return false;
+      jq(dialog).dialog('close');
+    }
     r3NativeBgRestore();
     return true;
   }catch{return false;}
@@ -5089,10 +5108,15 @@ async function r3RosterPrewarm(){
     // same character ID. Never close its reader or unlock its queue.
     if(generation===R3_ROSTER.generation&&runId===R3_ROSTER.runId&&
        game===R3_UI.campaignKey){
-      if(R3_NATIVE_BG.characterId===entry.id&&
+      if(R3_NATIVE_BG.characterId===entry.id&&R3_NATIVE_BG.dialog&&
           !r3RosterCloseOwned(entry.id)){
-        R3_ROSTER.lastError='Owned reader cannot be closed safely; bounded session retained';
-        R3_ROSTER.errors.set(entry.id,entry.name+': '+R3_ROSTER.lastError);
+        const cleanup='Owned private reader remains open: Roll20 exposed no verified close control. Use Show original sheet in Debug to restore it.';
+        // Preserve the *first* importer error: cleanup must never mask why
+        // the official sheet was not imported (as in the 0-of-2 case).
+        R3_ROSTER.lastError=R3_ROSTER.errors.get(entry.id)||
+          entry.name+': '+cleanup;
+        if(!R3_ROSTER.errors.has(entry.id))
+          R3_ROSTER.errors.set(entry.id,entry.name+': '+cleanup);
       }
       R3_ROSTER.running=false;R3_ROSTER.currentId='';
       if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();

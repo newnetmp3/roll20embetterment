@@ -241,3 +241,7 @@ This reliability update revalidates Journal character access before accepting an
 ## Firefox v3.10.28 — tabletop-safe progress placement (candidate)
 
 The preload indicator is no longer a full-window header. It uses actual Roll20 toolbar/sidebar geometry when available, conservatively reserves the controls when they are not yet mounted, caps the bar at 420px, and repositions on window/sidebar resize. The Details dropdown stays inside this bounded strip. If the viewport is too crowded to display it without overlapping native controls, only the overlay is suppressed; background importing continues and diagnostics remain available through the importer/Debug window. Clean 100% completion still automatically hides it. Real Roll20 layout acceptance is pending.
+
+## Firefox v3.10.29 — DM private reader cleanup (candidate)
+
+Fixes incorrect owned-dialog close handling during the DM Journal preload queue. Only script-owned, exact-ID verified Roll20 dialogs may be closed; manual character sheets remain untouched. The original import error is preserved in the progress Details instead of being replaced by a generic close failure. Real DM live verification is pending.
