@@ -346,3 +346,25 @@ test('a full-width Roll20 header is not mistaken for a native left toolbar',()=>
   assert.ok(b.left>=124);
   assert.ok(b.left+b.width<=1600-330-14);
 });
+
+test('native sidebar ResizeObserver reflows strip without a manual refresh',()=>{
+  const h=fixture(true);h.api.discover();
+  let chatLeft=1180,notify=null,observed=[];
+  const sidebar={getBoundingClientRect:()=>({
+    left:chatLeft,right:1600,width:1600-chatLeft,height:840})};
+  h.ctx.document.querySelector=selector=>selector==='#journalfolderroot'?h.journal:
+    selector==='#rightsidebar'?sidebar:null;
+  h.ctx.ResizeObserver=class {
+    constructor(callback){notify=callback;}
+    observe(node){observed.push(node);}
+    disconnect(){observed=[];}
+  };
+  h.api.refresh();
+  const host=h.nodes.get('r3-loading-strip');
+  const oldLeft=Number.parseInt(host.style.left);
+  assert.equal(observed[0],sidebar);
+  chatLeft=740;
+  notify();
+  assert.ok(Number.parseInt(host.style.left)<oldLeft);
+  assert.ok(Number.parseInt(host.style.left)+Number.parseInt(host.style.width)<=726);
+});
