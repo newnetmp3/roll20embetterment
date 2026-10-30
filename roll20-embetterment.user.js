@@ -779,7 +779,7 @@ async function r3CollectAllTabs(progress,shouldCancel=()=>false){
   const plan=items=>{
     for(const item of items)if(item.key)planned.add(item.key);
     // 32 is the existing source-reader safety bound.
-    progress?.('Planning',null,{totalTabs:Math.min(32,planned.size),
+    progress?.('Planning',r3Coverage(acc),{totalTabs:Math.min(32,planned.size),
       completedTabs:visited});
   };
   const primaryLabel=/^(combat|spells|inventory|features\s*(?:&|and)\s*traits|skills\s*(?:&|and)\s*tools|notes|about)$/i;
@@ -960,7 +960,7 @@ function r3ReaderChanged(event){
     if(!peer)return;
     try{peer.postMessage(r3Msg('dirty',{session:R3_SESSION,
       name:r3NameFromDocument(document)}),R3_EDITOR);}catch{}
-  },130);
+  },350);
 }
 function r3StartReader(){
   window.addEventListener('message',r3ReaderReceive);
@@ -1257,8 +1257,8 @@ function r3UIRefresh(){
         (R3_TOKEN.rosterPreviewId===x.id?' selected':'')+'>'+
         r3Escape(x.name)+' · '+r3Escape(x.kind)+(x.ready?' · Ready':' · Loading')+
         '</option>').join('');
-    if(rosterSelect.dataset.lastChoices!==options){
-      rosterSelect.innerHTML=options;rosterSelect.dataset.lastChoices=options;
+    if(R3_UI.renderedRosterChoices!==options){
+      rosterSelect.innerHTML=options;R3_UI.renderedRosterChoices=options;
     }
     if(rosterSelect.value!==R3_TOKEN.rosterPreviewId)
       rosterSelect.value=R3_TOKEN.rosterPreviewId||'';
