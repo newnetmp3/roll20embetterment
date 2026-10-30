@@ -890,7 +890,7 @@ async function r3ReaderWaitHydrated(shouldCancel=()=>false){
 }
 async function r3ReaderScan(mode,sendProgress,shouldCancel){
   if(mode==='all'){
-    await r3ReaderWaitHydrated(shouldCancel);
+    if(r3SheetContext())await r3ReaderWaitHydrated(shouldCancel);
     return r3CollectAllTabs(sendProgress,shouldCancel);
   }
   if(mode==='hp')return r3CaptureHealth(document.body);
