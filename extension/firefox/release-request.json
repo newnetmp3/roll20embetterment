@@ -1,6 +1,6 @@
 {
-  "version": "3.10.27",
+  "version": "3.10.28",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Harden Journal DM/Player preloading against permission revocation, late Journal mounts and stale cross-campaign reader responses; preserve valid cached sheets during sidebar unmounts, surface missing official openers in Details, and restore script-owned reader state on campaign change with regression tests."
+  "reason": "Fix full-width top preload progress overlay obscuring the native Roll20 Chat/Journal tabs and left action toolbar. Constrain the progress and Details to a compact, dynamically measured safe tabletop region, reflow for sidebar/window resizing, and suppress only the overlay if no safe room exists; retain background preloading and clean-100% auto-hide."
 }

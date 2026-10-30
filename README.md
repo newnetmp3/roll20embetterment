@@ -6,18 +6,18 @@ Player-focused D&D 2024 combat HUD and read-only Roll20 sheet companion. R20eb u
 
 | Distribution | Status |
 | --- | --- |
-| **Firefox / Floorp** | **v3.10.26** Mozilla-signed and published; v3.10.27 reliability fixes under validation |
+| **Firefox / Floorp** | **v3.10.27** Mozilla-signed and published; v3.10.28 tabletop-safe progress under validation |
 | **Chrome / Chromium** | **v3.4.0**; independently versioned and not feature-parity guaranteed |
 | **Optional userscript** | **v3.4.0** metadata; built from `v3/` independently of Firefox releases |
 
-- [Firefox v3.10.26 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.26/r20eb-firefox-v3.10.26.xpi)
+- [Firefox v3.10.27 signed XPI](https://github.com/newnetmp3/roll20embetterment/releases/download/firefox-v3.10.27/r20eb-firefox-v3.10.27.xpi)
 - [Firefox updates.json](extension/firefox/updates.json)
 - [Firefox installation and signing guide](extension/firefox/README.md)
 - [GitHub Actions](https://github.com/newnetmp3/roll20embetterment/actions)
 
 Disable any previous R20eb userscript or duplicate extension when using the signed Firefox add-on. Keep the native Roll20 chat panel accessible when running actions; R20eb does not overwrite an unsent chat draft.
 
-Firefox v3.10.26 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
+Firefox v3.10.27 is published as Mozilla-signed and referenced by the update feed. The release asset digest matches the feed hash. Live Roll20 gameplay acceptance remains separate.
 
 ## Playing as a DM vs Player Character — source-aware modes (v3.10.25 signed)
 
@@ -33,7 +33,7 @@ R20eb silently indexes the current Roll20 Journal without switching your Journal
 
 Only one verified private sheet is scanned at a time, with a hard cap, retries and explicit failure details. Cached entries can be selected directly from **Character → Journal characters** in the HUD Profile cascade or from the importer panel. This is a read-only preview: clicking an attack requires switching to a verified controlled token; unsupported GM native calls are not fabricated.
 
-A narrow loading strip at the very top shows percentage based on **discovered sheets and planned/visited sheet tabs**, plus a Details dropdown with pending or failed entries. It disappears automatically after **100% successful completion with no errors** and returns when new/changed sheets require work. HP refresh uses local 500ms source checks, while heavier full-tab requests remain gated so Roll20 stays responsive. Manual sheets and active imports take precedence. Only mounted official fields can be imported, and some Journal entries may be inaccessible under Roll20's API: failures remain visible rather than being counted as success.
+A compact loading strip near the top of the usable tabletop (never across the left Roll20 toolbar or right Chat/Journal sidebar) shows percentage based on **discovered sheets and planned/visited sheet tabs**, plus a Details dropdown with pending or failed entries. It disappears automatically after **100% successful completion with no errors** and returns when new/changed sheets require work. HP refresh uses local 500ms source checks, while heavier full-tab requests remain gated so Roll20 stays responsive. Manual sheets and active imports take precedence. Only mounted official fields can be imported, and some Journal entries may be inaccessible under Roll20's API: failures remain visible rather than being counted as success.
 
 ## Native-action and UI milestone (PR #110 — released in Firefox v3.10.0)
 
@@ -237,3 +237,7 @@ The importer Diagnostics view includes a bounded, read-only interactive control 
 ## Firefox v3.10.27 — preload lifecycle hardening (candidate)
 
 This reliability update revalidates Journal character access before accepting an asynchronous preload; revoked or removed previews and their cache entries are cleared. It preserves previously verified Journal entries when the sidebar temporarily unmounts, reconnects the observer on late Journal mounting, and protects campaign switches against late background reader responses. The progress Details view now reports an unavailable private reader. These changes are subject to Firefox and Chrome CI and live DM/Player testing; candidate status does not imply a Mozilla-signed release.
+
+## Firefox v3.10.28 — tabletop-safe progress placement (candidate)
+
+The preload indicator is no longer a full-window header. It uses actual Roll20 toolbar/sidebar geometry when available, conservatively reserves the controls when they are not yet mounted, caps the bar at 420px, and repositions on window/sidebar resize. The Details dropdown stays inside this bounded strip. If the viewport is too crowded to display it without overlapping native controls, only the overlay is suppressed; background importing continues and diagnostics remain available through the importer/Debug window. Clean 100% completion still automatically hides it. Real Roll20 layout acceptance is pending.

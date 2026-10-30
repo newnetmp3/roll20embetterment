@@ -1,3 +1,12 @@
+## 2026-10-30 — safe tabletop preload progress layout (Firefox v3.10.28 candidate)
+
+- [x] Replace fixed full-viewport top bar with compact indicator capped at 420px within Roll20's usable tabletop.
+- [x] Exclude left Roll20 toolbar and right Journal/Chat sidebar via geometry, with conservative fallbacks and fail-closed narrow-window placement.
+- [x] Update placement automatically on browser and native sidebar/toolbar resize; constrain Details popup width and height.
+- [x] Add simulated geometry/CSS regressions without modifying any native Roll20 UI.
+- [ ] Verify Firefox/Chrome CI, merge, publish Mozilla-signed v3.10.28 with verified update hash.
+- [ ] Live visual verification in Floorp/Roll20 with expanded/collapsed Journal, toolbars and different monitor widths.
+
 ## 2026-10-29 — Journal preload lifecycle safeguards (Firefox v3.10.27 candidate)
 
 - [x] Revalidate exact Journal ID/name and current Controlled By or explicit DM authority at completion of private sheet reads, not just at enqueue time.

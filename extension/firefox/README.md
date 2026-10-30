@@ -1,7 +1,7 @@
 # R20eb — Firefox/Floorp installation and releases
 
-**Last verified Mozilla-signed Firefox version:** v3.10.25.  
-**Current candidate:** v3.10.26 Journal preloading, local refresh and top progress.  
+**Last verified Mozilla-signed Firefox version:** v3.10.27.  
+**Current candidate:** v3.10.28 compact tabletop-safe preload progress.  
 **Chrome and optional userscript:** independently versioned v3.4.0; Firefox-only UI not guaranteed in Chrome.
 
 ## DM and Player Character modes
@@ -16,7 +16,7 @@ See [architecture](../../docs/ARCHITECTURE.md) and [audit](../../docs/CODEBASE_R
 
 R20eb reads exact-ID character entries from the existing Journal DOM without switching the Journal tab. DM rows may be preloaded through Roll20's verified opener with explicit GM role; player rows require Controlled By verification. It uses only script-owned private dialogs and does not hide or navigate manually opened original sheets. If Roll20 has not hydrated the character collection, the DM can still use an exact current-Journal entry; player authorization does not gain this fallback.
 
-A narrow progress strip appears at the top while scanning, counting actually discovered sheets and visited official tabs. It **hides automatically at error-free 100%**; any failures stay visible under Details. The Profile cascade and importer can show cached Journal snapshots as read-only previews, not as token control or authorization for native rolls.
+A compact progress strip appears near the top of the usable tabletop while scanning, counting actually discovered sheets and visited official tabs. It reserves Roll20's left action toolbar and right Chat/Journal sidebar, repositions on size changes, and suppresses itself when no safe tabletop width exists; native Roll20 controls are never intentionally covered. It **hides automatically at error-free 100%**; any failures stay visible under Details. The Profile cascade and importer can show cached Journal snapshots as read-only previews, not as token control or authorization for native rolls.
 
 ## Install
 
@@ -33,6 +33,7 @@ A passed CI build does **not** mean Mozilla-signed publication or live Roll20 fu
 npm install
 npm run build:firefox
 npm run check:firefox
+npm run check:chrome
 ```
 
 The build packages `v3/` plus Firefox-specific modules from `extension/firefox/` into `dist/firefox/`. Tests validate native-action safety and package consistency, but cannot exercise a real official Roll20 2024 sheet or its private Jumpgate runtime. A generated optional userscript is maintained with `npm run build`; it stays independently versioned.
