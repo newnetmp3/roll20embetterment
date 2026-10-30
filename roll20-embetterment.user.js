@@ -6,8 +6,7 @@
 // @author       roll20 Embetterment contributors
 // @match        https://app.roll20.net/editor/*
 // @match        https://app.roll20.net/editor
-// @match        https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/*
-// @match        https://advanced-sheets.production.roll20preflight.net/*dnd2024byroll20/*
+// @match        https://advanced-sheets.production.roll20preflight.net/*
 // @grant        none
 // @run-at       document-idle
 // @updateURL    https://raw.githubusercontent.com/newnetmp3/roll20embetterment/main/roll20-embetterment.user.js
@@ -1070,19 +1069,53 @@ function r3Listen(event){
   else if(!data.snapshot||data.snapshot.schema!==3)pending.reject(new Error('Malformed sheet snapshot'));
   else pending.resolve(data.snapshot);
 }
-function r3SendScan(candidate,mode,onProgress=null){
+// A newly opened Roll20 iframe can exist before the content-script reader
+// has registered its message listener. Never fire a one-shot 'scan' into an
+// unannounced window: that message is lost and causes a 40-second timeout.
+async function r3WaitScanReader(candidate){
+  const source=candidate?.window;
+  if(!source)throw new Error('Official sheet has no active iframe window.');
+  const initiallyOwned=typeof r3NativeIsOwned==='function'&&r3NativeIsOwned(candidate);
+  for(let attempt=0;attempt<48;attempt++){
+    if(initiallyOwned&&(
+      (typeof r3SheetAllowsBackground==='function'&&!r3SheetAllowsBackground())||
+      (typeof r3NativeIsOwned==='function'&&!r3NativeIsOwned(candidate))))
+      throw new Error('Private reader was released for a manually opened Roll20 sheet.');
+    const ready=R3_NATIVE.readers.get(source);
+    if(ready?.session&&/^[\w.:-]{6,100}$/.test(ready.session)){
+      // The sheet's authenticated reader may initially announce a generic
+      // title before Vue mounts. Explicit conflicting names are not accepted.
+      const name=r3String(ready.name,120);
+      const expected=r3String(candidate.name,120);
+      const generic=value=>!value||/^(?:unnamed sheet|official sheet popout|2024 character sheet)/i.test(value);
+      if(!generic(name)&&!generic(expected)&&name.toLowerCase()!==expected.toLowerCase())
+        throw new Error('Official sheet reader responded with a different character name.');
+      return;
+    }
+    // The reader may finish booting after its initial ready broadcast.
+    // A hello is idempotent and never starts a scan or modifies a sheet.
+    try{source.postMessage(r3Msg('hello'),R3_ORIGIN);}catch{}
+    await r3Pause(250);
+  }
+  throw new Error('Official sheet reader never initialized in this iframe. Check that the signed R20eb extension is enabled for advanced-sheets.production.roll20preflight.net, then reload the Roll20 editor and sheet.');
+}
+function r3SendScan(candidate,mode,onProgress=null,requireReady=false){
   if(!candidate?.window)return Promise.reject(new Error('No matching official 2024 iframe or popout'));
   if(!candidate.visible)return Promise.reject(new Error('Sheet iframe is hidden. Open the character sheet in Roll20 first.'));
-  return new Promise((resolve,reject)=>{
+  const start=()=>new Promise((resolve,reject)=>{
     const id='r3-'+R3_SESSION.replace(/[^a-z0-9.-]/gi,'').slice(0,40)+'-'+(++r3Counter);
     const timeout=setTimeout(()=>{R3_PENDING.delete(id);reject(new Error(
-      'Official sheet reader did not answer. Ensure the new userscript is active on the advanced-sheets.production.roll20preflight.net domain and reload the character sheet.'));},
+      'Official sheet reader initialized, but the '+mode+' scan did not finish. Inspect the Roll20 sheet tab and reader diagnostics.'));},
       mode==='all'?40000:mode==='hp'?2500:12000);
     R3_PENDING.set(id,{resolve,reject,window:candidate.window,timeout,mode,
       onProgress:typeof onProgress==='function'?onProgress:null});
     try{candidate.window.postMessage(r3Msg('scan',{id,mode}),R3_ORIGIN);}
     catch(e){R3_PENDING.delete(id);clearTimeout(timeout);reject(e);}
   });
+  // Only script-owned Journal preloads need to await a fresh reader
+  // handshake. Preserve the established immediate manual-sheet/UI read
+  // semantics; never move or navigate a manually opened Roll20 dialog.
+  return requireReady?r3WaitScanReader(candidate).then(start):start();
 }
 function r3CancelOwnedScans(){
   for(const [id,pending] of R3_PENDING){
@@ -2717,7 +2750,13 @@ function r3NativeReaderAnnounce(event,data,candidate){
   if(!candidate||typeof data.session!=='string'||
       !/^[\w.:-]{6,100}$/.test(data.session))return;
   const name=r3String(data.name,120);
-  if(name)R3_NATIVE.readers.set(event.source,{name,session:data.session});
+  // On first mount the authenticated official Vue reader may not know its
+  // character name yet. Record the source/session handshake regardless; a
+  // later ready announcement updates the name after Vue hydrates.
+  const previous=R3_NATIVE.readers.get(event.source);
+  R3_NATIVE.readers.set(event.source,{
+    name:name||previous?.name||'',session:data.session
+  });
 }
 async function r3NativeWaitReader(candidate,characterName,isCurrent=()=>true){
   if(!candidate?.window)throw new Error('No official character sheet reader exists.');
@@ -5062,7 +5101,7 @@ async function r3RosterPrewarm(){
       const done=Math.min(total,Math.max(prior.done,Number(meta?.completedTabs)||tabs.size));
       R3_ROSTER.tabProgress.set(entry.id,{done,total});
       if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
-    });
+    },true);
     if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
        game!==R3_UI.campaignKey||!r3NativeIsOwned(candidate)||
        r3AutoId(candidate)!==entry.id||

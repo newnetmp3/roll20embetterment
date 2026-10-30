@@ -1,6 +1,6 @@
 {
-  "version": "3.10.29",
+  "version": "3.10.30",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Fix DM Journal private reader cleanup: use the exact owned wrapper, avoid falsely reporting a close failure when no dialog was claimed, and retain the original underlying import error for diagnostics. Preserve manual sheet access and verify by regressions."
+  "reason": "DM Journal 0/2: wait for authenticated official advanced-sheets iframe ready handshake before starting all-tab scans, preserve source identity checks, and distinguish reader-not-injected from later scan timeout."
 }

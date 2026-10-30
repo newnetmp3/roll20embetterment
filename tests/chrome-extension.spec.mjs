@@ -17,7 +17,7 @@ function pack(browser){
 test('Chrome MV3 use MAIN world and match only Roll20 editor/official 2024 sheet',()=>{
   const expected=[
     'https://app.roll20.net/editor*',
-    'https://advanced-sheets.production.roll20preflight.net/*dnd2024byroll20/*'
+    'https://advanced-sheets.production.roll20preflight.net/*'
   ];
   for(const browser of ['chrome']){
     const {manifest:m,popup}=pack(browser);
