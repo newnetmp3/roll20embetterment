@@ -156,8 +156,8 @@ function r3UIRefresh(){
         (R3_TOKEN.rosterPreviewId===x.id?' selected':'')+'>'+
         r3Escape(x.name)+' · '+r3Escape(x.kind)+(x.ready?' · Ready':' · Loading')+
         '</option>').join('');
-    if(rosterSelect.dataset.lastChoices!==options){
-      rosterSelect.innerHTML=options;rosterSelect.dataset.lastChoices=options;
+    if(R3_UI.renderedRosterChoices!==options){
+      rosterSelect.innerHTML=options;R3_UI.renderedRosterChoices=options;
     }
     if(rosterSelect.value!==R3_TOKEN.rosterPreviewId)
       rosterSelect.value=R3_TOKEN.rosterPreviewId||'';
