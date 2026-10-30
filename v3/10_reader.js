@@ -137,8 +137,26 @@ function r3CurrentTabLabel(){
   const active=r3Tabs().filter(r3Active);
   return active.map(r3TabLabel).find(name=>main.test(name))||'Current view';
 }
+// Roll20's 2024 Vue iframe may announce ready before its character fields
+// have mounted. Wait briefly for actual source-observed values, not simply
+// a successful postMessage or an arbitrary page-ready event.
+async function r3ReaderWaitHydrated(shouldCancel=()=>false){
+  for(let i=0;i<24;i++){
+    if(shouldCancel())throw new Error('Private reader cancelled while Vue loaded');
+    const snapshot=r3Capture(document.body,r3CurrentTabLabel());
+    const populated=typeof r3AutoHasRecognizedData==='function'?
+      r3AutoHasRecognizedData(snapshot):
+      Object.keys(snapshot.stats||{}).length>0;
+    if(populated)return true;
+    await r3Pause(250);
+  }
+  return false;
+}
 async function r3ReaderScan(mode,sendProgress,shouldCancel){
-  if(mode==='all')return r3CollectAllTabs(sendProgress,shouldCancel);
+  if(mode==='all'){
+    await r3ReaderWaitHydrated(shouldCancel);
+    return r3CollectAllTabs(sendProgress,shouldCancel);
+  }
   if(mode==='hp')return r3CaptureHealth(document.body);
   return r3Capture(document.body,r3CurrentTabLabel());
 }
