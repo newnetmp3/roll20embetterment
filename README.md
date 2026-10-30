@@ -253,3 +253,7 @@ A newly opened Journal iframe may appear before its official sheet reader script
 ## Firefox v3.10.31 — DM preload validation (candidate)
 
 Background Journal preload waits briefly for actual Vue sheet values before scanning and reports which verification failed rather than the generic ID/name/data error. The bar may report partial tab progress even when zero sheets successfully import. No empty or incorrectly identified snapshot is cached.
+
+## Firefox v3.10.32 — delayed DM sheet resources (candidate)
+
+Some Roll20 DM sessions may require roughly ten seconds before all official sheet resources mount. Private Journal preloads now reserve a 12-second initial loading window, wait for stable observed data (up to approximately 26 seconds), and report the waiting phase separately from actual tab progress. Manually opened sheet reads remain fast, with cancellation and exact-character authorization unchanged. This addresses timing, not the availability or permissions of premium-only content. Live DM acceptance is still required.
