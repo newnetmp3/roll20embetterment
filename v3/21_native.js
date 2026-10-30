@@ -790,6 +790,11 @@ async function r3NativeReaderHandle(peer,data){
 const R3_NATIVE_BG={characterId:'',name:'',dialog:null,frame:null,moved:null,
   original:null,dialogOriginal:null,overlay:null,overlayOriginal:null,preOverlays:null,opening:null,sessions:new Map(),abortEpoch:0};
 function r3NativeBgResolve(name){
+  // A Journal roster preview is informational, even if another same-name
+  // controlled token happens to remain selected behind the HUD. All native
+  // actions still require switching to that verified Player Character.
+  if(R3_TOKEN.rosterPreviewId)
+    return {reason:'Journal preview is read-only. Select a verified controlled token before sending native Roll20 actions.'};
   const wanted=r3String(name,120).trim().toLowerCase();
   if(!wanted)return {reason:'No imported character name is available in the HUD.'};
   const chars=r3TokenCampaign()?.characters;
