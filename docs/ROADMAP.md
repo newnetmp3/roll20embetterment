@@ -1,3 +1,13 @@
+## 2026-10-29 — Journal preload lifecycle safeguards (Firefox v3.10.27 candidate)
+
+- [x] Revalidate exact Journal ID/name and current Controlled By or explicit DM authority at completion of private sheet reads, not just at enqueue time.
+- [x] Revoke removed/renamed/inaccessible Journal preview and cached snapshot without deleting verified registry entries during temporary sidebar unmount.
+- [x] Guard preload cleanup and errors by campaign generation and scan run ID; restore only script-owned sessions on campaign transitions.
+- [x] Reconnect Journal DOM observer when its root appears late or is replaced, and report missing official opener in Details.
+- [x] Add focused tests covering authorization revocation, async cancellation, late Journal, and missing opener.
+- [ ] Green branch and main Firefox/Chrome validation, then Firefox v3.10.27 Mozilla signing and update-feed SHA-256 verification.
+- [ ] Live DM/Player Jumpgate acceptance of private reader ownership, instant local updates and native action mappings.
+
 ## 2026-10-29 — fast Journal preloading and loading UX (Firefox v3.10.26 candidate)
 
 - [x] Build exact-ID Journal registry from live DOM without activating Journal tab.
