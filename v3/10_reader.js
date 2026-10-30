@@ -156,8 +156,8 @@ async function r3ReaderWaitHydrated(shouldCancel=()=>false,privatePreload=false)
   // The first script-owned Journal read can be delayed by Roll20's
   // account/resource loading phase. A ready message only verifies the
   // message listener, not that the Vue sheet's values are populated.
-  const minimumSamples=privatePreload?48:0; // 12 seconds at 250ms
-  const maxSamples=104; // bounded ~26 seconds, not indefinite waiting
+  const minimumSamples=privatePreload?24:0; // 12 seconds at 500ms
+  const maxSamples=52; // bounded ~26 seconds, not indefinite waiting
   let stable=0,previous='';
   for(let i=0;i<maxSamples;i++){
     if(shouldCancel())throw new Error('Private reader cancelled while Roll20 resources loaded');
@@ -169,8 +169,8 @@ async function r3ReaderWaitHydrated(shouldCancel=()=>false,privatePreload=false)
       stats:Object.keys(snapshot.stats||{}).length}):'';
     stable=populated&&signature===previous?stable+1:0;
     previous=signature;
-    if(populated&&i>=minimumSamples&&stable>=3&&!r3ReaderCountdownActive())return true;
-    await r3Pause(250);
+    if(populated&&i>=minimumSamples&&stable>=2&&!r3ReaderCountdownActive())return true;
+    await r3Pause(500);
   }
   throw new Error('Official Roll20 sheet has not finished loading character resources after 26 seconds; no unverified data was imported.');
 }
