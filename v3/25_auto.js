@@ -373,7 +373,7 @@ function r3AutoQueueDirty(candidate){
   const generation=R3_AUTO.generation;
   // Normal edits start a scan after ~400ms. Limit full current-tab reads
   // to once every 2 seconds during rapid typing/slider movement.
-  const ms=Math.max(400,2100-(Date.now()-R3_AUTO.lastScan));
+  const ms=Math.max(180,650-(Date.now()-R3_AUTO.lastScan));
   R3_AUTO.dirtyTimer=setTimeout(()=>{
     R3_AUTO.dirtyTimer=null;
     if(!R3_AUTO.enabled||R3_AUTO.generation!==generation||R3_UI.busy)return;
@@ -447,7 +447,7 @@ async function r3AutoTick(eventTriggered=false){
   // Event-triggered current-view checks bypass the periodic 12-second gate,
   // but retain a 2-second minimum between heavier DOM reads. Full-tab
   // traversal remains limited to the established background scheduler.
-  if(now-R3_AUTO.lastScan<(mode==='all'?10000:eventTriggered?2000:12000))return;
+  if(now-R3_AUTO.lastScan<(mode==='all'?10000:eventTriggered?650:6000))return;
   R3_AUTO.running=true;
   const generation=R3_AUTO.generation;
   r3UIRefresh();
@@ -590,7 +590,7 @@ function r3StartAuto(){
   r3AutoLoad();
   r3AutoDisplay();
   if(R3_AUTO.timer===null)R3_AUTO.timer=setInterval(()=>{r3AutoTick();},3000);
-  if(R3_AUTO.healthTimer===null)R3_AUTO.healthTimer=setInterval(()=>{r3AutoHealthTick();},1000);
+  if(R3_AUTO.healthTimer===null)R3_AUTO.healthTimer=setInterval(()=>{r3AutoHealthTick();},500);
   if(R3_AUTO.enabled)setTimeout(()=>{r3AutoTick();},180);
 }
 
