@@ -456,3 +456,21 @@ test('official reader handshake rejects contradictory character names',async()=>
     /different character name/);
   assert.equal(messages.some(m=>m.type==='scan'),false);
 });
+
+test('DM preload reports empty official sheet data rather than generic identity failure',async()=>{
+  const h=fixture(true);h.api.discover();h.api.roster.active=true;
+  h.ctx.r3NativeBgEnsure=async(name,request)=>({id:request.id,window:{},visible:true,type:'iframe'});
+  h.ctx.r3SendScan=async()=>({schema:3,name:'Example NPC',stats:{},
+    diagnostics:{tabs:['Current view','Combat']}});
+  assert.equal(await h.api.prewarm(),false);
+  assert.match(h.api.roster.errors.get('npc-one'),/no recognizable character values/);
+  assert.match(h.api.roster.errors.get('npc-one'),/Current view/);
+});
+test('DM preload identifies document-title mismatch without accepting another character',async()=>{
+  const h=fixture(true);h.api.discover();h.api.roster.active=true;
+  h.ctx.r3NativeBgEnsure=async(name,request)=>({id:request.id,window:{},visible:true,type:'iframe'});
+  h.ctx.r3SendScan=async()=>({schema:3,name:'Roll20 editor',stats:{hp:30}});
+  assert.equal(await h.api.prewarm(),false);
+  assert.match(h.api.roster.errors.get('npc-one'),/identity mismatch/);
+  assert.equal(h.ctx.R3_TOKEN.snapshots.size,0);
+});
