@@ -19,6 +19,7 @@ function r3TokenCheckCampaign(){
   const current=r3StorageKey();
   if(!R3_UI.campaignKey){R3_UI.campaignKey=current;return false;}
   if(R3_UI.campaignKey===current)return false;
+  if(typeof r3RosterReset==='function')r3RosterReset();
   if(typeof r3AutoRestoreDialog==='function')r3AutoRestoreDialog();
   if(typeof R3_AUTO==='object'){
     R3_AUTO.generation++;R3_AUTO.enabled=false;R3_AUTO.name='';
@@ -54,6 +55,8 @@ function r3TokenCheckCampaign(){
   if(typeof r3UIStatus==='function')
     r3UIStatus('Campaign changed. Waiting for a selected token or visible official character sheet.');
   if(typeof r3UIRefresh==='function')r3UIRefresh();
+  if(typeof r3RosterDiscover==='function')r3RosterDiscover();
+  if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
   return true;
 }
 function r3TokenPoll(){
