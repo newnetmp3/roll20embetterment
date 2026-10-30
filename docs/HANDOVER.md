@@ -1,3 +1,12 @@
+## 2026-10-29 — Roster preload lifecycle hardening (Firefox v3.10.27 candidate)
+
+- Resume from Mozilla-signed v3.10.26. Audit the Journal preload queue, top progress bar and same-document campaign reset rather than adding another parallel importer.
+- When a Journal row is removed/renamed or a player loses Controlled By permission, evict the old cached snapshot and invalidate an explicitly selected read-only Journal preview. Recheck exact Journal ID/name and current authorization **after** the asynchronous official read, before caching any result. Preserve verified rows when Roll20 temporarily unmounts its Journal sidebar; those retained rows still undergo live model-permission checks.
+- Preload attempts carry a generation-scoped run ID. Old responses and cleanup after a game switch cannot write errors or HP into the new campaign, release a newer queue lock, or close a newer private sheet with the same character ID. Report unavailable official private opener as a Details error instead of silently consuming an attempt.
+- Reconnect the local MutationObserver when Roll20 mounts or replaces `#journalfolderroot` after startup; disconnect old observers on reset. The campaign coordinator now restores script-owned private sheet state and invalidates pending openers before clearing cached session handles; never acts on a user-opened sheet.
+- Add synthetic regressions for authorization loss, temporary Journal unmount, permission revocation during a read, old-campaign request cancellation, unavailable opener and late Journal mounting. Preserve 500ms HP polling and previously intentional full-tab throttles. Run Firefox/Chrome CI, compare regenerated userscript, and request Mozilla v3.10.27 signing only after green validation.
+- **Acceptance remains:** real Roll20 GM and player sessions, Vue tab mounting, owned reader cleanup and native action parity need live verification; synthetic tests cannot prove browser behavior.
+
 ## 2026-10-29 — Journal roster silent preloading and top progress indicator (Firefox v3.10.26 candidate)
 
 - User requested fast, silent local data refresh after first import; DM preload of all authorized Journal NPC/character sheets; Player Character preload of available controlled PC sheets; and a percentage progress bar **at the very top**, auto-hiding only upon 100% successful completion, with a Details dropdown for errors.
