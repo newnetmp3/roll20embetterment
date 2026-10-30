@@ -12,6 +12,7 @@ function r3TokenSwitch(info){
   }
   if(previous)r3HudSave();
   R3_TOKEN.active=info;R3_TOKEN.visibleSheetId='';
+  R3_TOKEN.rosterPreviewId='';
   // Keep the currently opened dialog's last-seen ID when a *new* token was
   // explicitly selected. Otherwise the unchanged DM dialog steals focus
   // right back on the next 400ms poll. Once the sheet actually closes the
