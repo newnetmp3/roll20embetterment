@@ -8,7 +8,7 @@ const R3_ROSTER={
   active:false,timer:null,observer:null,observerTimer:null,
   lastDiscovery:0,done:0,failed:0,scans:0,source:'none',generation:0,
   maxCandidates:160,maxDeep:160,maxAttempts:2,lastError:'',
-  currentId:'',tabProgress:new Map(),errors:new Map(),idleAt:0,
+  currentId:'',currentPhase:'',tabProgress:new Map(),errors:new Map(),idleAt:0,
   modelCollection:null,lastChanged:new Map(),runId:0,journalRoot:null
 };
 function r3RosterIsGm(){
@@ -183,7 +183,7 @@ async function r3RosterPrewarm(){
   R3_ROSTER.running=true;
   const prior=R3_ROSTER.attempted.get(entry.id)||{attempts:0,at:0};
   R3_ROSTER.attempted.set(entry.id,{attempts:prior.attempts+1,at:now,status:'reading'});
-  R3_ROSTER.currentId=entry.id;
+  R3_ROSTER.currentId=entry.id;R3_ROSTER.currentPhase='';
   if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
   let candidate=null;
   try{
@@ -200,7 +200,14 @@ async function r3RosterPrewarm(){
       throw new Error('Journal preload identity changed while opening an owned reader');
     const tabs=new Set();
     const snap=await r3SendScan(candidate,'all',(_part,tab,meta)=>{
-      if(!R3_ROSTER.active||generation!==R3_ROSTER.generation)return;
+      if(!R3_ROSTER.active||generation!==R3_ROSTER.generation||
+         runId!==R3_ROSTER.runId||game!==R3_UI.campaignKey)return;
+      if(meta?.phase==='waiting'||meta?.phase==='ready'){
+        R3_ROSTER.currentPhase=meta.phase==='waiting'?'waiting':'';
+        if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
+        return;
+      }
+      R3_ROSTER.currentPhase='';
       if(tab&&tab!=='Planning')tabs.add(tab);
       const prior=R3_ROSTER.tabProgress.get(entry.id)||{done:0,total:1};
       const total=Math.min(32,Math.max(prior.total,Number(meta?.totalTabs)||1,tabs.size));
@@ -273,7 +280,7 @@ async function r3RosterPrewarm(){
         if(!R3_ROSTER.errors.has(entry.id))
           R3_ROSTER.errors.set(entry.id,entry.name+': '+cleanup);
       }
-      R3_ROSTER.running=false;R3_ROSTER.currentId='';
+      R3_ROSTER.running=false;R3_ROSTER.currentId='';R3_ROSTER.currentPhase='';
       if(typeof r3ProgressRefresh==='function')r3ProgressRefresh();
       if(typeof r3DebugRefresh==='function')r3DebugRefresh();
     }
@@ -290,7 +297,7 @@ function r3RosterReset(){
   R3_ROSTER.generation++;R3_ROSTER.runId++;
   R3_ROSTER.entries.clear();R3_ROSTER.queue=[];
   R3_ROSTER.attempted.clear();R3_ROSTER.errors.clear();
-  R3_ROSTER.tabProgress.clear();R3_ROSTER.currentId='';
+  R3_ROSTER.tabProgress.clear();R3_ROSTER.currentId='';R3_ROSTER.currentPhase='';
   R3_ROSTER.running=false;R3_ROSTER.done=0;R3_ROSTER.failed=0;
   R3_ROSTER.scans=0;R3_ROSTER.lastDiscovery=0;
 }
