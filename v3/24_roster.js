@@ -29,11 +29,16 @@ function r3RosterJournal(){
     }).filter(Boolean);
 }
 function r3RosterAuthorized(id,name){
-  const model=r3TokenCharacter(id);
-  if(!model||r3String(r3TokenModelGet(model,'name'),120).toLowerCase()!==
+  const model=r3TokenCharacter(id),gm=r3RosterIsGm();
+  // A DM's rendered Journal row is enough to *request opening* that exact
+  // Roll20 sheet even while Campaign.characters is still unhydrated. The
+  // private opener then verifies a newly created dialog with the same ID.
+  // A player NEVER receives this Journal-only fallback.
+  if(!model&&!gm)return null;
+  if(model&&r3String(r3TokenModelGet(model,'name'),120).toLowerCase()!==
     name.toLowerCase())return null;
-  if(!r3RosterIsGm()&&!r3TokenControls(model))return null;
-  return {model,id,name};
+  if(!gm&&!r3TokenControls(model))return null;
+  return {model:model||null,id,name};
 }
 function r3RosterDiscover(){
   const before=R3_ROSTER.entries;
