@@ -212,7 +212,7 @@ test('preload completion refuses a Journal entry whose permission was revoked mi
   h.ctx.r3SendScan=()=>new Promise(resolve=>{finish=resolve;});
   vm.runInContext('r3RosterCloseOwned=function(){R3_NATIVE_BG.characterId="";return true;}',h.ctx);
   const task=h.api.prewarm();
-  await Promise.resolve();await Promise.resolve();
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(typeof finish,'function');
   h.models.find(m=>m.id==='pc-two').get=k=>({
     name:'Example Player',npc:0,controlledby:''
@@ -237,7 +237,7 @@ test('old campaign preload cannot overwrite a new campaign or release its runnin
   };
   vm.runInContext('r3RosterCloseOwned=function(){R3_NATIVE_BG.characterId="";return true;}',h.ctx);
   const first=h.api.prewarm();
-  await Promise.resolve();await Promise.resolve();
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(typeof releaseOld,'function');
   h.api.reset();h.ctx.R3_UI.campaignKey='new-campaign';
   h.api.discover();
