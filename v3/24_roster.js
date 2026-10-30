@@ -12,7 +12,7 @@ const R3_ROSTER={
   modelCollection:null,lastChanged:new Map()
 };
 function r3RosterIsGm(){
-  return window.is_gm===true;
+  return window.is_gm===true||window.is_gm===1;
 }
 function r3RosterId(value){
   const id=r3String(value,110);
