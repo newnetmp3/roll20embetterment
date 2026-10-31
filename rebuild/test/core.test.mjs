@@ -36,7 +36,7 @@ test('percent never reaches 100 with errors or incomplete units',()=>{
  assert.equal(R.progress(0,2,0,1,0),0);
 });
 test('both worlds parse and share no access to Roll20 Mod API',()=>{
- new vm.Script('(function(){'+src('common.js')+src('ui.js')+src('editor.js')+'})();');
+ new vm.Script('(function(){'+src('common.js')+src('ui.js')+src('selection.js')+src('editor.js')+'})();');
  new vm.Script('(function(){'+src('common.js')+src('reader.js')+'})();');
  assert.match(src('reader.js'),/event\.origin!==R4\.editor/);
  assert.match(src('editor.js'),/event\.origin!==R4\.sheet/);
@@ -48,4 +48,13 @@ test('only source-observed native buttons execute a click',()=>{
  assert.match(reader,/control\.click\(\)/);
  assert.match(reader,/current\.source\.isConnected/);
  assert.match(reader,/R4\.same\(data\.expectedName,sheetName\(\)\)/);
+});
+
+test('Jumpgate adapter is isolated and bounded before reading internal engines',()=>{
+ const j=src('selection.js');
+ new vm.Script(j);
+ assert.match(j,/checked>=3/);
+ assert.match(j,/ids.length>16000/);
+ assert.match(j,/bytes>64000000/);
+ assert.match(j,/getterVerified\(tabletop\.getSelection\)/);
 });

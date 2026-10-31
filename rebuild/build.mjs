@@ -5,6 +5,7 @@ const root=resolve(import.meta.dirname);
 const pkg=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
 const shared=readFileSync(join(root,'src/common.js'),'utf8');
 const editor=shared+'\n'+readFileSync(join(root,'src/ui.js'),'utf8')+'\n'+
+  readFileSync(join(root,'src/selection.js'),'utf8')+'\n'+
   readFileSync(join(root,'src/editor.js'),'utf8');
 const reader=shared+'\n'+readFileSync(join(root,'src/reader.js'),'utf8');
 for(const browser of ['firefox','chrome']){

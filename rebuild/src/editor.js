@@ -62,15 +62,13 @@ function refreshRoster(){
   state.roster=next;
 }
 function editorSelection(){
-  const getter=window.jumpgate?.tabletop?.getSelection;
-  if(typeof getter!=='function'){
-    state.selectionStatus='Native Jumpgate selection API not exposed';
+  const selection=R4J.read(),selected=selection.items;
+  state.selectionStatus=selection.status;
+  if(!selected.length){
+    if(selection.status.startsWith('Verified')||selection.status==='Direct Jumpgate getter')
+      state.selectionStatus='No token selected · '+selection.status;
     return null;
   }
-  let selected;
-  try{selected=getter.call(window.jumpgate.tabletop);}
-  catch{state.selectionStatus='Jumpgate selection getter failed';return null;}
-  if(!Array.isArray(selected)){state.selectionStatus='Unexpected Jumpgate selection shape';return null;}
   if(!selected.length){state.selectionStatus='No token selected';return null;}
   for(const node of selected.slice().reverse()){
     const m=node?.dataWrapper?.model||node?.model;
