@@ -6,19 +6,23 @@ const R3_PROGRESS={lastPercent:-1,detailSignature:'',hidden:false,
 function r3ProgressState(){
   const roster=typeof R3_ROSTER==='object'?R3_ROSTER:null;
   const entries=roster?[...roster.entries.values()]:[];
-  let done=0,total=0,finished=0;
+  let finished=0,earned=0;
   for(const entry of entries){
     const tabs=roster.tabProgress.get(entry.id)||{done:0,total:0};
     const tabTotal=Math.max(0,Math.min(32,tabs.total||0));
     const tabDone=Math.min(tabTotal,Math.max(0,tabs.done||0));
-    total+=1+tabTotal;
-    done+=tabDone+(entry.complete?1:0);
-    if(entry.complete)finished++;
+    // Each sheet gets equal weight. A completed set of visited tabs does
+    // NOT count as an imported character until its verified snapshot has
+    // been committed. Failed characters contribute zero, rather than
+    // displaying 88%+ with 0/2 usable sheets.
+    if(entry.complete){finished++;earned+=1;}
+    else if(!roster.errors.has(entry.id)&&tabTotal)
+      earned+=.9*tabDone/tabTotal;
   }
   const errors=roster?[...roster.errors.values()].slice(0,24):[];
   const complete=entries.length>0&&finished===entries.length&&
     !roster.running&&errors.length===0;
-  const percent=total?Math.min(100,Math.floor(done*100/total)):0;
+  const percent=entries.length?Math.min(100,Math.floor(earned*100/entries.length)):0;
   const current=roster?.entries.get(roster.currentId);
   const status=complete?'All available character sheets loaded':
     current&&roster.currentPhase==='waiting'?
