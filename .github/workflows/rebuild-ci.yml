@@ -1,0 +1,31 @@
+name: R20eb clean rebuild preview
+on:
+  pull_request:
+    paths: ['rebuild/**', 'docs/REBUILD_HANDOVER.md', '.github/workflows/rebuild-ci.yml']
+  push:
+    branches: ['rebuild/clean-v4']
+  workflow_dispatch:
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit/contract tests
+        run: npm --prefix rebuild test
+      - name: Build unsigned Firefox and Chrome preview
+        run: npm --prefix rebuild run build
+      - name: Verify output syntax
+        run: |
+          node --check rebuild/dist/firefox/editor.js
+          node --check rebuild/dist/firefox/reader.js
+          node --check rebuild/dist/chrome/editor.js
+          node --check rebuild/dist/chrome/reader.js
+      - name: Upload unsigned previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: r20eb-v4-unsigned-previews
+          path: rebuild/dist/*.zip
+          retention-days: 14

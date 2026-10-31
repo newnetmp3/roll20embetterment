@@ -1,0 +1,13 @@
+{
+  "name": "r20eb-clean-rebuild",
+  "version": "4.0.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "node build.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
