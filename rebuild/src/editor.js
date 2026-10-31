@@ -5,7 +5,7 @@ if(location.origin!==R4.editor||!/^\/editor(?:\/|$)/.test(location.pathname)||
 const state={
   game:'',mode:'unbound',id:'',name:'',token:null,snapshot:null,
   roster:new Map(),cache:new Map(),errors:new Map(),progress:new Map(),
-  activeReader:null,owned:null,busy:false,scanKey:'',lastScan:0,
+  activeReader:null,owned:null,busy:false,scanKey:'',lastScan:0,lastPeek:0,peekBusy:false,
   pending:new Map(),ready:new Map(),selectionStatus:'Waiting for Jumpgate',
   actionUsed:{action:false,bonus:false,reaction:false},
   distance:0,lastXY:null,tab:'attacks',theme:'bg3',dock:'bottom',
@@ -147,7 +147,7 @@ function receive(event){
   if(data.type==='progress'){
     pending.onProgress?.(data);return;
   }
-  if(!['result','error','invoked'].includes(data.type))return;
+  if(!['result','error','invoked','peek'].includes(data.type))return;
   clearTimeout(pending.timer);state.pending.delete(data.request);
   if(data.type==='error')pending.reject(Error(R4.text(data.error,250)));
   else pending.resolve(data);
@@ -263,6 +263,27 @@ async function importEntry(entry,{owned=true}={}){
     state.busy=false;repaint();
   }
 }
+function maybePeek(){
+  if(state.busy||state.peekBusy||!state.id||Date.now()-state.lastPeek<1200)return;
+  let frame=null;
+  if(state.mode==='player'&&state.activeReader&&authorized(state.id))
+    frame=state.activeReader;
+  else if(state.mode==='dm-sheet')
+    frame=dialogs().find(d=>!d.owned&&d.id===state.id);
+  if(!frame?.el.isConnected)return;
+  const id=state.id,name=state.name,game=state.game;
+  state.peekBusy=true;state.lastPeek=Date.now();
+  void request(frame,'peek',{},2300).then(data=>{
+    if(game!==state.game||state.id!==id||!R4.same(name,data.name)||
+       (!isGM()&&!authorized(id)))return;
+    const stats=data.stats||{};
+    if(!Object.keys(stats).length)return;
+    if(state.snapshot)state.snapshot={...state.snapshot,stats:{...state.snapshot.stats,...stats}};
+    const cached=state.cache.get(id);
+    if(cached)cached.snapshot={...cached.snapshot,stats:{...cached.snapshot.stats,...stats}};
+    repaint();
+  }).catch(()=>{}).finally(()=>{state.peekBusy=false;});
+}
 function percent(){
   const all=[...state.roster.keys()];
   const completed=all.filter(id=>state.progress.get(id)?.complete).length;
@@ -318,8 +339,14 @@ function sync(){
       if(m&&authorized(selected.id))state.roster.set(selected.id,
         {id:selected.id,name:selected.name,element:null});
     }
-    if(state.mode!=='player'||state.id!==selected.id||state.token!==selected.model)
+    if(state.mode!=='player'||state.id!==selected.id)
       activate('player',selected.id,selected.name,selected.model);
+    else {
+      const prior=R4.id(state.token?.id||R4.model(state.token,'_id'));
+      const current=R4.id(selected.model?.id||R4.model(selected.model,'_id'));
+      if(prior!==current){state.lastXY=null;state.distance=0;}
+      state.token=selected.model;
+    }
     measure();
   }else if(state.mode==='player'){
     resetActive('Waiting for a controlled token');
@@ -348,6 +375,7 @@ function sync(){
       void importEntry(active,{owned:false});
     }
   }
+  maybePeek();
   repaint();
 }
 function retry(){state.errors.clear();for(const [id,p] of state.progress)

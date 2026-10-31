@@ -136,12 +136,35 @@ async function scan(data){
     message('error',{request,error:R4.text(e?.message||e,200)});
   }finally{working=false;}
 }
+function peekStats(){
+  const stats={},fields={
+    'hp':'hp','current hp':'hp','hit points':'hp',
+    'max hp':'maxHp','maximum hp':'maxHp','temporary hp':'tempHp',
+    'temp hp':'tempHp','armor class':'ac','ac':'ac','speed':'speed'
+  };
+  for(const el of [...document.querySelectorAll('input,select')].slice(0,350)){
+    if(!shown(el))continue;
+    const labels=[el.getAttribute('aria-label'),el.getAttribute('name'),
+      el.getAttribute('data-attribute'),el.labels?.[0]?.textContent];
+    const key=labels.map(x=>R4.text(x,80).toLowerCase().replace(/^attr_/,'')
+      .replace(/[_-]/g,' ')).find(x=>fields[x]);
+    if(!key)continue;
+    const raw=String(el.value??'');
+    if(!/^[+-]?\d{1,4}$/.test(raw))continue;
+    const value=Number(raw);if(value>=-100&&value<=9999)stats[fields[key]]=value;
+  }
+  return stats;
+}
 window.addEventListener('message',event=>{
   const data=event.data;
   if(event.origin!==R4.editor||event.source!==window.parent||
      !data||data.protocol!==R4.protocol)return;
   if(data.type==='hello'){message('ready',{name:sheetName()});return;}
   if(data.type==='scan'){void scan(data);return;}
+  if(data.type==='peek'){
+    message('peek',{request:R4.text(data.request,90),name:sheetName(),stats:peekStats()});
+    return;
+  }
   if(data.type==='invoke'){
     const request=R4.text(data.request,90);
     const current=actions.get(data.actionId);

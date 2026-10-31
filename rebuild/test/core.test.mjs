@@ -65,3 +65,11 @@ test('unknown single buttons are never considered native attacks',()=>{
  assert.doesNotMatch(reader,/found.length===1\)control=found\[0\]/);
  assert.match(reader,/eligible.length===1\?eligible\[0\]:null/);
 });
+
+test('HP fast-peek avoids tab navigation and preserves native actions',()=>{
+ const reader=src('reader.js'),editor=src('editor.js');
+ assert.match(reader,/function peekStats\(\)/);
+ assert.match(reader,/message\('peek'/);
+ assert.match(editor,/function maybePeek\(\)/);
+ assert.match(editor,/Date\.now\(\)-state\.lastPeek<1200/);
+});
