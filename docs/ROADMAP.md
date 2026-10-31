@@ -1,3 +1,13 @@
+## 2026-10-31 — DM 26-second empty-tab and owned reader cleanup (v3.10.33 candidate)
+
+- [x] Let a bounded, authenticated private reader traverse available official tabs after initial wait even when Current view is empty.
+- [x] Retry one verified all-tab traversal only when the entire first private scan had no source-observed values, then refuse persistent emptiness.
+- [x] Restore extension-owned modal visibly if no verified close control is exposed; never close user-opened sheets or report successful imports as failed.
+- [x] Weight preload progress by characters and real tab visits, excluding failed scans from completion.
+- [x] Add regressions covering empty current tab, empty repeated scans, safe restore and the 1-of-2 error percentage.
+- [ ] Run Firefox and Chrome CI; publish v3.10.33 via Mozilla unlisted signing and verify update manifest.
+- [ ] Confirm two successful character imports and no hidden stuck sheets on the user's DM session.
+
 ## 2026-10-30 — delayed DM sheet resource loading (v3.10.32 candidate)
 
 - [x] Accommodate ~10-second delayed resource mount without treating early empty data as final.

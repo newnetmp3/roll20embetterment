@@ -131,35 +131,42 @@ function r3RosterCloseOwned(id){
   if(bg.characterId!==id||!bg.dialog)return false;
   const dialog=bg.dialog,wrapper=bg.moved||
     dialog.closest?.('.ui-dialog')||null;
-  // Ownership is established by the native opener's exact-ID, newly
-  // created dialog claim. Never close a manually opened Roll20 sheet.
+  // The exact-ID background opener marks only its own newly created
+  // dialog. Never close, move or unhide a user-opened Roll20 sheet.
   const ours=dialog.hasAttribute?.('data-r3-private-reader')||
     wrapper?.hasAttribute?.('data-r3-private-reader');
   if(!ours)return false;
-  // Roll20 may close an owned reader itself before the scan settles.
-  if(dialog.isConnected===false||wrapper?.isConnected===false){
-    r3NativeBgRestore();return true;
-  }
-  // The close button belongs to the jQuery UI wrapper, not necessarily
-  // the .characterdialog descendant. Prefer the opener's saved wrapper.
+  const restore=()=>{
+    try{r3NativeBgRestore();return true;}
+    catch{return false;}
+  };
+  // The sheet can disappear on its own while the delayed scan runs.
+  if(dialog.isConnected===false||wrapper?.isConnected===false)
+    return restore();
   const button=wrapper?.querySelector?.('.ui-dialog-titlebar-close')||
     dialog.closest?.('.ui-dialog')?.querySelector?.('.ui-dialog-titlebar-close');
+  let closed=false;
   try{
-    if(button&&typeof button.click==='function')button.click();
-    else{
-      // Some Roll20 skins omit the titlebar close icon but retain the
-      // jQuery UI dialog close API. Restrict this fallback to our own
-      // marked, exact-ID dialog; never act on an unrelated visible sheet.
+    if(button&&typeof button.click==='function'){
+      button.click();closed=true;
+    }else{
+      // Some Roll20 skins omit the titlebar button but retain jQuery UI.
+      // Only call that API on the exact sheet we marked as private.
       const jq=window.jQuery;
-      if(typeof jq!=='function'||typeof jq.fn?.dialog!=='function')
-        return false;
-      const instance=jq(dialog).dialog('instance');
-      if(!instance)return false;
-      jq(dialog).dialog('close');
+      if(typeof jq==='function'&&typeof jq.fn?.dialog==='function'){
+        const target=jq(dialog);
+        if(target.dialog('instance')){target.dialog('close');closed=true;}
+      }
     }
-    r3NativeBgRestore();
-    return true;
-  }catch{return false;}
+  }catch{}
+  // An unclosable owned sheet must never remain invisible/offscreen forever.
+  // Restore ONLY our own visual changes and let Roll20/user close it. This
+  // is a cleanup warning, not a reason to invalidate a verified import.
+  const restored=restore();
+  if(restored&&!closed&&typeof r3DebugLog==='function')
+    r3DebugLog('Importer','Private Roll20 sheet '+id+
+      ' has no verified close control; restored visibly for manual closing.');
+  return restored;
 }
 async function r3RosterPrewarm(){
   if(R3_ROSTER.running||!R3_ROSTER.active||R3_AUTO.running||R3_AUTO.opening||

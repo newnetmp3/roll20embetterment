@@ -1,6 +1,6 @@
 {
-  "version": "3.10.32",
+  "version": "3.10.33",
   "channel": "unlisted",
   "distribution": "github-release",
-  "reason": "Support slow/free-tier DM sheet initialization: hold privately owned Journal readers through the observed ~10-second resource delay (12-second initial grace, bounded 26-second hydration cap), extend full-scan timeout, display waiting without fabricated tab progress, and preserve fast manual reads."
+  "reason": "Resolve DM preload screenshot: empty Current view must not prevent scanning authorized Combat/Inventory/Features tabs; retry all-tab traversal once if fully empty, restore an owned sheet visibly if Roll20 exposes no safe close control, and show truthful per-character percentage."
 }

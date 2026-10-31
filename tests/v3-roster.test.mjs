@@ -134,7 +134,7 @@ test('top progress represents real sheet and tab counts, auto-hides only at erro
   const e=h.api.roster.entries.get('npc-one');
   h.api.roster.tabProgress.set('npc-one',{total:3,done:2});
   h.api.refresh();
-  assert.equal(h.nodes.get('r3-loading-percentage').textContent,'40%');
+  assert.equal(h.nodes.get('r3-loading-percentage').textContent,'30%');
   assert.equal(h.nodes.get('r3-loading-strip').hidden,false);
   e.complete=true;h.api.roster.tabProgress.set('npc-one',{total:3,done:3});
   h.api.roster.entries.get('pc-two').complete=true;
@@ -573,4 +573,83 @@ test('DM progress displays resource waiting without fabricating tab visits',asyn
   assert.equal(await promise,true);
   assert.equal(h.api.roster.currentPhase,'');
   assert.equal(h.api.roster.done,1);
+});
+
+test('DM loader traverses verified tabs after grace even when Current view is empty',async()=>{
+  const ctx={window:{},document:{body:{},querySelectorAll(){return []}},
+    crypto:{randomUUID:()=> 'test-session-456'},Date,Math,Map,Set,Promise,
+    setTimeout(){return 1},clearTimeout(){},setInterval(){return 1},clearInterval(){},
+    r3String(v,n=120){return String(v??'').slice(0,n);},
+    r3Shown(){return true;},r3Text(){return ''}};
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
+  vm.runInContext('r3Tabs=()=>[{tab:"Combat"}];r3Capture=()=>({stats:{},coverage:{stats:0}});'+
+    'r3Pause=async()=>{globalThis.polls++}',Object.assign(ctx,{polls:0}));
+  const hydrated=await vm.runInContext('r3ReaderWaitHydrated(()=>false,true)',ctx);
+  assert.equal(hydrated,false,'tab discovery, not current-view stats, unlocks traversal');
+  assert.ok(ctx.polls>=24&&ctx.polls<52);
+});
+test('DM full traversal retries only if every first-pass tab lacks character data',async()=>{
+  const ctx={window:{},document:{body:{},querySelectorAll(){return []}},
+    crypto:{randomUUID:()=> 'test-session-456'},Date,Math,Map,Set,Promise,
+    setTimeout(){return 1},clearTimeout(){},setInterval(){return 1},clearInterval(){},
+    r3String(v,n=120){return String(v??'').slice(0,n);}};
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
+  vm.runInContext('r3SheetContext=()=>null;'+
+    'r3AutoHasRecognizedData=s=>!!s.stats?.hp;'+
+    'r3CollectAllTabs=async()=>{globalThis.scans++;return '+ 
+    '{schema:3,name:"Example NPC",stats:globalThis.scans>1?{hp:20}:{},"diagnostics":{tabs:["Combat"]}}};'+
+    'r3Pause=async()=>{}',Object.assign(ctx,{scans:0}));
+  const result=await vm.runInContext(
+    'r3ReaderScan("all",null,()=>false,{privatePreload:true})',ctx);
+  assert.equal(ctx.scans,2);
+  assert.equal(result.stats.hp,20);
+  const manual=await vm.runInContext(
+    'r3ReaderScan("all",null,()=>false,{privatePreload:false})',ctx);
+  assert.equal(manual.stats.hp,20);
+  assert.equal(ctx.scans,3,'manual reads are never repeated automatically');
+});
+test('DM retries cannot cache two fully empty tab passes',async()=>{
+  const ctx={window:{},document:{body:{},querySelectorAll(){return []}},
+    crypto:{randomUUID:()=> 'test-session-456'},Date,Math,Map,Set,Promise,
+    setTimeout(){return 1},clearTimeout(){},setInterval(){return 1},clearInterval(){},
+    r3String(v,n=120){return String(v??'').slice(0,n);}};
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(root,'v3/10_reader.js'),'utf8'),ctx);
+  vm.runInContext('r3SheetContext=()=>null;'+
+    'r3AutoHasRecognizedData=()=>false;'+
+    'r3CollectAllTabs=async()=>{globalThis.scans++;return '+
+    '{schema:3,name:"Example NPC",stats:{},diagnostics:{tabs:["Combat","Inventory"]}}};'+
+    'r3Pause=async()=>{}',Object.assign(ctx,{scans:0}));
+  await assert.rejects(vm.runInContext(
+    'r3ReaderScan("all",null,()=>false,{privatePreload:true})',ctx),
+    /two verified scans/);
+  assert.equal(ctx.scans,2);
+});
+test('an extension-owned sheet with no safe close control is restored, never stranded hidden',()=>{
+  const h=fixture(true);let restored=0,notice='';
+  h.ctx.R3_NATIVE_BG.characterId='npc-one';
+  h.ctx.R3_NATIVE_BG.dialog={isConnected:true,
+    hasAttribute:key=>key==='data-r3-private-reader',
+    closest:()=>null};
+  h.ctx.R3_NATIVE_BG.moved={isConnected:true,
+    hasAttribute:key=>key==='data-r3-private-reader',
+    querySelector:()=>null};
+  h.ctx.r3NativeBgRestore=()=>{restored++;};
+  h.ctx.r3DebugLog=(_area,message)=>{notice=message;};
+  assert.equal(vm.runInContext('r3RosterCloseOwned("npc-one")',h.ctx),true);
+  assert.equal(restored,1);
+  assert.match(notice,/restored visibly/);
+});
+test('failed scans do not inflate progress despite completed tab visits',()=>{
+  const h=fixture(true);h.api.discover();
+  h.api.roster.entries.get('npc-one').complete=true;
+  h.api.roster.tabProgress.set('npc-one',{done:5,total:5});
+  h.api.roster.tabProgress.set('pc-two',{done:5,total:5});
+  h.api.roster.errors.set('pc-two','No recognized values from official sheet');
+  const state=h.api.state();
+  assert.equal(state.percent,50);
+  assert.equal(state.finished,1);
+  assert.equal(state.complete,false);
 });

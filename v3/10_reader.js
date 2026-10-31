@@ -169,10 +169,18 @@ async function r3ReaderWaitHydrated(shouldCancel=()=>false,privatePreload=false)
       stats:Object.keys(snapshot.stats||{}).length}):'';
     stable=populated&&signature===previous?stable+1:0;
     previous=signature;
-    if(populated&&i>=minimumSamples&&stable>=2&&!r3ReaderCountdownActive())return true;
+    if(i>=minimumSamples&&!r3ReaderCountdownActive()){
+      if(populated&&stable>=2)return true;
+      // Current view can legitimately have NO useful fields (for example
+      // About/Notes or a blank initial Vue panel). If the private reader
+      // sees actual rendered Roll20 tabs, let the bounded all-tab walk
+      // discover Combat/Inventory/Features instead of blocking here forever.
+      // This exception is never used for a manually opened sheet.
+      if(privatePreload&&r3Tabs().some(tab=>r3Shown(tab)))return false;
+    }
     await r3Pause(500);
   }
-  throw new Error('Official Roll20 sheet has not finished loading character resources after 26 seconds; no unverified data was imported.');
+  throw new Error('Official Roll20 sheet never exposed loaded values or navigable tabs after 26 seconds; no unverified data was imported.');
 }
 async function r3ReaderScan(mode,sendProgress,shouldCancel,options={}){
   if(mode==='all'){
@@ -181,7 +189,22 @@ async function r3ReaderScan(mode,sendProgress,shouldCancel,options={}){
       await r3ReaderWaitHydrated(shouldCancel,options.privatePreload===true);
       options.onPhase?.('ready');
     }
-    return r3CollectAllTabs(sendProgress,shouldCancel);
+    let result=await r3CollectAllTabs(sendProgress,shouldCancel);
+    // A private scan may have started from an empty tab, or a secondary Vue
+    // panel may mount after its first visit. Make one bounded local retry
+    // only when the COMPLETE first traversal contained no recognized data.
+    // Do not weaken the exact-ID/character-name verification in the editor.
+    if(options.privatePreload===true&&
+       !r3AutoHasRecognizedData(result)){
+      if(shouldCancel?.())throw new Error('Private reader cancelled during the final sheet check');
+      await r3Pause(1250);
+      if(shouldCancel?.())throw new Error('Private reader cancelled during the final sheet check');
+      result=await r3CollectAllTabs(sendProgress,shouldCancel);
+      if(!r3AutoHasRecognizedData(result))
+        throw new Error('Roll20 sheet tabs rendered but contained no recognizable character values after two verified scans. Tabs: '+
+          r3String(result?.diagnostics?.tabs?.join(', ')||'none',110));
+    }
+    return result;
   }
   if(mode==='hp')return r3CaptureHealth(document.body);
   return r3Capture(document.body,r3CurrentTabLabel());

@@ -905,10 +905,18 @@ async function r3ReaderWaitHydrated(shouldCancel=()=>false,privatePreload=false)
       stats:Object.keys(snapshot.stats||{}).length}):'';
     stable=populated&&signature===previous?stable+1:0;
     previous=signature;
-    if(populated&&i>=minimumSamples&&stable>=2&&!r3ReaderCountdownActive())return true;
+    if(i>=minimumSamples&&!r3ReaderCountdownActive()){
+      if(populated&&stable>=2)return true;
+      // Current view can legitimately have NO useful fields (for example
+      // About/Notes or a blank initial Vue panel). If the private reader
+      // sees actual rendered Roll20 tabs, let the bounded all-tab walk
+      // discover Combat/Inventory/Features instead of blocking here forever.
+      // This exception is never used for a manually opened sheet.
+      if(privatePreload&&r3Tabs().some(tab=>r3Shown(tab)))return false;
+    }
     await r3Pause(500);
   }
-  throw new Error('Official Roll20 sheet has not finished loading character resources after 26 seconds; no unverified data was imported.');
+  throw new Error('Official Roll20 sheet never exposed loaded values or navigable tabs after 26 seconds; no unverified data was imported.');
 }
 async function r3ReaderScan(mode,sendProgress,shouldCancel,options={}){
   if(mode==='all'){
@@ -917,7 +925,22 @@ async function r3ReaderScan(mode,sendProgress,shouldCancel,options={}){
       await r3ReaderWaitHydrated(shouldCancel,options.privatePreload===true);
       options.onPhase?.('ready');
     }
-    return r3CollectAllTabs(sendProgress,shouldCancel);
+    let result=await r3CollectAllTabs(sendProgress,shouldCancel);
+    // A private scan may have started from an empty tab, or a secondary Vue
+    // panel may mount after its first visit. Make one bounded local retry
+    // only when the COMPLETE first traversal contained no recognized data.
+    // Do not weaken the exact-ID/character-name verification in the editor.
+    if(options.privatePreload===true&&
+       !r3AutoHasRecognizedData(result)){
+      if(shouldCancel?.())throw new Error('Private reader cancelled during the final sheet check');
+      await r3Pause(1250);
+      if(shouldCancel?.())throw new Error('Private reader cancelled during the final sheet check');
+      result=await r3CollectAllTabs(sendProgress,shouldCancel);
+      if(!r3AutoHasRecognizedData(result))
+        throw new Error('Roll20 sheet tabs rendered but contained no recognizable character values after two verified scans. Tabs: '+
+          r3String(result?.diagnostics?.tabs?.join(', ')||'none',110));
+    }
+    return result;
   }
   if(mode==='hp')return r3CaptureHealth(document.body);
   return r3Capture(document.body,r3CurrentTabLabel());
@@ -4783,19 +4806,23 @@ const R3_PROGRESS={lastPercent:-1,detailSignature:'',hidden:false,
 function r3ProgressState(){
   const roster=typeof R3_ROSTER==='object'?R3_ROSTER:null;
   const entries=roster?[...roster.entries.values()]:[];
-  let done=0,total=0,finished=0;
+  let finished=0,earned=0;
   for(const entry of entries){
     const tabs=roster.tabProgress.get(entry.id)||{done:0,total:0};
     const tabTotal=Math.max(0,Math.min(32,tabs.total||0));
     const tabDone=Math.min(tabTotal,Math.max(0,tabs.done||0));
-    total+=1+tabTotal;
-    done+=tabDone+(entry.complete?1:0);
-    if(entry.complete)finished++;
+    // Each sheet gets equal weight. A completed set of visited tabs does
+    // NOT count as an imported character until its verified snapshot has
+    // been committed. Failed characters contribute zero, rather than
+    // displaying 88%+ with 0/2 usable sheets.
+    if(entry.complete){finished++;earned+=1;}
+    else if(!roster.errors.has(entry.id)&&tabTotal)
+      earned+=.9*tabDone/tabTotal;
   }
   const errors=roster?[...roster.errors.values()].slice(0,24):[];
   const complete=entries.length>0&&finished===entries.length&&
     !roster.running&&errors.length===0;
-  const percent=total?Math.min(100,Math.floor(done*100/total)):0;
+  const percent=entries.length?Math.min(100,Math.floor(earned*100/entries.length)):0;
   const current=roster?.entries.get(roster.currentId);
   const status=complete?'All available character sheets loaded':
     current&&roster.currentPhase==='waiting'?
@@ -5086,35 +5113,42 @@ function r3RosterCloseOwned(id){
   if(bg.characterId!==id||!bg.dialog)return false;
   const dialog=bg.dialog,wrapper=bg.moved||
     dialog.closest?.('.ui-dialog')||null;
-  // Ownership is established by the native opener's exact-ID, newly
-  // created dialog claim. Never close a manually opened Roll20 sheet.
+  // The exact-ID background opener marks only its own newly created
+  // dialog. Never close, move or unhide a user-opened Roll20 sheet.
   const ours=dialog.hasAttribute?.('data-r3-private-reader')||
     wrapper?.hasAttribute?.('data-r3-private-reader');
   if(!ours)return false;
-  // Roll20 may close an owned reader itself before the scan settles.
-  if(dialog.isConnected===false||wrapper?.isConnected===false){
-    r3NativeBgRestore();return true;
-  }
-  // The close button belongs to the jQuery UI wrapper, not necessarily
-  // the .characterdialog descendant. Prefer the opener's saved wrapper.
+  const restore=()=>{
+    try{r3NativeBgRestore();return true;}
+    catch{return false;}
+  };
+  // The sheet can disappear on its own while the delayed scan runs.
+  if(dialog.isConnected===false||wrapper?.isConnected===false)
+    return restore();
   const button=wrapper?.querySelector?.('.ui-dialog-titlebar-close')||
     dialog.closest?.('.ui-dialog')?.querySelector?.('.ui-dialog-titlebar-close');
+  let closed=false;
   try{
-    if(button&&typeof button.click==='function')button.click();
-    else{
-      // Some Roll20 skins omit the titlebar close icon but retain the
-      // jQuery UI dialog close API. Restrict this fallback to our own
-      // marked, exact-ID dialog; never act on an unrelated visible sheet.
+    if(button&&typeof button.click==='function'){
+      button.click();closed=true;
+    }else{
+      // Some Roll20 skins omit the titlebar button but retain jQuery UI.
+      // Only call that API on the exact sheet we marked as private.
       const jq=window.jQuery;
-      if(typeof jq!=='function'||typeof jq.fn?.dialog!=='function')
-        return false;
-      const instance=jq(dialog).dialog('instance');
-      if(!instance)return false;
-      jq(dialog).dialog('close');
+      if(typeof jq==='function'&&typeof jq.fn?.dialog==='function'){
+        const target=jq(dialog);
+        if(target.dialog('instance')){target.dialog('close');closed=true;}
+      }
     }
-    r3NativeBgRestore();
-    return true;
-  }catch{return false;}
+  }catch{}
+  // An unclosable owned sheet must never remain invisible/offscreen forever.
+  // Restore ONLY our own visual changes and let Roll20/user close it. This
+  // is a cleanup warning, not a reason to invalidate a verified import.
+  const restored=restore();
+  if(restored&&!closed&&typeof r3DebugLog==='function')
+    r3DebugLog('Importer','Private Roll20 sheet '+id+
+      ' has no verified close control; restored visibly for manual closing.');
+  return restored;
 }
 async function r3RosterPrewarm(){
   if(R3_ROSTER.running||!R3_ROSTER.active||R3_AUTO.running||R3_AUTO.opening||
