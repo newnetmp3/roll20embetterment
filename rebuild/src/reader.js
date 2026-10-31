@@ -60,9 +60,15 @@ function capture(tab){
       if(!name||name.length<2)continue;
       const details=R4.text(row.textContent,200);
       const buttons=[...row.querySelectorAll('button,[role="button"]')].filter(shown);
-      const control=buttons.find(b=>/^(roll|attack|cast|use|save|check)$/i.test(
-        R4.text(b.getAttribute('aria-label')||b.getAttribute('title')||b.textContent,60)))||
-        (buttons.length===1?buttons[0]:null);
+      // A generic single button might be Edit or Delete: never map it.
+      const eligible=buttons.filter(b=>{
+        const caption=R4.text(b.getAttribute('aria-label')||b.getAttribute('title')||
+          b.textContent,60);
+        const testid=R4.text(b.getAttribute('data-testid'),70);
+        return /^(roll|attack|cast|use|save|check)$/i.test(caption)||
+          /(?:^|[-_])(roll|attack|cast|use|check)(?:[-_]|$)/i.test(testid);
+      });
+      const control=eligible.length===1?eligible[0]:null;
       const actionId=control?session+':'+(++index)+':'+kind+':'+Math.random().toString(36).slice(2):'';
       if(actionId)actions.set(actionId,{control,kind,name,source:row,tab,created:Date.now()});
       entries.push({name,details,kind,actionId,tab});
@@ -172,10 +178,11 @@ window.addEventListener('message',event=>{
           if(candidates.length!==1)throw Error('Native action has no unique current source row');
           const found=[...candidates[0].querySelectorAll('button,[role="button"]')].filter(shown);
           const exact=found.filter(b=>/^(roll|attack|cast|use|save|check)$/i.test(
-            R4.text(b.getAttribute('aria-label')||b.getAttribute('title')||b.textContent,60)));
+            R4.text(b.getAttribute('aria-label')||b.getAttribute('title')||b.textContent,60))||
+            /(?:^|[-_])(roll|attack|cast|use|check)(?:[-_]|$)/i.test(
+              R4.text(b.getAttribute('data-testid'),70)));
           if(exact.length===1)control=exact[0];
-          else if(found.length===1)control=found[0];
-          else throw Error('Native action control ambiguous');
+          else throw Error('Native action control ambiguous; never click Edit/Delete');
         }
         if(!R4.same(data.expectedName,sheetName())||!shown(control))
           throw Error('Native sheet identity/control changed');

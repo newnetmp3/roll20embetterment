@@ -58,3 +58,10 @@ test('Jumpgate adapter is isolated and bounded before reading internal engines',
  assert.match(j,/bytes>64000000/);
  assert.match(j,/getterVerified\(tabletop\.getSelection\)/);
 });
+
+test('unknown single buttons are never considered native attacks',()=>{
+ const reader=src('reader.js');
+ assert.doesNotMatch(reader,/buttons.length===1\?buttons\[0\]/);
+ assert.doesNotMatch(reader,/found.length===1\)control=found\[0\]/);
+ assert.match(reader,/eligible.length===1\?eligible\[0\]:null/);
+});
