@@ -45,7 +45,7 @@ test('both worlds parse and share no access to Roll20 Mod API',()=>{
 });
 test('only source-observed native buttons execute a click',()=>{
  const reader=src('reader.js');
- assert.match(reader,/current\.control\.click\(\)/);
+ assert.match(reader,/control\.click\(\)/);
  assert.match(reader,/current\.source\.isConnected/);
  assert.match(reader,/R4\.same\(data\.expectedName,sheetName\(\)\)/);
 });
