@@ -18,6 +18,9 @@ function activeTab(){return [...document.querySelectorAll('[role="tab"]')].filte
 function tabs(){return [...document.querySelectorAll('[role="tab"]')].filter(el=>shown(el)&&
    !el.disabled&&R4.text(el.getAttribute('aria-label')||el.textContent,65));}
 function label(el){return R4.text(el.getAttribute('aria-label')||el.textContent,65);}
+function tabKey(el){const list=el.closest('[role="tablist"]');
+  return R4.text(list?.id||list?.getAttribute('aria-label')||list?.className||'tablist',90)+':'+label(el);
+}
 function capture(tab){
   const stats={},categories={},countMax=180;
   const fieldMap={
@@ -103,21 +106,49 @@ async function scan(data){
     if(!hydrated)throw Error('Official sheet did not hydrate verified name/data or usable tabs');
     actions.clear();
     const names=[],parts=[];const all=!!data.all;
-    const original=activeTab();const originalLabel=original?label(original):'Current view';
-    const queue=all?[...new Set(tabs().map(label))].slice(0,32):[originalLabel];
-    if(!queue.length)queue.push('Current view');
+    const original=activeTab(),originalLabel=original?label(original):'Current view';
+    const describe=tab=>({key:tabKey(tab),label:label(tab),parent:''});
+    const priority=['Combat','Features & Traits','Inventory','Spells','Skills & Tools','Notes','About'];
+    const rank=item=>{
+      const n=priority.findIndex(v=>v.toLowerCase()===item.label.toLowerCase());
+      return n<0?priority.length:n;
+    };
+    const initial=tabs().map(describe);
+    const queue=all?initial.sort((a,b)=>rank(a)-rank(b)).slice(0,32):
+      [{key:original?tabKey(original):'current',label:originalLabel,parent:''}];
+    const planned=new Set(queue.map(x=>x.key)),visited=new Set();
+    if(!queue.length){queue.push({key:'current',label:'Current view',parent:''});}
     message('progress',{request,completed:0,total:queue.length,phase:'reading'});
-    for(const tabLabel of queue){
+    for(let i=0;i<queue.length&&names.length<32;i++){
       if(turn!==epoch)throw Error('Reader scan cancelled');
-      if(all){
-        const candidate=tabs().find(t=>label(t)===tabLabel);
-        if(!candidate)continue;
-        if(candidate.getAttribute('aria-selected')!=='true'){
-          candidate.click();await pause(330);
+      const target=queue[i];
+      if(visited.has(target.key))continue;
+      let candidate=all?tabs().find(t=>tabKey(t)===target.key):activeTab();
+      if(!candidate&&target.parent){
+        const parent=tabs().find(t=>tabKey(t)===target.parent);
+        if(parent){
+          if(parent.getAttribute('aria-selected')!=='true'){parent.click();await pause(170);}
+          candidate=tabs().find(t=>tabKey(t)===target.key);
         }
       }
-      const part=capture(tabLabel);
-      parts.push(part);names.push(tabLabel);
+      if(all&&!candidate)continue;
+      visited.add(target.key);
+      if(all&&candidate&&candidate.getAttribute('aria-selected')!=='true'){
+        candidate.click();await pause(330);
+      }
+      const part=capture(target.label);
+      parts.push(part);names.push(target.label);
+      if(all&&queue.length<32){
+        // Vue mounts nested filters only after their parent tab opens.
+        // Add newly visible tabs immediately after their parent, while
+        // preserving top-level tab order and a bounded 32-view budget.
+        const currentKey=candidate?tabKey(candidate):target.key;
+        const newcomers=tabs().map(describe).filter(x=>
+          !planned.has(x.key)&&!visited.has(x.key)).slice(0,32-queue.length)
+          .map(x=>({...x,parent:currentKey}));
+        for(const x of newcomers)planned.add(x.key);
+        if(newcomers.length)queue.splice(i+1,0,...newcomers);
+      }
       message('progress',{request,completed:names.length,total:queue.length,phase:'reading'});
     }
     if(all&&originalLabel){

@@ -73,3 +73,10 @@ test('HP fast-peek avoids tab navigation and preserves native actions',()=>{
  assert.match(editor,/function maybePeek\(\)/);
  assert.match(editor,/Date\.now\(\)-state\.lastPeek<1200/);
 });
+
+test('private all-tab reading discovers lazily mounted nested tabs with a hard limit',()=>{
+ const reader=src('reader.js');
+ assert.match(reader,/newcomers=tabs\(\)\.map\(describe\)/);
+ assert.match(reader,/queue\.splice\(i\+1,0,\.\.\.newcomers\)/);
+ assert.match(reader,/names.length<32/);
+});
