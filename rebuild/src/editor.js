@@ -8,7 +8,7 @@ const state={
   activeReader:null,owned:null,busy:false,scanKey:'',lastScan:0,lastPeek:0,peekBusy:false,
   pending:new Map(),ready:new Map(),selectionStatus:'Waiting for Jumpgate',
   actionUsed:{action:false,bonus:false,reaction:false},
-  distance:0,lastXY:null,tab:'attacks',theme:'bg3',dock:'bottom',
+  distance:0,lastXY:null,previewToken:'',tab:'attacks',theme:'bg3',dock:'bottom',
   displayName:'',status:'Loading Roll20',logs:[],revision:0
 };
 const repaint=()=>state.repaint?.();
@@ -84,7 +84,7 @@ function editorSelection(){
 }
 function resetActive(reason){
   if(state.owned)releaseOwned();
-  state.mode='unbound';state.id='';state.name='';state.snapshot=null;
+  state.mode='unbound';state.id='';state.name='';state.previewToken='';state.snapshot=null;
   state.activeReader=null;state.token=null;state.lastXY=null;state.distance=0;
   state.actionUsed={action:false,bonus:false,reaction:false};
   state.status=reason;repaint();
@@ -93,6 +93,7 @@ function activate(mode,id,name,token=null){
   if(state.owned&&state.id!==id)releaseOwned();
   if(state.mode===mode&&state.id===id&&R4.same(state.name,name))return;
   state.mode=mode;state.id=id;state.name=name;state.token=token;
+  if(mode!=='preview')state.previewToken='';
   state.snapshot=state.cache.get(id)?.name===name?state.cache.get(id).snapshot:null;
   state.activeReader=null;state.actionUsed={action:false,bonus:false,reaction:false};
   state.distance=0;state.lastXY=null;state.status='Reading '+name;
@@ -333,7 +334,8 @@ function sync(){
   }
   refreshRoster();
   const selected=editorSelection();
-  if(selected){
+  if(selected&&!(state.mode==='preview'&&
+      state.previewToken===R4.id(selected.model?.id||R4.model(selected.model,'_id')))){
     if(!state.roster.has(selected.id)){
       const m=character(selected.id);
       if(m&&authorized(selected.id))state.roster.set(selected.id,
@@ -382,7 +384,10 @@ function retry(){state.errors.clear();for(const [id,p] of state.progress)
   if(!p.complete)state.progress.delete(id);state.status='Retrying official reads';repaint();}
 function preview(id){
   const e=state.roster.get(id);if(!e)return;
+  const currentlySelected=editorSelection();
+  const selectionId=R4.id(currentlySelected?.model?.id||R4.model(currentlySelected?.model,'_id'));
   activate('preview',e.id,e.name);
+  state.previewToken=selectionId;
   state.status='Read-only Journal preview';repaint();
 }
 window.addEventListener('beforeunload',()=>releaseOwned());
