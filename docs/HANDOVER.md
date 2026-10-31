@@ -1,3 +1,11 @@
+## 2026-10-31 — DM preload empty-tab deadlock and owned-dialog cleanup (v3.10.33 candidate)
+
+- New DM screenshot: `Preloading 1 of 2 · 88% · 2 errors`. Owust Ofo waited 26 seconds for character values; Rondez the Green Mage imported but its extension-owned hidden sheet had no verified close control. This is not proof of subscription-gated data or a reason to bypass Roll20 premium access.
+- Root cause: `r3ReaderWaitHydrated` required recognized values in the **current** official tab before allowing `r3CollectAllTabs` to navigate. About/Notes/empty initial views can be fieldless even though Combat, Inventory or Features have values. After the existing 12-second private preload grace and any detected countdown, permit a verified navigable official tab list to unlock all-tab scanning (without fabricating data). If the entire first private all-tab result contains no recognized data, retry only once after a short pause; reject two empty full passes.
+- For verified script-owned dialogs only, use the native close button or verified jQuery UI close API. If Roll20 exposes neither, **restore that specific owned sheet visibly** and log a warning rather than leave a hidden/offscreen session trapped. Never touch a manually opened sheet or count cleanup as an import failure after verified data has been committed.
+- Progress percentage now assigns equal weight to authorized characters, with up to 90% of an unfinished character earned by actual tab visits; a failed character earns zero. Thus 1 of 2 completed with the other failed reads 50%, not misleading 88%. Keep auto-hide exclusively for 100% error-free completion and existing tabletop-safe positioning.
+- Added synthetic regressions for empty initial view with navigable tabs, empty retry/strict refusal, missing close control and percentage accuracy. Run Firefox/Chrome CI and publish signed build only after validation; real DM session and non-premium delayed content acceptance remain unverified.
+
 ## 2026-10-30 — slow DM resource loading (v3.10.32 candidate)
 
 - User observed that some Roll20 non-premium DM sessions have a ~10-second loading timer before all resources are present. Treat this as a real delayed-resource case, not proof that Roll20 imposes a universal subscription-specific timer.
