@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- Synthetic NPC sheet copying the structure of Roll20's official D&D 2024
+     NPC sheet (Oct 2026). It renders two layouts; npc__large and npc__small. -->
+<html><body><div id="app"><div class="dnd-sheet npc-sheet"><div class="layout-grid npc--wrapper"><div class="compact-sheet-npc">
+ <div class="manage"><div class="manage__roll-mode"><div class="poly-radio manage__roll-privacy--radio" role="radiogroup">
+  <div role="radio" aria-checked="true">Public</div><div role="radio" aria-checked="false">Whisper</div></div></div></div>
+ <div class="npc__column npc__large">
+  <div class="npc-info"><span class="npc-info__name">Cave Bear</span><div class="npc-info__challenge-rating-box">2</div>
+   <div class="poly-value npc-info__hp-average" value="42"></div><div class="poly-value armor__total" value="12"></div><div class="poly-value speed__walk" value="40"></div>
+   <div class="npc-info__initiative"><div class="poly-button initiative"><button type="button"><span>Roll</span><div class="poly-value poly-value--npc-button-text" value="(+1)"></div></button></div></div></div>
+  <div class="npc-abilities--wrapper"><div class="inline-ability"><label class="utility-incrementer__label">STR</label><input class="utility-incrementer__input" aria-valuenow="20">
+   <div class="poly-button poly-button--ability"><button type="button"><span>+5</span></button></div>
+   <div class="poly-button poly-button--compact-saving-throw"><button type="button"><span>+5</span></button></div></div>
+   <div class="poly-button npc-abilities__skill-button"><button type="button"><span class="npc-skill__name">Perception</span><span class="npc-skill__value">+3</span></button></div></div>
+  <div class="npc-features--wrapper"><div class="npc-features__header">Features &amp; Traits</div>
+   <div class="npc-feature"><div class="poly-value npc-feature__combined-name-desc" value="Smells prey from far away."><label class="poly-value__label">Keen Smell:</label></div>
+    <div class="poly-button npc-feature__button npc-feature__chat"><button type="button"></button></div></div></div>
+ </div>
+ <div class="npc__column npc__large"><div class="npc-actions--wrapper">
+  <div class="npc-actions__header">Actions</div>
+  <div class="npc-actions__actions"><div class="attack-item"><span class="span--item-row-title">Bite</span><span class="span--item-row-subtitle">Melee</span>
+   <div class="attack-item__range"><span>5 ft.</span></div>
+   <div class="poly-button poly-button--hit-dc"><button type="button"><span>+7 Attack</span></button></div>
+   <div class="damage-buttons"><div class="poly-button poly-button--damage"><button type="button"><span>2d8+5</span></button></div></div></div></div>
+  <div class="npc-actions__header">Bonus Actions</div>
+  <div class="npc-actions__actions"><div class="attack-item"><span class="span--item-row-title">Claw</span>
+   <div class="poly-button poly-button--hit-dc"><button type="button"><span>+7 Attack</span></button></div>
+   <div class="damage-buttons"><div class="poly-button poly-button--damage"><button type="button"><span>2d6+5</span></button></div></div></div></div>
+ </div></div>
+ <div class="npc__column npc__small"><span class="npc-info__name">Cave Bear</span>
+  <div class="attack-item"><span class="span--item-row-title">Bite</span><div class="poly-button poly-button--hit-dc"><button type="button"><span>+7 Attack</span></button></div></div></div>
+</div></div></div></div></body></html>

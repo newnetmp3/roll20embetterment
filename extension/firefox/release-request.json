@@ -1,6 +1,0 @@
-{
-  "version": "3.10.33",
-  "channel": "unlisted",
-  "distribution": "github-release",
-  "reason": "Resolve DM preload screenshot: empty Current view must not prevent scanning authorized Combat/Inventory/Features tabs; retry all-tab traversal once if fully empty, restore an owned sheet visibly if Roll20 exposes no safe close control, and show truthful per-character percentage."
-}

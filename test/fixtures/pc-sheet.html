@@ -1,0 +1,114 @@
+<!doctype html>
+<!-- Synthetic PC sheet copying the structure of Roll20's official D&D 2024
+     sheet (Oct 2026). Made-up character; no real campaign data. -->
+<html><body><div id="app"><div class="dnd-sheet pc-sheet">
+<div class="wrapper wrapper--mobile"><div class="attack-item"><span class="span--item-row-title">Dagger</span>
+  <div class="poly-button poly-button--hit-dc"><button type="button"><span>+9 Attack</span></button></div></div></div>
+<div class="layout-grid wrapper wrapper--desktop">
+ <div class="manage"><div class="manage__roll-mode">
+  <div class="poly-radio manage__roll-privacy--radio" role="radiogroup">
+   <div role="radio" aria-checked="true"><div class="poly-radio__button-label">Public</div></div>
+   <div role="radio" aria-checked="false"><div class="poly-radio__button-label">Whisper</div></div></div>
+  <div class="poly-radio manage__roll-mode--radio" role="radiogroup">
+   <div role="radio" aria-checked="false"><div class="poly-radio__button-label">Advantage</div></div>
+   <div role="radio" aria-checked="false"><div class="poly-radio__button-label">Disadvantage</div></div>
+   <div role="radio" aria-checked="true"><div class="poly-radio__button-label">Automatic</div></div></div></div></div>
+ <div class="compact-sheet__hp-and-info"><span class="level">5</span><span class="help-title__panel-title profile__name">Test Hero</span></div>
+ <div class="hp-panel">
+  <input class="utility-incrementer__input" title="Current Hitpoints" aria-valuenow="30" type="text">
+  <input class="utility-incrementer__input" title="Max Hitpoints" aria-valuenow="44" type="text">
+  <input class="utility-incrementer__input" title="Temp" aria-valuenow="0" type="text">
+  <input class="poly-incrementer__input" title="Heal or Damage" aria-valuenow="1" type="text">
+  <button class="utility-button utility-button--harm" type="button"></button>
+  <button class="utility-button utility-button--heal" type="button"></button>
+  <button class="utility-button utility-button--default" aria-label="Short Rest" type="button">Short Rest</button>
+  <button class="utility-button utility-button--default" aria-label="Long Rest" type="button">Long Rest</button>
+  <div class="inline-hit-dice"><div class="poly-button poly-button--default"><button aria-label="Roll a d10 hit die for Fighter" type="button">D10 (Fighter)</button></div>
+   <div class="inline-hit-dice__entry"><input aria-valuenow="4"><input aria-valuenow="5"></div></div>
+ </div>
+ <div class="ac-speed"><input aria-valuenow="16"><input aria-valuenow="30"></div>
+ <div class="poly-button initiative-btn"><button type="button">Initiative +2</button></div>
+ <div class="inline-abilities-panel">
+  <div class="inline-ability"><label class="utility-incrementer__label">STR</label><input class="utility-incrementer__input" aria-valuenow="16" title="STR">
+   <div class="poly-button poly-button--ability"><button class="ability-button" type="button"><span>+3</span></button></div>
+   <div class="poly-button poly-button--compact-saving-throw"><button class="save-button" type="button"><span>+6</span></button></div></div>
+ </div>
+ <div class="layout-tabbed-panel">
+  <div class="layout-tabbed-panel__display" role="tabpanel"><div class="combat-tab">
+   <div class="sticky-section combat-tab__attacks"><div class="section-header"><span class="section-header__main-header">Attacks</span></div>
+    <div class="attack-item"><div class="attack-item__title-chat"><span class="span--item-row-title">Dagger</span>
+      <div class="poly-button poly-button--item-row-chat"><button type="button"><div aria-label="chat"></div></button></div></div>
+     <span class="span--item-row-subtitle">Melee</span><div class="attack-item__range"><span>5 ft.</span></div>
+     <div class="poly-button poly-button--hit-dc"><button type="button"><span>+6 Attack</span></button></div>
+     <div class="damage-buttons"><div class="poly-button poly-button--damage"><button type="button"><span>1d4+3</span><div class="poly-icon--damage-icon" aria-label="piercing"></div></button></div></div></div>
+    <div class="attack-item"><div class="attack-item__title-chat"><span class="span--item-row-title">Dagger (Thrown)</span>
+      <div class="poly-button poly-button--item-row-chat"><button type="button"><div aria-label="chat"></div></button></div></div>
+     <span class="span--item-row-subtitle">Ranged</span><div class="attack-item__range"><span>20/60 ft.</span></div>
+     <div class="poly-button poly-button--hit-dc"><button type="button"><span>+6 Attack</span></button></div>
+     <div class="damage-buttons"><div class="poly-button poly-button--damage"><button type="button"><span>1d4+3</span></button></div></div></div>
+    <div class="attack-item"><div class="attack-item__title-chat"><span class="span--item-row-title">Longbow</span></div>
+     <div class="poly-button poly-button--hit-dc"><button type="button"><span>+5 Attack</span></button></div>
+     <div class="damage-buttons"><div class="poly-button poly-button--damage"><button type="button"><span>1d8+2</span></button></div></div></div>
+   </div>
+   <div class="sticky-section combat-tab__actions"><div class="section-header"><span class="section-header__main-header">Actions</span></div>
+    <div class="action-item"><div class="action-item__name-and-resources"><div class="name-chat"><span class="span--item-row-title">Use Healer's Kit</span>
+      <div class="poly-button poly-button--item-row-chat"><button type="button"></button></div></div>
+     <div class="draggable-list view-resource"><div class="draggable-list__item"><span class="view-resource__name">Healer's Kit</span>
+      <div class="poly-button view-resource__decrement poly-button--resources"><button type="button"><div aria-label="minus"></div></button></div>
+      <input class="poly-incrementer__input" aria-valuenow="7" type="text"><span class="view-resource__max">10</span>
+      <div class="poly-button view-resource__increment poly-button--resources"><button type="button"><div aria-label="plus"></div></button></div></div></div></div>
+     <span class="action-item__description">Stabilize a creature.</span></div>
+    <div class="action-item"><div class="action-item__name-and-resources"><div class="name-chat"><span class="span--item-row-title">Drink Potion of Healing</span>
+      <div class="poly-button poly-button--item-row-chat"><button type="button"></button></div></div></div>
+     <div class="poly-button poly-button--healing"><button type="button"><span>2d4+2</span></button></div></div>
+   </div>
+   <div class="sticky-section combat-tab__actions"><div class="section-header"><span class="section-header__main-header">Bonus Actions</span></div>
+    <div class="action-item"><div class="action-item__name-and-resources"><div class="name-chat"><span class="span--item-row-title">Second Wind</span>
+      <div class="poly-button poly-button--item-row-chat"><button type="button"></button></div></div>
+     <div class="draggable-list view-resource"><div class="draggable-list__item"><span class="view-resource__name">Second Wind</span>
+      <label class="range-counter"><input class="range-counter__input" aria-valuenow="2" type="range" min="0" max="2" value="2">
+      <div class="range-counter__wrapper"><button data-testid="option-1"></button><button data-testid="option-2"></button></div></label></div></div></div>
+     <div class="poly-button poly-button--healing"><button type="button"><span>1d10+5</span></button></div></div>
+   </div>
+  </div></div>
+  <div class="layout-tabbed-panel__display" role="tabpanel" style="display: none;"><div class="skill-panel">
+   <div class="skill"><div class="skill__summary"><button aria-label="Roll a Stealth check" class="skill__name">Stealth</button>
+    <span class="skill__ability">DEX</span><span class="skill__bonus" data-prof="Proficient"><span>+5</span></span></div></div>
+   <button aria-label="Roll a Thieves' Tools check" class="tool">Thieves' Tools</button>
+  </div></div>
+  <div class="layout-tabbed-panel__display" role="tabpanel" style="display: none;"><div class="spells-tab">
+   <div class="sticky-section full-screen-spells__sticky-section"><span class="full-screen-spells__sticky-header-level">1ST</span>
+    <div class="spell-item"><div class="utility-switch utility-switch--prepared"><button role="switch" aria-checked="true"></button></div>
+     <span class="spell-item__name span--item-row-title">Magic Missile</span>
+     <div class="poly-button spell-item__chat poly-button--item-row-chat"><button type="button"></button></div>
+     <div class="spell-item__range"><span>120 feet</span></div><div class="spell-item__hit-dc"></div>
+     <div class="spell-item__damage"><div class="damage-buttons"><div class="poly-button poly-button--damage"><button type="button"><span>3d4+3</span></button></div></div></div></div>
+   </div></div></div>
+  <div class="layout-tabbed-panel__display" role="tabpanel" style="display: none;"><div class="inventory-tab">
+   <div class="sticky-section"><div class="section-header"><span class="section-header__main-header">Equipment</span></div>
+    <div class="item-item"><div class="utility-switch item-item__equip-switch"><button role="switch" aria-checked="true"></button></div>
+     <span class="span--item-row-title item-item__title">Dagger</span><ul class="item-item__subtitle"><li>Melee Weapon</li></ul>
+     <span class="item-item__weight">1 lb</span>
+     <div class="poly-incrementer item-item__quantity-incrementer"><input class="poly-incrementer__input" aria-valuenow="2">
+      <button class="poly-incrementer__button poly-incrementer__button--increment"></button><button class="poly-incrementer__button poly-incrementer__button--decrement"></button></div>
+     <div class="poly-button item-item__chat--desktop poly-button--item-row-chat"><button type="button"></button></div></div>
+    <div class="item-item"><span class="span--item-row-title item-item__title">Potion of Healing</span><ul class="item-item__subtitle"><li>Gear</li></ul>
+     <div class="poly-incrementer item-item__quantity-incrementer"><input class="poly-incrementer__input" aria-valuenow="3">
+      <button class="poly-incrementer__button poly-incrementer__button--increment"></button><button class="poly-incrementer__button poly-incrementer__button--decrement"></button></div>
+     <div class="poly-button item-item__chat--desktop poly-button--item-row-chat"><button type="button"></button></div></div>
+    <div class="item-item"><span class="span--item-row-title item-item__title">Healer's Kit</span>
+     <div class="poly-incrementer item-item__quantity-incrementer"><input class="poly-incrementer__input" aria-valuenow="1"></div></div>
+   </div></div></div>
+  <div class="layout-tabbed-panel__display" role="tabpanel" style="display: none;"><div class="feature-tab">
+   <div class="sticky-section"><div class="section-header"><span class="section-header__main-header">Class Features</span></div>
+    <div class="feature-item"><div class="feature-item__title-chat"><span class="span--item-row-title">Second Wind</span>
+      <div class="poly-button poly-button--item-row-chat"><button type="button"></button></div></div>
+     <span class="feature-item__source">Fighter</span><div class="poly-chip feature-item__action"><span class="poly-chip__label">Bonus Action</span></div>
+     <div class="draggable-list view-resource"><div class="draggable-list__item"><span class="view-resource__name">Second Wind</span>
+      <label class="range-counter"><input class="range-counter__input" aria-valuenow="2" type="range" min="0" max="2" value="2"></label></div></div>
+     <span class="feature-item__description">Regain hit points.</span></div>
+    <div class="feature-item"><div class="feature-item__title-chat"><span class="span--item-row-title">Extra Attack</span>
+      <div class="poly-button poly-button--item-row-chat"><button type="button"></button></div></div><span class="feature-item__source">Fighter</span></div>
+   </div></div></div>
+ </div>
+</div></div></div></body></html>

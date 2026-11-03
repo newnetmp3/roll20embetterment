@@ -1,21 +1,19 @@
-name: R20eb Firefox CI
+name: Companion CI
 on:
   push:
   pull_request:
 jobs:
-  validate:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - run: npm run check:firefox
-      - run: npm run check:chrome
-      - run: git diff --exit-code -- roll20-embetterment.user.js
+          node-version: 22
+      - run: npm ci
+      - run: npm run check
+      - run: npx --yes web-ext@8.3.0 lint --source-dir dist/firefox/extension --warnings-as-errors=false
       - uses: actions/upload-artifact@v4
         with:
-          name: r20eb-firefox-unsigned
-          path: dist/firefox/roll20-embetterment-firefox-*.zip
-          if-no-files-found: error
-          retention-days: 30
+          name: roll20-sheet-companion-unsigned
+          path: dist/firefox/*.zip
