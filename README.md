@@ -70,6 +70,20 @@ shows a short message instead of doing nothing. If Roll20 changes its engine,
 following stops and ⚙ → **Copy diagnostics** shows why; everything else keeps
 working.
 
+## Movement per turn
+
+The **Movement** button (boot icon) shows how far the active character's
+token has moved this turn, against its speed from the sheet:
+
+- Distance follows the page's grid: the 5e rule counts every square,
+  diagonals included, as one square; other diagonal settings are honored.
+- A move made with waypoints counts the whole path walked, using Roll20's own
+  record of the move.
+- The count resets when that token's turn starts in the turn order. Outside
+  the turn order, use **Start a new count**.
+- **Dash** doubles the speed until the count resets. The bar turns red once
+  the token has moved further than its speed.
+
 ## No setup for players
 
 When a player joins a game, Roll20embetterment finds the character they control

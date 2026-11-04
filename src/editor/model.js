@@ -292,6 +292,21 @@
   }
 
   const LISTS = ['attacks', 'actions', 'features', 'items', 'spells', 'abilities', 'checks', 'hitDice', 'rests'];
+  // Movement this turn for the active character's token.
+  // mv: { feet, speed, units, dash, onTurn, inOrder }
+  C.movementMenu = function movementMenu(mv) {
+    const budget = mv.speed ? mv.speed * (mv.dash ? 2 : 1) : null;
+    const left = budget != null ? Math.round((budget - mv.feet) * 10) / 10 : null;
+    const items = [
+      { key: 'mv', header: true, label: 'Moved ' + mv.feet + ' ' + mv.units,
+        meter: { kind: 'move', cur: mv.feet, max: budget, units: mv.units, left, dash: !!mv.dash } },
+      { key: 'mv:dash', label: 'Dash (double speed this turn)', checked: !!mv.dash, run: { op: 'move-dash', say: mv.dash ? 'Dash off' : 'Dash' } },
+      { key: 'mv:reset', label: 'Start a new count', hint: mv.inOrder ? 'resets on its turn' : 'not in turn order',
+        run: { op: 'move-reset', say: 'Movement reset' } },
+    ];
+    return { key: 'move', icon: 'boot', label: 'Movement', badge: String(Math.round(mv.feet)), over: left != null && left < 0, items };
+  };
+
   C.buildMenus = function buildMenus(raw, prefs = {}) {
     // No character yet: still offer the companion settings and diagnostics.
     if (!raw) return [{ key: 'settings', icon: 'gear', label: 'Settings', items: rollSettings({}, prefs) }];

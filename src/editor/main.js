@@ -31,7 +31,10 @@
   let firstScan = true;
 
   const ui = C.createUI({
-    run: (act) => (active ? C.sheets.invoke(active, act, prefs) : { ok: false, msg: 'Choose a character first.' }),
+    run: (act) => {
+      if (act.op === 'move-dash' || act.op === 'move-reset') return moveAction(act.op);
+      return active ? C.sheets.invoke(active, act, prefs) : { ok: false, msg: 'Choose a character first.' };
+    },
     select: (id) => { chosen = true; return select(id, true); },
     pref: (k, v) => { prefs = { ...prefs, [k]: v }; set('prefs', prefs); refresh(); },
     toggleHidden: (id) => { C.sheets.setHidden(id, !C.sheets.isHidden(id)); refresh(); },
@@ -83,7 +86,15 @@
     ui.update({
       character: active ? { id: active, name: (snap && snap.name) || (j && j.name) || 'Character', img: (j && j.img) || '', stats: snap && snap.stats } : null,
       live: !!(active && C.sheets.isLive(active)),
-      cats: (() => { try { return C.buildMenus(snap, prefs); } catch (e) { note('menus', e); return []; } })(),
+      cats: (() => {
+        let cats = [];
+        try { cats = C.buildMenus(snap, prefs); } catch (e) { note('menus', e); }
+        try {
+          const mv = movementFor(snap);
+          if (mv) { const i = cats.findIndex((c) => c.key === 'hp'); cats.splice(i + 1, 0, C.movementMenu(mv)); }
+        } catch (e) { note('movement', e); }
+        return cats;
+      })(),
       people: people(),
     });
   }
@@ -220,6 +231,43 @@
     if (!ok && mySeq === followSeq) ui.toast('Could not open that character’s sheet.', true);
     refresh();
   }));
+  // ---- movement per turn (measured in selection.js) --------------------------
+  let moveState = { tokens: {}, turn: '', units: 'ft' };
+  const dashing = new Set(); // "tokenId:seq" — Dash lasts until that token's count resets
+  document.addEventListener('r20c-movement', guard('movement', (e) => {
+    try { moveState = JSON.parse(e.detail); } catch { return; }
+    if (active) refresh();
+  }));
+  // The active character's token: the selected one, else one on the turn, else the first.
+  function moveToken() {
+    if (!active) return null;
+    const tokens = moveState.tokens || {};
+    const sel = lastSelection && lastSelection.tokenOf && lastSelection.tokenOf[active];
+    if (sel && tokens[sel]) return sel;
+    const mine = Object.keys(tokens).filter((id) => tokens[id].char === active);
+    return mine.find((id) => id === moveState.turn) || mine[0] || null;
+  }
+  function movementFor(snap) {
+    const id = moveToken();
+    if (!id) return null;
+    const t = moveState.tokens[id];
+    const speed = snap && snap.stats && Number(snap.stats.speed) > 0 ? Number(snap.stats.speed) : null;
+    return { feet: t.feet, speed, units: moveState.units || 'ft', dash: dashing.has(id + ':' + t.seq), inOrder: !!moveState.turn };
+  }
+  function moveAction(op) {
+    const id = moveToken();
+    if (!id) return { ok: false, msg: 'No token for this character on the current page.' };
+    const t = moveState.tokens[id];
+    if (op === 'move-dash') {
+      const k = id + ':' + t.seq;
+      if (dashing.has(k)) dashing.delete(k); else dashing.add(k);
+    } else {
+      document.dispatchEvent(new CustomEvent('r20c-movement-reset', { detail: JSON.stringify({ token: id }) }));
+    }
+    refresh();
+    return { ok: true, msg: '' };
+  }
+
   function selectionStatus() {
     return new Promise((resolve) => {
       const done = (e) => { document.removeEventListener('r20c-selection-status-reply', done); try { resolve(JSON.parse(e.detail)); } catch { resolve(null); } };

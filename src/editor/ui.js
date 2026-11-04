@@ -11,6 +11,7 @@
     bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
     spark: '<path d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M6 18l3-3M15 9l3-3"/>',
     bag: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    boot: '<path d="M8 3h5v7l5.5 2.6A2.5 2.5 0 0 1 20 15v2H6V4.5"/><path d="M6 17v3h14v-3"/><path d="M13 7h-2.5M13 10h-2.5"/>',
     star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
     hourglass: '<path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9"/>',
     d20: '<path d="m12 2 9 5v10l-9 5-9-5V7z"/><path d="m12 7 5 8H7z"/>',
@@ -78,6 +79,10 @@
 .meter .tmp { position: absolute; inset: 0 auto 0 0; background: repeating-linear-gradient(135deg, rgba(122,167,255,.75) 0 6px, rgba(122,167,255,.5) 6px 12px); }
 .meter .val { position: absolute; inset: 0; display: grid; place-items: center; font: 700 12px/1 inherit; color: #fff;
      text-shadow: 0 1px 2px rgba(0,0,0,.8); letter-spacing: .02em; }
+.meter.move .fill { background: linear-gradient(180deg, #e8b85a, #b7832a); }
+.meter.move .bar { background: var(--bg3); }
+.meter.move.over .fill { background: linear-gradient(180deg, #ef7b76, #b8443f); }
+.sb .badge.over { color: var(--bad); }
 .meter .sub { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--mute); }
 .row { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 6px 3px 8px; border-radius: 5px; cursor: pointer;
      outline: none; }
@@ -117,6 +122,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
 
   // Health bar: green is current HP; striped blue on top is temp HP.
   function meterFor(m) {
+    if (m.kind === 'move') return moveMeter(m);
     const box = el('div', 'meter');
     const max = Number(m.max) || 0;
     const cur = m.cur == null ? null : Number(m.cur);
@@ -132,6 +138,26 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     box.appendChild(bar);
     const left = m.temp > 0 ? m.temp + ' temp HP' : m.note ? m.note + ' HP' : 'Hit points';
     box.appendChild(el('div', 'sub', [el('span', null, left), m.ac != null ? el('span', null, 'AC ' + m.ac) : null]));
+    return box;
+  }
+
+  // Movement bar: amber is distance used this turn out of the speed; red once over.
+  function moveMeter(m) {
+    const box = el('div', 'meter move' + (m.left != null && m.left < 0 ? ' over' : ''));
+    const max = Number(m.max) || 0;
+    const cur = Number(m.cur) || 0;
+    const bar = el('div', 'bar');
+    bar.setAttribute('role', 'meter');
+    bar.setAttribute('aria-label', 'Movement used this turn');
+    bar.setAttribute('aria-valuenow', String(cur));
+    if (max) bar.setAttribute('aria-valuemax', String(max));
+    const fill = el('div', 'fill');
+    fill.style.width = (max ? Math.min(100, (cur / max) * 100) : cur ? 100 : 0) + '%';
+    bar.appendChild(fill);
+    bar.appendChild(el('div', 'val', cur + (max ? ' / ' + max : '') + ' ' + m.units));
+    box.appendChild(bar);
+    const left = m.left == null ? 'Speed unknown' : m.left < 0 ? Math.abs(m.left) + ' ' + m.units + ' over' : m.left + ' ' + m.units + ' left';
+    box.appendChild(el('div', 'sub', [el('span', null, left), m.dash ? el('span', null, 'Dashing') : null]));
     return box;
   }
 
@@ -223,6 +249,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         b.setAttribute('aria-haspopup', 'menu');
         b.setAttribute('aria-expanded', String(path[0] === cat.key));
         if (cat.key === 'hp' && hp && hp.hp !== undefined && hp.hp !== null) b.appendChild(el('span', 'badge', String(hp.hp)));
+        else if (cat.badge) b.appendChild(el('span', 'badge' + (cat.over ? ' over' : ''), cat.badge));
         strip.appendChild(b);
       }
     }

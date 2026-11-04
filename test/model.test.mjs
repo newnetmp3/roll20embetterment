@@ -81,3 +81,21 @@ test('healing rows drop the echoed "Healing" and roll healing', () => {
   assert.deepEqual(atk.run, { ref: 'attack:0:Cure Wounds Healing', op: 'dmg', arg: 0, say: 'Cure Wounds healing' });
   assert.equal(atk.controls[0].title, 'Healing');
 });
+
+test('movement menu: moved vs speed, dash doubles, over turns red', () => {
+  const m = model();
+  const base = plain(m.movementMenu({ feet: 20, speed: 30, units: 'ft', dash: false, inOrder: true }));
+  assert.equal(base.key, 'move');
+  assert.equal(base.badge, '20');
+  assert.equal(base.over, false);
+  assert.deepEqual(base.items[0].meter, { kind: 'move', cur: 20, max: 30, units: 'ft', left: 10, dash: false });
+  const dash = plain(m.movementMenu({ feet: 45, speed: 30, units: 'ft', dash: true, inOrder: true }));
+  assert.equal(dash.items[0].meter.max, 60);
+  assert.equal(dash.items[1].checked, true);
+  const over = plain(m.movementMenu({ feet: 35, speed: 30, units: 'ft', dash: false, inOrder: false }));
+  assert.equal(over.over, true);
+  assert.equal(over.items[0].meter.left, -5);
+  assert.equal(over.items[2].hint, 'not in turn order');
+  const unknown = plain(m.movementMenu({ feet: 10, speed: null, units: 'm', dash: false, inOrder: false }));
+  assert.equal(unknown.items[0].meter.max, null);
+});
