@@ -27,8 +27,28 @@ advantage settings apply as usual.
 | 🎲 Checks | Initiative, abilities and saves, skills, tools, hit dice. |
 | ⚙ Settings | Roll visibility (Public/Whisper), roll mode (Advantage/Disadvantage/Automatic/Query), companion options, **Copy diagnostics**. |
 
+Drag the bar anywhere: press on any part of it and move. A press without
+movement is an ordinary click. The position is remembered; ⚙ → **Dock bar
+beside the toolbar** puts it back. Menus open toward the side of the screen
+with more room.
+
 Keyboard: arrow keys move through menus (→ opens, ← goes back), Enter
 activates, Esc closes.
+
+## No setup for players
+
+When a player joins a game, the companion finds the character they control
+and loads that sheet hidden in the background, so the bar works right away
+and actions never wait for a sheet to open. It never gets in the way:
+
+- If the player opens that sheet themselves (Journal, token, anywhere), it is
+  shown and becomes theirs; the companion stops hiding it.
+- When they close it, it is quietly reloaded in the background.
+- Sheets the player opens for other characters are never hidden or closed.
+- GMs don't get a background sheet; they pick characters from the portrait
+  menu, and a sheet opens (hidden) when an action needs it.
+
+Turn this off with ⚙ → **Keep my character sheet loaded**.
 
 ## How it works
 
@@ -38,24 +58,28 @@ activates, Esc closes.
 - The 2024 sheet keeps every tab in the page (inactive tabs are only hidden),
   so the whole sheet is read in one pass and hidden buttons can be pressed
   without switching tabs.
-- The sheet must be loaded for an action to work. If you use an action for a
-  character whose sheet is closed, the companion opens it from the Journal and
-  (by default) keeps the window hidden. The portrait's dot is green while the
-  sheet is connected.
+- The sheet must be loaded for an action to work. Players' own sheets stay
+  loaded in the background (above). For any other character, the companion
+  opens the sheet from the Journal when needed and keeps the window hidden.
+  The portrait's dot is green while the sheet is connected.
+- Hidden sheets are hidden with a style rule written before they open, so
+  they never flash on screen.
 - Data from the last time a sheet was open is saved locally, so the menus are
   available before you open the sheet again.
 
-## Install for testing (Firefox / Floorp)
+## Install (Firefox / Floorp)
 
-1. `npm install && npm run build`
-2. Open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** →
-   choose `dist/firefox/extension/manifest.json`.
-3. Disable the old Roll20 Embetterment add-on while testing, so the two don't
-   overlap.
-4. Reload your Roll20 game and open a character sheet.
+Open the `.xpi` from the latest
+[companion release](https://github.com/newnetmp3/roll20embetterment/releases?q=companion)
+in Firefox and click **Add**. It is signed by Mozilla and updates itself.
+Disable the old Roll20 Embetterment add-on so the two don't overlap.
 
-Temporary add-ons are removed when Firefox restarts. A signed build will come
-once live testing is done.
+To release a new version: bump `version` in `package.json`, set the same
+version in `release-request.json`, and push. The **Companion signed release**
+workflow signs it, publishes the release and updates `updates.json`.
+
+For development, `npm run build` and load `dist/firefox/extension/manifest.json`
+from `about:debugging` → **Load Temporary Add-on…**.
 
 ## Not yet known / limits
 

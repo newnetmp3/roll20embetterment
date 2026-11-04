@@ -31,7 +31,9 @@
      font: 13px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--fg); }
 .strip { position: fixed; z-index: 10050; width: 44px; display: flex; flex-direction: column; gap: 2px; padding: 4px;
      background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
-     box-shadow: 2px 2px 10px rgba(0,0,0,.35); }
+     box-shadow: 2px 2px 10px rgba(0,0,0,.35); touch-action: none; user-select: none; cursor: grab; }
+.strip.dragging { cursor: grabbing; opacity: .92; box-shadow: 4px 6px 18px rgba(0,0,0,.5); }
+.strip.dragging .sb { cursor: grabbing; }
 .sb { position: relative; width: 36px; height: 36px; border: 0; border-radius: 6px; background: transparent; color: var(--fg);
      display: grid; place-items: center; cursor: pointer; padding: 0; }
 .sb:hover { background: var(--bg3); }
@@ -105,10 +107,24 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     let path = []; // open menu keys: [categoryKey, nodeKey, ...]
     let filter = '';
     let toastTimer = null;
+    let custom = null; // {x, y} once the bar has been dragged; null = docked
+    let drag = null;
+    let swallowClick = false;
     const busy = new Set();
 
     // ---- placement beside Roll20's left toolbar -----------------------------
+    const clampPos = (x, y) => ({
+      x: Math.round(Math.max(0, Math.min(x, innerWidth - strip.offsetWidth))),
+      y: Math.round(Math.max(0, Math.min(y, innerHeight - Math.min(strip.offsetHeight, innerHeight)))),
+    });
     function place() {
+      if (custom) {
+        const p = clampPos(custom.x, custom.y);
+        strip.style.left = p.x + 'px';
+        strip.style.top = p.y + 'px';
+        positionMenus();
+        return;
+      }
       const bar = document.getElementById('master-toolbar');
       const r = bar && bar.getBoundingClientRect();
       const visible = r && r.width > 10 && r.height > 40 && r.right > 0;
@@ -157,7 +173,44 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         strip.appendChild(b);
       }
     }
+    // Drag the whole bar: no handle. A press that moves more than a few
+    // pixels becomes a drag; a press that doesn't is an ordinary click.
+    strip.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const r = strip.getBoundingClientRect();
+      drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, left: r.left, top: r.top, moved: false };
+    });
+    // Track the pointer on the whole window while pressed, so a fast drag
+    // never leaves the bar behind.
+    addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.sx;
+      const dy = e.clientY - drag.sy;
+      if (!drag.moved) {
+        if (Math.hypot(dx, dy) < 5) return;
+        drag.moved = true;
+        try { strip.setPointerCapture(e.pointerId); } catch { /* window listeners cover it */ }
+        strip.classList.add('dragging');
+        if (path.length) { path = []; renderMenus(); renderStrip(); }
+      }
+      custom = clampPos(drag.left + dx, drag.top + dy);
+      strip.style.left = custom.x + 'px';
+      strip.style.top = custom.y + 'px';
+    }, true);
+    const endDrag = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (drag.moved) {
+        swallowClick = true;
+        setTimeout(() => { swallowClick = false; }, 0);
+        strip.classList.remove('dragging');
+        handlers.savePos(custom);
+      }
+      drag = null;
+    };
+    addEventListener('pointerup', endDrag, true);
+    addEventListener('pointercancel', endDrag, true);
     strip.addEventListener('click', (e) => {
+      if (swallowClick) { swallowClick = false; e.stopPropagation(); return; }
       const b = e.target.closest('.sb');
       if (!b) return;
       const key = b.dataset.cat;
@@ -269,6 +322,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (n.header || n.search) return;
       if (n.person) { handlers.select(n.person.id); path = []; render(); return; }
       if (n.pref) { handlers.pref(n.pref, !n.checked); return; }
+      if (n.dock) { custom = null; handlers.savePos(null); path = []; render(); place(); toast('Bar docked beside the toolbar.'); return; }
       if (n.diag) { Promise.resolve(handlers.diag()).then((ok) => toast(ok ? 'Diagnostics copied. Paste them into your bug report.' : 'Could not copy diagnostics.', !ok)); return; }
       if (n.children) {
         path = path.slice(0, level + 1);
@@ -311,7 +365,11 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       positionMenus();
     }
     function positionMenus() {
-      let anchorLeft = strip.getBoundingClientRect().right + 4;
+      const sr = strip.getBoundingClientRect();
+      // Open toward the side of the screen with more room.
+      const toLeft = sr.left + sr.width / 2 > innerWidth / 2;
+      let anchorLeft = sr.right + 4;
+      let anchorRight = sr.left - 4;
       menus.forEach((m, level) => {
         let top;
         if (level === 0) {
@@ -323,10 +381,11 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         }
         const w = m.offsetWidth;
         const h = m.offsetHeight;
-        const left = Math.max(4, Math.min(anchorLeft, innerWidth - w - 4));
+        const left = toLeft ? Math.max(4, anchorRight - w) : Math.max(4, Math.min(anchorLeft, innerWidth - w - 4));
         m.style.left = Math.round(left) + 'px';
         m.style.top = Math.round(Math.max(4, Math.min(top, innerHeight - h - 4))) + 'px';
         anchorLeft = left + w + 2;
+        anchorRight = left - 2;
       });
     }
 
@@ -338,8 +397,8 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       t.className = 'toast' + (bad ? ' bad' : '');
       t.textContent = text;
       const s = strip.getBoundingClientRect();
-      t.style.top = Math.round(s.bottom + 6) + 'px';
-      t.style.left = Math.round(s.left) + 'px';
+      t.style.top = Math.round(Math.min(s.bottom + 6, innerHeight - 60)) + 'px';
+      t.style.left = Math.round(Math.max(4, Math.min(s.left, innerWidth - 330))) + 'px';
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => t.remove(), bad ? 6000 : 3000);
     }
@@ -377,6 +436,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
 
     return {
       update(next) {
+        if ('pos' in next) { custom = next.pos || null; delete next.pos; place(); }
         model = { ...model, ...next };
         // Keep open menus open across updates; drop levels that vanished.
         for (let level = 1; level < path.length; level++) {

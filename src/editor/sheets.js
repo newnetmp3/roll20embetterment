@@ -75,10 +75,55 @@
     });
   }
 
+  // Sheets the companion hides. The rule is written *before* a background
+  // sheet opens, so its window never flashes on screen.
+  const hidden = new Set();
+  const owned = new Set(); // sheets the companion opened itself
+  const quietUntil = new Map(); // ignore Roll20's own setup changes right after opening
+  const style = document.createElement('style');
+  (document.head || document.documentElement).appendChild(style);
+  function writeStyle() {
+    style.textContent = [...hidden].map((id) => '.characterdialog[data-characterid="' + esc(id) +
+      '"]{visibility:hidden!important;pointer-events:none!important}').join('\n');
+  }
+  function setHidden(id, on) {
+    if (on) hidden.add(id); else hidden.delete(id);
+    writeStyle();
+  }
+  const isHidden = (id) => hidden.has(id) && !!dialogFor(id);
+
+  // The person opened a sheet the companion was keeping hidden: show it and
+  // hand it over. Covers Journal clicks and anything that brings the window
+  // to the front (Roll20 raises its z-index), such as double-clicking a token.
+  function handOver(id) {
+    if (!hidden.has(id)) return;
+    setHidden(id, false);
+    owned.delete(id);
+    emit('dialogs', openIds(), []);
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.isTrusted) return;
+    const li = e.target.closest && e.target.closest('#journalfolderroot li.journalitem[data-itemid]');
+    if (li && hidden.has(li.getAttribute('data-itemid'))) setTimeout(() => handOver(li.getAttribute('data-itemid')), 50);
+  }, true);
+  const zSeen = new Map();
+  function watchRaised() {
+    for (const id of hidden) {
+      const d = dialogFor(id);
+      if (!d) continue;
+      const z = Number(d.style.zIndex) || 0;
+      const before = zSeen.get(id);
+      zSeen.set(id, z);
+      if (before !== undefined && z > before && Date.now() > (quietUntil.get(id) || 0)) handOver(id);
+    }
+  }
+
   // Open a character's sheet the way a person would: click its Journal entry.
-  async function open(id) {
+  // With { hidden: true } it loads in the background and is never shown.
+  async function open(id, opts = {}) {
     if (live(id)) return true;
     if (!dialogFor(id)) {
+      if (opts.hidden) { setHidden(id, true); owned.add(id); quietUntil.set(id, Date.now() + 5000); }
       const entry = document.querySelector('#journalfolderroot li.journalitem[data-itemid="' + esc(id) + '"]');
       const target = entry && (entry.querySelector('.namecontainer') || entry.querySelector('.dd-content') || entry);
       if (target) target.click();
@@ -88,27 +133,29 @@
       }
     }
     setTimeout(greetAll, 1500);
-    return waitReady(id, 25000);
+    const ok = await waitReady(id, 25000);
+    if (!ok && opts.hidden && owned.has(id) && !dialogFor(id)) { setHidden(id, false); owned.delete(id); }
+    return ok;
   }
 
-  // Hide a sheet window without closing it, so actions keep working.
-  const style = document.createElement('style');
-  style.textContent = '.characterdialog.r20c-hidden{visibility:hidden!important;pointer-events:none!important}';
-  (document.head || document.documentElement).appendChild(style);
-  function setHidden(id, hidden) {
+  // Close a sheet, but only one the companion opened and is still hiding.
+  function closeOwned(id) {
     const d = dialogFor(id);
-    if (d) d.classList.toggle('r20c-hidden', !!hidden);
+    if (!d || !owned.has(id) || !hidden.has(id)) return false;
+    const btn = d.querySelector('.asv__close');
+    if (btn) btn.click();
+    return !!btn;
   }
-  const isHidden = (id) => !!dialogFor(id)?.classList.contains('r20c-hidden');
 
   async function invoke(id, act, opts = {}) {
     let opened = false;
     if (!live(id)) {
-      if (!(await open(id))) return { ok: false, msg: 'Could not open the sheet. Open it from the Journal and try again.' };
+      if (!(await open(id, { hidden: !!opts.autoHide && !act.reveal }))) {
+        return { ok: false, msg: 'Could not open the sheet. Open it from the Journal and try again.' };
+      }
       opened = true;
-      if (opts.autoHide && !act.reveal) setHidden(id, true);
     }
-    if (act.reveal) setHidden(id, false);
+    if (act.reveal) handOver(id);
     const reqId = 'r' + ++seq;
     return new Promise((resolve) => {
       const timer = setTimeout(() => { pending.delete(reqId); resolve({ ok: false, msg: 'The sheet did not answer.' }); }, opened ? 15000 : 8000);
@@ -120,21 +167,27 @@
   }
 
   // Report sheet windows opening and closing.
+  const openIds = () => [...document.querySelectorAll('.characterdialog[data-characterid]')].map((d) => d.getAttribute('data-characterid'));
   let lastDialogs = '';
   setInterval(() => {
-    const ids = [...document.querySelectorAll('.characterdialog[data-characterid]')].map((d) => d.getAttribute('data-characterid'));
+    watchRaised();
+    const ids = openIds();
     const key = ids.join(',');
     if (key !== lastDialogs) {
       const before = new Set(lastDialogs ? lastDialogs.split(',') : []);
       lastDialogs = key;
-      emit('dialogs', ids, ids.filter((x) => !before.has(x)));
+      // A closed sheet is no longer ours to hide.
+      for (const id of [...hidden]) if (!ids.includes(id) && Date.now() > (quietUntil.get(id) || 0)) { hidden.delete(id); owned.delete(id); zSeen.delete(id); }
+      writeStyle();
+      emit('dialogs', ids, ids.filter((x) => !before.has(x) && !hidden.has(x)));
       setTimeout(greetAll, 800);
     }
   }, 700);
 
   C.sheets = {
     on: (type, fn) => handlers[type].push(fn),
-    journal, open, invoke, setHidden, isHidden, greetAll,
+    journal, open, invoke, setHidden, isHidden, greetAll, closeOwned,
+    isOwned: (id) => owned.has(id),
     isLive: (id) => !!live(id),
     isOpen: (id) => !!dialogFor(id),
     refresh: (id) => post(id, { type: 'hello' }),

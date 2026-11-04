@@ -261,6 +261,8 @@
     out.push({ key: 'prefs:h', header: true, label: 'Companion' });
     out.push({ key: 'pref:autoHide', label: 'Hide sheets opened for an action', checked: !!prefs.autoHide, pref: 'autoHide' });
     out.push({ key: 'pref:spend', label: 'Spend a use when using a feature', checked: !!prefs.spend, pref: 'spend' });
+    out.push({ key: 'pref:background', label: 'Keep my character sheet loaded (players)', checked: !!prefs.background, pref: 'background' });
+    out.push({ key: 'dock', label: 'Dock bar beside the toolbar', dock: true });
     out.push({ key: 'diag', label: 'Copy diagnostics', diag: true });
     return out;
   }
