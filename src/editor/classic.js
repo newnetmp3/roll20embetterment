@@ -80,6 +80,24 @@
   const rowRef = (r, tail) => 'rep:' + r.group + ':' + r.id + ':' + tail;
   const ORD = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10] || 'th');
 
+  // "30 ft., fly 60 ft. (hover), swim 30 ft." -> { walk: 30, fly: 60, swim: 30 }
+  function speedsFrom(s) {
+    const t = String(s || '').toLowerCase();
+    const out = {};
+    const first = /^\s*(\d+)/.exec(t);
+    if (first) out.walk = Number(first[1]);
+    for (const m of t.matchAll(/\b(walk|fly|swim|climb|burrow)\w*\s*(\d+)/g)) out[m[1]] = Number(m[2]);
+    return out;
+  }
+  C.speedsFrom = speedsFrom;
+  const deathBoxes = (doc, kind) => [1, 2, 3].map((i) => doc.querySelector('input[type="checkbox"][name="attr_deathsave_' + kind + i + '"]')).filter(Boolean);
+  function deathCount(doc) {
+    const ok = deathBoxes(doc, 'succ');
+    const fail = deathBoxes(doc, 'fail');
+    if (!ok.length && !fail.length) return null;
+    return { ok: ok.filter((b) => b.checked).length, fail: fail.filter((b) => b.checked).length };
+  }
+
   function rowName(r) {
     return field(r.el, ['name', 'atkname', 'spellname', 'itemname', 'toolname', 'npc_name']) ||
       (r.buttons[0] && (text(r.buttons[0], 120) || humanize(r.buttons[0].getAttribute('name')))) || '';
@@ -102,6 +120,8 @@
         stats: {
           hp: num(field(doc, 'hp')), maxHp: num(field(doc, 'hp_max')), tempHp: num(field(doc, 'hp_temp')),
           ac: num(field(doc, isNpc ? ['npc_ac', 'ac'] : ['ac'])), speed: num(field(doc, isNpc ? ['npc_speed', 'speed'] : ['speed'])),
+          speeds: speedsFrom(field(doc, isNpc ? ['npc_speed', 'speed'] : ['speed'])),
+          deathSaves: isNpc ? null : deathCount(doc),
         },
         privacy: null, mode: null,
         attacks: [], actions: [], features: [], items: [], spells: [],
@@ -145,7 +165,7 @@
           const prep = r.el.querySelector('input[type="checkbox"][name="attr_spellprepared"]');
           snap.spells.push({
             ref: rowRef(r, 'spell'), name: nm, level: lvl === 'cantrip' ? 'CANTRIPS' : /^\d$/.test(lvl) ? ORD(Number(lvl)) : titleCase(lvl),
-            range: field(r.el, 'spellrange'), hit: '', dmg: [], tags: [field(r.el, 'spellritual') === '1' ? 'R' : '', field(r.el, 'spellconcentration') === '1' ? 'C' : ''].filter(Boolean),
+            range: field(r.el, 'spellrange'), time: field(r.el, 'spellcastingtime'), hit: '', dmg: [], tags: [field(r.el, 'spellritual') === '1' ? 'R' : '', field(r.el, 'spellconcentration') === '1' ? 'C' : ''].filter(Boolean),
             prepared: prep ? prep.checked : null,
           });
         } else if (r.g === 'tool') {
@@ -175,10 +195,12 @@
         const ref = 'btn:0:' + key;
         const label = humanize(key) || text(btn, 40);
         if (/init/i.test(key)) { if (!snap.initiative) snap.initiative = { ref, text: field(doc, ['initiative_bonus', 'npc_init']) }; continue; }
-        if (/death/i.test(key)) continue;
+        if (/death/i.test(key)) { if (!isNpc && !snap.deathSave) snap.deathSave = { ref }; continue; }
         if (/hit_?dic?e|hitdie|hd_/i.test(key)) { snap.hitDice.push({ ref, name: label, label: text(btn, 30) || label }); continue; }
         snap.checks.push({ ref, name: label, ability: '', bonus: text(btn, 8), prof: '' });
       }
+      // The Classic sheet has no rest buttons; the bar offers its own Long Rest.
+      if (!isNpc && fieldEl(doc, 'hp')) snap.rests.push({ ref: 'sheet:rest', name: 'Long Rest', op: 'longrest', desc: 'Restores HP, spell slots and half your hit dice; clears temp HP and death saves. Resources are left as they are.' });
       return snap;
     },
 
@@ -221,6 +243,29 @@
           setField(hp, Math.max(0, cur - left));
         } else setField(hp, max ? Math.min(max, cur + n) : cur + n);
         return { ok: true, msg: 'HP ' + hp.value };
+      }
+      if (op === 'longrest') {
+        const hp = fieldEl(doc, 'hp');
+        const max = num(field(doc, 'hp_max'));
+        if (!hp || !max) return { ok: false, msg: 'This sheet has no maximum HP set.' };
+        setField(hp, max);
+        const tmp = fieldEl(doc, 'hp_temp');
+        if (tmp) setField(tmp, 0);
+        for (const b of [...deathBoxes(doc, 'succ'), ...deathBoxes(doc, 'fail')]) {
+          if (b.checked) b.click();
+          if (b.checked) { b.checked = false; b.dispatchEvent(new Event('change', { bubbles: true })); }
+        }
+        // Spell slots: on this sheet "expended" holds the slots remaining.
+        let slots = 0;
+        for (let l = 1; l <= 9; l++) {
+          const left = fieldEl(doc, 'lvl' + l + '_slots_expended');
+          const total = num(field(doc, 'lvl' + l + '_slots_total'));
+          if (left && total) { setField(left, total); slots++; }
+        }
+        const hd = fieldEl(doc, 'hit_dice');
+        const hdMax = num(field(doc, 'hit_dice_max'));
+        if (hd && hdMax) setField(hd, Math.min(hdMax, (num(hd.value) || 0) + Math.max(1, Math.floor(hdMax / 2))));
+        return { ok: true, msg: 'HP ' + max + (slots ? ', spell slots restored' : '') + (hd && hdMax ? ', hit dice ' + hd.value + '/' + hdMax : '') + '.' };
       }
       const f = this.find(doc, ref);
       if (!f) return { ok: false, msg: 'That entry is no longer on the sheet.' };

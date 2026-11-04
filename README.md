@@ -23,7 +23,8 @@ advantage settings apply as usual.
 | Button | Opens |
 | --- | --- |
 | Portrait | The selected token's character. Click for the picker: open sheets and the Journal, with search. Eye button hides or shows a sheet window. |
-| ♥ Hit points | Take damage, heal, temp HP, short/long rest, hit dice (PC). NPCs show average HP and AC. |
+| ♥ Hit points | Take damage, heal, temp HP, short/long rest, hit dice (PC), concentration, death saves at 0 HP. NPCs show average HP and AC. |
+| 👢 This turn | Action / Bonus / Reaction used this turn, and movement against speed. See below. |
 | ⚔ Attacks | Weapons, each opening its attacks (e.g. Dagger → Standard / Finesse / Off-Hand / Thrown) with attack, damage and chat buttons. |
 | ⚡ Actions | Actions, Bonus Actions, Reactions and Free Actions. **Use** rolls and spends a use. |
 | ✦ Spells | Spells by level: cast (posts the spell card), attack/save and damage buttons. |
@@ -70,19 +71,43 @@ shows a short message instead of doing nothing. If Roll20 changes its engine,
 following stops and ⚙ → **Copy diagnostics** shows why; everything else keeps
 working.
 
-## Movement per turn
+## This turn: actions and movement
 
-The **Movement** button (boot icon) shows how far the active character's
-token has moved this turn, against its speed from the sheet:
+The **This turn** button (boot icon) tracks what the active character has
+used this turn.
 
-- Distance follows the page's grid: the 5e rule counts every square,
-  diagonals included, as one square; other diagonal settings are honored.
-- A move made with waypoints counts the whole path walked, using Roll20's own
-  record of the move.
-- The count resets when that token's turn starts in the turn order. Outside
-  the turn order, use **Start a new count**.
-- **Dash** doubles the speed until the count resets. The bar turns red once
-  the token has moved further than its speed.
+- **Action, Bonus, Reaction**: green while still available. Using an attack,
+  spell, action or feature from the bar marks the one it takes (from its
+  section, such as "Bonus Actions", or the spell's casting time). Click a
+  pill to flip it by hand.
+- **Movement**: how far the token has moved, against its speed from the
+  sheet. Distance follows the page's grid: the 5e rule counts every square,
+  diagonals included, as one; other diagonal settings are honored. A move
+  made with waypoints counts the whole path walked, using Roll20's own record
+  of the move.
+- **Dash** doubles the speed (and uses the action). **Difficult terrain**
+  makes every foot moved count as two while it's on. Characters with fly,
+  swim, climb or burrow speeds can pick which speed to measure against. The
+  bar turns red once the token has moved further than its speed.
+- Everything clears when that token's turn starts in the turn order. Outside
+  the turn order, use **Start a new turn**.
+- **Your turn**: when one of your characters comes up in the turn order, the
+  bar glows and switches to that character. Turn it off in ⚙ → **Highlight
+  the bar on my turn**.
+
+## Concentration, death saves and rests
+
+- Casting a concentration spell from the bar marks the character as
+  **Concentrating** (or tick it by hand in ♥ Hit points). Taking damage
+  through the bar then shows the Constitution save DC (10 or half the damage,
+  at most 30) with a button that rolls the sheet's own save.
+- At 0 HP a **Death saving throw** button appears (the sheet's own, or a d20
+  posted to chat when the sheet has none). Classic sheets also show the
+  successes and failures ticked.
+- The 2024 sheet's Short Rest and Long Rest buttons are in ♥ Hit points. The
+  Classic sheet has none, so the bar adds a **Long Rest** that restores HP,
+  spell slots and half the hit dice, and clears temp HP and death saves.
+  Class resources are left alone, since they recharge on different rests.
 
 ## No setup for players
 

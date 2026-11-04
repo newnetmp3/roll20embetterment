@@ -21,7 +21,8 @@ Roll20embetterment adds a compact action bar beside Roll20's left toolbar for D&
 - Attacks, spells, inventory, features & traits, resources, checks and saves in cascading menus.
 - Every roll presses the character sheet's own button, so chat cards are Roll20's normal ones (including the Damage button after an attack).
 - Follows the token you select: GMs get the NPC's actions, players their own character.
-- Hit points as a health bar, with take damage / heal / temp HP.
+- Hit points as a health bar, with take damage / heal / temp HP, concentration save DCs and death saves.
+- Tracks each turn: Action, Bonus Action and Reaction used, and how far your token has moved against its speed (Dash, difficult terrain, fly/swim speeds). Resets when your turn comes up, and the bar lights up when it's your turn.
 - Keeps the sheet it needs loaded in the background, so actions work without opening a sheet window.
 - Works with the "D&D Fifth Edition (5E & 5.5E) by Roll20" sheet and the older "D&D 5E (Classic) by Roll20" sheet, for player characters and NPCs.
 - Drag the bar anywhere; Alt+Shift+C puts it back.
@@ -34,6 +35,8 @@ Privacy: the add-on collects and sends no data. It runs only on app.roll20.net a
 
 - Source is plain, unminified JavaScript; the uploaded files are the repository's `src/` files as-is (built by `scripts/build.mjs`, which only copies files and writes the manifest). Repository: https://github.com/newnetmp3/roll20embetterment
 - `src/editor/selection.js` runs in the page (MAIN world) and only reads Roll20's own `window.MeshManager.engine.tabletop.getSelection()` to learn which character the selected token represents. It sends the result to the content script as a JSON string in a DOM CustomEvent. It changes nothing in the page.
+- The same script also reads, read-only, Roll20's `window.Campaign` page data (token positions, the page's grid scale and the turn order) to measure how far each token moved this turn. It sends only distances and token ids to the content script, the same way.
+- Two actions write to Roll20's own UI, both only when the user clicks them: a death or Constitution save on a sheet without its own button types a d20 roll into Roll20's chat box and presses Send; the Classic sheet's Long Rest sets the sheet's own HP, spell slot and hit dice fields.
 - `wrappedJSObject` is used read-only to look up the current player id, whether the user is the GM, and the characters they control.
 - Sheet actions are performed by clicking the official sheet's own buttons inside the sheet frame (messages between frames are origin-checked).
 - No remote code, no network requests, no analytics.

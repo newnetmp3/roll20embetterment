@@ -18,7 +18,7 @@ test('Attacks menu: weapon -> attack, with attack/damage/chat buttons', () => {
   const attacks = cat(cats, 'attacks').items;
   assert.deepEqual(attacks.map((n) => n.label), ['Dagger', 'Longbow']);
   assert.deepEqual(attacks[0].children.map((n) => n.label), ['Standard', 'Thrown']);
-  assert.deepEqual(plain(attacks[0].children[1].run), { ref: 'attack:0:Dagger (Thrown)', op: 'hit', say: 'Dagger (Thrown) attack' });
+  assert.deepEqual(plain(attacks[0].children[1].run), { ref: 'attack:0:Dagger (Thrown)', op: 'hit', say: 'Dagger (Thrown) attack', econ: 'action' });
   assert.deepEqual(attacks[1].controls.map((c) => c.label), ['+5', '1d8+2', '💬']);
   assert.equal(attacks[1].children, undefined, 'a single attack is clickable directly');
 });
@@ -78,24 +78,80 @@ test('healing rows drop the echoed "Healing" and roll healing', () => {
   const snap = { type: 'pc', stats: {}, attacks: [{ ref: 'attack:0:Cure Wounds Healing', name: 'Cure Wounds Healing', range: 'Touch', hit: '', dmg: [{ text: '2d8+3', type: 'healing' }] }] };
   const atk = plain(m.buildMenus(snap)).find((c) => c.key === 'attacks').items[0];
   assert.equal(atk.label, 'Cure Wounds');
-  assert.deepEqual(atk.run, { ref: 'attack:0:Cure Wounds Healing', op: 'dmg', arg: 0, say: 'Cure Wounds healing' });
+  assert.deepEqual(atk.run, { ref: 'attack:0:Cure Wounds Healing', op: 'dmg', arg: 0, say: 'Cure Wounds healing', econ: 'action' });
   assert.equal(atk.controls[0].title, 'Healing');
 });
 
-test('movement menu: moved vs speed, dash doubles, over turns red', () => {
+test('turn menu: moved vs speed, dash doubles, over turns red', () => {
   const m = model();
-  const base = plain(m.movementMenu({ feet: 20, speed: 30, units: 'ft', dash: false, inOrder: true }));
-  assert.equal(base.key, 'move');
+  const mv = (o) => ({ feet: 20, speed: 30, speeds: { walk: 30 }, mode: 'walk', units: 'ft', dash: false, difficult: false, ...o });
+  const at = (menu, key) => menu.items.find((n) => n.key === key);
+  const base = plain(m.turnMenu({ used: {}, inOrder: true, move: mv() }));
+  assert.equal(base.key, 'turn');
   assert.equal(base.badge, '20');
   assert.equal(base.over, false);
-  assert.deepEqual(base.items[0].meter, { kind: 'move', cur: 20, max: 30, units: 'ft', left: 10, dash: false });
-  const dash = plain(m.movementMenu({ feet: 45, speed: 30, units: 'ft', dash: true, inOrder: true }));
-  assert.equal(dash.items[0].meter.max, 60);
-  assert.equal(dash.items[1].checked, true);
-  const over = plain(m.movementMenu({ feet: 35, speed: 30, units: 'ft', dash: false, inOrder: false }));
+  assert.deepEqual(at(base, 'mv').meter, { kind: 'move', cur: 20, max: 30, units: 'ft', left: 10, dash: false, difficult: false, mode: '' });
+  const dash = plain(m.turnMenu({ used: {}, inOrder: true, move: mv({ feet: 45, dash: true }) }));
+  assert.equal(at(dash, 'mv').meter.max, 60);
+  assert.equal(at(dash, 'mv:dash').checked, true);
+  const over = plain(m.turnMenu({ used: {}, inOrder: false, move: mv({ feet: 35 }) }));
   assert.equal(over.over, true);
-  assert.equal(over.items[0].meter.left, -5);
-  assert.equal(over.items[2].hint, 'not in turn order');
-  const unknown = plain(m.movementMenu({ feet: 10, speed: null, units: 'm', dash: false, inOrder: false }));
-  assert.equal(unknown.items[0].meter.max, null);
+  assert.equal(at(over, 'mv').meter.left, -5);
+  assert.equal(at(over, 'turn:reset').hint, 'not in turn order');
+  const unknown = plain(m.turnMenu({ used: {}, inOrder: false, move: mv({ feet: 10, speed: null, units: 'm' }) }));
+  assert.equal(at(unknown, 'mv').meter.max, null);
+});
+
+test('turn menu: action pips, speed choices, no token', () => {
+  const m = model();
+  const t = plain(m.turnMenu({ used: { action: true }, inOrder: true, move: { feet: 0, speed: 60, speeds: { walk: 30, fly: 60 }, mode: 'fly', units: 'ft' } }));
+  assert.deepEqual(t.items[0].econ.map((p) => p.used), [true, false, false]);
+  assert.equal(t.items.find((n) => n.key === 'mv:mode:fly').checked, true);
+  assert.equal(t.items.find((n) => n.key === 'mv').meter.mode, 'Fly');
+  const none = plain(m.turnMenu({ used: { bonus: true }, inOrder: false, move: null }));
+  assert.equal(none.badge, '2'); // two of three still available
+  assert.deepEqual(none.items.map((n) => n.key), ['econ', 'turn:reset']);
+});
+
+test('actions are tagged with the part of the turn they use', () => {
+  const m = model();
+  assert.equal(m.econOf('Bonus Actions'), 'bonus');
+  assert.equal(m.econOf('Reactions'), 'reaction');
+  assert.equal(m.econOf('Actions'), 'action');
+  assert.equal(m.econOf('Legendary Actions'), '');
+  assert.equal(m.econOf('1 bonus action'), 'bonus');
+  assert.equal(m.econOf('Other'), null);
+  const snap = {
+    type: 'pc', name: 'T', stats: {},
+    attacks: [{ ref: 'a', name: 'Dagger', hit: '+5 Attack', dmg: [{ text: '1d4', type: '' }], range: '' }],
+    actions: [{ ref: 'b', name: 'Cunning Action', section: 'Bonus Actions', res: [] }],
+    spells: [{ ref: 's', name: 'Bless', level: '1ST', tags: ['C'], dmg: [], hit: '', range: '' }, { ref: 'h', name: 'Healing Word', level: '1ST', time: '1 bonus action', tags: [], dmg: [], hit: '', range: '' }],
+  };
+  const cats = plain(m.buildMenus(snap));
+  const find = (key) => { let hit = null; const walk = (ns) => ns.forEach((n) => { if (n.key === key) hit = hit || n; if (n.children) walk(n.children); }); cats.forEach((c) => walk(c.items)); return hit; };
+  assert.equal(find('a').run.econ, 'action');
+  assert.equal(find('a').controls[1].run.econ, undefined); // damage after the attack roll uses nothing more
+  assert.equal(find('b').run.econ, 'bonus');
+  assert.equal(find('s').run.econ, 'action');
+  assert.equal(find('s').run.conc, 'Bless');
+  assert.equal(find('h').run.econ, 'bonus');
+});
+
+test('concentration and death saves in the hit point menu', () => {
+  const m = model();
+  assert.equal(m.concentrationDC(8), 10);
+  assert.equal(m.concentrationDC(27), 13);
+  assert.equal(m.concentrationDC(90), 30);
+  const snap = { type: 'pc', name: 'T', stats: { hp: 0, maxHp: 20, deathSaves: { ok: 1, fail: 2 } }, abilities: [{ ref: 'ability:0:CON', name: 'CON' }] };
+  const hp = plain(m.buildMenus(snap, {}, { conc: { spell: 'Bless', dc: 12 } })).find((c) => c.key === 'hp').items;
+  const death = hp.find((n) => n.key === 'death');
+  assert.equal(death.hint, '✓1 ✗2');
+  assert.equal(death.run.op, 'chat-roll');
+  assert.equal(hp.find((n) => n.key === 'conc').label, 'Concentrating: Bless');
+  const save = hp.find((n) => n.key === 'conc:save');
+  assert.equal(save.hint, 'DC 12');
+  assert.deepEqual([save.run.ref, save.run.op, save.run.clearsDc], ['ability:0:CON', 'save', true]);
+  const healthy = plain(m.buildMenus({ ...snap, stats: { hp: 5, maxHp: 20 } })).find((c) => c.key === 'hp').items;
+  assert.equal(healthy.some((n) => n.key === 'death'), false);
+  assert.equal(healthy.find((n) => n.key === 'conc').checked, false);
 });
