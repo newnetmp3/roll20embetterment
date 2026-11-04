@@ -1,5 +1,8 @@
 # Roll20embetterment
 
+> **Foundry VTT:** the same bar is also available as a Foundry module for the
+> dnd5e system. See [foundry/README.md](foundry/README.md).
+
 A Firefox extension that adds a slim action bar beside Roll20's left toolbar.
 It reads the official **D&D 2024** character sheet (PCs and NPCs) and lets you
 attack, cast, use items and features, roll checks and saves, and track

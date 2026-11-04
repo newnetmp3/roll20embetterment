@@ -138,7 +138,7 @@
   C.linkFor = linkFor;
   // Weapons link to attacks too, so only a link to an action (or a
   // consumable-sounding name) marks an item as used up.
-  const isConsumable = (item, snap) => CONSUMABLE.test(item.name) || (linkFor(item, snap) || {}).kind === 'action';
+  const isConsumable = (item, snap) => !!item.consumable || CONSUMABLE.test(item.name) || (linkFor(item, snap) || {}).kind === 'action';
   C.isConsumable = isConsumable;
 
   function itemNode(item, snap) {
@@ -150,6 +150,8 @@
         ? { ...attackNode(x, 'Use: ' + x.name), key: 'use:' + x.ref }
         : { ...actionNode(x), key: 'use:' + x.ref, label: 'Use: ' + x.name });
     }
+    // Items the VTT can use directly (Foundry): a plain Use row.
+    if (!link && item.usable) children.push({ key: 'use', label: 'Use', hint: item.timing || '', run: withEcon({ ref: item.ref, op: 'use', say: item.name }, econOf(item.timing) || null) });
     if (item.qty !== null) {
       children.push({
         key: 'qty', label: 'Quantity', hint: String(item.qty),
@@ -284,7 +286,7 @@
   function concentration(snap, conc) {
     if (!conc) return [{ key: 'conc', label: 'Concentrating', checked: false, desc: 'Track a concentration spell by hand. Casting a C spell from the bar starts this for you.', run: { op: 'conc-start', say: 'Concentrating' } }];
     const out = [{ key: 'conc', label: 'Concentrating' + (conc.spell ? ': ' + conc.spell : ''), checked: true, desc: 'Click to stop concentrating.', run: { op: 'conc-end', say: 'Concentration ended' } }];
-    if (conc.dc) out.push({ key: 'conc:save', label: 'Concentration save', hint: 'DC ' + conc.dc, run: { ...conSave(snap, 'Concentration save (DC ' + conc.dc + ')'), clearsDc: true } });
+    if (conc.dc) out.push({ key: 'conc:save', label: 'Concentration save', hint: 'DC ' + conc.dc, run: { ...conSave(snap, 'Concentration save (DC ' + conc.dc + ')'), clearsDc: true, dc: conc.dc } });
     return out;
   }
 
@@ -301,7 +303,7 @@
   function health(snap, ctx = {}) {
     const s = snap.stats || {};
     const out = [];
-    if (snap.type === 'pc') {
+    if (snap.type === 'pc' || snap.hpEditable) {
       out.push({
         key: 'hp', header: true, label: 'HP ' + (s.hp ?? '—') + ' / ' + (s.maxHp ?? '—') + (s.tempHp ? '  (+' + s.tempHp + ' temp)' : ''),
         meter: { cur: s.hp ?? null, max: s.maxHp ?? null, temp: s.tempHp || 0, ac: s.ac ?? null },
@@ -333,11 +335,12 @@
     };
     radio(snap.privacy, 'privacy', 'Roll visibility');
     radio(snap.mode, 'mode', 'Roll mode');
-    out.push({ key: 'prefs:h', header: true, label: 'Roll20embetterment' });
-    out.push({ key: 'pref:autoHide', label: 'Hide sheets opened for an action', checked: !!prefs.autoHide, pref: 'autoHide' });
-    out.push({ key: 'pref:spend', label: 'Spend a use when using a feature', checked: !!prefs.spend, pref: 'spend' });
+    out.push({ key: 'prefs:h', header: true, label: (C.TEXT && C.TEXT.product) || 'Roll20embetterment' });
+    // Foundry runs actions through the system itself: no sheet windows to manage.
+    if (!snap.foundry) out.push({ key: 'pref:autoHide', label: 'Hide sheets opened for an action', checked: !!prefs.autoHide, pref: 'autoHide' });
+    if (!snap.foundry) out.push({ key: 'pref:spend', label: 'Spend a use when using a feature', checked: !!prefs.spend, pref: 'spend' });
     out.push({ key: 'pref:follow', label: 'Follow the selected token', checked: !!prefs.follow, pref: 'follow' });
-    out.push({ key: 'pref:background', label: 'Keep my character sheet loaded (players)', checked: !!prefs.background, pref: 'background' });
+    if (!snap.foundry) out.push({ key: 'pref:background', label: 'Keep my character sheet loaded (players)', checked: !!prefs.background, pref: 'background' });
     out.push({ key: 'pref:turnCue', label: 'Highlight the bar on my turn', checked: prefs.turnCue !== false, pref: 'turnCue' });
     out.push({ key: 'dock', label: 'Dock bar beside the toolbar', dock: true });
     out.push({ key: 'diag', label: 'Copy diagnostics', diag: true });
@@ -362,9 +365,10 @@
         { key: 'mv', header: true, label: 'Moved ' + mv.feet + ' ' + mv.units,
           meter: { kind: 'move', cur: mv.feet, max: budget, units: mv.units, left, dash: !!mv.dash, difficult: !!mv.difficult, mode: mv.mode && mv.mode !== 'walk' ? SPEED_NAMES[mv.mode] : '' } },
         { key: 'mv:dash', label: 'Dash (double speed this turn)', checked: !!mv.dash, run: { op: 'move-dash', say: mv.dash ? 'Dash off' : 'Dash' } },
-        { key: 'mv:difficult', label: 'Difficult terrain', hint: 'costs double', checked: !!mv.difficult,
-          desc: 'While on, each foot moved counts as two.', run: { op: 'move-difficult', say: mv.difficult ? 'Difficult terrain off' : 'Difficult terrain' } },
       );
+      // null: the VTT measures terrain itself (Foundry regions).
+      if (mv.difficult != null) items.push({ key: 'mv:difficult', label: 'Difficult terrain', hint: 'costs double', checked: !!mv.difficult,
+        desc: 'While on, each foot moved counts as two.', run: { op: 'move-difficult', say: mv.difficult ? 'Difficult terrain off' : 'Difficult terrain' } });
       const modes = Object.keys(mv.speeds || {}).filter((k) => SPEED_NAMES[k]);
       if (modes.length > 1) {
         items.push({ key: 'mv:modes', header: true, label: 'Speed' });
@@ -380,7 +384,7 @@
 
   C.buildMenus = function buildMenus(raw, prefs = {}, ctx = {}) {
     // No character yet: still offer the companion settings and diagnostics.
-    if (!raw) return [{ key: 'settings', icon: 'gear', label: 'Settings', items: rollSettings({}, prefs) }];
+    if (!raw) return [{ key: 'settings', icon: 'gear', label: 'Settings', items: rollSettings({ foundry: !!ctx.foundry }, prefs) }];
     // Tolerate snapshots with missing parts (older saves, unusual sheets).
     const snap = { ...raw, stats: raw.stats || {} };
     for (const k of LISTS) if (!Array.isArray(snap[k])) snap[k] = [];
