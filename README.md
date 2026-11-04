@@ -52,7 +52,7 @@ Games can enable both the 2024 sheet and the older "D&D 5E (Classic) by
 Roll20" sheet; compendium NPCs often use Classic. Roll20 draws a Classic
 sheet straight into the page, so `src/editor/classic.js` reads it from the
 editor and presses its own roll buttons (actions, bonus actions, reactions,
-legendary actions, traits, saves, skills, initiative). Rolls post Roll20's
+legendary actions, traits, saves, skills, initiative; for player characters also attacks, spells, inventory, features & traits and resources). Rolls post Roll20's
 normal chat cards.
 
 Roll20 has no public "selected token" API, so `src/editor/selection.js` runs in
