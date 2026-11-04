@@ -2,3 +2,4 @@ dist/
 node_modules/
 # Raw sheet dumps from a real campaign hold private character data.
 *.private.html
+__pycache__/
