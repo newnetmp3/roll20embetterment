@@ -1,8 +1,9 @@
 {
   "name": "roll20embetterment",
-  "version": "5.4.3",
+  "version": "5.5.0",
   "private": true,
   "type": "module",
+  "license": "MIT",
   "description": "Sidebar action bar and character-sheet companion for Roll20 D&D 5E sheets (Firefox)",
   "scripts": {
     "build": "node scripts/build.mjs",

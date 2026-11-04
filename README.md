@@ -12,6 +12,12 @@ advantage settings apply as usual.
 > This is v5, a from-scratch rewrite. The previous extension (v3, "Roll20
 > Embetterment") is preserved on the `main` branch history and its releases.
 
+
+> Unofficial fan tool, not affiliated with Roll20. MIT licensed (see `LICENSE`).
+> Listing text for addons.mozilla.org: `store/amo-listing.md`. `npm run build`
+> also writes `dist/firefox/roll20embetterment-<version>-amo.zip`, the upload
+> for the listed (Mozilla-hosted) version, which has no self-hosted update URL.
+
 ## What's on the bar
 
 | Button | Opens |

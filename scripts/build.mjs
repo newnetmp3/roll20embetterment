@@ -15,7 +15,7 @@ export const manifest = {
   manifest_version: 3,
   name: 'Roll20embetterment',
   version: pkg.version,
-  description: 'Sidebar action bar for Roll20 D&D 2024 PC and NPC sheets. Uses the sheet\'s own buttons, so chat rolls keep their Damage button.',
+  description: 'Unofficial action bar for Roll20 D&D 5E character sheets (2024 and Classic). Uses the sheet\'s own buttons, so chat rolls keep their Damage button.',
   icons: { 48: 'icons/icon.svg', 96: 'icons/icon.svg' },
   permissions: ['storage'],
   content_scripts: [
@@ -85,6 +85,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   const zipName = 'roll20embetterment-' + pkg.version + '.zip';
   writeFileSync(join(out, zipName), zip(files));
-  console.log('Built dist/firefox/extension and dist/firefox/' + zipName);
+  // addons.mozilla.org upload: Mozilla hosts updates for listed add-ons, so
+  // no self-hosted update_url.
+  const amo = JSON.parse(JSON.stringify(manifest));
+  delete amo.browser_specific_settings.gecko.update_url;
+  const amoFiles = [['manifest.json', Buffer.from(JSON.stringify(amo, null, 2) + '\n')], ...files.slice(1), ['LICENSE', readFileSync(join(root, 'LICENSE'))]];
+  const amoName = 'roll20embetterment-' + pkg.version + '-amo.zip';
+  writeFileSync(join(out, amoName), zip(amoFiles));
+  console.log('Built dist/firefox/extension, dist/firefox/' + zipName + ' and dist/firefox/' + amoName);
 }
 

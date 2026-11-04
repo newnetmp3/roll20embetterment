@@ -20,8 +20,21 @@
     eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.3 4M6.6 6.6C3.9 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 4.2-1"/>',
   };
-  const icon = (name, size = 18) => '<svg viewBox="0 0 24 24" width="' + size + '" height="' + size +
-    '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
+  // Icons are built as SVG elements from the fixed shapes above (no HTML strings).
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const iconCache = new Map();
+  function icon(name, size = 18) {
+    if (!iconCache.has(name)) {
+      const parsed = new DOMParser().parseFromString('<svg xmlns="' + SVG_NS + '">' + (ICONS[name] || '') + '</svg>', 'image/svg+xml');
+      iconCache.set(name, parsed.documentElement);
+    }
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    const attrs = { viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8',
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' };
+    for (const [k, v] of Object.entries(attrs)) svg.setAttribute(k, String(v));
+    for (const child of iconCache.get(name).childNodes) svg.appendChild(document.importNode(child, true));
+    return svg;
+  }
 
   const CSS_TEXT = `
 :host { all: initial; }
@@ -96,10 +109,10 @@ input.txt { width: 100%; margin: 2px 0 4px; }
   function el(tag, cls, html) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
-    if (html !== undefined) e.innerHTML = html;
+    // Content: text, an element, or a list of them. Never parsed as HTML.
+    for (const c of [].concat(html ?? [])) if (c !== null && c !== false) e.append(c instanceof Node ? c : String(c));
     return e;
   }
-  const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
   // Health bar: green is current HP; striped blue on top is temp HP.
@@ -115,10 +128,10 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     const fill = el('div', 'fill'); fill.style.width = pct(cur || 0) + '%';
     bar.appendChild(fill);
     if (m.temp > 0) { const t = el('div', 'tmp'); t.style.width = pct(m.temp) + '%'; bar.appendChild(t); }
-    bar.appendChild(el('div', 'val', escHtml((cur ?? '—') + (max && !m.note ? ' / ' + max : '') + (m.temp > 0 ? '  +' + m.temp : ''))));
+    bar.appendChild(el('div', 'val', (cur ?? '—') + (max && !m.note ? ' / ' + max : '') + (m.temp > 0 ? '  +' + m.temp : '')));
     box.appendChild(bar);
     const left = m.temp > 0 ? m.temp + ' temp HP' : m.note ? m.note + ' HP' : 'Hit points';
-    box.appendChild(el('div', 'sub', '<span>' + escHtml(left) + '</span>' + (m.ac != null ? '<span>AC ' + escHtml(m.ac) + '</span>' : '')));
+    box.appendChild(el('div', 'sub', [el('span', null, left), m.ac != null ? el('span', null, 'AC ' + m.ac) : null]));
     return box;
   }
 
@@ -181,8 +194,8 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       who.dataset.cat = 'people';
       who.title = ch ? ch.name + (model.live ? '' : ' (sheet closed)') : 'Choose a character';
       who.setAttribute('aria-label', who.title);
-      who.innerHTML = '<span class="who">' + (ch ? escHtml(initials(ch.name)) : icon('user')) + '</span>' +
-        (ch ? '<span class="dot' + (model.live ? ' live' : '') + '"></span>' : '');
+      who.append(el('span', 'who', ch ? initials(ch.name) : icon('user')));
+      if (ch) who.append(el('span', 'dot' + (model.live ? ' live' : '')));
       if (ch && ch.img) {
         // Portrait from the Journal; keep the initials if it fails to load.
         const img = el('img');
@@ -196,7 +209,9 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (hp && hp.maxHp && hp.hp !== undefined && hp.hp !== null) {
         const bar = el('div', 'hpbar');
         bar.title = 'HP ' + hp.hp + '/' + hp.maxHp;
-        bar.innerHTML = '<i style="width:' + Math.max(0, Math.min(100, (hp.hp / hp.maxHp) * 100)) + '%"></i>';
+        const fill = el('i');
+        fill.style.width = Math.max(0, Math.min(100, (hp.hp / hp.maxHp) * 100)) + '%';
+        bar.appendChild(fill);
         strip.appendChild(bar);
       }
       if (model.cats.length) strip.appendChild(el('div', 'sep'));
@@ -207,7 +222,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         b.setAttribute('aria-label', cat.label);
         b.setAttribute('aria-haspopup', 'menu');
         b.setAttribute('aria-expanded', String(path[0] === cat.key));
-        if (cat.key === 'hp' && hp && hp.hp !== undefined && hp.hp !== null) b.insertAdjacentHTML('beforeend', '<span class="badge">' + hp.hp + '</span>');
+        if (cat.key === 'hp' && hp && hp.hp !== undefined && hp.hp !== null) b.appendChild(el('span', 'badge', String(hp.hp)));
         strip.appendChild(b);
       }
     }
@@ -314,8 +329,8 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (!n.header) { row.tabIndex = -1; row.setAttribute('role', 'menuitem'); }
       if (n.desc) row.title = n.desc;
       if (n.checked !== undefined && !n.header) row.appendChild(el('span', 'chk', n.checked ? '✓' : ''));
-      row.appendChild(el('span', 'lab', escHtml(n.label)));
-      if (n.hint) { const h = el('span', 'hint', escHtml(n.hint)); h.title = n.hint; row.appendChild(h); }
+      row.appendChild(el('span', 'lab', n.label));
+      if (n.hint) { const h = el('span', 'hint', n.hint); h.title = n.hint; row.appendChild(h); }
       if (n.input) {
         const input = el('input', 'num');
         input.type = 'number'; input.min = '0'; input.placeholder = n.input.placeholder || '';
@@ -329,7 +344,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (n.controls && n.controls.length) {
         const box = el('span', 'ctls');
         n.controls.forEach((c, i) => {
-          const b = el('button', 'ctl' + (c.label.length <= 2 || c.html ? ' sm' : ''), c.html ? c.label : escHtml(c.label));
+          const b = el('button', 'ctl' + (c.label.length <= 2 || c.html ? ' sm' : ''), c.label);
           b.title = c.title || '';
           b.setAttribute('aria-label', (c.title || c.label) + ' — ' + n.label);
           b.addEventListener('click', (e) => {
@@ -388,8 +403,8 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         const m = el('div', 'menu');
         m.setAttribute('role', 'menu');
         m.dataset.level = String(level);
-        const t = el('div', 'title', '<span class="tname">' + escHtml(titleAt(level)) + '</span>' +
-          (level === 0 && model.character && path[0] !== 'people' ? '<span class="tsub">' + escHtml(model.character.name) + '</span>' : ''));
+        const t = el('div', 'title', [el('span', 'tname', titleAt(level)),
+          level === 0 && model.character && path[0] !== 'people' ? el('span', 'tsub', model.character.name) : null]);
         m.appendChild(t);
         if (!nodes.length) m.appendChild(el('div', 'empty', 'Nothing here.'));
         for (const n of nodes) {
