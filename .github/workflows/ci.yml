@@ -12,7 +12,7 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm run check
-      - run: npx --yes web-ext@8.3.0 lint --source-dir dist/firefox/extension --warnings-as-errors=false
+      - run: npx --yes web-ext@8.3.0 lint --self-hosted --source-dir dist/firefox/extension --warnings-as-errors=false
       - uses: actions/upload-artifact@v4
         with:
           name: roll20-sheet-companion-unsigned
