@@ -60,7 +60,7 @@
   // starts in the turn order, or when the person resets it from the bar.
   // A finished move carries Roll20's own "lastmove" (start point and waypoints),
   // so the path walked is measured, not just the straight line.
-  const moves = new Map(); // tokenId -> { left, top, feet, seq, char }
+  const moves = new Map(); // tokenId -> { left, top, feet, seq, char, difficult }
   let turnId = '';
   let moveKey = '';
   const pageOf = () => { try { return window.Campaign && window.Campaign.activePage && window.Campaign.activePage(); } catch { return null; } };
@@ -114,7 +114,7 @@
     if (turn !== turnId) {
       turnId = turn;
       const m = moves.get(turn);
-      if (m) { m.feet = 0; m.seq++; } // that token's turn starts: fresh movement
+      if (m) { m.feet = 0; m.seq++; m.difficult = false; } // that token's turn starts: fresh movement
     }
     const seen = new Set();
     for (let i = 0; i < models.length && i < 400; i++) {
@@ -130,13 +130,15 @@
       if (!known) { moves.set(id, { left, top, feet: 0, seq: 0, char, name: String(g(t, 'name') || '') }); continue; }
       known.char = char;
       if (known.left !== left || known.top !== top) {
-        known.feet = Math.round((known.feet + pathFeet(mt, known, { left, top }, g(t, 'lastmove'))) * 10) / 10;
+        // Difficult terrain: every foot moved while it is on costs two.
+        const cost = pathFeet(mt, known, { left, top }, g(t, 'lastmove')) * (known.difficult ? 2 : 1);
+        known.feet = Math.round((known.feet + cost) * 10) / 10;
         known.left = left; known.top = top;
       }
     }
     for (const id of moves.keys()) if (!seen.has(id)) moves.delete(id);
     const out = {};
-    for (const [id, m] of moves) if (m.char || id === turnId) out[id] = { char: m.char, feet: m.feet, seq: m.seq, name: m.name };
+    for (const [id, m] of moves) if (m.char || id === turnId) out[id] = { char: m.char, feet: m.feet, seq: m.seq, name: m.name, difficult: !!m.difficult };
     const detail = JSON.stringify({ tokens: out, turn: turnId, units: mt.units });
     if (detail === moveKey) return;
     moveKey = detail;
@@ -147,7 +149,14 @@
     let id = '';
     try { id = String(JSON.parse(e.detail).token || ''); } catch { return; }
     const m = moves.get(id);
-    if (m) { m.feet = 0; m.seq++; moveKey = ''; }
+    if (m) { m.feet = 0; m.seq++; m.difficult = false; moveKey = ''; }
+  });
+  // The bar turns difficult terrain on or off for a token's next moves.
+  document.addEventListener('r20c-movement-mode', (e) => {
+    let d;
+    try { d = JSON.parse(e.detail); } catch { return; }
+    const m = moves.get(String(d.token || ''));
+    if (m) { m.difficult = !!d.difficult; moveKey = ''; }
   });
   setInterval(() => { try { trackMoves(); } catch { /* Roll20 not ready */ } }, 250);
 

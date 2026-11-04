@@ -61,3 +61,32 @@ test('No sheet in the page: nothing parsed', () => {
   const { C, document } = load('<html><body><p>loading</p></body></html>', SHEET);
   assert.equal(C.parseSheet(document), null);
 });
+
+test('speeds: walk from the sheet; Classic speed text lists every mode', () => {
+  const pc = load(fixture('pc-sheet.html'), SHEET);
+  assert.deepEqual({ ...pc.C.parseSheet(pc.document).stats.speeds }, { walk: 30 });
+  const { C } = load('<html><body></body></html>', ['src/shared/wire.js', 'src/editor/classic.js']);
+  assert.deepEqual({ ...C.speedsFrom('30 ft., fly 60 ft. (hover), swim 30 ft.') }, { walk: 30, fly: 60, swim: 30 });
+  assert.deepEqual({ ...C.speedsFrom('') }, {});
+});
+
+test('Classic Long Rest: HP, temp HP, death saves, spell slots, half the hit dice', () => {
+  const html = `<html><body>
+    <input name="attr_hp" value="3"><input name="attr_hp_max" value="40"><input name="attr_hp_temp" value="5">
+    <input type="checkbox" name="attr_deathsave_fail1" checked><input type="checkbox" name="attr_deathsave_succ1">
+    <input name="attr_lvl1_slots_expended" value="0"><input name="attr_lvl1_slots_total" value="4">
+    <input name="attr_hit_dice" value="1"><input name="attr_hit_dice_max" value="6">
+    <button type="roll" name="roll_death_save">Death save</button>
+  </body></html>`;
+  const { C, document } = load(html, ['src/shared/wire.js', 'src/editor/classic.js']);
+  document.querySelector('[name="attr_deathsave_fail1"]').checked = true; // the test DOM doesn't map the attribute
+  const snap = C.classic.parse(document, 'Salven');
+  assert.equal(snap.type, 'pc');
+  assert.deepEqual({ ...snap.stats.deathSaves }, { ok: 0, fail: 1 });
+  assert.equal(snap.deathSave.ref, 'btn:0:roll_death_save');
+  const rest = snap.rests.find((r) => r.op === 'longrest');
+  const res = C.classic.perform(document, rest.ref, rest.op);
+  assert.equal(res.ok, true, res.msg);
+  const v = (n) => document.querySelector('[name="attr_' + n + '"]');
+  assert.deepEqual([v('hp').value, v('hp_temp').value, v('lvl1_slots_expended').value, v('hit_dice').value, v('deathsave_fail1').checked], ['40', '0', '4', '4', false]);
+});

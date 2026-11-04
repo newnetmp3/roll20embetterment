@@ -32,16 +32,31 @@
   }
   C.tidyName = tidyName;
 
+  // Which part of the turn a row uses, from its section or timing text:
+  // 'action' | 'bonus' | 'reaction' | '' (none) | null (unknown).
+  function econOf(textIn) {
+    const t = norm(textIn);
+    if (!t) return null;
+    if (/bonus/.test(t)) return 'bonus';
+    if (/reaction/.test(t)) return 'reaction';
+    if (/legendary|lair|mythic|free|minute|hour|ritual|special/.test(t)) return '';
+    if (/\baction|\battack/.test(t)) return 'action';
+    return null;
+  }
+  C.econOf = econOf;
+  const withEcon = (run, econ, conc) => (run ? { ...run, ...(econ ? { econ } : {}), ...(conc ? { conc } : {}) } : run);
+
   function attackNode(a, label) {
     label = tidyName(label);
     const name = tidyName(a.name);
+    const econ = econOf(a.section) ?? 'action';
     const controls = [];
-    if (a.hit) controls.push({ label: a.hit.replace(/\s*Attack$/i, ''), title: a.hit, run: { ref: a.ref, op: 'hit', say: name + ' attack' } });
+    if (a.hit) controls.push({ label: a.hit.replace(/\s*Attack$/i, ''), title: a.hit, run: withEcon({ ref: a.ref, op: 'hit', say: name + ' attack' }, econ) });
     a.dmg.forEach((d, i) => {
       const heal = /heal/i.test(d.type);
       controls.push({
         label: d.text, title: heal ? 'Healing' : 'Damage' + (d.type ? ' (' + d.type + ')' : ''),
-        run: { ref: a.ref, op: 'dmg', arg: i, say: name + (heal ? ' healing' : ' damage') },
+        run: withEcon({ ref: a.ref, op: 'dmg', arg: i, say: name + (heal ? ' healing' : ' damage') }, a.hit ? null : econ),
       });
     });
     controls.push({ label: '💬', title: 'Show in chat', run: { ref: a.ref, op: 'chat', say: name } });
@@ -49,8 +64,8 @@
     return {
       key: a.ref, label, hint: a.range,
       desc: [name !== label ? name : '', a.sub, a.range, ...(a.chips || [])].filter(Boolean).join(' · '),
-      run: a.hit ? { ref: a.ref, op: 'hit', say: name + ' attack' }
-        : heals ? { ref: a.ref, op: 'dmg', arg: 0, say: name + ' healing' } : { ref: a.ref, op: 'chat', say: name },
+      run: a.hit ? withEcon({ ref: a.ref, op: 'hit', say: name + ' attack' }, econ)
+        : heals ? withEcon({ ref: a.ref, op: 'dmg', arg: 0, say: name + ' healing' }, econ) : { ref: a.ref, op: 'chat', say: name },
       controls,
     };
   }
@@ -82,8 +97,9 @@
 
   function actionNode(x) {
     const res = x.res || [];
+    const econ = econOf(x.section) || null;
     const controls = [];
-    if (x.roll) controls.push({ label: x.roll, title: 'Roll', run: { ref: x.ref, op: 'roll', say: x.name } });
+    if (x.roll) controls.push({ label: x.roll, title: 'Roll', run: withEcon({ ref: x.ref, op: 'roll', say: x.name }, econ) });
     controls.push(...resControls(x.ref, res));
     controls.push({ label: '💬', title: 'Show in chat', run: { ref: x.ref, op: 'chat', say: x.name } });
     const empty = res.length && res[0].cur === 0;
@@ -91,7 +107,7 @@
       key: x.ref, label: x.name, desc: x.desc,
       hint: res.length ? res.map(counter).join(' ') : x.roll,
       disabled: !!empty,
-      run: { ref: x.ref, op: 'use', say: x.name },
+      run: withEcon({ ref: x.ref, op: 'use', say: x.name }, econ),
       controls,
     };
   }
@@ -171,7 +187,7 @@
       key: f.ref, label: f.name, desc: [f.source, f.timing].filter(Boolean).join(' · ') + (f.desc ? '\n' + f.desc : ''),
       hint: res.length ? res.map(counter).join(' ') : f.timing,
       disabled: !!(res.length && res[0].cur === 0),
-      run: res.length ? { ref: f.ref, op: 'use', say: f.name } : { ref: f.ref, op: 'chat', say: f.name },
+      run: withEcon(res.length ? { ref: f.ref, op: 'use', say: f.name } : { ref: f.ref, op: 'chat', say: f.name }, econOf(f.timing) || null),
       controls,
     };
   }
@@ -179,14 +195,18 @@
   function spells(snap) {
     const label = (l) => ({ CANTRIPS: 'Cantrips' }[l] || (/^\d/.test(l) ? l.toLowerCase() + ' level' : l || 'Spells'));
     return bySection(snap.spells.map((s) => ({ ...s, section: label(s.level) })), (s) => {
+      // Casting uses an action unless the casting time says otherwise;
+      // a "C" tag means casting it starts concentration.
+      const econ = econOf(s.time) ?? 'action';
+      const conc = (s.tags || []).includes('C') ? s.name : null;
       const controls = [];
-      if (s.hit) controls.push({ label: s.hit.replace(/\s*Attack$/i, ''), title: s.hit, run: { ref: s.ref, op: 'hit', say: s.name } });
-      s.dmg.forEach((d, i) => controls.push({ label: d.text, title: 'Damage', run: { ref: s.ref, op: 'dmg', arg: i, say: s.name + ' damage' } }));
+      if (s.hit) controls.push({ label: s.hit.replace(/\s*Attack$/i, ''), title: s.hit, run: withEcon({ ref: s.ref, op: 'hit', say: s.name }, econ, conc) });
+      s.dmg.forEach((d, i) => controls.push({ label: d.text, title: 'Damage', run: withEcon({ ref: s.ref, op: 'dmg', arg: i, say: s.name + ' damage' }, s.hit ? null : econ, s.hit ? null : conc) }));
       return {
         key: s.ref, label: s.name,
         hint: [s.tags.join(''), s.prepared === false ? 'unprepared' : ''].filter(Boolean).join(' '),
-        desc: s.range,
-        run: { ref: s.ref, op: 'chat', say: 'Cast ' + s.name },
+        desc: [s.time, s.range].filter(Boolean).join(' · '),
+        run: withEcon({ ref: s.ref, op: 'chat', say: 'Cast ' + s.name }, econ, conc),
         controls,
       };
     });
@@ -248,7 +268,37 @@
     return out;
   }
 
-  function health(snap) {
+  // The Constitution saving throw on this sheet, or a plain d20 in chat.
+  function conSave(snap, say) {
+    const a = snap.abilities.find((x) => /^con/i.test(x.name));
+    if (a) return { ref: a.ref, op: 'save', say };
+    const c = snap.checks.find((x) => /con(stitution)?\b.*sav/i.test(x.name));
+    if (c) return { ref: c.ref, op: 'press', say };
+    return { op: 'chat-roll', arg: { title: 'Constitution saving throw', expr: '1d20' }, say };
+  }
+  C.conSave = conSave;
+  // Concentration DC after taking damage (2024 rules: 10 or half, at most 30).
+  C.concentrationDC = (dmg) => Math.min(30, Math.max(10, Math.floor((Number(dmg) || 0) / 2)));
+
+  // ctx.conc: { spell, dc? } while concentrating, else null.
+  function concentration(snap, conc) {
+    if (!conc) return [{ key: 'conc', label: 'Concentrating', checked: false, desc: 'Track a concentration spell by hand. Casting a C spell from the bar starts this for you.', run: { op: 'conc-start', say: 'Concentrating' } }];
+    const out = [{ key: 'conc', label: 'Concentrating' + (conc.spell ? ': ' + conc.spell : ''), checked: true, desc: 'Click to stop concentrating.', run: { op: 'conc-end', say: 'Concentration ended' } }];
+    if (conc.dc) out.push({ key: 'conc:save', label: 'Concentration save', hint: 'DC ' + conc.dc, run: { ...conSave(snap, 'Concentration save (DC ' + conc.dc + ')'), clearsDc: true } });
+    return out;
+  }
+
+  function deathSaves(snap) {
+    const s = snap.stats || {};
+    if (snap.type !== 'pc' || !(s.hp != null && s.hp <= 0)) return [];
+    const d = s.deathSaves;
+    const hint = d ? '✓' + d.ok + ' ✗' + d.fail : '';
+    const run = snap.deathSave ? { ref: snap.deathSave.ref, op: 'press', say: 'Death saving throw' }
+      : { op: 'chat-roll', arg: { title: 'Death saving throw', expr: '1d20' }, say: 'Death saving throw' };
+    return [{ key: 'death', label: 'Death saving throw', hint, desc: '10 or higher succeeds; a 20 brings you back with 1 HP.', run }];
+  }
+
+  function health(snap, ctx = {}) {
     const s = snap.stats || {};
     const out = [];
     if (snap.type === 'pc') {
@@ -267,7 +317,9 @@
         meter: { cur, max: s.maxHp ?? null, temp: s.tempHp || 0, ac: s.ac ?? null, note: s.hp == null ? 'average' : '' },
       });
     }
-    for (const r of snap.rests) out.push({ key: r.ref, label: r.name, reveal: true, run: { ref: r.ref, op: 'press', say: r.name } });
+    out.push(...deathSaves(snap));
+    out.push(...concentration(snap, ctx.conc || null));
+    for (const r of snap.rests) out.push({ key: r.ref, label: r.name, desc: r.desc, run: { ref: r.ref, op: r.op || 'press', say: r.name } });
     for (const h of snap.hitDice) out.push({ key: 'hd' + h.ref, label: 'Roll hit die ' + h.label, run: { ref: h.ref, op: 'press', say: h.label } });
     return out;
   }
@@ -286,28 +338,47 @@
     out.push({ key: 'pref:spend', label: 'Spend a use when using a feature', checked: !!prefs.spend, pref: 'spend' });
     out.push({ key: 'pref:follow', label: 'Follow the selected token', checked: !!prefs.follow, pref: 'follow' });
     out.push({ key: 'pref:background', label: 'Keep my character sheet loaded (players)', checked: !!prefs.background, pref: 'background' });
+    out.push({ key: 'pref:turnCue', label: 'Highlight the bar on my turn', checked: prefs.turnCue !== false, pref: 'turnCue' });
     out.push({ key: 'dock', label: 'Dock bar beside the toolbar', dock: true });
     out.push({ key: 'diag', label: 'Copy diagnostics', diag: true });
     return out;
   }
 
   const LISTS = ['attacks', 'actions', 'features', 'items', 'spells', 'abilities', 'checks', 'hitDice', 'rests'];
-  // Movement this turn for the active character's token.
-  // mv: { feet, speed, units, dash, onTurn, inOrder }
-  C.movementMenu = function movementMenu(mv) {
-    const budget = mv.speed ? mv.speed * (mv.dash ? 2 : 1) : null;
-    const left = budget != null ? Math.round((budget - mv.feet) * 10) / 10 : null;
-    const items = [
-      { key: 'mv', header: true, label: 'Moved ' + mv.feet + ' ' + mv.units,
-        meter: { kind: 'move', cur: mv.feet, max: budget, units: mv.units, left, dash: !!mv.dash } },
-      { key: 'mv:dash', label: 'Dash (double speed this turn)', checked: !!mv.dash, run: { op: 'move-dash', say: mv.dash ? 'Dash off' : 'Dash' } },
-      { key: 'mv:reset', label: 'Start a new count', hint: mv.inOrder ? 'resets on its turn' : 'not in turn order',
-        run: { op: 'move-reset', say: 'Movement reset' } },
-    ];
-    return { key: 'move', icon: 'boot', label: 'Movement', badge: String(Math.round(mv.feet)), over: left != null && left < 0, items };
+  const ECON = [['action', 'Action'], ['bonus', 'Bonus'], ['reaction', 'Reaction']];
+  const SPEED_NAMES = { walk: 'Walk', fly: 'Fly', swim: 'Swim', climb: 'Climb', burrow: 'Burrow' };
+  // What the active character has used this turn.
+  // t: { used: {action, bonus, reaction}, inOrder, move?: { feet, speed, speeds, mode, units, dash, difficult } }
+  C.turnMenu = function turnMenu(t) {
+    const used = t.used || {};
+    const items = [{ key: 'econ', econ: ECON.map(([k, label]) => ({ key: k, label, used: !!used[k] })) }];
+    const mv = t.move;
+    let badge = String(ECON.filter(([k]) => !used[k]).length);
+    let over = false;
+    if (mv) {
+      const budget = mv.speed ? mv.speed * (mv.dash ? 2 : 1) : null;
+      const left = budget != null ? Math.round((budget - mv.feet) * 10) / 10 : null;
+      items.push(
+        { key: 'mv', header: true, label: 'Moved ' + mv.feet + ' ' + mv.units,
+          meter: { kind: 'move', cur: mv.feet, max: budget, units: mv.units, left, dash: !!mv.dash, difficult: !!mv.difficult, mode: mv.mode && mv.mode !== 'walk' ? SPEED_NAMES[mv.mode] : '' } },
+        { key: 'mv:dash', label: 'Dash (double speed this turn)', checked: !!mv.dash, run: { op: 'move-dash', say: mv.dash ? 'Dash off' : 'Dash' } },
+        { key: 'mv:difficult', label: 'Difficult terrain', hint: 'costs double', checked: !!mv.difficult,
+          desc: 'While on, each foot moved counts as two.', run: { op: 'move-difficult', say: mv.difficult ? 'Difficult terrain off' : 'Difficult terrain' } },
+      );
+      const modes = Object.keys(mv.speeds || {}).filter((k) => SPEED_NAMES[k]);
+      if (modes.length > 1) {
+        items.push({ key: 'mv:modes', header: true, label: 'Speed' });
+        for (const k of modes) items.push({ key: 'mv:mode:' + k, label: SPEED_NAMES[k], hint: mv.speeds[k] + ' ' + mv.units, checked: (mv.mode || 'walk') === k, run: { op: 'move-mode', arg: k, say: SPEED_NAMES[k] + ' speed' } });
+      }
+      badge = String(Math.round(mv.feet));
+      over = left != null && left < 0;
+    }
+    items.push({ key: 'turn:reset', label: 'Start a new turn', hint: t.inOrder ? 'resets on its turn' : 'not in turn order',
+      desc: 'Clears actions used and movement. Happens by itself when this token’s turn comes up.', run: { op: 'turn-reset', say: 'New turn' } });
+    return { key: 'turn', icon: 'boot', label: 'This turn', badge, over, items };
   };
 
-  C.buildMenus = function buildMenus(raw, prefs = {}) {
+  C.buildMenus = function buildMenus(raw, prefs = {}, ctx = {}) {
     // No character yet: still offer the companion settings and diagnostics.
     if (!raw) return [{ key: 'settings', icon: 'gear', label: 'Settings', items: rollSettings({}, prefs) }];
     // Tolerate snapshots with missing parts (older saves, unusual sheets).
@@ -317,7 +388,7 @@
     const errors = [];
     const safe = (key, fn) => { try { return fn(); } catch (e) { errors.push(key + ': ' + (e && e.message || e)); return []; } };
     const cats = [
-      { key: 'hp', icon: 'heart', label: 'Hit points & rests', items: safe('hp', () => health(snap)) },
+      { key: 'hp', icon: 'heart', label: 'Hit points & rests', items: safe('hp', () => health(snap, ctx)) },
       { key: 'attacks', icon: 'sword', label: 'Attacks', items: safe('attacks', () => attacks(snap)) },
       {
         key: 'actions', icon: 'bolt', label: 'Actions',

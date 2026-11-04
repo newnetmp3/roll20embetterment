@@ -83,6 +83,15 @@
 .meter.move .bar { background: var(--bg3); }
 .meter.move.over .fill { background: linear-gradient(180deg, #ef7b76, #b8443f); }
 .sb .badge.over { color: var(--bad); }
+.pips { display: flex; gap: 4px; padding: 4px 6px 6px; }
+.pip { flex: 1 1 0; min-width: 0; padding: 4px 2px; border-radius: 12px; border: 1px solid var(--ok); background: rgba(95,184,122,.18);
+     color: var(--fg); font: 600 11px/1.1 inherit; cursor: pointer; }
+.pip:hover { border-color: var(--acc); }
+.pip.used { border-color: var(--line); background: transparent; color: var(--mute); text-decoration: line-through; }
+.pip:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.strip.myturn { border-color: var(--acc); box-shadow: 0 0 0 2px rgba(217,164,65,.55), 2px 2px 12px rgba(217,164,65,.35); animation: r20turn 1.6s ease-in-out infinite; }
+@keyframes r20turn { 50% { box-shadow: 0 0 0 3px rgba(217,164,65,.25), 2px 2px 16px rgba(217,164,65,.5); } }
+@media (prefers-reduced-motion: reduce) { .strip.myturn { animation: none; } }
 .meter .sub { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--mute); }
 .row { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 6px 3px 8px; border-radius: 5px; cursor: pointer;
      outline: none; }
@@ -157,7 +166,21 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     bar.appendChild(el('div', 'val', cur + (max ? ' / ' + max : '') + ' ' + m.units));
     box.appendChild(bar);
     const left = m.left == null ? 'Speed unknown' : m.left < 0 ? Math.abs(m.left) + ' ' + m.units + ' over' : m.left + ' ' + m.units + ' left';
-    box.appendChild(el('div', 'sub', [el('span', null, left), m.dash ? el('span', null, 'Dashing') : null]));
+    const notes = [m.mode, m.dash ? 'Dashing' : '', m.difficult ? 'Difficult terrain' : ''].filter(Boolean).join(' · ');
+    box.appendChild(el('div', 'sub', [el('span', null, left), notes ? el('span', null, notes) : null]));
+    return box;
+  }
+
+  // Action / Bonus / Reaction: green is still available; click to flip.
+  function econRow(n, run) {
+    const box = el('div', 'pips');
+    for (const p of n.econ) {
+      const b = el('button', 'pip' + (p.used ? ' used' : ''), p.label);
+      b.title = p.label + (p.used ? ' used this turn — click to mark available' : ' available — click to mark used');
+      b.setAttribute('aria-pressed', String(p.used));
+      b.addEventListener('click', (e) => { e.stopPropagation(); run({ op: 'econ', arg: p.key, say: '' }); });
+      box.appendChild(b);
+    }
     return box;
   }
 
@@ -215,6 +238,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     // ---- strip ---------------------------------------------------------------
     function renderStrip() {
       strip.textContent = '';
+      strip.classList.toggle('myturn', !!model.myTurn);
       const ch = model.character;
       const who = el('button', 'sb');
       who.dataset.cat = 'people';
@@ -351,6 +375,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         return box;
       }
       if (n.meter) return meterFor(n.meter);
+      if (n.econ) return econRow(n, (run) => act(n, run));
       const row = el('div', 'row' + (n.header ? ' hdr' : '') + (n.disabled ? ' dis' : '') + (path[level + 1] === n.key ? ' open' : '') + (busy.has(n.key) ? ' busy' : ''));
       row.dataset.key = n.key;
       if (!n.header) { row.tabIndex = -1; row.setAttribute('role', 'menuitem'); }

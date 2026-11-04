@@ -69,6 +69,8 @@
     npcskill: { sel: '.npc-abilities__skill-button', name: (r) => text(r.querySelector('.npc-skill__name'), 60) },
     hitdie: { sel: 'button[aria-label^="Roll a d"][aria-label*="hit die"]', name: (r) => clean(attr(r, 'aria-label')) },
     rest: { sel: 'button[aria-label="Short Rest"],button[aria-label="Long Rest"]', name: (r) => clean(attr(r, 'aria-label')) },
+    // Shown by the sheet only while the character is dying.
+    death: { sel: 'button[aria-label*="death sav" i], [class*="death-save"] button', name: () => 'Death saving throw' },
     initiative: { sel: '.initiative-btn, .npc-info__initiative .poly-button.initiative', name: () => 'Initiative' },
   };
 
@@ -146,6 +148,19 @@
   }));
   const desc = (row, sel) => text(row.querySelector(sel), 600);
 
+  // Walk, fly, swim... speeds, from classes like "speed__fly" / "speed-edit__swim".
+  function speedModes(sc) {
+    const out = {};
+    for (const el of all(sc, '[class*="speed__"], [class*="speed-edit__"]')) {
+      const m = /(?:^|\s)speed(?:-edit)?__(walk|fly|swim|climb|burrow)(?:\s|$)/.exec(attr(el, 'class') || '');
+      if (!m || out[m[1]] != null) continue;
+      const input = el.matches('input') ? el : el.querySelector('input');
+      const v = input ? num(attr(input, 'aria-valuenow') ?? input.value) : num(attr(el, 'value') ?? text(el, 20));
+      if (v > 0) out[m[1]] = v;
+    }
+    return out;
+  }
+
   function readStats(sc) {
     const s = {};
     const byTitle = (t) => all(sc, 'input[title="' + t + '"]')[0];
@@ -171,6 +186,10 @@
       s.cr = text(all(sc, '.npc-info__challenge-rating-box')[0], 10);
       s.initiative = clean(attr(all(sc, '.npc-info__initiative .poly-value--npc-button-text')[0], 'value'), 10).replace(/[()]/g, '');
     }
+    try {
+      s.speeds = speedModes(sc);
+      if (s.speed && !s.speeds.walk) s.speeds.walk = s.speed;
+    } catch { s.speeds = {}; }
     return s;
   }
 
@@ -299,6 +318,7 @@
     });
     part(snap, 'hitdie', () => { for (const r of rows(sc, 'hitdie')) snap.hitDice.push({ ref: r.ref, name: r.name, label: text(r.el, 30) }); });
     part(snap, 'rest', () => { for (const r of rows(sc, 'rest')) snap.rests.push({ ref: r.ref, name: r.name }); });
+    part(snap, 'death', () => { const d = rows(sc, 'death')[0]; if (d) snap.deathSave = { ref: d.ref }; });
     const init = rows(sc, 'initiative')[0];
     if (init) snap.initiative = { ref: init.ref, text: snap.stats.initiative };
     return snap;

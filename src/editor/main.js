@@ -25,18 +25,23 @@
     if (errors.length > 10) errors.shift();
     console.error('[Roll20embetterment]', msg, e);
   }
-  let prefs = { autoHide: true, spend: true, background: true, follow: true };
+  let prefs = { autoHide: true, spend: true, background: true, follow: true, turnCue: true };
   let active = null;
   let chosen = false; // the person picked or opened a character this session
   let firstScan = true;
+  const conc = new Map(); // charId -> concentration { spell, dc? }
+  let myTurn = false; // the bar glows while it's one of your characters' turns
 
   const ui = C.createUI({
-    run: (act) => {
-      if (act.op === 'move-dash' || act.op === 'move-reset') return moveAction(act.op);
-      return active ? C.sheets.invoke(active, act, prefs) : { ok: false, msg: 'Choose a character first.' };
+    run: async (act) => {
+      if (LOCAL_OPS.has(act.op)) return localAction(act);
+      if (!active) return { ok: false, msg: 'Choose a character first.' };
+      const id = active;
+      const res = await C.sheets.invoke(id, act, prefs);
+      return res && res.ok ? afterAction(id, act, res) : res;
     },
     select: (id) => { chosen = true; return select(id, true); },
-    pref: (k, v) => { prefs = { ...prefs, [k]: v }; set('prefs', prefs); refresh(); },
+    pref: (k, v) => { prefs = { ...prefs, [k]: v }; set('prefs', prefs); if (k === 'turnCue') myTurn = myTurn && v; refresh(); },
     toggleHidden: (id) => { C.sheets.setHidden(id, !C.sheets.isHidden(id)); refresh(); },
     savePos: (pos) => set('barPos', pos),
     diag: async () => {
@@ -88,13 +93,13 @@
       live: !!(active && C.sheets.isLive(active)),
       cats: (() => {
         let cats = [];
-        try { cats = C.buildMenus(snap, prefs); } catch (e) { note('menus', e); }
+        try { cats = C.buildMenus(snap, prefs, { conc: active ? conc.get(active) || null : null }); } catch (e) { note('menus', e); }
         try {
-          const mv = movementFor(snap);
-          if (mv) { const i = cats.findIndex((c) => c.key === 'hp'); cats.splice(i + 1, 0, C.movementMenu(mv)); }
-        } catch (e) { note('movement', e); }
+          if (snap) { const i = cats.findIndex((c) => c.key === 'hp'); cats.splice(i + 1, 0, C.turnMenu(turnFor(snap))); }
+        } catch (e) { note('turn', e); }
         return cats;
       })(),
+      myTurn,
       people: people(),
     });
   }
@@ -231,11 +236,22 @@
     if (!ok && mySeq === followSeq) ui.toast('Could not open that character’s sheet.', true);
     refresh();
   }));
-  // ---- movement per turn (measured in selection.js) --------------------------
+  // ---- this turn: actions used and movement ---------------------------------
+  // Movement is measured in selection.js. Everything here is keyed by the
+  // token's turn count ("tokenId:seq"), so it all clears when its turn comes
+  // up. A character with no token on the page gets a count of its own.
   let moveState = { tokens: {}, turn: '', units: 'ft' };
-  const dashing = new Set(); // "tokenId:seq" — Dash lasts until that token's count resets
+  const dashing = new Set(); // turn keys with Dash on
+  const used = new Map(); // turn key -> { action, bonus, reaction }
+  const ownSeq = new Map(); // charId -> turn count when there's no token
+  const speedMode = new Map(); // charId -> 'walk' | 'fly' | ...
+  const ECON_NAMES = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction' };
+  const LOCAL_OPS = new Set(['move-dash', 'move-difficult', 'move-mode', 'turn-reset', 'econ', 'conc-start', 'conc-end', 'chat-roll']);
+
+  let lastTurn = null;
   document.addEventListener('r20c-movement', guard('movement', (e) => {
     try { moveState = JSON.parse(e.detail); } catch { return; }
+    if (moveState.turn !== lastTurn) { lastTurn = moveState.turn; turnCue(); }
     if (active) refresh();
   }));
   // The active character's token: the selected one, else one on the turn, else the first.
@@ -247,25 +263,123 @@
     const mine = Object.keys(tokens).filter((id) => tokens[id].char === active);
     return mine.find((id) => id === moveState.turn) || mine[0] || null;
   }
-  function movementFor(snap) {
+  function turnKey() {
     const id = moveToken();
-    if (!id) return null;
-    const t = moveState.tokens[id];
-    const speed = snap && snap.stats && Number(snap.stats.speed) > 0 ? Number(snap.stats.speed) : null;
-    return { feet: t.feet, speed, units: moveState.units || 'ft', dash: dashing.has(id + ':' + t.seq), inOrder: !!moveState.turn };
+    return id ? id + ':' + moveState.tokens[id].seq : 'c:' + active + ':' + (ownSeq.get(active) || 0);
   }
-  function moveAction(op) {
+  function turnFor(snap) {
+    const out = { used: used.get(turnKey()) || {}, inOrder: !!moveState.turn, move: null };
+    const id = moveToken();
+    if (!id) return out;
+    const t = moveState.tokens[id];
+    const stats = (snap && snap.stats) || {};
+    const speeds = { ...(stats.speeds || {}) };
+    if (!speeds.walk && Number(stats.speed) > 0) speeds.walk = Number(stats.speed);
+    let mode = speedMode.get(active) || 'walk';
+    if (!speeds[mode]) mode = 'walk';
+    const speed = speeds[mode] || (Number(stats.speed) > 0 ? Number(stats.speed) : null);
+    out.move = { feet: t.feet, speed, speeds, mode, units: moveState.units || 'ft', dash: dashing.has(turnKey()), difficult: !!t.difficult };
+    return out;
+  }
+  function markUsed(key, kind, on = true) {
+    const u = { ...(used.get(key) || {}) };
+    u[kind] = on;
+    used.set(key, u);
+  }
+
+  // Anything the bar does that changes no sheet.
+  function localAction(act) {
+    const ok = (msg) => { refresh(); return { ok: true, msg }; };
+    if (act.op === 'chat-roll') {
+      const snap = active ? snaps.get(active) : null;
+      const who = String((snap && snap.name) || '').replace(/[{}]/g, '');
+      const a = act.arg || {};
+      const msg = '&{template:default} {{name=' + (who ? who + ': ' : '') + a.title + '}} {{Roll=[[' + a.expr + ']]}}';
+      if (!sendChat(msg)) return { ok: false, msg: 'Roll20’s chat box isn’t available.' };
+      return afterAction(active, act, { ok: true, msg: 'Rolled in chat.' });
+    }
+    if (!active) return { ok: false, msg: 'Choose a character first.' };
+    if (act.op === 'econ') {
+      const k = turnKey();
+      const now = !(used.get(k) || {})[act.arg];
+      markUsed(k, act.arg, now);
+      return ok(ECON_NAMES[act.arg] + (now ? ' used.' : ' available.'));
+    }
+    if (act.op === 'conc-start') { conc.set(active, { spell: '' }); saveConc(); return ok('Tracking concentration.'); }
+    if (act.op === 'conc-end') { conc.delete(active); saveConc(); return ok('Done.'); }
+    if (act.op === 'turn-reset') {
+      const id = moveToken();
+      if (id) document.dispatchEvent(new CustomEvent('r20c-movement-reset', { detail: JSON.stringify({ token: id }) }));
+      else ownSeq.set(active, (ownSeq.get(active) || 0) + 1);
+      return ok('Actions and movement cleared.');
+    }
     const id = moveToken();
     if (!id) return { ok: false, msg: 'No token for this character on the current page.' };
     const t = moveState.tokens[id];
-    if (op === 'move-dash') {
-      const k = id + ':' + t.seq;
-      if (dashing.has(k)) dashing.delete(k); else dashing.add(k);
-    } else {
-      document.dispatchEvent(new CustomEvent('r20c-movement-reset', { detail: JSON.stringify({ token: id }) }));
+    if (act.op === 'move-dash') {
+      const k = turnKey();
+      if (dashing.has(k)) dashing.delete(k); else { dashing.add(k); markUsed(k, 'action'); }
+      return ok(dashing.has(k) ? 'Action used.' : '');
     }
+    if (act.op === 'move-difficult') {
+      t.difficult = !t.difficult; // shown at once; selection.js confirms
+      document.dispatchEvent(new CustomEvent('r20c-movement-mode', { detail: JSON.stringify({ token: id, difficult: t.difficult }) }));
+      return ok(t.difficult ? 'Moves now count double.' : 'Moves count normally.');
+    }
+    if (act.op === 'move-mode') { speedMode.set(active, act.arg); return ok(''); }
+    return { ok: false, msg: 'Unknown action.' };
+  }
+
+  // After a sheet action works: note what it used this turn and concentration.
+  function afterAction(id, act, res) {
+    const extra = [];
+    if (id === active && act.econ) {
+      const k = turnKey();
+      const was = (used.get(k) || {})[act.econ];
+      markUsed(k, act.econ);
+      if (!was) extra.push(ECON_NAMES[act.econ] + ' used.');
+    }
+    if (act.conc) {
+      const prev = conc.get(id);
+      conc.set(id, { spell: act.conc });
+      extra.push('Concentrating on ' + act.conc + (prev && prev.spell && prev.spell !== act.conc ? ' (' + prev.spell + ' ended)' : '') + '.');
+      saveConc();
+    }
+    if (act.op === 'damage' && conc.has(id) && Number(act.arg) > 0) {
+      const dc = C.concentrationDC(act.arg);
+      conc.set(id, { ...conc.get(id), dc });
+      extra.push('Concentration save: DC ' + dc + ' (in Hit points).');
+      saveConc();
+    }
+    if (act.clearsDc && conc.has(id)) { const c = { ...conc.get(id) }; delete c.dc; conc.set(id, c); saveConc(); }
+    if (act.op === 'longrest' && conc.has(id)) { conc.delete(id); saveConc(); }
     refresh();
-    return { ok: true, msg: '' };
+    return extra.length ? { ...res, msg: [res.msg, ...extra].filter(Boolean).join(' ') } : res;
+  }
+  const saveConc = () => set('conc', Object.fromEntries(conc));
+
+  // Post a roll to Roll20's chat, as if typed and sent.
+  function sendChat(msg) {
+    const box = document.querySelector('#textchat-input textarea');
+    const send = document.querySelector('#textchat-input .btn, #textchat-input button');
+    if (!box || !send) return false;
+    const draft = box.value;
+    box.value = msg;
+    send.click();
+    if (draft) setTimeout(() => { if (!box.value) box.value = draft; }, 0);
+    return true;
+  }
+
+  // Your turn: glow the bar, say so once, and switch to that character.
+  function turnCue() {
+    const tok = moveState.tokens && moveState.tokens[moveState.turn];
+    const mineList = isGM() ? (active ? [active] : []) : controlled() || (active ? [active] : []);
+    const mine = !!(tok && tok.char && mineList.includes(tok.char));
+    myTurn = mine && prefs.turnCue !== false;
+    if (!myTurn) { refresh(); return; }
+    const snap = snaps.get(tok.char);
+    ui.toast('Your turn' + ((snap && snap.name) || tok.name ? ': ' + ((snap && snap.name) || tok.name) : '') + '.');
+    if (tok.char !== active && prefs.follow) select(tok.char); else refresh();
   }
 
   function selectionStatus() {
@@ -279,6 +393,7 @@
 
   (async () => {
     prefs = { ...prefs, ...(await get('prefs', {})) };
+    for (const [k, v] of Object.entries((await get('conc', {})) || {})) if (v) conc.set(k, v);
     ui.update({ pos: await get('barPos', null) });
     setTimeout(guard('keeper', keeper), 2500);
     const last = await get('active', null);
