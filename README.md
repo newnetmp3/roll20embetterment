@@ -16,7 +16,7 @@ advantage settings apply as usual.
 
 | Button | Opens |
 | --- | --- |
-| Portrait | Character picker: open sheets and the Journal, with search. Eye button hides or shows a sheet window. |
+| Portrait | The selected token's character. Click for the picker: open sheets and the Journal, with search. Eye button hides or shows a sheet window. |
 | ♥ Hit points | Take damage, heal, temp HP, short/long rest, hit dice (PC). NPCs show average HP and AC. |
 | ⚔ Attacks | Weapons, each opening its attacks (e.g. Dagger → Standard / Finesse / Off-Hand / Thrown) with attack, damage and chat buttons. |
 | ⚡ Actions | Actions, Bonus Actions, Reactions and Free Actions. **Use** rolls and spends a use. |
@@ -32,8 +32,24 @@ movement is an ordinary click. The position is remembered; ⚙ → **Dock bar
 beside the toolbar** puts it back. Menus open toward the side of the screen
 with more room.
 
+Lost the bar? **Alt+Shift+C** brings it back beside the toolbar.
+
 Keyboard: arrow keys move through menus (→ opens, ← goes back), Enter
 activates, Esc closes.
+
+## Follows the selected token
+
+Click a token on the map and the bar switches to the character it represents.
+GMs get the NPC (or PC) under the token instantly: its sheet loads hidden in the
+background, so actions work right away, and the companion keeps at most three
+such background sheets, closing the oldest. Players only follow tokens of
+characters they control. Sheets you opened yourself are never hidden or
+closed. Turn it off with ⚙ → **Follow the selected token**.
+
+Roll20 has no public "selected token" API, so `src/editor/selection.js` runs in
+Roll20's page and reads the selection from the Jumpgate engine, read-only (the
+approach v3 proved in-game). If Roll20 changes its engine, following stops and
+⚙ → **Copy diagnostics** shows why; everything else keeps working.
 
 ## No setup for players
 
@@ -109,6 +125,7 @@ Code layout:
 | `src/editor/sheets.js` | editor | Finds sheet frames, opens/hides sheets, sends actions |
 | `src/editor/ui.js` | editor | The bar and cascading menus |
 | `src/editor/main.js` | editor | Wires it together, saves data and settings |
+| `src/editor/selection.js` | Roll20 page | Reports the characters behind the selected tokens |
 | `src/shared/wire.js` | both | Message format between page and frames |
 
 Saved sheet HTML from a real campaign contains private character data. Name

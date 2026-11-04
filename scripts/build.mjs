@@ -8,6 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 export const EDITOR_SCRIPTS = ['src/shared/wire.js', 'src/editor/model.js', 'src/editor/sheets.js', 'src/editor/ui.js', 'src/editor/main.js'];
+export const PAGE_SCRIPT = 'src/editor/selection.js';
 export const SHEET_SCRIPTS = ['src/shared/wire.js', 'src/sheet/parse.js', 'src/sheet/act.js', 'src/sheet/main.js'];
 
 export const manifest = {
@@ -18,6 +19,8 @@ export const manifest = {
   icons: { 48: 'icons/icon.svg', 96: 'icons/icon.svg' },
   permissions: ['storage'],
   content_scripts: [
+    // Runs in Roll20's page to read the token selection (see selection.js).
+    { matches: ['https://app.roll20.net/editor*'], js: [PAGE_SCRIPT], run_at: 'document_start', world: 'MAIN' },
     { matches: ['https://app.roll20.net/editor*'], js: EDITOR_SCRIPTS, run_at: 'document_idle' },
     {
       matches: ['https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/*'],
@@ -75,7 +78,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const out = join(root, 'dist', 'firefox');
   rmSync(out, { recursive: true, force: true });
   const files = [['manifest.json', Buffer.from(JSON.stringify(manifest, null, 2) + '\n')]];
-  for (const f of new Set([...EDITOR_SCRIPTS, ...SHEET_SCRIPTS, 'icons/icon.svg'])) files.push([f, readFileSync(join(root, f))]);
+  for (const f of new Set([PAGE_SCRIPT, ...EDITOR_SCRIPTS, ...SHEET_SCRIPTS, 'icons/icon.svg'])) files.push([f, readFileSync(join(root, f))]);
   for (const [name, data] of files) {
     mkdirSync(dirname(join(out, 'extension', name)), { recursive: true });
     writeFileSync(join(out, 'extension', name), data);

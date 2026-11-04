@@ -10,7 +10,22 @@
   const set = (k, v) => { try { if (store) store.set({ [k]: v }); } catch { /* storage unavailable */ } };
 
   const snaps = new Map(); // charId -> snapshot (live or saved)
-  let prefs = { autoHide: true, spend: true, background: true };
+  // One failing step must never stop the bar from appearing.
+  const errors = [];
+  const guard = (label, fn) => (...args) => {
+    try {
+      const r = fn(...args);
+      if (r && typeof r.catch === 'function') r.catch((e) => note(label, e));
+      return r;
+    } catch (e) { note(label, e); return undefined; }
+  };
+  function note(label, e) {
+    const msg = label + ': ' + String((e && e.message) || e);
+    errors.push(msg);
+    if (errors.length > 10) errors.shift();
+    console.error('[R20 Companion]', msg, e);
+  }
+  let prefs = { autoHide: true, spend: true, background: true, follow: true };
   let active = null;
   let chosen = false; // the person picked or opened a character this session
   let firstScan = true;
@@ -32,7 +47,11 @@
         sheetFrames: document.querySelectorAll('iframe[name^="iframe_"]').length,
         journal: C.sheets.journal().length,
         toolbar: !!document.getElementById('master-toolbar'),
-        gm: isGM(), controlled: controlled(), background: keep,
+        gm: isGM(), controlled: controlled(), background: keep, errors,
+        selection: { script: await selectionStatus(), last: lastSelection, recent },
+        bar: (() => { const h = document.getElementById('r20-companion'); const st = h && h.shadowRoot && h.shadowRoot.querySelector('.strip'); return st ? st.getBoundingClientRect().toJSON() : null; })(),
+        window: { w: innerWidth, h: innerHeight },
+        toolbarRect: document.getElementById('master-toolbar')?.getBoundingClientRect().toJSON() || null,
         sheet: snap ? {
           type: snap.type, name: snap.name, stats: snap.stats,
           counts: Object.fromEntries(['attacks', 'actions', 'features', 'items', 'spells', 'abilities', 'checks', 'hitDice', 'rests'].map((k) => [k, count(k)])),
@@ -63,7 +82,7 @@
     ui.update({
       character: active ? { id: active, name: (snap && snap.name) || (j && j.name) || 'Character', img: (j && j.img) || '', stats: snap && snap.stats } : null,
       live: !!(active && C.sheets.isLive(active)),
-      cats: C.buildMenus(snap, prefs),
+      cats: (() => { try { return C.buildMenus(snap, prefs); } catch (e) { note('menus', e); return []; } })(),
       people: people(),
     });
   }
@@ -84,12 +103,12 @@
     }
   }
 
-  C.sheets.on('snapshot', (id, snap) => {
+  C.sheets.on('snapshot', guard('snapshot', (id, snap) => {
     snaps.set(id, snap);
     set('snap:' + id, snap);
     if (!active) select(id); else if (id === active) refresh();
-  });
-  C.sheets.on('dialogs', (ids, opened) => {
+  }));
+  C.sheets.on('dialogs', guard('dialogs', (ids, opened) => {
     // A sheet the user just opened becomes the active character.
     const fresh = opened.filter((id) => !C.sheets.isHidden(id));
     // Sheets already open when the page loaded don't outrank the player's own
@@ -97,7 +116,7 @@
     if (fresh.length && !firstScan) chosen = true;
     firstScan = false;
     if (fresh.length) select(fresh[fresh.length - 1]); else refresh();
-  });
+  }));
 
   // ---- background sheet for players -----------------------------------------
   // Keep the player's own character sheet loaded (hidden) so every action
@@ -105,8 +124,10 @@
   // access; if that is unavailable we fall back to the last character used.
   const page = () => { try { return G.wrappedJSObject || null; } catch { return null; } };
   function isGM() {
-    const W = page();
-    try { if (W && typeof W.is_gm === 'boolean') return W.is_gm; } catch { /* ignore */ }
+    try {
+      const W = page();
+      if (W && typeof W.is_gm === 'boolean') return W.is_gm;
+    } catch { /* fall through */ }
     return !!document.getElementById('layers-label'); // only GMs get the layer switcher
   }
   function controlled() {
@@ -148,15 +169,63 @@
     retryAt = ok ? 0 : Date.now() + 20000; // back off only after a failure
     refresh();
   }
-  setInterval(keeper, 4000);
+  setInterval(guard('keeper', keeper), 4000);
+
+  // ---- follow the selected token -------------------------------------------
+  // selection.js (in Roll20's page) reports the characters that the selected
+  // tokens represent. The bar switches to the first one and loads its sheet
+  // hidden so actions are instant. Players only follow characters they control.
+  const recent = []; // background sheets opened for selected tokens, oldest first
+  let followSeq = 0;
+  let lastSelection = null;
+  function remember(id) {
+    const i = recent.indexOf(id);
+    if (i >= 0) recent.splice(i, 1);
+    recent.push(id);
+    // Keep at most three; never close the active character or the player's own.
+    for (let n = 0; recent.length > 3 && n < recent.length; n++) {
+      const old = recent[0];
+      if (old === active || old === keep) { recent.push(recent.shift()); continue; }
+      recent.shift();
+      C.sheets.closeOwned(old);
+    }
+  }
+  document.addEventListener('r20c-selection', guard('selection', async (e) => {
+    let sel;
+    try { sel = JSON.parse(e.detail); } catch { return; }
+    lastSelection = sel;
+    const id = Array.isArray(sel.chars) ? String(sel.chars[0] || '') : '';
+    if (!id || !prefs.follow || id === active) return;
+    const visible = C.sheets.journal().some((j) => j.id === id) || C.sheets.isOpen(id);
+    if (!visible) return; // not a character this user can open
+    if (!isGM()) {
+      const mine = controlled();
+      if (mine && !mine.includes(id)) return;
+    }
+    const mySeq = ++followSeq;
+    chosen = true;
+    await select(id);
+    if (C.sheets.isOpen(id) || mySeq !== followSeq) return;
+    const ok = await C.sheets.open(id, { hidden: true });
+    if (ok && C.sheets.isOwned(id)) remember(id);
+    refresh();
+  }));
+  function selectionStatus() {
+    return new Promise((resolve) => {
+      const done = (e) => { document.removeEventListener('r20c-selection-status-reply', done); try { resolve(JSON.parse(e.detail)); } catch { resolve(null); } };
+      document.addEventListener('r20c-selection-status-reply', done);
+      document.dispatchEvent(new CustomEvent('r20c-selection-status'));
+      setTimeout(() => { document.removeEventListener('r20c-selection-status-reply', done); resolve('no reply from selection script'); }, 400);
+    });
+  }
 
   (async () => {
     prefs = { ...prefs, ...(await get('prefs', {})) };
     ui.update({ pos: await get('barPos', null) });
-    setTimeout(keeper, 2500);
+    setTimeout(guard('keeper', keeper), 2500);
     const last = await get('active', null);
-    if (last) await select(last); else refresh();
-    C.sheets.greetAll();
+    try { if (last) await select(last); else refresh(); } catch (e) { note('start', e); refresh(); }
+    guard('greet', C.sheets.greetAll)();
     ui.place();
-  })();
+  })().catch((e) => note('boot', e));
 })(globalThis);

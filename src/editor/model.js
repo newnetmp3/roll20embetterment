@@ -261,29 +261,38 @@
     out.push({ key: 'prefs:h', header: true, label: 'Companion' });
     out.push({ key: 'pref:autoHide', label: 'Hide sheets opened for an action', checked: !!prefs.autoHide, pref: 'autoHide' });
     out.push({ key: 'pref:spend', label: 'Spend a use when using a feature', checked: !!prefs.spend, pref: 'spend' });
+    out.push({ key: 'pref:follow', label: 'Follow the selected token', checked: !!prefs.follow, pref: 'follow' });
     out.push({ key: 'pref:background', label: 'Keep my character sheet loaded (players)', checked: !!prefs.background, pref: 'background' });
     out.push({ key: 'dock', label: 'Dock bar beside the toolbar', dock: true });
     out.push({ key: 'diag', label: 'Copy diagnostics', diag: true });
     return out;
   }
 
-  C.buildMenus = function buildMenus(snap, prefs = {}) {
-    if (!snap) return [];
+  const LISTS = ['attacks', 'actions', 'features', 'items', 'spells', 'abilities', 'checks', 'hitDice', 'rests'];
+  C.buildMenus = function buildMenus(raw, prefs = {}) {
+    if (!raw) return [];
+    // Tolerate snapshots with missing parts (older saves, unusual sheets).
+    const snap = { ...raw, stats: raw.stats || {} };
+    for (const k of LISTS) if (!Array.isArray(snap[k])) snap[k] = [];
+    // Each menu is built on its own: one odd row only empties that menu.
+    const errors = [];
+    const safe = (key, fn) => { try { return fn(); } catch (e) { errors.push(key + ': ' + (e && e.message || e)); return []; } };
     const cats = [
-      { key: 'hp', icon: 'heart', label: 'Hit points & rests', items: health(snap) },
-      { key: 'attacks', icon: 'sword', label: 'Attacks', items: attacks(snap) },
+      { key: 'hp', icon: 'heart', label: 'Hit points & rests', items: safe('hp', () => health(snap)) },
+      { key: 'attacks', icon: 'sword', label: 'Attacks', items: safe('attacks', () => attacks(snap)) },
       {
         key: 'actions', icon: 'bolt', label: 'Actions',
-        items: bySection(snap.actions.concat(snap.type === 'npc' ? snap.attacks.map((a) => ({ ...a, npcAttack: true })) : []),
-          (x) => (x.npcAttack ? attackNode(x, x.name) : actionNode(x)), ACTION_ORDER),
+        items: safe('actions', () => bySection(snap.actions.concat(snap.type === 'npc' ? snap.attacks.map((a) => ({ ...a, npcAttack: true })) : []),
+          (x) => (x.npcAttack ? attackNode(x, x.name) : actionNode(x)), ACTION_ORDER)),
       },
-      { key: 'spells', icon: 'spark', label: 'Spells', items: spells(snap) },
-      { key: 'items', icon: 'bag', label: 'Inventory', items: inventory(snap) },
-      { key: 'features', icon: 'star', label: 'Features & traits', items: bySection(snap.features, featureNode) },
-      { key: 'resources', icon: 'hourglass', label: 'Resources', items: resources(snap) },
-      { key: 'checks', icon: 'd20', label: 'Checks & saves', items: checks(snap) },
-      { key: 'settings', icon: 'gear', label: 'Roll settings', items: rollSettings(snap, prefs) },
+      { key: 'spells', icon: 'spark', label: 'Spells', items: safe('spells', () => spells(snap)) },
+      { key: 'items', icon: 'bag', label: 'Inventory', items: safe('items', () => inventory(snap)) },
+      { key: 'features', icon: 'star', label: 'Features & traits', items: safe('features', () => bySection(snap.features, featureNode)) },
+      { key: 'resources', icon: 'hourglass', label: 'Resources', items: safe('resources', () => resources(snap)) },
+      { key: 'checks', icon: 'd20', label: 'Checks & saves', items: safe('checks', () => checks(snap)) },
+      { key: 'settings', icon: 'gear', label: 'Roll settings', items: safe('settings', () => rollSettings(snap, prefs)) },
     ];
+    C.lastMenuErrors = errors;
     return cats.filter((c) => c.items.length);
   };
 })(globalThis);

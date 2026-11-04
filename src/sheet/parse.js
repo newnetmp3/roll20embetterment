@@ -180,6 +180,11 @@
     return { value: (options.find((o) => o.on) || {}).label || '', options: options.map((o) => o.label) };
   }
 
+  // Run one part of the read; a failure skips only that part.
+  function part(snap, name, fn) {
+    try { fn(); } catch (e) { (snap.errors = snap.errors || []).push(name + ': ' + String(e && e.message || e)); }
+  }
+
   C.parseSheet = function parseSheet(doc) {
     const sc = scopes(doc);
     if (!sc) return null;
@@ -189,90 +194,108 @@
 
     const snap = {
       v: 1, type: sc.type, name, at: Date.now(),
-      stats: readStats(sc),
+      stats: (() => { try { return readStats(sc); } catch { return {}; } })(),
       privacy: radios(sc.sheet, '.manage__roll-privacy--radio'),
       mode: radios(sc.sheet, '.manage__roll-mode--radio'),
       attacks: [], actions: [], features: [], items: [], spells: [],
       abilities: [], checks: [], hitDice: [], rests: [], initiative: null,
     };
 
-    for (const r of rows(sc, 'attack')) {
-      snap.attacks.push({
-        ref: r.ref, name: r.name, section: section(r.el),
-        sub: text(r.el.querySelector('.span--item-row-subtitle'), 40),
-        range: text(r.el.querySelector('.attack-item__range'), 40),
-        hit: hitText(r.el), dmg: dmgList(r.el),
-        chips: [...r.el.querySelectorAll('.attack-item__type-range .poly-chip__label')].map((c) => text(c, 60)),
-      });
-    }
-    for (const r of rows(sc, 'action')) {
-      const roll = r.el.querySelector('.poly-button--healing button, .poly-button--hit-dc button, .poly-button--damage button');
-      snap.actions.push({
-        ref: r.ref, name: r.name, section: section(r.el),
-        desc: desc(r.el, '.action-item__description'),
-        roll: roll ? text(roll, 40) : '',
-        res: resources(r.el),
-      });
-    }
-    for (const r of rows(sc, 'feature')) {
-      snap.features.push({
-        ref: r.ref, name: r.name, section: section(r.el),
-        source: text(r.el.querySelector('.feature-item__source'), 60),
-        timing: text(r.el.querySelector('.feature-item__action'), 30),
-        desc: desc(r.el, '.feature-item__description'),
-        res: resources(r.el),
-      });
-    }
-    for (const r of rows(sc, 'npcfeature')) {
-      snap.features.push({
-        ref: r.ref, name: r.name, section: 'Features & Traits', source: '',
-        timing: '', desc: clean(attr(r.el.querySelector('.npc-feature__combined-name-desc'), 'value'), 600), res: [],
-      });
-    }
-    for (const r of rows(sc, 'item')) {
-      const qty = r.el.querySelector('.item-item__quantity-incrementer .poly-incrementer__input');
-      const sw = r.el.querySelector('.item-item__equip-switch [role="switch"]');
-      snap.items.push({
-        ref: r.ref, name: r.name, section: section(r.el),
-        sub: [...r.el.querySelectorAll('.item-item__subtitle li')].map((li) => text(li, 40)).join(', '),
-        qty: qty ? num(attr(qty, 'aria-valuenow') ?? qty.value) : null,
-        weight: text(r.el.querySelector('.item-item__weight'), 20),
-        equipped: sw ? attr(sw, 'aria-checked') === 'true' : null,
-      });
-    }
-    for (const r of rows(sc, 'spell')) {
-      const prep = r.el.querySelector('.utility-switch--prepared [role="switch"]');
-      snap.spells.push({
-        ref: r.ref, name: r.name, level: section(r.el) || '',
-        range: text(r.el.querySelector('.spell-item__range'), 50),
-        hit: text(r.el.querySelector('.spell-item__hit-dc button'), 40),
-        dmg: [...r.el.querySelectorAll('.spell-item__damage button')].map((b) => ({ text: text(b, 40), type: '' })),
-        tags: [...r.el.querySelectorAll('.spell-item__rit-con .poly-chip__label')].map((c) => text(c, 4)),
-        prepared: prep ? attr(prep, 'aria-checked') === 'true' : null,
-      });
-    }
-    for (const r of rows(sc, 'ability')) {
-      snap.abilities.push({
-        ref: r.ref, name: r.name,
-        score: num(attr(r.el.querySelector('.utility-incrementer__input'), 'aria-valuenow')),
-        mod: text(r.el.querySelector('.poly-button--ability button'), 6),
-        save: text(r.el.querySelector('.poly-button--compact-saving-throw button'), 6),
-      });
-    }
-    for (const r of rows(sc, 'check')) {
-      const row = r.el.closest('.skill');
-      snap.checks.push({
-        ref: r.ref, name: r.name,
-        ability: row ? text(row.querySelector('.skill__ability'), 4) : '',
-        bonus: row ? text(row.querySelector('.skill__bonus'), 6) : '',
-        prof: row ? clean(attr(row.querySelector('.skill__bonus'), 'data-prof'), 20) : '',
-      });
-    }
-    for (const r of rows(sc, 'npcskill')) {
-      snap.checks.push({ ref: r.ref, name: r.name, ability: '', bonus: text(r.el.querySelector('.npc-skill__value'), 6), prof: '' });
-    }
-    for (const r of rows(sc, 'hitdie')) snap.hitDice.push({ ref: r.ref, name: r.name, label: text(r.el, 30) });
-    for (const r of rows(sc, 'rest')) snap.rests.push({ ref: r.ref, name: r.name });
+    part(snap, 'attack', () => {
+      for (const r of rows(sc, 'attack')) {
+        snap.attacks.push({
+          ref: r.ref, name: r.name, section: section(r.el),
+          sub: text(r.el.querySelector('.span--item-row-subtitle'), 40),
+          range: text(r.el.querySelector('.attack-item__range'), 40),
+          hit: hitText(r.el), dmg: dmgList(r.el),
+          chips: [...r.el.querySelectorAll('.attack-item__type-range .poly-chip__label')].map((c) => text(c, 60)),
+        });
+      }
+    });
+    part(snap, 'action', () => {
+      for (const r of rows(sc, 'action')) {
+        const roll = r.el.querySelector('.poly-button--healing button, .poly-button--hit-dc button, .poly-button--damage button');
+        snap.actions.push({
+          ref: r.ref, name: r.name, section: section(r.el),
+          desc: desc(r.el, '.action-item__description'),
+          roll: roll ? text(roll, 40) : '',
+          res: resources(r.el),
+        });
+      }
+    });
+    part(snap, 'feature', () => {
+      for (const r of rows(sc, 'feature')) {
+        snap.features.push({
+          ref: r.ref, name: r.name, section: section(r.el),
+          source: text(r.el.querySelector('.feature-item__source'), 60),
+          timing: text(r.el.querySelector('.feature-item__action'), 30),
+          desc: desc(r.el, '.feature-item__description'),
+          res: resources(r.el),
+        });
+      }
+    });
+    part(snap, 'npcfeature', () => {
+      for (const r of rows(sc, 'npcfeature')) {
+        snap.features.push({
+          ref: r.ref, name: r.name, section: 'Features & Traits', source: '',
+          timing: '', desc: clean(attr(r.el.querySelector('.npc-feature__combined-name-desc'), 'value'), 600), res: [],
+        });
+      }
+    });
+    part(snap, 'item', () => {
+      for (const r of rows(sc, 'item')) {
+        const qty = r.el.querySelector('.item-item__quantity-incrementer .poly-incrementer__input');
+        const sw = r.el.querySelector('.item-item__equip-switch [role="switch"]');
+        snap.items.push({
+          ref: r.ref, name: r.name, section: section(r.el),
+          sub: [...r.el.querySelectorAll('.item-item__subtitle li')].map((li) => text(li, 40)).join(', '),
+          qty: qty ? num(attr(qty, 'aria-valuenow') ?? qty.value) : null,
+          weight: text(r.el.querySelector('.item-item__weight'), 20),
+          equipped: sw ? attr(sw, 'aria-checked') === 'true' : null,
+        });
+      }
+    });
+    part(snap, 'spell', () => {
+      for (const r of rows(sc, 'spell')) {
+        const prep = r.el.querySelector('.utility-switch--prepared [role="switch"]');
+        snap.spells.push({
+          ref: r.ref, name: r.name, level: section(r.el) || '',
+          range: text(r.el.querySelector('.spell-item__range'), 50),
+          hit: text(r.el.querySelector('.spell-item__hit-dc button'), 40),
+          dmg: [...r.el.querySelectorAll('.spell-item__damage button')].map((b) => ({ text: text(b, 40), type: '' })),
+          tags: [...r.el.querySelectorAll('.spell-item__rit-con .poly-chip__label')].map((c) => text(c, 4)),
+          prepared: prep ? attr(prep, 'aria-checked') === 'true' : null,
+        });
+      }
+    });
+    part(snap, 'ability', () => {
+      for (const r of rows(sc, 'ability')) {
+        snap.abilities.push({
+          ref: r.ref, name: r.name,
+          score: num(attr(r.el.querySelector('.utility-incrementer__input'), 'aria-valuenow')),
+          mod: text(r.el.querySelector('.poly-button--ability button'), 6),
+          save: text(r.el.querySelector('.poly-button--compact-saving-throw button'), 6),
+        });
+      }
+    });
+    part(snap, 'check', () => {
+      for (const r of rows(sc, 'check')) {
+        const row = r.el.closest('.skill');
+        snap.checks.push({
+          ref: r.ref, name: r.name,
+          ability: row ? text(row.querySelector('.skill__ability'), 4) : '',
+          bonus: row ? text(row.querySelector('.skill__bonus'), 6) : '',
+          prof: row ? clean(attr(row.querySelector('.skill__bonus'), 'data-prof'), 20) : '',
+        });
+      }
+    });
+    part(snap, 'npcskill', () => {
+      for (const r of rows(sc, 'npcskill')) {
+        snap.checks.push({ ref: r.ref, name: r.name, ability: '', bonus: text(r.el.querySelector('.npc-skill__value'), 6), prof: '' });
+      }
+    });
+    part(snap, 'hitdie', () => { for (const r of rows(sc, 'hitdie')) snap.hitDice.push({ ref: r.ref, name: r.name, label: text(r.el, 30) }); });
+    part(snap, 'rest', () => { for (const r of rows(sc, 'rest')) snap.rests.push({ ref: r.ref, name: r.name }); });
     const init = rows(sc, 'initiative')[0];
     if (init) snap.initiative = { ref: init.ref, text: snap.stats.initiative };
     return snap;

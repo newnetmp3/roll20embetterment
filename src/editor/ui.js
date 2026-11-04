@@ -29,7 +29,7 @@
 .r { --bg:#1d1f26; --bg2:#272a33; --bg3:#323642; --line:#3d4250; --fg:#e8e9ee; --mute:#9aa0ae;
      --acc:#d9a441; --ok:#5fb87a; --bad:#e0645f; --focus:#7aa7ff;
      font: 13px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--fg); }
-.strip { position: fixed; z-index: 10050; width: 44px; display: flex; flex-direction: column; gap: 2px; padding: 4px;
+.strip { position: fixed; z-index: 2147483000; width: 44px; display: flex; flex-direction: column; gap: 2px; padding: 4px;
      background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
      box-shadow: 2px 2px 10px rgba(0,0,0,.35); touch-action: none; user-select: none; cursor: grab; }
 .strip.dragging { cursor: grabbing; opacity: .92; box-shadow: 4px 6px 18px rgba(0,0,0,.5); }
@@ -49,7 +49,7 @@
 .sep { height: 1px; background: var(--line); margin: 2px 4px; }
 .hpbar { height: 4px; border-radius: 2px; background: var(--bg3); margin: 0 3px 2px; overflow: hidden; }
 .hpbar i { display: block; height: 100%; background: var(--ok); }
-.menu { position: fixed; z-index: 10060; min-width: 220px; max-width: 320px; max-height: 72vh; overflow-y: auto;
+.menu { position: fixed; z-index: 2147483010; min-width: 220px; max-width: 320px; max-height: 72vh; overflow-y: auto;
      background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 4px 4px 16px rgba(0,0,0,.45); }
 .title { padding: 6px 8px 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--mute);
      display: flex; justify-content: space-between; gap: 8px; }
@@ -74,7 +74,7 @@ input.num, input.txt { width: 70px; background: var(--bg2); border: 1px solid va
      padding: 3px 6px; font: inherit; }
 input.txt { width: 100%; margin: 2px 0 4px; }
 .empty { padding: 8px; color: var(--mute); }
-.toast { position: fixed; z-index: 10070; max-width: 320px; padding: 8px 10px; border-radius: 6px; background: var(--bg);
+.toast { position: fixed; z-index: 2147483020; max-width: 320px; padding: 8px 10px; border-radius: 6px; background: var(--bg);
      border: 1px solid var(--line); border-left: 3px solid var(--ok); box-shadow: 2px 2px 10px rgba(0,0,0,.4); font-size: 12px; }
 .toast.bad { border-left-color: var(--bad); }
 `;
@@ -128,8 +128,12 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       const bar = document.getElementById('master-toolbar');
       const r = bar && bar.getBoundingClientRect();
       const visible = r && r.width > 10 && r.height > 40 && r.right > 0;
-      strip.style.left = Math.round(visible ? r.right + 4 : 8) + 'px';
-      strip.style.top = Math.round(visible ? Math.max(4, r.top + 4) : 60) + 'px';
+      // Use the toolbar only if it looks like the slim left toolbar; always
+      // keep the bar inside the window.
+      const sane = visible && r.right < Math.min(400, innerWidth / 2);
+      const p = clampPos(sane ? r.right + 4 : 8, sane ? Math.max(4, r.top + 4) : 60);
+      strip.style.left = p.x + 'px';
+      strip.style.top = p.y + 'px';
       positionMenus();
     }
     addEventListener('resize', place);
@@ -402,6 +406,19 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => t.remove(), bad ? 6000 : 3000);
     }
+
+    // Alt+Shift+C: bring the bar back beside the toolbar if it ever goes missing.
+    document.addEventListener('keydown', (e) => {
+      if (!(e.altKey && e.shiftKey && (e.key === 'C' || e.key === 'c' || e.code === 'KeyC'))) return;
+      e.preventDefault();
+      custom = null;
+      handlers.savePos(null);
+      if (!host.isConnected) document.documentElement.appendChild(host);
+      path = [];
+      render();
+      place();
+      toast('Companion bar is here.');
+    }, true);
 
     // ---- closing & keyboard ---------------------------------------------------
     document.addEventListener('mousedown', (e) => {
