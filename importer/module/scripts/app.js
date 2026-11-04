@@ -71,6 +71,7 @@ class ImportApp extends foundry.applications.api.ApplicationV2 {
       ['tables', 'Roll tables', true], ['macros', 'Macros (kept as Roll20 text)', true], ['playlists', 'Jukebox (playlists)', true],
       ['compendium', 'Use dnd5e compendium spells, items, classes when names match', true],
       ['skipExisting', 'Skip things already imported (safe to run again)', true],
+      ['replaceScenes', 'Replace scenes already imported (redo maps)', false],
     ];
     const box = h('div', '', 'display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;');
     for (const [k, label, def] of opts) {
@@ -255,8 +256,8 @@ async function runImport(name, index, opt, userMap, say, progress) {
           if (it) { items.push(it); if (it._stats?.compendiumSource) matched++; }
         }
         const dt = ch.defaulttoken && typeof ch.defaulttoken === 'object' ? ch.defaulttoken : {};
-        const avatar = (dir && local(dir + '/avatar.png')) || ch.avatar || '';
-        const tokenImg = (dir && local(dir + '/token.png')) || dt.imgsrc || avatar;
+        const avatar = (dir && local(dir + '/avatar.png')) || '';
+        const tokenImg = (dir && local(dir + '/token.png')) || avatar;
         const controlled = listOf(ch.controlledby).length > 0;
         const proto = tokenSettings(dt, 70);
         delete proto.rotation;
@@ -291,7 +292,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
     for (const h of hs) {
       if (opt.skipExisting && existingJournal.has(h.id)) { journalByR20.set(h.id, existingJournal.get(h.id)); continue; }
       const dir = index.handouts[h.id];
-      const img = (dir && local(dir + '/avatar.png')) || h.avatar || '';
+      const img = (dir && local(dir + '/avatar.png')) || '';
       const j = convertHandout(h, img);
       batch.push({ ...j, folder: folderOf.get(h.id) || (await rootFolder.JournalEntry()), ownership: ownership(h.inplayerjournals, OWN.OBSERVER), flags: { [MOD]: { id: h.id, archived: !!h.archived } } });
     }
@@ -318,11 +319,18 @@ async function runImport(name, index, opt, userMap, say, progress) {
       }
       return protoCache.get(id);
     };
+    if (opt.replaceScenes) {
+      const old = game.scenes.filter((s) => s.getFlag(MOD, 'id'));
+      if (old.length) { say(`  Removing ${old.length} scenes from the earlier import…`); await Scene.deleteDocuments(old.map((s) => s.id)); }
+      existingScenes.clear();
+    }
     for (const [i, page] of pages.entries()) {
       if (opt.skipExisting && existingScenes.has(page.id)) continue;
       try {
         const dir = index.pages[page.id];
-        const imageFor = (pg, g) => (dir && local(dir + '/graphics/' + g.id + '.png')) || g.imgsrc || '';
+        // Local files only: Roll20's own image links can't be loaded from Foundry.
+        const imageFor = (pg, g) => (dir && local(dir + '/graphics/' + g.id + '.png'))
+          || (g.represents && index.characters[g.represents] && (local(index.characters[g.represents] + '/token.png') || local(index.characters[g.represents] + '/avatar.png'))) || '';
         const { scene, stats } = convertPage(page, { imageFor, actorFor });
         scene.folder = await rootFolder.Scene();
         scene.navigation = page.id === campaign.playerpageid;
@@ -339,7 +347,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
   if (opt.tables) {
     const tables = campaign.tables || campaign.rollabletables || [];
     const existing = found('RollTable');
-    const data = tables.filter((t) => !(opt.skipExisting && existing.has(t.id))).map((t) => ({ ...convertTable(t, (it) => it.avatar || ''), folder: null, flags: { [MOD]: { id: t.id } } }));
+    const data = tables.filter((t) => !(opt.skipExisting && existing.has(t.id))).map((t) => ({ ...convertTable(t, (it) => local('tables/' + t.id + '/' + (t.items || []).indexOf(it) + '.png')), folder: null, flags: { [MOD]: { id: t.id } } }));
     if (data.length) { const f = await rootFolder.RollTable(); data.forEach((d) => (d.folder = f)); await RollTable.createDocuments(data); }
     say(`Roll tables: ${data.length}`);
   }

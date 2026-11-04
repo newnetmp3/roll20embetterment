@@ -80,6 +80,116 @@ def unique_names(entries, label):
     return out
 
 
+SIZES = ["original", "max", "med", "thumb"]
+
+
+def url_variants(url, big):
+    """Roll20 image URLs end in original/max/med/thumb; try the useful sizes."""
+    url = re.sub(r"^http:", "https:", url.strip())
+    m = re.search(r"/(original|max|med|thumb)\.([a-z0-9]+)(\?.*)?$", url, re.I)
+    if not m:
+        return [url]
+    order = SIZES if big else ["max", "original", "med", "thumb"]
+    return [url[:m.start(1)] + s + url[m.end(1):] for s in order]
+
+
+def download(url):
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (r20prep)"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read()
+
+
+def fetch_missing(campaign, index, files, dest):
+    from concurrent.futures import ThreadPoolExecutor
+    wanted = []  # (key in files, url, big, label)
+
+    def want(rel, url, big=False, label=""):
+        if url and isinstance(url, str) and url.startswith("http") and rel not in files:
+            wanted.append((rel, url, big, label))
+
+    for p in campaign.get("pages", []):
+        d = index["pages"].get(p.get("id"))
+        if not d:
+            continue
+        for g in p.get("graphics", []):
+            want(f"{d}/graphics/{g.get('id')}.png", g.get("imgsrc"), g.get("layer") == "map", p.get("name", ""))
+    for c in campaign.get("characters", []):
+        d = index["characters"].get(c.get("id"))
+        if not d:
+            continue
+        want(f"{d}/avatar.png", c.get("avatar"))
+        tok = c.get("defaulttoken")
+        if isinstance(tok, dict):
+            want(f"{d}/token.png", tok.get("imgsrc"))
+    for h in campaign.get("handouts", []):
+        d = index["handouts"].get(h.get("id"))
+        if d:
+            want(f"{d}/avatar.png", h.get("avatar"), True)
+    for t in campaign.get("tables", []) or []:
+        for i, it in enumerate(t.get("items", []) or []):
+            want(f"tables/{t.get('id')}/{i}.png", it.get("avatar"))
+    if not wanted:
+        print("All images are in the export.")
+        return
+
+    print(f"Downloading {len(wanted)} images the export is missing (Roll20 refused them to the exporter) ...")
+    by_url = {}  # first variant URL -> saved relative path
+    failed = {}
+
+    def get(item):
+        rel, url, big, label = item
+        for u in url_variants(url, big):
+            try:
+                data = download(u)
+            except Exception:
+                continue
+            ext = sniff(data[:64])
+            if not ext:
+                continue
+            return item, data, ext
+        return item, None, None
+
+    # One download per distinct image; later copies are hard links.
+    unique = {}
+    for item in wanted:
+        unique.setdefault(item[1], item)
+    done = 0
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for item, data, ext in pool.map(get, unique.values()):
+            done += 1
+            if data:
+                rel = item[0].rsplit(".", 1)[0] + "." + ext
+                out = os.path.join(dest, rel)
+                os.makedirs(os.path.dirname(out), exist_ok=True)
+                with open(out, "wb") as f:
+                    f.write(data)
+                by_url[item[1]] = rel
+            if done % 100 == 0 or done == len(unique):
+                print(f"  {done}/{len(unique)}")
+    got = 0
+    for rel, url, big, label in wanted:
+        src = by_url.get(url)
+        if not src:
+            failed[label or "characters & handouts"] = failed.get(label or "characters & handouts", 0) + 1
+            continue
+        target = rel.rsplit(".", 1)[0] + "." + src.rsplit(".", 1)[1]
+        if target != src:
+            out = os.path.join(dest, target)
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            if os.path.exists(out):
+                os.remove(out)
+            try:
+                os.link(os.path.join(dest, src), out)
+            except OSError:
+                shutil.copyfile(os.path.join(dest, src), out)
+        files[rel] = target
+        got += 1
+    print(f"Downloaded {got} of {len(wanted)} missing images.")
+    for label, n in sorted(failed.items()):
+        print(f"  still missing on '{label}': {n}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Prepare a Roll20 export for Foundry VTT.")
     ap.add_argument("zip", help="the export .zip (contains campaign.json)")
@@ -87,6 +197,7 @@ def main():
     ap.add_argument("--user", default=DEFAULT_USER, help=f"user Foundry runs as (default {DEFAULT_USER})")
     ap.add_argument("--name", help="folder name under r20import/ (default: from the campaign)")
     ap.add_argument("--skip-module", action="store_true", help="don't install the Foundry module")
+    ap.add_argument("--no-download", action="store_true", help="don't download images missing from the export")
     args = ap.parse_args()
 
     if not os.path.isdir(args.data):
@@ -189,6 +300,13 @@ def main():
                 walk(e.get("i", []), f"{prefix}/{name}")
 
     walk(campaign.get("jukeboxfolder") or [], "jukebox")
+
+    # ---- images the exporter couldn't download ------------------------------------
+    # Roll20 often refused the exporter's browser downloads, so those images are
+    # missing from the zip. The browser can't fetch them later either, but the
+    # server can: download them here, straight into the campaign folder.
+    if not args.no_download:
+        fetch_missing(campaign, index, files, dest)
 
     with open(os.path.join(dest, "index.json"), "w") as f:
         json.dump(index, f)
