@@ -24,18 +24,33 @@
   }
   C.weaponOf = weaponOf;
 
+  // The sheet titles healing rows "Cure Wounds Healing"; drop the echo.
+  // A one-word remainder ("Mass Healing" -> "Mass") keeps the full name.
+  function tidyName(name) {
+    const m = /^(.*\S)\s+Healing$/i.exec(String(name || ''));
+    return m && m[1].trim().split(/\s+/).length >= 2 ? m[1] : name;
+  }
+  C.tidyName = tidyName;
+
   function attackNode(a, label) {
+    label = tidyName(label);
+    const name = tidyName(a.name);
     const controls = [];
-    if (a.hit) controls.push({ label: a.hit.replace(/\s*Attack$/i, ''), title: a.hit, run: { ref: a.ref, op: 'hit', say: a.name + ' attack' } });
-    a.dmg.forEach((d, i) => controls.push({
-      label: d.text, title: 'Damage' + (d.type ? ' (' + d.type + ')' : ''),
-      run: { ref: a.ref, op: 'dmg', arg: i, say: a.name + ' damage' },
-    }));
-    controls.push({ label: '💬', title: 'Show in chat', run: { ref: a.ref, op: 'chat', say: a.name } });
+    if (a.hit) controls.push({ label: a.hit.replace(/\s*Attack$/i, ''), title: a.hit, run: { ref: a.ref, op: 'hit', say: name + ' attack' } });
+    a.dmg.forEach((d, i) => {
+      const heal = /heal/i.test(d.type);
+      controls.push({
+        label: d.text, title: heal ? 'Healing' : 'Damage' + (d.type ? ' (' + d.type + ')' : ''),
+        run: { ref: a.ref, op: 'dmg', arg: i, say: name + (heal ? ' healing' : ' damage') },
+      });
+    });
+    controls.push({ label: '💬', title: 'Show in chat', run: { ref: a.ref, op: 'chat', say: name } });
+    const heals = a.dmg.length && a.dmg.every((d) => /heal/i.test(d.type));
     return {
       key: a.ref, label, hint: a.range,
-      desc: [a.sub, a.range, ...(a.chips || [])].filter(Boolean).join(' · '),
-      run: a.hit ? { ref: a.ref, op: 'hit', say: a.name + ' attack' } : { ref: a.ref, op: 'chat', say: a.name },
+      desc: [name !== label ? name : '', a.sub, a.range, ...(a.chips || [])].filter(Boolean).join(' · '),
+      run: a.hit ? { ref: a.ref, op: 'hit', say: name + ' attack' }
+        : heals ? { ref: a.ref, op: 'dmg', arg: 0, say: name + ' healing' } : { ref: a.ref, op: 'chat', say: name },
       controls,
     };
   }
@@ -43,7 +58,7 @@
   function attacks(snap) {
     const groups = new Map();
     for (const a of snap.attacks) {
-      const w = weaponOf(a.name);
+      const w = weaponOf(tidyName(a.name));
       if (!groups.has(norm(w.base))) groups.set(norm(w.base), { base: w.base, list: [] });
       groups.get(norm(w.base)).list.push({ a, variant: w.variant });
     }

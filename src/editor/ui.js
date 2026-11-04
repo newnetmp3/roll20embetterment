@@ -61,8 +61,9 @@
 .row.hdr { cursor: default; min-height: 24px; padding-top: 8px; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--mute); }
 .row.hdr:hover { background: none; }
 .row.busy { opacity: .6; pointer-events: none; }
-.lab { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hint { color: var(--mute); font-size: 12px; white-space: nowrap; }
+.lab { flex: 1 1 auto; min-width: 5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Long range text ("120 feet 60 ft long, 20 ft high") yields to the name and buttons. */
+.hint { flex: 0 1 auto; min-width: 0; max-width: 9em; overflow: hidden; text-overflow: ellipsis; color: var(--mute); font-size: 12px; white-space: nowrap; }
 .chk { width: 14px; color: var(--acc); flex: none; text-align: center; }
 .ctls { display: flex; gap: 3px; flex: none; }
 .ctl { border: 1px solid var(--line); background: var(--bg2); color: var(--fg); border-radius: 4px; padding: 2px 6px;
@@ -280,7 +281,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (n.desc) row.title = n.desc;
       if (n.checked !== undefined && !n.header) row.appendChild(el('span', 'chk', n.checked ? '✓' : ''));
       row.appendChild(el('span', 'lab', escHtml(n.label)));
-      if (n.hint) row.appendChild(el('span', 'hint', escHtml(n.hint)));
+      if (n.hint) { const h = el('span', 'hint', escHtml(n.hint)); h.title = n.hint; row.appendChild(h); }
       if (n.input) {
         const input = el('input', 'num');
         input.type = 'number'; input.min = '0'; input.placeholder = n.input.placeholder || '';

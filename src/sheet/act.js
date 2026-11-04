@@ -180,8 +180,10 @@
       case 'hit': return press(q(row, k === 'spell' ? '.spell-item__hit-dc button' : '.poly-button--hit-dc button'))
         ? { ok: true, msg: 'Attack rolled.' } : { ok: false, msg: 'No attack button.' };
       case 'dmg': {
-        const list = row.querySelectorAll(k === 'spell' ? '.spell-item__damage button' : '.poly-button--damage button');
-        return press(list[Number(arg) || 0]) ? { ok: true, msg: 'Damage rolled.' } : { ok: false, msg: 'No damage button.' };
+        const list = row.querySelectorAll(k === 'spell' ? '.spell-item__damage button' : (C.DMG_BUTTONS || '.poly-button--damage button'));
+        const b = list[Number(arg) || 0];
+        const heal = !!(b && b.closest('.poly-button--healing'));
+        return press(b) ? { ok: true, msg: heal ? 'Healing rolled.' : 'Damage rolled.' } : { ok: false, msg: 'No damage button.' };
       }
       case 'chat': return press(chatButton(row, k)) ? { ok: true, msg: 'Posted to chat.' } : { ok: false, msg: 'No chat button.' };
       case 'roll': return press(rollButton(row)) ? { ok: true, msg: 'Rolled.' } : { ok: false, msg: 'Nothing to roll.' };

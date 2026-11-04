@@ -137,7 +137,10 @@
 
   const buttonText = (sel) => (row) => text(row.querySelector(sel), 40);
   const hitText = buttonText('.poly-button--hit-dc button');
-  const dmgList = (row) => [...row.querySelectorAll('.poly-button--damage button')].map((b) => ({
+  // Damage and healing buttons, in sheet order (act.js presses by index).
+  const DMG_BUTTONS = '.poly-button--damage button, .poly-button--healing button';
+  C.DMG_BUTTONS = DMG_BUTTONS;
+  const dmgList = (row) => [...row.querySelectorAll(DMG_BUTTONS)].map((b) => ({
     text: text(b, 40),
     type: clean(attr(b.querySelector('.poly-icon--damage-icon'), 'aria-label'), 30),
   }));

@@ -68,3 +68,16 @@ test('no snapshot: only the companion settings', () => {
   assert.ok(keys.includes('pref:follow') && keys.includes('diag'));
   assert.ok(!keys.some((k) => k.startsWith('privacy:') || k.startsWith('mode:')));
 });
+
+test('healing rows drop the echoed "Healing" and roll healing', () => {
+  const m = model();
+  assert.equal(m.tidyName('Cure Wounds Healing'), 'Cure Wounds');
+  assert.equal(m.tidyName('Mass Healing Word Healing'), 'Mass Healing Word');
+  assert.equal(m.tidyName('Mass Healing'), 'Mass Healing');
+  assert.equal(m.tidyName('Healing'), 'Healing');
+  const snap = { type: 'pc', stats: {}, attacks: [{ ref: 'attack:0:Cure Wounds Healing', name: 'Cure Wounds Healing', range: 'Touch', hit: '', dmg: [{ text: '2d8+3', type: 'healing' }] }] };
+  const atk = plain(m.buildMenus(snap)).find((c) => c.key === 'attacks').items[0];
+  assert.equal(atk.label, 'Cure Wounds');
+  assert.deepEqual(atk.run, { ref: 'attack:0:Cure Wounds Healing', op: 'dmg', arg: 0, say: 'Cure Wounds healing' });
+  assert.equal(atk.controls[0].title, 'Healing');
+});
