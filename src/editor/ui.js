@@ -51,8 +51,21 @@
 .hpbar i { display: block; height: 100%; background: var(--ok); }
 .menu { position: fixed; z-index: 2147483010; min-width: 220px; max-width: 320px; max-height: 72vh; overflow-y: auto;
      background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 4px 4px 16px rgba(0,0,0,.45); }
-.title { padding: 6px 8px 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--mute);
-     display: flex; justify-content: space-between; gap: 8px; }
+/* Menu header: the menu's name stands apart from its items. */
+.title { position: sticky; top: -4px; z-index: 1; margin: -4px -4px 4px; padding: 9px 12px 8px;
+     background: linear-gradient(180deg, var(--bg3), var(--bg2)); border-bottom: 1px solid var(--line);
+     border-radius: 8px 8px 0 0; box-shadow: inset 0 -2px 0 rgba(217,164,65,.35);
+     display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.title .tname { font-size: 14px; font-weight: 700; letter-spacing: .02em; color: var(--acc); white-space: nowrap; }
+.title .tsub { font-size: 11px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Health bar */
+.meter { padding: 4px 6px 8px; }
+.meter .bar { position: relative; height: 20px; border-radius: 5px; background: #3a2226; border: 1px solid var(--line); overflow: hidden; }
+.meter .fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(180deg, #6fcf8a, #3f9a5c); transition: width .25s; }
+.meter .tmp { position: absolute; inset: 0 auto 0 0; background: repeating-linear-gradient(135deg, rgba(122,167,255,.75) 0 6px, rgba(122,167,255,.5) 6px 12px); }
+.meter .val { position: absolute; inset: 0; display: grid; place-items: center; font: 700 12px/1 inherit; color: #fff;
+     text-shadow: 0 1px 2px rgba(0,0,0,.8); letter-spacing: .02em; }
+.meter .sub { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--mute); }
 .row { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 6px 3px 8px; border-radius: 5px; cursor: pointer;
      outline: none; }
 .row:hover, .row.open { background: var(--bg2); }
@@ -88,6 +101,26 @@ input.txt { width: 100%; margin: 2px 0 4px; }
   }
   const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+
+  // Health bar: green is current HP; striped blue on top is temp HP.
+  function meterFor(m) {
+    const box = el('div', 'meter');
+    const max = Number(m.max) || 0;
+    const cur = m.cur == null ? null : Number(m.cur);
+    const pct = (v) => (max ? Math.max(0, Math.min(100, (v / max) * 100)) : v ? 100 : 0);
+    const bar = el('div', 'bar');
+    bar.setAttribute('role', 'meter');
+    bar.setAttribute('aria-label', 'Hit points');
+    if (cur != null) { bar.setAttribute('aria-valuenow', String(cur)); bar.setAttribute('aria-valuemin', '0'); if (max) bar.setAttribute('aria-valuemax', String(max)); }
+    const fill = el('div', 'fill'); fill.style.width = pct(cur || 0) + '%';
+    bar.appendChild(fill);
+    if (m.temp > 0) { const t = el('div', 'tmp'); t.style.width = pct(m.temp) + '%'; bar.appendChild(t); }
+    bar.appendChild(el('div', 'val', escHtml((cur ?? '—') + (max && !m.note ? ' / ' + max : '') + (m.temp > 0 ? '  +' + m.temp : ''))));
+    box.appendChild(bar);
+    const left = m.temp > 0 ? m.temp + ' temp HP' : m.note ? m.note + ' HP' : 'Hit points';
+    box.appendChild(el('div', 'sub', '<span>' + escHtml(left) + '</span>' + (m.ac != null ? '<span>AC ' + escHtml(m.ac) + '</span>' : '')));
+    return box;
+  }
 
   C.createUI = function createUI(handlers) {
     const host = document.createElement('div');
@@ -275,6 +308,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         box.appendChild(input);
         return box;
       }
+      if (n.meter) return meterFor(n.meter);
       const row = el('div', 'row' + (n.header ? ' hdr' : '') + (n.disabled ? ' dis' : '') + (path[level + 1] === n.key ? ' open' : '') + (busy.has(n.key) ? ' busy' : ''));
       row.dataset.key = n.key;
       if (!n.header) { row.tabIndex = -1; row.setAttribute('role', 'menuitem'); }
@@ -354,8 +388,8 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         const m = el('div', 'menu');
         m.setAttribute('role', 'menu');
         m.dataset.level = String(level);
-        const t = el('div', 'title', '<span>' + escHtml(titleAt(level)) + '</span>' +
-          (level === 0 && model.character && path[0] !== 'people' ? '<span>' + escHtml(model.character.name) + '</span>' : ''));
+        const t = el('div', 'title', '<span class="tname">' + escHtml(titleAt(level)) + '</span>' +
+          (level === 0 && model.character && path[0] !== 'people' ? '<span class="tsub">' + escHtml(model.character.name) + '</span>' : ''));
         m.appendChild(t);
         if (!nodes.length) m.appendChild(el('div', 'empty', 'Nothing here.'));
         for (const n of nodes) {

@@ -252,12 +252,20 @@
     const s = snap.stats || {};
     const out = [];
     if (snap.type === 'pc') {
-      out.push({ key: 'hp', header: true, label: 'HP ' + (s.hp ?? '—') + ' / ' + (s.maxHp ?? '—') + (s.tempHp ? '  (+' + s.tempHp + ' temp)' : '') });
-      out.push({ key: 'dmg', label: 'Take damage', input: { placeholder: 'amount', op: 'damage' } });
-      out.push({ key: 'heal', label: 'Heal', input: { placeholder: 'amount', op: 'heal' } });
+      out.push({
+        key: 'hp', header: true, label: 'HP ' + (s.hp ?? '—') + ' / ' + (s.maxHp ?? '—') + (s.tempHp ? '  (+' + s.tempHp + ' temp)' : ''),
+        meter: { cur: s.hp ?? null, max: s.maxHp ?? null, temp: s.tempHp || 0, ac: s.ac ?? null },
+      });
+      out.push({ key: 'dmg', label: 'Take damage', input: { placeholder: 'HP', op: 'damage' } });
+      out.push({ key: 'heal', label: 'Heal', input: { placeholder: 'HP', op: 'heal' } });
       out.push({ key: 'temp', label: 'Set temp HP', input: { placeholder: String(s.tempHp ?? 0), op: 'temp' } });
     } else {
-      out.push({ key: 'hp', header: true, label: 'HP ' + (s.maxHp ?? '—') + ' (average)  ·  AC ' + (s.ac ?? '—') });
+      // 2024 NPC sheets show only the average; Classic NPCs track current HP.
+      const cur = s.hp ?? s.maxHp ?? null;
+      out.push({
+        key: 'hp', header: true, label: 'HP ' + (s.hp != null ? s.hp + ' / ' : '') + (s.maxHp ?? '—') + (s.hp == null ? ' (average)' : '') + '  ·  AC ' + (s.ac ?? '—'),
+        meter: { cur, max: s.maxHp ?? null, temp: s.tempHp || 0, ac: s.ac ?? null, note: s.hp == null ? 'average' : '' },
+      });
     }
     for (const r of snap.rests) out.push({ key: r.ref, label: r.name, reveal: true, run: { ref: r.ref, op: 'press', say: r.name } });
     for (const h of snap.hitDice) out.push({ key: 'hd' + h.ref, label: 'Roll hit die ' + h.label, run: { ref: h.ref, op: 'press', say: h.label } });
