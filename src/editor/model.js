@@ -343,6 +343,7 @@
     if (!snap.foundry) out.push({ key: 'pref:background', label: 'Keep my character sheet loaded (players)', checked: !!prefs.background, pref: 'background' });
     out.push({ key: 'pref:turnCue', label: 'Highlight the bar on my turn', checked: prefs.turnCue !== false, pref: 'turnCue' });
     out.push({ key: 'dock', label: 'Dock bar beside the toolbar', dock: true });
+    if (C.EXPORT_ENABLED && !snap.foundry) out.push({ key: 'export', label: 'Export campaign for Foundry…', exportCampaign: true });
     out.push({ key: 'diag', label: 'Copy diagnostics', diag: true });
     return out;
   }

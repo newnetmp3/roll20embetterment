@@ -112,6 +112,16 @@ used this turn.
   spell slots and half the hit dice, and clears temp HP and death saves.
   Class resources are left alone, since they recharge on different rests.
 
+## Export a campaign to Foundry VTT
+
+The GitHub build (not the addons.mozilla.org one) adds ⚙ Settings → **Export
+campaign for Foundry…** for GMs. It saves the whole campaign (pages, tokens,
+walls, characters including 2024-sheet ones, handouts, tables, macros,
+jukebox, every image and track) as zip files for the importer in
+[importer/](importer/README.md). For that it has extra permissions: to
+download from Roll20 and its image storage (app.roll20.net, s3.amazonaws.com,
+files.d20.io). Files go only to your own downloads folder.
+
 ## No setup for players
 
 When a player joins a game, Roll20embetterment finds the character they control

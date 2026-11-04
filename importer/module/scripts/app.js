@@ -134,6 +134,11 @@ async function runImport(name, index, opt, userMap, say, progress) {
   const campaign = await fetchJSON(enc(root) + '/campaign.json');
   const files = index.files || {};
   const local = (rel) => (files[rel] ? enc(root + '/' + files[rel]) : '');
+  // Roll20embetterment exports keep one copy of each image, found by its URL.
+  const assets = index.assets || {};
+  const assetFor = (url) => { const r = url && assets[url]; return r ? enc(root + '/' + (files[r] || r)) : ''; };
+  // Images inside handout and bio HTML: point them at the saved copies.
+  const localHTML = (html) => String(html || '').replace(/(<img[^>]+src\s*=\s*["'])([^"']+)(["'])/gi, (m, a, url, b) => { const l = assetFor(url.replace(/&amp;/g, '&')); return l ? a + l + b : m; });
   const title = index.title || campaign.campaign_title || name;
   const found = (type) => new Map(game.collections.get(type).filter((d) => d.getFlag(MOD, 'id')).map((d) => [d.getFlag(MOD, 'id'), d]));
 
@@ -248,7 +253,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
       if (opt.skipExisting && existingActors.has(ch.id)) { actorByR20.set(ch.id, existingActors.get(ch.id)); continue; }
       try {
         const dir = index.characters[ch.id];
-        const conv = convertCharacter(ch);
+        const conv = convertCharacter({ ...ch, bio: localHTML(ch.bio), gmnotes: localHTML(ch.gmnotes) });
         if (conv.sheetKind === 'other') other++;
         const items = [...conv.items];
         for (const l of conv.lookups) {
@@ -256,8 +261,8 @@ async function runImport(name, index, opt, userMap, say, progress) {
           if (it) { items.push(it); if (it._stats?.compendiumSource) matched++; }
         }
         const dt = ch.defaulttoken && typeof ch.defaulttoken === 'object' ? ch.defaulttoken : {};
-        const avatar = (dir && local(dir + '/avatar.png')) || '';
-        const tokenImg = (dir && local(dir + '/token.png')) || avatar;
+        const avatar = (dir && local(dir + '/avatar.png')) || assetFor(ch.avatar) || '';
+        const tokenImg = (dir && local(dir + '/token.png')) || assetFor(dt.imgsrc) || avatar;
         const controlled = listOf(ch.controlledby).length > 0;
         const proto = tokenSettings(dt, 70);
         delete proto.rotation;
@@ -292,8 +297,8 @@ async function runImport(name, index, opt, userMap, say, progress) {
     for (const h of hs) {
       if (opt.skipExisting && existingJournal.has(h.id)) { journalByR20.set(h.id, existingJournal.get(h.id)); continue; }
       const dir = index.handouts[h.id];
-      const img = (dir && local(dir + '/avatar.png')) || '';
-      const j = convertHandout(h, img);
+      const img = (dir && local(dir + '/avatar.png')) || assetFor(h.avatar) || '';
+      const j = convertHandout({ ...h, notes: localHTML(h.notes), gmnotes: localHTML(h.gmnotes) }, img);
       batch.push({ ...j, folder: folderOf.get(h.id) || (await rootFolder.JournalEntry()), ownership: ownership(h.inplayerjournals, OWN.OBSERVER), flags: { [MOD]: { id: h.id, archived: !!h.archived } } });
     }
     for (let i = 0; i < batch.length; i += 20) {
@@ -329,7 +334,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
       try {
         const dir = index.pages[page.id];
         // Local files only: Roll20's own image links can't be loaded from Foundry.
-        const imageFor = (pg, g) => (dir && local(dir + '/graphics/' + g.id + '.png'))
+        const imageFor = (pg, g) => (dir && local(dir + '/graphics/' + g.id + '.png')) || assetFor(g.imgsrc)
           || (g.represents && index.characters[g.represents] && (local(index.characters[g.represents] + '/token.png') || local(index.characters[g.represents] + '/avatar.png'))) || '';
         const { scene, stats } = convertPage(page, { imageFor, actorFor });
         scene.folder = await rootFolder.Scene();
@@ -347,7 +352,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
   if (opt.tables) {
     const tables = campaign.tables || campaign.rollabletables || [];
     const existing = found('RollTable');
-    const data = tables.filter((t) => !(opt.skipExisting && existing.has(t.id))).map((t) => ({ ...convertTable(t, (it) => local('tables/' + t.id + '/' + (t.items || []).indexOf(it) + '.png')), folder: null, flags: { [MOD]: { id: t.id } } }));
+    const data = tables.filter((t) => !(opt.skipExisting && existing.has(t.id))).map((t) => ({ ...convertTable(t, (it) => local('tables/' + t.id + '/' + (t.items || []).indexOf(it) + '.png') || assetFor(it.avatar)), folder: null, flags: { [MOD]: { id: t.id } } }));
     if (data.length) { const f = await rootFolder.RollTable(); data.forEach((d) => (d.folder = f)); await RollTable.createDocuments(data); }
     say(`Roll tables: ${data.length}`);
   }

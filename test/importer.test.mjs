@@ -189,3 +189,48 @@ test('r20prep.py: unpacks, fixes image types, indexes ids, installs the module',
   assert.ok(!existsSync(join(dir, 'chat_archive.json')));
   assert.ok(existsSync(join(data, 'modules/r20import/module.json')));
 });
+
+test('2024-sheet characters: the exporter\'s sheet reading becomes a dnd5e actor', () => {
+  const snap = {
+    type: 'pc', name: 'Nier', stats: { hp: 30, maxHp: 44, ac: 17, speed: 30, level: 5 },
+    abilities: [{ name: 'STR', score: 16, mod: '+3', save: '+6' }, { name: 'DEX', score: 14, mod: '+2', save: '+2' }],
+    checks: [{ name: 'Stealth', bonus: '+5', prof: 'proficient' }, { name: 'Athletics', bonus: '+9', prof: 'expertise' }],
+    attacks: [{ name: 'Dagger', hit: '+5 Attack', dmg: [{ text: '1d4+3', type: 'Piercing' }], range: '20/60' }, { name: 'Longsword', hit: '+6 Attack', dmg: [{ text: '1d8+3', type: 'Slashing' }] }],
+    actions: [{ name: 'Second Wind', section: 'Bonus Actions', desc: 'Heal.', res: [{ i: 0, name: 'Second Wind', cur: 1, max: 2 }] }],
+    features: [{ name: 'Second Wind', section: 'Class Features', desc: 'dup' }, { name: 'Weapon Mastery', section: 'Class Features', desc: 'Masteries.' }],
+    items: [{ name: 'Longsword', qty: 1, equipped: true }],
+    spells: [{ name: 'Shield', level: '1ST', tags: [], prepared: true }],
+  };
+  const c = cv.convertCharacter({ id: '-C', name: 'Nier', attributes: [{ name: 'beacon', current: 1 }], r20e_snapshot: snap });
+  assert.equal(c.sheetKind, '2024');
+  const sys = c.actor.system;
+  assert.deepEqual([sys.abilities.str.value, sys.abilities.str.proficient, sys.abilities.dex.proficient], [16, 1, undefined]);
+  assert.deepEqual([sys.skills.ste.value, sys.skills.ath.value], [1, 2]);
+  assert.deepEqual([sys.attributes.hp.value, sys.attributes.hp.max, sys.attributes.ac.flat], [30, 44, 17]);
+  const names = c.items.map((i) => i.name);
+  assert.deepEqual(names, ['Dagger', 'Second Wind', 'Weapon Mastery'], 'Longsword comes from the inventory; Second Wind once');
+  assert.deepEqual(c.items[0].system.attack, { bonus: '5', flat: true });
+  assert.deepEqual(c.items[0].system.damage.parts, [['1d4+3', 'piercing']]);
+  assert.equal(c.items[1].system.activation.type, 'bonus');
+  assert.equal(c.items[1].system.uses.spent, 1);
+  assert.deepEqual(c.lookups.map((l) => l.kind + ':' + l.name), ['gear:Longsword', 'spell:Shield']);
+});
+
+test('r20prep.py: a multi-part Roll20embetterment export (shared assets/)', () => {
+  try { execFileSync('python3', ['--version']); } catch { return; }
+  const tmp = mkdtempSync(join(tmpdir(), 'r20prep2-'));
+  const data = join(tmp, 'Data');
+  mkdirSync(join(data, 'modules'), { recursive: true });
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9]);
+  const camp = { campaign_title: 'Two Parts', pages: [page], characters: [npc], handouts: [], players: [], jukebox: [{ id: '-T1', title: 'x' }], jukeboxfolder: ['-T1'],
+    r20e: { format: 1, assets: { 'https://x/max.png': 'assets/00001.png', 'https://x/o.png': 'assets/00002.jpg' }, tracks: { '-T1': 'assets/00003.mp3' } } };
+  writeFileSync(join(tmp, 'Two Parts - Foundry export part 1.zip'), zip([['assets/00001.png', jpg], ['assets/00002.jpg', jpg]]));
+  writeFileSync(join(tmp, 'Two Parts - Foundry export part 2.zip'), zip([['assets/00003.mp3', Buffer.from('ID3x')], ['campaign.json', Buffer.from(JSON.stringify(camp))]]));
+  const out = execFileSync('python3', [join(root, 'importer/r20prep.py'), join(tmp, 'Two Parts - Foundry export part 1.zip'), '--data', data, '--user', process.env.USER || 'root', '--skip-module', '--no-download'], { encoding: 'utf8' });
+  assert.match(out, /part 2\.zip/);
+  const index = JSON.parse(readFileSync(join(data, 'r20import', 'two-parts', 'index.json'), 'utf8'));
+  assert.equal(index.files['assets/00001.png'], 'assets/00001.jpg', 'real file type');
+  assert.equal(index.assets['https://x/max.png'], 'assets/00001.png');
+  assert.equal(index.tracks['-T1'], 'assets/00003.mp3');
+  assert.ok(existsSync(join(data, 'r20import', 'two-parts', 'assets', '00003.mp3')));
+});

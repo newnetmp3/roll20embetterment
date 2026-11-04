@@ -8,12 +8,31 @@ Foundry VTT v14 world running dnd5e 6.
 Two steps: a script on the Foundry server unpacks the export, then a Foundry
 module creates everything inside your world.
 
+## 0. Export from Roll20 (recommended: Roll20embetterment's exporter)
+
+The GitHub build of Roll20embetterment (5.7.0 and later) has its own
+exporter: open the campaign in Roll20 as GM, then ⚙ Settings → **Export
+campaign for Foundry…** → Export. Keep the tab open until it says Done.
+
+Compared with r20Exporter it:
+- downloads every image and audio file through the add-on, so Roll20 can't
+  refuse them (r20Exporter misses many, which leaves holes in maps);
+- stores each image once (r20Exporter saves a copy per token), so the export
+  is much smaller;
+- reads characters on the **2024 sheet** by opening each one hidden, so their
+  stats, skills, attacks, actions, features, items and spells come across;
+- saves zip files of up to 1 GB each ("… part 1.zip", "… part 2.zip", …).
+  Give `r20prep.py` part 1; it finds the other parts in the same folder.
+
+r20Exporter zips still work: `r20prep.py` downloads the images they're
+missing on the server.
+
 ## 1. On the Foundry server (Arch Linux)
 
 ```bash
 git clone https://github.com/newnetmp3/roll20embetterment.git
 cd roll20embetterment/importer
-sudo python3 r20prep.py "/home/scott/Downloads/The Shattered Lands Copy.zip"
+sudo python3 r20prep.py "/home/scott/Downloads/The Shattered Lands - Foundry export part 1.zip"
 ```
 
 It unpacks into `Data/r20import/<campaign>/`, fixes image file types,
@@ -48,5 +67,7 @@ imported are skipped.
 
 Not imported: chat archive, card decks, turn order, character ability macros
 (kept on the actor as a flag), doors and windows (not in the export).
-Characters on the **2024 sheet** keep name, art, bio and basics only: that
-sheet stores its data in a different way, so rebuild those PCs in Foundry.
+Characters on the **2024 sheet** need Roll20embetterment's exporter (see step
+0); from an r20Exporter zip they keep only name, art, bio and basics. Either
+way, add their class from the dnd5e compendium afterwards (the 2024 sheet's
+reading shows the level, not the class).

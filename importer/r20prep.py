@@ -190,9 +190,93 @@ def fetch_missing(campaign, index, files, dest):
         print(f"  still missing on '{label}': {n}")
 
 
+def find_parts(given):
+    """All parts of a multi-part export: "... part 1.zip" finds "... part 2.zip" etc."""
+    out = []
+    for g in given:
+        out.append(os.path.abspath(g))
+        m = re.match(r"^(.*part )\d+(\.zip)$", os.path.basename(g), re.I)
+        if m:
+            d = os.path.dirname(os.path.abspath(g))
+            for f in sorted(os.listdir(d)):
+                if re.match(re.escape(m.group(1)) + r"\d+" + re.escape(m.group(2)) + "$", f, re.I):
+                    out.append(os.path.join(d, f))
+    seen = set()
+    return [p for p in out if not (p in seen or seen.add(p))]
+
+
+def asset_urls(c):
+    """Every image a Roll20embetterment export refers to (mirrors exporter.js)."""
+    want = {}
+
+    def add(u, big=False):
+        if isinstance(u, str) and re.match(r"^https?://", u):
+            want[u] = want.get(u, False) or big
+
+    def html(s):
+        for m in re.finditer(r"""<img[^>]+src\s*=\s*["']([^"']+)["']""", s or "", re.I):
+            add(m.group(1).replace("&amp;", "&"), True)
+
+    for p in c.get("pages", []):
+        for g in p.get("graphics", []):
+            add(g.get("imgsrc"), g.get("layer") == "map")
+            for x in g.get("sides") or []:
+                add(x)
+    for ch in c.get("characters", []):
+        add(ch.get("avatar"), True)
+        t = ch.get("defaulttoken") if isinstance(ch.get("defaulttoken"), dict) else {}
+        add(t.get("imgsrc"))
+        html(ch.get("bio")); html(ch.get("gmnotes"))
+    for h in c.get("handouts", []):
+        add(h.get("avatar"), True); html(h.get("notes")); html(h.get("gmnotes"))
+    for t in c.get("tables") or []:
+        for it in t.get("items") or []:
+            add(it.get("avatar"))
+    return want
+
+
+def fetch_missing_assets(campaign, index, files, dest):
+    """Download any image the exporter couldn't save, into assets/dl/."""
+    from concurrent.futures import ThreadPoolExecutor
+    assets = index["assets"]
+    for url, rel in list(assets.items()):  # follow extension fixes
+        assets[url] = files.get(rel, rel)
+    todo = [(u, big) for u, big in asset_urls(campaign).items() if u not in assets]
+    if not todo:
+        print("All images are in the export.")
+        return
+    print(f"Downloading {len(todo)} images the export is missing ...")
+
+    def get(item):
+        url, big = item
+        for u in url_variants(url, big):
+            try:
+                data = download(u)
+            except Exception:
+                continue
+            ext = sniff(data[:64])
+            if ext:
+                return url, data, ext
+        return url, None, None
+
+    got = 0
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for n, (url, data, ext) in enumerate(pool.map(get, todo), 1):
+            if data:
+                rel = f"assets/dl/{n:05d}.{ext}"
+                os.makedirs(os.path.join(dest, "assets", "dl"), exist_ok=True)
+                with open(os.path.join(dest, rel), "wb") as f:
+                    f.write(data)
+                assets[url] = rel
+                got += 1
+            if n % 100 == 0 or n == len(todo):
+                print(f"  {n}/{len(todo)}")
+    print(f"Downloaded {got} of {len(todo)}; {len(todo) - got} could not be fetched (those show as blank).")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Prepare a Roll20 export for Foundry VTT.")
-    ap.add_argument("zip", help="the export .zip (contains campaign.json)")
+    ap.add_argument("zip", nargs="+", help="the export .zip file(s); for a multi-part export, part 1 is enough (the rest are found next to it)")
     ap.add_argument("--data", default=DEFAULT_DATA, help=f"Foundry Data folder (default {DEFAULT_DATA})")
     ap.add_argument("--user", default=DEFAULT_USER, help=f"user Foundry runs as (default {DEFAULT_USER})")
     ap.add_argument("--name", help="folder name under r20import/ (default: from the campaign)")
@@ -209,14 +293,23 @@ def main():
     if os.geteuid() != 0 and os.geteuid() != pw.pw_uid:
         sys.exit(f"Run with sudo (files must end up owned by {args.user}).")
 
-    zf = zipfile.ZipFile(args.zip)
-    names = zf.namelist()
-    if "campaign.json" not in names:
-        sys.exit("campaign.json is not at the top of this zip: is it an R20Exporter export?")
+    paths = find_parts(args.zip)
+    zips = [zipfile.ZipFile(p) for p in paths]
+    owner = {}  # name inside the export -> the zip holding it
+    for z in zips:
+        for i in z.infolist():
+            owner.setdefault(i.filename, (z, i))
+    names = list(owner)
+    if "campaign.json" not in owner:
+        sys.exit("No campaign.json in " + ", ".join(paths) + ": is every part of the export here?")
+    if len(paths) > 1:
+        print("Export parts:\n  " + "\n  ".join(paths))
 
     print("Reading campaign.json ...")
+    zf = owner["campaign.json"][0]
     campaign = json.loads(zf.read("campaign.json"))
-    title = campaign.get("campaign_title") or campaign.get("name") or os.path.splitext(os.path.basename(args.zip))[0]
+    r20e = campaign.get("r20e") or {}
+    title = campaign.get("campaign_title") or campaign.get("name") or os.path.splitext(os.path.basename(paths[0]))[0]
     slug = args.name or slugify(re.sub(r"\s*copy$", "", title, flags=re.I))
     root_rel = f"r20import/{slug}"
     dest = os.path.join(args.data, "r20import", slug)
@@ -231,8 +324,8 @@ def main():
             return any(n.startswith(d) for d in handout_dirs)
         return True
 
-    members = [i for i in zf.infolist() if wanted(i.filename)]
-    need = sum(i.file_size for i in members)
+    members = [owner[n] for n in names if wanted(n)]
+    need = sum(i.file_size for _, i in members)
     free = shutil.disk_usage(args.data).free
     print(f"Campaign: {title}\nUnpacking {len(members)} files ({human(need)}) to {dest}\nFree space: {human(free)}")
     if need > free - 512 * 1024 * 1024:
@@ -244,9 +337,9 @@ def main():
     os.makedirs(dest)
 
     files = {}  # path inside the zip -> path relative to the campaign folder
-    for n, info in enumerate(members, 1):
+    for n, (z, info) in enumerate(members, 1):
         rel = info.filename
-        with zf.open(info) as src:
+        with z.open(info) as src:
             head = src.read(64)
             ext = sniff(head)
             out_rel = rel
@@ -264,12 +357,14 @@ def main():
 
     # ---- index: Roll20 id -> folder ----------------------------------------
     def load(rel):
-        with zf.open(rel) as f:
+        with owner[rel][0].open(rel) as f:
             return json.load(f)
 
     index = {
         "format": "r20prep-1", "title": title, "root": root_rel,
         "characters": {}, "handouts": {}, "pages": {}, "tracks": {}, "files": files,
+        # Roll20embetterment exports: one copy of each image, by its Roll20 URL.
+        "assets": dict(r20e.get("assets") or {}),
         "players": [{"id": p.get("id"), "name": p.get("displayname") or p.get("d20userid") or p.get("id")} for p in campaign.get("players", [])],
         "counts": {k: len(campaign.get(k) or []) for k in ("characters", "handouts", "pages", "tables", "macros", "jukebox", "players")},
     }
@@ -300,13 +395,17 @@ def main():
                 walk(e.get("i", []), f"{prefix}/{name}")
 
     walk(campaign.get("jukeboxfolder") or [], "jukebox")
+    index["tracks"].update(r20e.get("tracks") or {})
 
     # ---- images the exporter couldn't download ------------------------------------
     # Roll20 often refused the exporter's browser downloads, so those images are
     # missing from the zip. The browser can't fetch them later either, but the
     # server can: download them here, straight into the campaign folder.
     if not args.no_download:
-        fetch_missing(campaign, index, files, dest)
+        if r20e:
+            fetch_missing_assets(campaign, index, files, dest)
+        else:
+            fetch_missing(campaign, index, files, dest)
 
     with open(os.path.join(dest, "index.json"), "w") as f:
         json.dump(index, f)

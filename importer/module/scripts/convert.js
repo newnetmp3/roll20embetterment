@@ -250,6 +250,92 @@ export function spellItem(r, sheet, mods) {
 // `itemsByName` lets app.js swap in compendium entries afterwards.
 export function convertCharacter(ch, opts = {}) {
   const sheet = readSheet(ch);
+  const classic = sheet.has('npc') || sheet.has('charactersheet_type') || sheet.sections().some((x) => /^(npc|attack|inventory|traits|spell-)/.test(x));
+  if (ch.r20e_snapshot && !classic) return convertSnapshot(ch, ch.r20e_snapshot);
+  return convertClassic(ch, sheet);
+}
+
+// 2024 sheet: the exporter saved what the add-on's sheet reader saw.
+export function convertSnapshot(ch, snap) {
+  const isNpc = snap.type === 'npc';
+  const st = snap.stats || {};
+  const abilities = {};
+  const mods = {};
+  for (const a of snap.abilities || []) {
+    const k = String(a.name || '').toLowerCase().slice(0, 3);
+    if (!ABILITIES[k]) continue;
+    abilities[k] = { value: num(a.score) ?? 10 };
+    mods[k] = num(a.mod) ?? Math.floor(((num(a.score) ?? 10) - 10) / 2);
+    if (num(a.save) !== null && num(a.save) > mods[k]) abilities[k].proficient = 1;
+  }
+  const skills = {};
+  for (const c of snap.checks || []) {
+    const key = Object.keys(SKILLS).find((k) => SKILLS[k] === String(c.name || '').toLowerCase().replace(/\s+/g, '_'));
+    if (!key) continue;
+    const prof = String(c.prof || '').toLowerCase();
+    if (/expert/.test(prof)) skills[key] = { value: 2 };
+    else if (/half/.test(prof)) skills[key] = { value: 0.5 };
+    else if (/prof/.test(prof)) skills[key] = { value: 1 };
+  }
+  const speeds = { ...(st.speeds || {}) };
+  if (!speeds.walk && st.speed) speeds.walk = st.speed;
+  const system = {
+    abilities, skills,
+    attributes: {
+      hp: { value: st.hp ?? st.maxHp ?? 1, max: st.maxHp ?? st.hp ?? 1, temp: st.tempHp || 0 },
+      ac: { calc: 'flat', flat: st.ac ?? 10 },
+      movement: { speeds, units: 'ft' },
+    },
+    details: {},
+  };
+  if (isNpc && st.cr) system.details.cr = parseCR(st.cr);
+  const items = [];
+  const lookups = [];
+  const seen = new Set();
+  const once = (name) => { const k = clean(name).toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; };
+  for (const it of snap.items || []) {
+    if (!once(it.name)) continue;
+    const qty = num(it.qty) ?? 1;
+    lookups.push({ name: clean(it.name), kind: 'gear', patch: { system: { quantity: qty, ...(it.equipped ? { equipped: true } : {}) } },
+      fallback: legacyItem('loot', it.name, { quantity: qty, description: { value: esc(it.sub || '') } }) });
+  }
+  for (const sp of snap.spells || []) {
+    if (!once('spell:' + sp.name)) continue;
+    const level = /cantrip/i.test(sp.level) ? 0 : num(sp.level) ?? 0;
+    const props = (sp.tags || []).includes('C') ? ['concentration'] : [];
+    if ((sp.tags || []).includes('R')) props.push('ritual');
+    lookups.push({ name: clean(sp.name), kind: 'spell', patch: { system: { method: 'spell', prepared: level === 0 || sp.prepared !== false ? 1 : 0 } },
+      fallback: legacyItem('spell', sp.name, { level, range: rangeOf(sp.range), properties: props, preparation: { mode: 'prepared', prepared: sp.prepared !== false }, description: { value: '' } }) });
+  }
+  const gearNames = new Set((snap.items || []).map((i) => clean(i.name).toLowerCase()));
+  for (const a of snap.attacks || []) {
+    const base = clean(String(a.name || '').replace(/\s*\(.*\)\s*$/, '')).toLowerCase();
+    if (gearNames.has(base) || !once(a.name)) continue;
+    const parts = (a.dmg || []).map((d) => [resolveFormula(String(d.text || '').replace(/[a-z]+$/i, '')), damageType(d.type || d.text)]).filter((x) => x[0]);
+    const system = { description: { value: '' }, type: { value: isNpc ? 'monster' : 'feat' }, activation: { type: 'action', cost: 1 }, damage: { parts }, range: rangeOf(a.range) };
+    const bonus = /([+-]\d+)/.exec(a.hit || '');
+    if (bonus) { system.actionType = /ranged|\//i.test(a.range || '') ? 'rwak' : 'mwak'; system.attack = { bonus: String(Number(bonus[1])), flat: true }; }
+    const dc = /DC\s*(\d+)\s*(\w+)?/i.exec(a.hit || '');
+    if (dc) { const ab = Object.keys(ABILITIES).find((k) => dc[2] && ABILITIES[k].startsWith(dc[2].toLowerCase().slice(0, 3))); system.actionType = system.actionType || 'save'; system.save = { ability: ab || '', dc: Number(dc[1]), scaling: 'flat' }; }
+    if (!system.actionType && parts.length) system.actionType = 'other';
+    items.push(legacyItem('feat', a.name, system));
+  }
+  const ACT = (t) => (/bonus/i.test(t) ? 'bonus' : /reaction/i.test(t) ? 'reaction' : /legendary/i.test(t) ? 'legendary' : /action/i.test(t) ? 'action' : '');
+  for (const f of [...(snap.actions || []), ...(snap.features || [])]) {
+    if (!once(f.name)) continue;
+    const r = (f.res || [])[0];
+    const system = { description: { value: para(f.desc) }, type: { value: isNpc ? 'monster' : /species|race/i.test(f.section || '') ? 'race' : /feat/i.test(f.section || '') ? 'feat' : 'class' } };
+    const act = ACT(f.timing || f.section || '');
+    if (act) system.activation = { type: act, cost: 1 };
+    if (r && r.max) system.uses = { max: String(r.max), spent: Math.max(0, r.max - (r.cur ?? r.max)) };
+    items.push(legacyItem('feat', f.name, system));
+  }
+  const bio = (ch.bio || '') + (ch.gmnotes ? '<section class="secret"><h3>GM notes (Roll20)</h3>' + ch.gmnotes + '</section>' : '');
+  system.details.biography = { value: (st.level ? '<p><em>Level ' + esc(st.level) + ' (2024 sheet: add the class from the compendium)</em></p>' : '') + bio };
+  return { actor: { name: clean(ch.name) || 'Unnamed', type: isNpc ? 'npc' : 'character', system }, items, lookups, isNpc, empty: false, sheetKind: '2024' };
+}
+
+function convertClassic(ch, sheet) {
   const isNpc = on(sheet.get('npc')) || (!sheet.has('npc') && sheet.sections().some((s) => /^npc/.test(s)));
   const scores = {};
   const mods = {};
