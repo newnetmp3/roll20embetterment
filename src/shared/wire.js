@@ -4,7 +4,9 @@
 (function (G) {
   'use strict';
   const C = (G.R20C = G.R20C || {});
-  const TAG = 'r20-companion:v5:';
+  // A separate add-on bundling these scripts (the campaign exporter) sets its
+  // own tag first, so the two never answer each other's sheet frames.
+  const TAG = G.R20C_WIRE_TAG || 'r20-companion:v5:';
   C.wire = {
     encode: (msg) => TAG + JSON.stringify(msg),
     decode: (data) => {

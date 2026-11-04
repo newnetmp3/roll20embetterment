@@ -1,0 +1,14 @@
+{
+  "id": "r20import",
+  "title": "Roll20 Campaign Import",
+  "description": "Imports a Roll20 campaign exported with r20Exporter (R20Exporter format) into a dnd5e world: pages as scenes with tokens, walls and drawings; characters and NPCs; handouts; roll tables; macros; jukebox. Prepare the export on the server with r20prep.py first.",
+  "version": "1.0.0",
+  "compatibility": { "minimum": "14", "verified": "14.370" },
+  "relationships": {
+    "systems": [{ "id": "dnd5e", "type": "system", "compatibility": { "minimum": "6.0.0", "verified": "6.0.6" } }]
+  },
+  "authors": [{ "name": "newnetmp3" }],
+  "esmodules": ["scripts/app.js"],
+  "url": "https://github.com/newnetmp3/roll20embetterment/tree/main/importer",
+  "license": "MIT"
+}

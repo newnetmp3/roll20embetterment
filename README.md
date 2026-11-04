@@ -112,6 +112,11 @@ used this turn.
   spell slots and half the hit dice, and clears temp HP and death saves.
   Class resources are left alone, since they recharge on different rests.
 
+## Export a campaign to Foundry VTT
+
+A separate add-on, **Roll20embetterment Campaign Exporter**, saves a whole
+campaign for the Foundry importer. See [exporter/README.md](exporter/README.md).
+
 ## No setup for players
 
 When a player joins a game, Roll20embetterment finds the character they control
