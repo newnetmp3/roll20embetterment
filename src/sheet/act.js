@@ -152,13 +152,30 @@
       const btn = root.querySelector(op === 'damage' ? '.utility-button--harm' : '.utility-button--heal');
       const hp = root.querySelector('input[title="Current Hitpoints"]');
       if (!input || !btn) return { ok: false, msg: 'This sheet has no heal/damage control.' };
-      const before = numOf(hp);
+      const cur = () => numOf(root.querySelector('input[title="Current Hitpoints"]')) || 0;
+      const temp = () => numOf(root.querySelector('input[title="Temp"]')) || 0;
+      // Damage takes temp HP first, so measure current + temp for damage.
+      const level = () => (op === 'damage' ? cur() + temp() : cur());
+      // The amount box is a locked spinner that starts at 1; a typed value
+      // does not always stick. Enter the amount, then press until the full
+      // amount has landed (each press is the sheet's own button).
+      try { input.click(); } catch { /* ignore */ }
       commitInput(input, amount);
       await wait(150);
-      press(btn);
-      await wait(350);
-      const after = numOf(root.querySelector('input[title="Current Hitpoints"]'));
-      return after !== before ? { ok: true, msg: 'HP ' + after } : { ok: false, msg: 'HP did not change.' };
+      let applied = 0;
+      for (let presses = 0; applied < amount && presses < amount; presses++) {
+        const step = numOf(input) || 1;
+        if (step > amount - applied) { commitInput(input, amount - applied); await wait(120); if ((numOf(input) || 1) > amount - applied) break; }
+        const b = level();
+        press(btn);
+        await wait(presses ? 150 : 350);
+        const d = Math.abs(level() - b);
+        if (!d) break; // capped (0 HP or full health)
+        applied += d;
+      }
+      const after = cur();
+      if (!applied) return { ok: false, msg: 'HP did not change.' };
+      return { ok: true, msg: 'HP ' + after + (applied < amount ? ' (' + applied + ' applied)' : '') };
     }
     if (op === 'temp') {
       const input = sc.list[0].querySelector('input[title="Temp"]');

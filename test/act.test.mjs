@@ -77,3 +77,20 @@ test('NPC attacks, skills and features', async () => {
   assert.equal(presses.length, 3);
   assert.equal(presses[0], '+7 Attack');
 });
+
+test('damage lands in full even when the sheet\'s amount box sticks at 1', async () => {
+  const { C, document } = sheet();
+  const root = C.scopes(document).list[0];
+  const hp = root.querySelector('input[title="Current Hitpoints"]');
+  const box = root.querySelector('input[title="Heal or Damage"]');
+  hp.setAttribute('aria-valuenow', '20'); hp.value = '20';
+  // Simulate the live sheet: typed amounts are ignored, each press removes 1.
+  box.addEventListener('input', () => { box.value = '1'; box.setAttribute('aria-valuenow', '1'); });
+  box.value = '1'; box.setAttribute('aria-valuenow', '1');
+  root.querySelector('.utility-button--harm').addEventListener('click', () => {
+    const v = Number(hp.value) - 1; hp.value = String(v); hp.setAttribute('aria-valuenow', String(v));
+  });
+  const r = await C.perform(document, null, 'damage', 2);
+  assert.equal(r.ok, true, r.msg);
+  assert.equal(hp.value, '18');
+});
