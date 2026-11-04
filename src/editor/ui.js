@@ -435,7 +435,6 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (n.person) { handlers.select(n.person.id); path = []; render(); return; }
       if (n.pref) { handlers.pref(n.pref, !n.checked); return; }
       if (n.dock) { custom = null; handlers.savePos(null); path = []; render(); place(); toast('Bar docked beside the toolbar.'); return; }
-      if (n.exportCampaign) { path = []; render(); if (handlers.exportCampaign) handlers.exportCampaign(); return; }
       if (n.diag) { Promise.resolve(handlers.diag()).then((ok) => toast(ok ? 'Diagnostics copied. Paste them into your bug report.' : 'Could not copy diagnostics.', !ok)); return; }
       if (n.children) {
         path = path.slice(0, level + 1);

@@ -10,11 +10,6 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 export const EDITOR_SCRIPTS = ['src/shared/wire.js', 'src/editor/model.js', 'src/editor/classic.js', 'src/editor/sheets.js', 'src/editor/ui.js', 'src/editor/main.js'];
 export const PAGE_SCRIPT = 'src/editor/selection.js';
 export const SHEET_SCRIPTS = ['src/shared/wire.js', 'src/sheet/parse.js', 'src/sheet/act.js', 'src/sheet/main.js'];
-// Campaign exporter (GitHub build only; not in the addons.mozilla.org upload).
-export const EXPORT_PAGE = 'src/export/page.js';
-export const EXPORT_EDITOR = 'src/export/exporter.js';
-export const EXPORT_BACKGROUND = 'src/export/background.js';
-export const EXPORT_HOSTS = ['https://app.roll20.net/*', 'https://s3.amazonaws.com/*', 'https://files.d20.io/*', 'https://*.roll20.net/*'];
 
 export const manifest = {
   manifest_version: 3,
@@ -83,15 +78,8 @@ function zip(files) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const out = join(root, 'dist', 'firefox');
   rmSync(out, { recursive: true, force: true });
-  // GitHub build: the add-on plus the campaign exporter.
-  const full = JSON.parse(JSON.stringify(manifest));
-  full.content_scripts[0].js.push(EXPORT_PAGE);
-  full.content_scripts[1].js.push(EXPORT_EDITOR);
-  full.background = { scripts: [EXPORT_BACKGROUND] };
-  full.host_permissions = EXPORT_HOSTS;
-  const files = [['manifest.json', Buffer.from(JSON.stringify(full, null, 2) + '\n')]];
-  const base = [PAGE_SCRIPT, ...EDITOR_SCRIPTS, ...SHEET_SCRIPTS, 'icons/icon.svg'];
-  for (const f of new Set([...base, EXPORT_PAGE, EXPORT_EDITOR, EXPORT_BACKGROUND])) files.push([f, readFileSync(join(root, f))]);
+  const files = [['manifest.json', Buffer.from(JSON.stringify(manifest, null, 2) + '\n')]];
+  for (const f of new Set([PAGE_SCRIPT, ...EDITOR_SCRIPTS, ...SHEET_SCRIPTS, 'icons/icon.svg'])) files.push([f, readFileSync(join(root, f))]);
   for (const [name, data] of files) {
     mkdirSync(dirname(join(out, 'extension', name)), { recursive: true });
     writeFileSync(join(out, 'extension', name), data);
@@ -102,7 +90,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   // no self-hosted update_url.
   const amo = JSON.parse(JSON.stringify(manifest));
   delete amo.browser_specific_settings.gecko.update_url;
-  const amoFiles = [['manifest.json', Buffer.from(JSON.stringify(amo, null, 2) + '\n')], ...files.slice(1).filter(([f]) => base.includes(f)), ['LICENSE', readFileSync(join(root, 'LICENSE'))]];
+  const amoFiles = [['manifest.json', Buffer.from(JSON.stringify(amo, null, 2) + '\n')], ...files.slice(1), ['LICENSE', readFileSync(join(root, 'LICENSE'))]];
   const amoName = 'roll20embetterment-' + pkg.version + '-amo.zip';
   writeFileSync(join(out, amoName), zip(amoFiles));
   console.log('Built dist/firefox/extension, dist/firefox/' + zipName + ' and dist/firefox/' + amoName);

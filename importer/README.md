@@ -8,11 +8,11 @@ Foundry VTT v14 world running dnd5e 6.
 Two steps: a script on the Foundry server unpacks the export, then a Foundry
 module creates everything inside your world.
 
-## 0. Export from Roll20 (recommended: Roll20embetterment's exporter)
+## 0. Export from Roll20 (recommended: the Campaign Exporter add-on)
 
-The GitHub build of Roll20embetterment (5.7.0 and later) has its own
-exporter: open the campaign in Roll20 as GM, then ⚙ Settings → **Export
-campaign for Foundry…** → Export. Keep the tab open until it says Done.
+Install **Roll20embetterment Campaign Exporter** (a separate Firefox add-on,
+see [exporter/](../exporter/README.md)), open the campaign in Roll20 as GM,
+click its toolbar button → Export. Keep the tab open until it says Done.
 
 Compared with r20Exporter it:
 - downloads every image and audio file through the add-on, so Roll20 can't

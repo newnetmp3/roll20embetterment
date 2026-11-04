@@ -1,5 +1,6 @@
-// Campaign exporter: saves a whole Roll20 campaign as zip files for the
-// Foundry importer (importer/r20prep.py + the Roll20 Campaign Import module).
+// Roll20embetterment Campaign Exporter: saves a whole Roll20 campaign as zip
+// files for the Foundry importer (importer/r20prep.py + the Roll20 Campaign
+// Import module). Opened from the add-on's toolbar button.
 //
 // 1. page.js (in Roll20's page) reads the campaign: pages, characters,
 //    handouts, tables, decks, macros, jukebox, folders.
@@ -13,7 +14,6 @@
   'use strict';
   const C = G.R20C;
   if (!C || window.top !== window) return;
-  C.EXPORT_ENABLED = true;
 
   const PART_LIMIT = 1000 * 1024 * 1024;
   const PART_FILES = 60000;
@@ -287,4 +287,9 @@
   }
 
   C.exporter = { open };
+  // The toolbar button (background.js) asks this tab to open the window.
+  browser.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.type === 'r20x-open') { open(); return Promise.resolve(true); }
+    return undefined;
+  });
 })(globalThis);

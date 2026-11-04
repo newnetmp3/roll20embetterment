@@ -43,7 +43,6 @@
     select: (id) => { chosen = true; return select(id, true); },
     pref: (k, v) => { prefs = { ...prefs, [k]: v }; set('prefs', prefs); if (k === 'turnCue') myTurn = myTurn && v; refresh(); },
     toggleHidden: (id) => { C.sheets.setHidden(id, !C.sheets.isHidden(id)); refresh(); },
-    exportCampaign: () => { if (C.exporter) C.exporter.open(); },
     savePos: (pos) => set('barPos', pos),
     diag: async () => {
       const snap = active ? snaps.get(active) : null;

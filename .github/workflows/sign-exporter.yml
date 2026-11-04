@@ -1,0 +1,77 @@
+name: Campaign Exporter signed release
+# Signs Roll20embetterment Campaign Exporter (a separate add-on) with Mozilla
+# (unlisted, self-distributed) and publishes it as a GitHub release plus
+# exporter/updates.json. Start a release by raising the version in
+# exporter/release-request.json and pushing to main.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [exporter/release-request.json]
+permissions:
+  contents: write
+concurrency:
+  group: roll20-exporter-signed-release
+  cancel-in-progress: false
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: firefox-signing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: node scripts/build-exporter.mjs
+      - name: Check release request
+        id: req
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./exporter/release-request.json').version")
+          if gh release view "roll20-campaign-exporter-v$version" >/dev/null 2>&1; then
+            echo "::error::roll20-campaign-exporter-v$version is already released; bump the version."; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Check AMO credentials
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::error::AMO_JWT_ISSUER / AMO_JWT_SECRET are not available to this branch in the firefox-signing environment."; exit 1
+          fi
+      - name: Mozilla signing (unlisted)
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          mkdir -p dist/signed-exporter
+          npx --yes web-ext@8.3.0 sign \
+            --source-dir dist/exporter/extension \
+            --artifacts-dir dist/signed-exporter \
+            --channel unlisted \
+            --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" \
+            --approval-timeout 900000 --no-input
+          ls -la dist/signed-exporter
+          [ "$(find dist/signed-exporter -name '*.xpi' | wc -l)" -eq 1 ]
+      - name: Publish release and update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.req.outputs.version }}
+        run: |
+          xpi="dist/roll20-campaign-exporter-$VERSION.xpi"
+          cp "$(find dist/signed-exporter -name '*.xpi' | head -n 1)" "$xpi"
+          node scripts/update-feed.mjs "$xpi" "$VERSION" --exporter
+          gh release create "roll20-campaign-exporter-v$VERSION" "$xpi" --target "$GITHUB_SHA" --prerelease \
+            --title "Roll20embetterment Campaign Exporter v$VERSION (Mozilla signed)" \
+            --notes "Separate Firefox add-on: exports a whole Roll20 campaign for the Foundry importer. Open the .xpi in Firefox to install; later versions update automatically."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add exporter/updates.json
+          git commit -m "release: signed exporter v$VERSION update feed"
+          git pull --rebase origin ${GITHUB_REF_NAME}
+          git push origin HEAD:${GITHUB_REF_NAME}
