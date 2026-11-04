@@ -46,6 +46,15 @@ such background sheets, closing the oldest. Players only follow tokens of
 characters they control. Sheets you opened yourself are never hidden or
 closed. Turn it off with ⚙ → **Follow the selected token**.
 
+## Classic (D&D 5E Classic) sheets
+
+Games can enable both the 2024 sheet and the older "D&D 5E (Classic) by
+Roll20" sheet; compendium NPCs often use Classic. Roll20 draws a Classic
+sheet straight into the page, so `src/editor/classic.js` reads it from the
+editor and presses its own roll buttons (actions, bonus actions, reactions,
+legendary actions, traits, saves, skills, initiative). Rolls post Roll20's
+normal chat cards.
+
 Roll20 has no public "selected token" API, so `src/editor/selection.js` runs in
 Roll20's page and reads the selection from the Jumpgate engine, read-only. It
 reaches the engine through Roll20's `window.MeshManager` global, and falls back
@@ -129,6 +138,7 @@ Code layout:
 | `src/editor/sheets.js` | editor | Finds sheet frames, opens/hides sheets, sends actions |
 | `src/editor/ui.js` | editor | The bar and cascading menus |
 | `src/editor/main.js` | editor | Wires it together, saves data and settings |
+| `src/editor/classic.js` | Roll20 page (editor) | Reads and drives Classic sheets |
 | `src/editor/selection.js` | Roll20 page | Reports the characters behind the selected tokens |
 | `src/shared/wire.js` | both | Message format between page and frames |
 

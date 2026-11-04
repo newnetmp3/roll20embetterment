@@ -37,7 +37,9 @@
 
   function live(id) {
     const f = frames.get(id);
-    if (f && f.iframe.isConnected) return f;
+    if (f && f.classic) {
+      if (f.iframe.isConnected && C.classic.docOf(f.iframe)) return f;
+    } else if (f && f.iframe.isConnected) return f;
     frames.delete(id);
     return null;
   }
@@ -83,8 +85,11 @@
   const style = document.createElement('style');
   (document.head || document.documentElement).appendChild(style);
   function writeStyle() {
-    style.textContent = [...hidden].map((id) => '.characterdialog[data-characterid="' + esc(id) +
-      '"]{visibility:hidden!important;pointer-events:none!important}').join('\n');
+    // Classic sheets sit in a jQuery dialog window around .characterdialog.
+    style.textContent = [...hidden].map((id) => {
+      const d = '.characterdialog[data-characterid="' + esc(id) + '"]';
+      return d + ',.ui-dialog:has(> ' + d + '){visibility:hidden!important;pointer-events:none!important}';
+    }).join('\n');
   }
   function setHidden(id, on) {
     if (on) hidden.add(id); else hidden.delete(id);
@@ -111,7 +116,7 @@
     for (const id of hidden) {
       const d = dialogFor(id);
       if (!d) continue;
-      const z = Number(d.style.zIndex) || 0;
+      const z = Number((d.closest('.ui-dialog') || d).style.zIndex) || 0;
       const before = zSeen.get(id);
       zSeen.set(id, z);
       if (before !== undefined && z > before && Date.now() > (quietUntil.get(id) || 0)) handOver(id);
@@ -142,7 +147,7 @@
   function closeOwned(id) {
     const d = dialogFor(id);
     if (!d || !owned.has(id) || !hidden.has(id)) return false;
-    const btn = d.querySelector('.asv__close');
+    const btn = d.querySelector('.asv__close') || d.closest('.ui-dialog')?.querySelector('.ui-dialog-titlebar-close');
     if (btn) btn.click();
     return !!btn;
   }
@@ -156,6 +161,11 @@
       opened = true;
     }
     if (act.reveal) handOver(id);
+    const f = live(id);
+    if (f && f.classic) {
+      try { const r = C.classic.perform(f.doc, act.ref, act.op, act.arg); setTimeout(() => readClassic(id, f, true), 400); return r; }
+      catch (e) { return { ok: false, msg: String(e && e.message || e) }; }
+    }
     const reqId = 'r' + ++seq;
     return new Promise((resolve) => {
       const timer = setTimeout(() => { pending.delete(reqId); resolve({ ok: false, msg: 'The sheet did not answer.' }); }, opened ? 15000 : 8000);
@@ -166,11 +176,40 @@
     });
   }
 
+  // Classic sheets: the editor reads them itself (see classic.js).
+  const classicKeys = new Map();
+  function readClassic(id, f, force) {
+    let snap;
+    try { snap = C.classic.parse(f.doc, (f.iframe.getAttribute('title') || '').replace(/^Character sheet for\s*/i, '')); }
+    catch (e) { console.error('[R20 Companion] classic sheet', e); return; }
+    if (!snap || !snap.name) return;
+    const key = JSON.stringify({ ...snap, at: 0 });
+    if (!force && classicKeys.get(id) === key) return;
+    classicKeys.set(id, key);
+    emit('snapshot', id, snap);
+  }
+  let classicTick = 0;
+  function scanClassic() {
+    classicTick++;
+    for (const d of document.querySelectorAll('.characterdialog[data-characterid]')) {
+      const id = d.getAttribute('data-characterid');
+      const iframe = d.querySelector('iframe[name="iframe_' + esc(id) + '"]') || d.querySelector('iframe');
+      const doc = C.classic.docOf(iframe);
+      if (!doc) continue;
+      const known = frames.get(id);
+      const fresh = !known || !known.classic || known.doc !== doc;
+      if (fresh) frames.set(id, { classic: true, iframe, doc });
+      if (fresh || classicTick % 2 === 0) readClassic(id, frames.get(id), fresh);
+      if (fresh) emit('ready', id);
+    }
+  }
+
   // Report sheet windows opening and closing.
   const openIds = () => [...document.querySelectorAll('.characterdialog[data-characterid]')].map((d) => d.getAttribute('data-characterid'));
   let lastDialogs = '';
   setInterval(() => {
     watchRaised();
+    try { scanClassic(); } catch (e) { console.error('[R20 Companion]', e); }
     const ids = openIds();
     const key = ids.join(',');
     if (key !== lastDialogs) {
@@ -190,6 +229,7 @@
     isOwned: (id) => owned.has(id),
     isLive: (id) => !!live(id),
     isOpen: (id) => !!dialogFor(id),
-    refresh: (id) => post(id, { type: 'hello' }),
+    refresh: (id) => { const f = live(id); if (f && f.classic) readClassic(id, f, true); else post(id, { type: 'hello' }); },
+    classicInfo: (id) => { const f = live(id); return f && f.classic ? C.classic.describe(f.doc) : null; },
   };
 })(globalThis);

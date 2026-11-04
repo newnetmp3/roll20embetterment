@@ -228,7 +228,7 @@
     const skills = snap.checks.filter((c) => SKILLS.has(norm(c.name)));
     const tools = snap.checks.filter((c) => !SKILLS.has(norm(c.name)));
     if (skills.length) out.push({ key: 'skills', label: 'Skills', hint: String(skills.length), children: skills.map(skillNode) });
-    if (tools.length) out.push({ key: 'tools', label: 'Tools', hint: String(tools.length), children: tools.map(skillNode) });
+    if (tools.length) out.push({ key: 'tools', label: snap.classic ? 'Saves & other rolls' : 'Tools', hint: String(tools.length), children: tools.map(skillNode) });
     for (const h of snap.hitDice) out.push({ key: h.ref, label: 'Hit die ' + h.label, run: { ref: h.ref, op: 'press', say: h.label } });
     return out;
   }

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
-export const EDITOR_SCRIPTS = ['src/shared/wire.js', 'src/editor/model.js', 'src/editor/sheets.js', 'src/editor/ui.js', 'src/editor/main.js'];
+export const EDITOR_SCRIPTS = ['src/shared/wire.js', 'src/editor/model.js', 'src/editor/classic.js', 'src/editor/sheets.js', 'src/editor/ui.js', 'src/editor/main.js'];
 export const PAGE_SCRIPT = 'src/editor/selection.js';
 export const SHEET_SCRIPTS = ['src/shared/wire.js', 'src/sheet/parse.js', 'src/sheet/act.js', 'src/sheet/main.js'];
 

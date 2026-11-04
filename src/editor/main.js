@@ -45,6 +45,7 @@
         active, live: !!(active && C.sheets.isLive(active)), open: C.sheets.isOpen(active),
         dialogs: document.querySelectorAll('.characterdialog[data-characterid]').length,
         sheetFrames: document.querySelectorAll('iframe[name^="iframe_"]').length,
+        classic: active ? C.sheets.classicInfo(active) : null,
         journal: C.sheets.journal().length,
         toolbar: !!document.getElementById('master-toolbar'),
         gm: isGM(), controlled: controlled(), background: keep, errors,
@@ -53,7 +54,7 @@
         window: { w: innerWidth, h: innerHeight },
         toolbarRect: document.getElementById('master-toolbar')?.getBoundingClientRect().toJSON() || null,
         sheet: snap ? {
-          type: snap.type, name: snap.name, stats: snap.stats,
+          classic: !!snap.classic, type: snap.type, name: snap.name, stats: snap.stats,
           counts: Object.fromEntries(['attacks', 'actions', 'features', 'items', 'spells', 'abilities', 'checks', 'hitDice', 'rests'].map((k) => [k, count(k)])),
           privacy: snap.privacy, mode: snap.mode,
         } : null,
