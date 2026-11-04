@@ -1,4 +1,4 @@
-name: Companion signed release
+name: Roll20embetterment signed release
 # Signs the extension with Mozilla (unlisted, self-distributed) and publishes
 # it as a GitHub release plus an update feed. Start a release by setting
 # release-request.json to the package.json version and pushing.
@@ -10,7 +10,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: companion-signed-release
+  group: roll20embetterment-signed-release
   cancel-in-progress: false
 jobs:
   sign:
@@ -34,8 +34,8 @@ jobs:
           if [ "$version" != "$requested" ]; then
             echo "::error::release-request.json ($requested) must match package.json ($version)"; exit 1
           fi
-          if gh release view "companion-v$version" >/dev/null 2>&1; then
-            echo "::error::companion-v$version is already released; bump the version."; exit 1
+          if gh release view "roll20embetterment-v$version" >/dev/null 2>&1; then
+            echo "::error::roll20embetterment-v$version is already released; bump the version."; exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Check AMO credentials
@@ -65,11 +65,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.req.outputs.version }}
         run: |
-          xpi="dist/roll20-sheet-companion-$VERSION.xpi"
+          xpi="dist/roll20embetterment-$VERSION.xpi"
           cp "$(find dist/signed -name '*.xpi' | head -n 1)" "$xpi"
           node scripts/update-feed.mjs "$xpi" "$VERSION"
-          gh release create "companion-v$VERSION" "$xpi" --target "$GITHUB_SHA" --prerelease \
-            --title "Roll20 Sheet Companion v$VERSION (Mozilla signed)" \
+          gh release create "roll20embetterment-v$VERSION" "$xpi" --target "$GITHUB_SHA" --prerelease \
+            --title "Roll20embetterment v$VERSION (Mozilla signed)" \
             --notes "Mozilla-signed Firefox build. Open the .xpi in Firefox to install; later versions update automatically."
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

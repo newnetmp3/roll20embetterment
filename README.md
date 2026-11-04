@@ -1,4 +1,4 @@
-# Roll20 Sheet Companion
+# Roll20embetterment
 
 A Firefox extension that adds a slim action bar beside Roll20's left toolbar.
 It reads the official **D&D 2024** character sheet (PCs and NPCs) and lets you
@@ -25,7 +25,7 @@ advantage settings apply as usual.
 | ★ Features | Class features, species traits and feats, with use counters. |
 | ⧗ Resources | Every tracked counter and consumable quantity in one list, with −/+. |
 | 🎲 Checks | Initiative, abilities and saves, skills, tools, hit dice. |
-| ⚙ Settings | Roll visibility (Public/Whisper), roll mode (Advantage/Disadvantage/Automatic/Query), companion options, **Copy diagnostics**. |
+| ⚙ Settings | Roll visibility (Public/Whisper), roll mode (Advantage/Disadvantage/Automatic/Query), Roll20embetterment options, **Copy diagnostics**. |
 
 Drag the bar anywhere: press on any part of it and move. A press without
 movement is an ordinary click. The position is remembered; ⚙ → **Dock bar
@@ -41,7 +41,7 @@ activates, Esc closes.
 
 Click a token on the map and the bar switches to the character it represents.
 GMs get the NPC (or PC) under the token instantly: its sheet loads hidden in the
-background, so actions work right away, and the companion keeps at most three
+background, so actions work right away, and Roll20embetterment keeps at most three
 such background sheets, closing the oldest. Players only follow tokens of
 characters they control. Sheets you opened yourself are never hidden or
 closed. Turn it off with ⚙ → **Follow the selected token**.
@@ -66,12 +66,12 @@ working.
 
 ## No setup for players
 
-When a player joins a game, the companion finds the character they control
+When a player joins a game, Roll20embetterment finds the character they control
 and loads that sheet hidden in the background, so the bar works right away
 and actions never wait for a sheet to open. It never gets in the way:
 
 - If the player opens that sheet themselves (Journal, token, anywhere), it is
-  shown and becomes theirs; the companion stops hiding it.
+  shown and becomes theirs; Roll20embetterment stops hiding it.
 - When they close it, it is quietly reloaded in the background.
 - Sheets the player opens for other characters are never hidden or closed.
 - GMs don't get a background sheet; they pick characters from the portrait
@@ -88,7 +88,7 @@ Turn this off with ⚙ → **Keep my character sheet loaded**.
   so the whole sheet is read in one pass and hidden buttons can be pressed
   without switching tabs.
 - The sheet must be loaded for an action to work. Players' own sheets stay
-  loaded in the background (above). For any other character, the companion
+  loaded in the background (above). For any other character, Roll20embetterment
   opens the sheet from the Journal when needed and keeps the window hidden.
   The portrait's dot is green while the sheet is connected.
 - Hidden sheets are hidden with a style rule written before they open, so
@@ -99,12 +99,12 @@ Turn this off with ⚙ → **Keep my character sheet loaded**.
 ## Install (Firefox / Floorp)
 
 Open the `.xpi` from the latest
-[companion release](https://github.com/newnetmp3/roll20embetterment/releases?q=companion)
+[latest release](https://github.com/newnetmp3/roll20embetterment/releases?q=roll20embetterment)
 in Firefox and click **Add**. It is signed by Mozilla and updates itself.
 Disable the old Roll20 Embetterment add-on so the two don't overlap.
 
 To release a new version: bump `version` in `package.json`, set the same
-version in `release-request.json`, and push. The **Companion signed release**
+version in `release-request.json`, and push. The **Roll20embetterment signed release**
 workflow signs it, publishes the release and updates `updates.json`.
 
 For development, `npm run build` and load `dist/firefox/extension/manifest.json`

@@ -452,7 +452,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       path = [];
       render();
       place();
-      toast('Companion bar is here.');
+      toast('Roll20embetterment bar is here.');
     }, true);
 
     // ---- closing & keyboard ---------------------------------------------------

@@ -1,9 +1,9 @@
 {
-  "name": "roll20-sheet-companion",
-  "version": "5.4.2",
+  "name": "roll20embetterment",
+  "version": "5.4.3",
   "private": true,
   "type": "module",
-  "description": "Sidebar action bar and character-sheet companion for Roll20's D&D 2024 sheets (Firefox)",
+  "description": "Sidebar action bar and character-sheet companion for Roll20 D&D 5E sheets (Firefox)",
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs",

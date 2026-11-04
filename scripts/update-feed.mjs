@@ -13,7 +13,7 @@ const feed = {
     [id]: {
       updates: [{
         version,
-        update_link: `https://github.com/newnetmp3/roll20embetterment/releases/download/companion-v${version}/roll20-sheet-companion-${version}.xpi`,
+        update_link: `https://github.com/newnetmp3/roll20embetterment/releases/download/roll20embetterment-v${version}/roll20embetterment-${version}.xpi`,
         update_hash: 'sha256:' + hash,
       }],
     },

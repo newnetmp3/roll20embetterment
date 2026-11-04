@@ -23,7 +23,7 @@
     const msg = label + ': ' + String((e && e.message) || e);
     errors.push(msg);
     if (errors.length > 10) errors.shift();
-    console.error('[R20 Companion]', msg, e);
+    console.error('[Roll20embetterment]', msg, e);
   }
   let prefs = { autoHide: true, spend: true, background: true, follow: true };
   let active = null;

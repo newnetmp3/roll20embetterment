@@ -281,7 +281,7 @@
     };
     radio(snap.privacy, 'privacy', 'Roll visibility');
     radio(snap.mode, 'mode', 'Roll mode');
-    out.push({ key: 'prefs:h', header: true, label: 'Companion' });
+    out.push({ key: 'prefs:h', header: true, label: 'Roll20embetterment' });
     out.push({ key: 'pref:autoHide', label: 'Hide sheets opened for an action', checked: !!prefs.autoHide, pref: 'autoHide' });
     out.push({ key: 'pref:spend', label: 'Spend a use when using a feature', checked: !!prefs.spend, pref: 'spend' });
     out.push({ key: 'pref:follow', label: 'Follow the selected token', checked: !!prefs.follow, pref: 'follow' });

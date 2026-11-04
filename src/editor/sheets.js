@@ -10,7 +10,7 @@
   const handlers = { snapshot: [], ready: [], dialogs: [] };
   let seq = 0;
 
-  const emit = (type, ...args) => handlers[type].forEach((fn) => { try { fn(...args); } catch (e) { console.error('[R20 Companion]', e); } });
+  const emit = (type, ...args) => handlers[type].forEach((fn) => { try { fn(...args); } catch (e) { console.error('[Roll20embetterment]', e); } });
   const esc = (s) => (G.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&'));
   // Roll20 can keep a closed sheet window in the page, just not displayed.
   // Only a window that is laid out counts (our hidden ones are only
@@ -194,7 +194,7 @@
   function readClassic(id, f, force) {
     let snap;
     try { snap = C.classic.parse(f.doc, (f.iframe.getAttribute('title') || '').replace(/^Character sheet for\s*/i, '')); }
-    catch (e) { console.error('[R20 Companion] classic sheet', e); return; }
+    catch (e) { console.error('[Roll20embetterment] classic sheet', e); return; }
     if (!snap || !snap.name) return;
     const key = JSON.stringify({ ...snap, at: 0 });
     if (!force && classicKeys.get(id) === key) return;
@@ -223,7 +223,7 @@
   let lastDialogs = '';
   setInterval(() => {
     watchRaised();
-    try { scanClassic(); } catch (e) { console.error('[R20 Companion]', e); }
+    try { scanClassic(); } catch (e) { console.error('[Roll20embetterment]', e); }
     const ids = openIds();
     const key = ids.join(',');
     if (key !== lastDialogs) {

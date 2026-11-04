@@ -13,7 +13,7 @@ export const SHEET_SCRIPTS = ['src/shared/wire.js', 'src/sheet/parse.js', 'src/s
 
 export const manifest = {
   manifest_version: 3,
-  name: 'Roll20 Sheet Companion',
+  name: 'Roll20embetterment',
   version: pkg.version,
   description: 'Sidebar action bar for Roll20 D&D 2024 PC and NPC sheets. Uses the sheet\'s own buttons, so chat rolls keep their Damage button.',
   icons: { 48: 'icons/icon.svg', 96: 'icons/icon.svg' },
@@ -83,7 +83,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     mkdirSync(dirname(join(out, 'extension', name)), { recursive: true });
     writeFileSync(join(out, 'extension', name), data);
   }
-  const zipName = 'roll20-sheet-companion-' + pkg.version + '.zip';
+  const zipName = 'roll20embetterment-' + pkg.version + '.zip';
   writeFileSync(join(out, zipName), zip(files));
   console.log('Built dist/firefox/extension and dist/firefox/' + zipName);
 }

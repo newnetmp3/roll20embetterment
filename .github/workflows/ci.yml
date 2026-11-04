@@ -1,4 +1,4 @@
-name: Companion CI
+name: Roll20embetterment CI
 on:
   push:
   pull_request:
@@ -15,5 +15,5 @@ jobs:
       - run: npx --yes web-ext@8.3.0 lint --self-hosted --source-dir dist/firefox/extension --warnings-as-errors=false
       - uses: actions/upload-artifact@v4
         with:
-          name: roll20-sheet-companion-unsigned
+          name: roll20embetterment-unsigned
           path: dist/firefox/*.zip

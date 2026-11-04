@@ -4,7 +4,7 @@ Notes from real PC and NPC sheet HTML. Update when Roll20 changes the sheet.
 
 ## Editor page (app.roll20.net/editor)
 
-- Left toolbar: `#master-toolbar`. The companion docks to its right edge.
+- Left toolbar: `#master-toolbar`. Roll20embetterment docks to its right edge.
 - Sheet window: `.characterdialog[data-characterid]` containing
   `iframe#advanced-charsheet-dialog__charsheet` named `iframe_<characterId>`.
 - Other frames load the same sheet URL but are not character sheets:
