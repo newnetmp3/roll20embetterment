@@ -32,7 +32,7 @@ export const manifest = {
       id: 'roll20-sheet-companion@newnetmp3.github.io',
       strict_min_version: '128.0',
       // Firefox checks this feed for new signed versions (written by the sign workflow).
-      update_url: 'https://raw.githubusercontent.com/newnetmp3/roll20embetterment/rebuild/sheet-companion/updates.json',
+      update_url: 'https://raw.githubusercontent.com/newnetmp3/roll20embetterment/main/updates.json',
       data_collection_permissions: { required: ['none'] },
     },
   },

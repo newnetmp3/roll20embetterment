@@ -5,7 +5,7 @@ name: Companion signed release
 on:
   workflow_dispatch:
   push:
-    branches: [rebuild/sheet-companion]
+    branches: [main]
     paths: [release-request.json]
 permissions:
   contents: write
