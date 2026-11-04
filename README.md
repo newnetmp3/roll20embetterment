@@ -47,9 +47,13 @@ characters they control. Sheets you opened yourself are never hidden or
 closed. Turn it off with ⚙ → **Follow the selected token**.
 
 Roll20 has no public "selected token" API, so `src/editor/selection.js` runs in
-Roll20's page and reads the selection from the Jumpgate engine, read-only (the
-approach v3 proved in-game). If Roll20 changes its engine, following stops and
-⚙ → **Copy diagnostics** shows why; everything else keeps working.
+Roll20's page and reads the selection from the Jumpgate engine, read-only. It
+reaches the engine through Roll20's `window.MeshManager` global, and falls back
+to finding the engine module in the webpack registry. Selecting a token that
+isn't linked to a character ("Represents Character" in the token settings)
+shows a short message instead of doing nothing. If Roll20 changes its engine,
+following stops and ⚙ → **Copy diagnostics** shows why; everything else keeps
+working.
 
 ## No setup for players
 

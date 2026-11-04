@@ -1,13 +1,16 @@
 // Runs in Roll20's own page (MAIN world): reports which characters the
 // selected tokens represent. Roll20 has no public "selected token" API, so
-// this asks the Jumpgate engine the same way the v3 extension did, read-only:
-//   VTTEngine.instance.tabletop.getSelection() -> nodes -> dataWrapper.model
+// this reads the Jumpgate engine, read-only:
+//   engine.tabletop.getSelection() -> nodes -> dataWrapper.model
 //   -> model.get('represents') = character id.
+// The engine is reached through Roll20's own window.MeshManager global
+// (MeshManager.engine). If that is missing, the engine module is looked up in
+// the webpack registry instead.
 // It only reads. Results go to the extension as a DOM event with a JSON string.
 (function () {
   'use strict';
   if (window.top !== window || window.__r20cSelection) return;
-  const state = (window.__r20cSelection = { status: 'waiting for first map render', module: null, tries: 0 });
+  const state = (window.__r20cSelection = { status: 'waiting for first map render', module: null, via: null, tries: 0 });
   let engine = null;
   let rendered = false;
   let lastTry = 0;
@@ -51,20 +54,41 @@
     }]);
   }
 
+  // The live tabletop: Roll20's MeshManager global first, then the engine
+  // class found in the webpack registry.
+  function tabletop() {
+    try {
+      const mm = window.MeshManager;
+      const t = mm && mm.engine && mm.engine.tabletop;
+      if (t && typeof t.getSelection === 'function') { state.via = 'MeshManager'; return t; }
+    } catch { /* fall through */ }
+    try {
+      // Only read an instance that already exists: Roll20's "instance" getter
+      // would build a new engine if none were running.
+      const t = engine && engine.instance && engine.instance.tabletop;
+      if (t && typeof t.getSelection === 'function') { state.via = 'webpack'; return t; }
+    } catch { /* fall through */ }
+    return null;
+  }
+
   // Characters represented by the selected tokens, in selection order.
-  function selectedCharacters() {
-    const tabletop = engine && engine.instance && engine.instance.tabletop;
-    if (!tabletop || typeof tabletop.getSelection !== 'function' || tabletop.getSelection.length !== 0) return null;
-    const items = tabletop.getSelection();
-    if (!Array.isArray(items)) return null;
+  function selectedCharacters(t) {
+    if (t.getSelection.length !== 0) return null;
+    const raw = t.getSelection();
+    const items = Array.isArray(raw) ? raw : raw && typeof raw[Symbol.iterator] === 'function' ? Array.from(raw) : null;
+    if (!items) return null;
     const out = [];
+    const names = [];
+    let unlinked = 0;
     for (const item of items.slice(0, 50)) {
       const m = (item && item.dataWrapper && item.dataWrapper.model) || (item && item.model);
-      let rep = '';
-      try { rep = String((m && (typeof m.get === 'function' ? m.get('represents') : m.attributes && m.attributes.represents)) || ''); } catch { /* skip */ }
-      if (rep && !out.includes(rep)) out.push(rep);
+      if (!m) continue;
+      const read = (k) => { try { return String((typeof m.get === 'function' ? m.get(k) : m.attributes && m.attributes[k]) || ''); } catch { return ''; } };
+      const rep = read('represents');
+      if (rep) { if (!out.includes(rep)) out.push(rep); } else unlinked++;
+      if (names.length < 5) names.push(read('name'));
     }
-    return { chars: out, tokens: items.length };
+    return { chars: out, tokens: items.length, unlinked, names };
   }
 
   function tick() {
@@ -73,18 +97,18 @@
       // map canvas exists and the page has settled.
       if (performance.now() > 15000) rendered = true;
     }
-    if (!rendered) return;
-    if (!engine) {
-      if (state.tries >= 6 || Date.now() - lastTry < 3000) return;
+    const t = rendered || window.MeshManager ? tabletop() : null;
+    if (!t) {
+      if (!rendered || engine || state.tries >= 6 || Date.now() - lastTry < 3000) return;
       lastTry = Date.now();
       try { findEngine(); } catch { state.status = 'engine lookup failed'; }
       return;
     }
     let sel = null;
-    try { sel = selectedCharacters(); } catch { sel = null; }
+    try { sel = selectedCharacters(t); } catch { sel = null; }
     if (!sel) { state.status = 'selection unavailable'; return; }
     state.status = 'ok';
-    const key = sel.chars.join(',') + '|' + sel.tokens;
+    const key = sel.chars.join(',') + '|' + sel.tokens + '|' + sel.unlinked;
     if (key === last) return;
     last = key;
     document.dispatchEvent(new CustomEvent('r20c-selection', { detail: JSON.stringify(sel) }));

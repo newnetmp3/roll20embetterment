@@ -61,6 +61,10 @@ test('Roll settings reflect the sheet and companion prefs', () => {
   assert.equal(byKey['pref:spend'].checked, false);
 });
 
-test('no snapshot, no menus', () => {
-  assert.deepEqual(plain(model().buildMenus(null)), []);
+test('no snapshot: only the companion settings', () => {
+  const cats = plain(model().buildMenus(null, { follow: true }));
+  assert.deepEqual(cats.map((c) => c.key), ['settings']);
+  const keys = cats[0].items.map((i) => i.key);
+  assert.ok(keys.includes('pref:follow') && keys.includes('diag'));
+  assert.ok(!keys.some((k) => k.startsWith('privacy:') || k.startsWith('mode:')));
 });

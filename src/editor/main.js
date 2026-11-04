@@ -194,20 +194,29 @@
     let sel;
     try { sel = JSON.parse(e.detail); } catch { return; }
     lastSelection = sel;
+    if (!prefs.follow) return;
     const id = Array.isArray(sel.chars) ? String(sel.chars[0] || '') : '';
-    if (!id || !prefs.follow || id === active) return;
+    const label = (sel.names && sel.names[0]) ? '“' + sel.names[0] + '”' : 'That token';
+    if (!id) {
+      // Say why nothing happened, so an unlinked token doesn't look like a bug.
+      if (sel.tokens && sel.unlinked) ui.toast(label + ' isn’t linked to a character sheet. Link it in the token’s settings (“Represents Character”).', true);
+      return;
+    }
+    if (id === active) return;
     const visible = C.sheets.journal().some((j) => j.id === id) || C.sheets.isOpen(id);
-    if (!visible) return; // not a character this user can open
+    if (!visible) { ui.toast(label + '’s character isn’t in your Journal, so it can’t be opened.', true); return; }
     if (!isGM()) {
       const mine = controlled();
-      if (mine && !mine.includes(id)) return;
+      if (mine && !mine.includes(id)) return; // players only follow their own characters
     }
     const mySeq = ++followSeq;
     chosen = true;
     await select(id);
     if (C.sheets.isOpen(id) || mySeq !== followSeq) return;
+    ui.toast('Loading ' + label.replace(/^That token$/, 'the selected character') + '…');
     const ok = await C.sheets.open(id, { hidden: true });
     if (ok && C.sheets.isOwned(id)) remember(id);
+    if (!ok && mySeq === followSeq) ui.toast('Could not open that character’s sheet.', true);
     refresh();
   }));
   function selectionStatus() {

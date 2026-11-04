@@ -270,7 +270,8 @@
 
   const LISTS = ['attacks', 'actions', 'features', 'items', 'spells', 'abilities', 'checks', 'hitDice', 'rests'];
   C.buildMenus = function buildMenus(raw, prefs = {}) {
-    if (!raw) return [];
+    // No character yet: still offer the companion settings and diagnostics.
+    if (!raw) return [{ key: 'settings', icon: 'gear', label: 'Settings', items: rollSettings({}, prefs) }];
     // Tolerate snapshots with missing parts (older saves, unusual sheets).
     const snap = { ...raw, stats: raw.stats || {} };
     for (const k of LISTS) if (!Array.isArray(snap[k])) snap[k] = [];
