@@ -150,7 +150,7 @@ test('concentration and death saves in the hit point menu', () => {
   assert.equal(hp.find((n) => n.key === 'conc').label, 'Concentrating: Bless');
   const save = hp.find((n) => n.key === 'conc:save');
   assert.equal(save.hint, 'DC 12');
-  assert.deepEqual([save.run.ref, save.run.op, save.run.clearsDc], ['ability:0:CON', 'save', true]);
+  assert.deepEqual([save.run.ref, save.run.op, save.run.clearsDc, save.run.dc], ['ability:0:CON', 'save', true, 12]);
   const healthy = plain(m.buildMenus({ ...snap, stats: { hp: 5, maxHp: 20 } })).find((c) => c.key === 'hp').items;
   assert.equal(healthy.some((n) => n.key === 'death'), false);
   assert.equal(healthy.find((n) => n.key === 'conc').checked, false);

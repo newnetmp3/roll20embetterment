@@ -120,6 +120,12 @@ input.txt { width: 100%; margin: 2px 0 4px; }
 .toast.bad { border-left-color: var(--bad); }
 `;
 
+  // Wording and docking that differ between Roll20 and Foundry builds.
+  const text = (k) => ({
+    product: 'Roll20embetterment', anchor: 'master-toolbar', openHeader: 'Open sheets', listHeader: 'Journal',
+    emptyPeople: 'Open a character sheet, or open the Journal tab once', ...(C.TEXT || {}),
+  })[k];
+
   function el(tag, cls, html) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -221,7 +227,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         positionMenus();
         return;
       }
-      const bar = document.getElementById('master-toolbar');
+      const bar = document.getElementById(text('anchor'));
       const r = bar && bar.getBoundingClientRect();
       const visible = r && r.width > 10 && r.height > 40 && r.right > 0;
       // Use the toolbar only if it looks like the slim left toolbar; always
@@ -339,9 +345,9 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         person: p,
         controls: p.open ? [{ label: p.hidden ? icon('eye', 14) : icon('eyeOff', 14), html: true, title: p.hidden ? 'Show sheet window' : 'Hide sheet window', toggle: p.id }] : [],
       });
-      if (open.length) { out.push({ key: 'h:open', header: true, label: 'Open sheets' }); out.push(...open.map(row)); }
-      if (rest.length) { out.push({ key: 'h:journal', header: true, label: 'Journal' }); out.push(...rest.slice(0, 80).map(row)); }
-      if (!list.length) out.push({ key: 'none', header: true, label: model.people.length ? 'No matches' : 'Open a character sheet, or open the Journal tab once' });
+      if (open.length) { out.push({ key: 'h:open', header: true, label: text('openHeader') }); out.push(...open.map(row)); }
+      if (rest.length) { out.push({ key: 'h:journal', header: true, label: text('listHeader') }); out.push(...rest.slice(0, 80).map(row)); }
+      if (!list.length) out.push({ key: 'none', header: true, label: model.people.length ? 'No matches' : text('emptyPeople') });
       return out;
     }
     function nodesAt(level) {
@@ -519,7 +525,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       path = [];
       render();
       place();
-      toast('Roll20embetterment bar is here.');
+      toast(text('product') + ' bar is here.');
     }, true);
 
     // ---- closing & keyboard ---------------------------------------------------

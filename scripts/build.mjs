@@ -49,6 +49,7 @@ const crc32 = (buf) => {
   return (c ^ 0xffffffff) >>> 0;
 };
 // Uncompressed ZIP with a fixed timestamp, so builds are reproducible.
+export { zip };
 function zip(files) {
   const local = [];
   const central = [];
