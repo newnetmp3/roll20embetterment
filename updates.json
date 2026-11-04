@@ -3,9 +3,9 @@
     "roll20-sheet-companion@newnetmp3.github.io": {
       "updates": [
         {
-          "version": "5.4.3",
-          "update_link": "https://github.com/newnetmp3/roll20embetterment/releases/download/roll20embetterment-v5.4.3/roll20embetterment-5.4.3.xpi",
-          "update_hash": "sha256:9f6d5f90dde956004eb1c588a82dd0e2637fa2e89cd9c3795b639bd240c033ee"
+          "version": "5.5.1",
+          "update_link": "https://github.com/newnetmp3/roll20embetterment/releases/download/roll20embetterment-v5.5.1/roll20embetterment-5.5.1.xpi",
+          "update_hash": "sha256:a6d0814108e8f0fdf2bb8e436cd8f113ad7a6f9e017a882af953e3d8019fba63"
         }
       ]
     }
