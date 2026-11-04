@@ -187,6 +187,9 @@
   }
 
   C.perform = async function perform(doc, ref, op, arg, opts = {}) {
+    // A sheet window that was just (re)opened may still be rendering.
+    for (let i = 0; !C.scopes(doc) && i < 40; i++) await wait(200);
+    if (!C.scopes(doc)) return { ok: false, gone: true, msg: 'Sheet not loaded.' };
     const wide = await sheetWide(doc, op, arg);
     if (wide) return wide;
     const found = findRow(doc, ref);

@@ -39,7 +39,7 @@
       let result;
       try { result = await C.perform(document, msg.ref, msg.op, msg.arg, msg.opts || {}); }
       catch (e) { result = { ok: false, msg: String(e && e.message || e) }; }
-      send({ type: 'result', id: msg.id, ...result });
+      send({ type: 'result', id: msg.id, ...result, gone: !!result.gone });
       schedule();
     }
   });

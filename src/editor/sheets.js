@@ -12,7 +12,11 @@
 
   const emit = (type, ...args) => handlers[type].forEach((fn) => { try { fn(...args); } catch (e) { console.error('[R20 Companion]', e); } });
   const esc = (s) => (G.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&'));
-  const dialogFor = (id) => document.querySelector('.characterdialog[data-characterid="' + esc(id) + '"]');
+  // Roll20 can keep a closed sheet window in the page, just not displayed.
+  // Only a window that is laid out counts (our hidden ones are only
+  // visibility:hidden, so they still count).
+  const shown = (d) => { try { return !!d && d.getClientRects().length > 0; } catch { return false; } };
+  const dialogFor = (id) => [...document.querySelectorAll('.characterdialog[data-characterid="' + esc(id) + '"]')].find(shown) || null;
 
   function iframeFor(win) {
     for (const f of document.querySelectorAll('iframe[name^="iframe_"]')) if (f.contentWindow === win) return f;
@@ -31,12 +35,13 @@
     else if (msg.type === 'ready') emit('ready', msg.charId);
     else if (msg.type === 'result') {
       const p = pending.get(msg.id);
-      if (p) { clearTimeout(p.timer); pending.delete(msg.id); p.resolve({ ok: !!msg.ok, msg: String(msg.msg || '') }); }
+      if (p) { clearTimeout(p.timer); pending.delete(msg.id); p.resolve({ ok: !!msg.ok, msg: String(msg.msg || ''), gone: !!msg.gone }); }
     }
   });
 
   function live(id) {
     const f = frames.get(id);
+    if (f && !dialogFor(id)) { frames.delete(id); return null; } // window closed
     if (f && f.classic) {
       if (f.iframe.isConnected && C.classic.docOf(f.iframe)) return f;
     } else if (f && f.iframe.isConnected) return f;
@@ -152,7 +157,15 @@
     return !!btn;
   }
 
+  // Run an action; if the sheet turned out to be closed or empty, load the
+  // companion's own hidden copy and try once more.
   async function invoke(id, act, opts = {}) {
+    const r = await invokeOnce(id, act, opts);
+    if (r.ok || !(r.gone || r.noAnswer)) return r;
+    frames.delete(id);
+    return invokeOnce(id, act, { ...opts, autoHide: true });
+  }
+  async function invokeOnce(id, act, opts = {}) {
     let opened = false;
     if (!live(id)) {
       if (!(await open(id, { hidden: !!opts.autoHide && !act.reveal }))) {
@@ -168,10 +181,10 @@
     }
     const reqId = 'r' + ++seq;
     return new Promise((resolve) => {
-      const timer = setTimeout(() => { pending.delete(reqId); resolve({ ok: false, msg: 'The sheet did not answer.' }); }, opened ? 15000 : 8000);
+      const timer = setTimeout(() => { pending.delete(reqId); resolve({ ok: false, noAnswer: true, msg: 'The sheet did not answer.' }); }, opened ? 15000 : 8000);
       pending.set(reqId, { resolve, timer });
       if (!post(id, { type: 'invoke', id: reqId, ref: act.ref, op: act.op, arg: act.arg, opts: { spend: opts.spend } })) {
-        clearTimeout(timer); pending.delete(reqId); resolve({ ok: false, msg: 'Sheet is not connected.' });
+        clearTimeout(timer); pending.delete(reqId); resolve({ ok: false, noAnswer: true, msg: 'Sheet is not connected.' });
       }
     });
   }
@@ -192,6 +205,7 @@
   function scanClassic() {
     classicTick++;
     for (const d of document.querySelectorAll('.characterdialog[data-characterid]')) {
+      if (!shown(d)) continue;
       const id = d.getAttribute('data-characterid');
       const iframe = d.querySelector('iframe[name="iframe_' + esc(id) + '"]') || d.querySelector('iframe');
       const doc = C.classic.docOf(iframe);
@@ -205,7 +219,7 @@
   }
 
   // Report sheet windows opening and closing.
-  const openIds = () => [...document.querySelectorAll('.characterdialog[data-characterid]')].map((d) => d.getAttribute('data-characterid'));
+  const openIds = () => [...new Set([...document.querySelectorAll('.characterdialog[data-characterid]')].filter(shown).map((d) => d.getAttribute('data-characterid')))];
   let lastDialogs = '';
   setInterval(() => {
     watchRaised();
