@@ -249,6 +249,8 @@
     const camp = await collect(set);
     const title = (camp.campaign_title || 'Roll20 campaign').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Roll20 campaign';
     say(`${camp.pages.length} pages, ${camp.characters.length} characters, ${camp.handouts.length} handouts, ${(camp.tables || []).length} tables, ${(camp.jukebox || []).length} tracks.`);
+    const blank = camp.characters.filter((ch) => !(ch.attributes || []).length);
+    say(`  sheet data for ${camp.characters.length - blank.length} of ${camp.characters.length} characters` + (blank.length ? ` (no sheet data saved in Roll20 for: ${blank.slice(0, 12).map((ch) => ch.name).join(', ')}${blank.length > 12 ? ', …' : ''})` : '') + '.');
 
     if (opts.sheets && C.sheets) {
       const todo = camp.characters.filter((ch) => !isClassic(ch) && (ch.attributes || []).length >= 5);

@@ -48,6 +48,32 @@
     }
   }
 
+  // Roll20 only loads a character's attributes and abilities when its sheet
+  // is opened. Read the rest straight from Roll20's database instead.
+  function stored(coll) {
+    return new Promise((resolve) => {
+      const ref = coll && coll.backboneFirebase && coll.backboneFirebase.reference;
+      if (!ref || typeof ref.once !== 'function') { resolve(null); return; }
+      let done = false;
+      const finish = (v) => { if (!done) { done = true; resolve(v); } };
+      try {
+        ref.once('value', (snap) => {
+          const val = snap && typeof snap.val === 'function' ? snap.val() : null;
+          finish(val && typeof val === 'object' ? Object.entries(val).map(([id, a]) => ({ id, ...a })) : []);
+        }, () => finish(null));
+      } catch { finish(null); }
+      setTimeout(() => finish(null), 20000);
+    });
+  }
+  async function fullList(coll) {
+    const have = list(coll);
+    if (have.length) return have;
+    try { if (coll && typeof coll.fetch === 'function' && coll.backboneFirebase) coll.fetch(coll.backboneFirebase.reference); } catch { /* try the database read */ }
+    for (let t = 0; t < 10 && coll && !coll.length; t++) await wait(200);
+    if (coll && coll.length) return list(coll);
+    return (await stored(coll)) || [];
+  }
+
   async function collect() {
     const C = window.Campaign;
     if (!C || !C.pages) throw new Error('The Roll20 campaign has not finished loading.');
@@ -74,12 +100,22 @@
     });
 
     const chars = C.characters.models;
+    // Attributes and abilities for every character, a few at a time.
+    const sheetData = new Map();
+    let loaded = 0;
+    const queue = [...chars];
+    await Promise.all(Array.from({ length: 6 }, async () => {
+      for (let c = queue.shift(); c; c = queue.shift()) {
+        sheetData.set(c, { attributes: await fullList(c.attribs), abilities: await fullList(c.abilities) });
+        progress('Loading character sheets', ++loaded, chars.length);
+      }
+    }));
     out.characters = [];
     for (const [i, c] of chars.entries()) {
       progress('Reading characters', i, chars.length);
       const d = json(c);
-      d.attributes = list(c.attribs);
-      d.abilities = list(c.abilities);
+      d.attributes = sheetData.get(c).attributes;
+      d.abilities = sheetData.get(c).abilities;
       d.controlledby = split(d.controlledby);
       d.inplayerjournals = split(d.inplayerjournals);
       if (d.bio) d.bio = unescapeText(await blob(c, 'bio'));

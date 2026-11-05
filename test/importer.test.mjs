@@ -312,23 +312,26 @@ test('character check: missing items, DM-changed spells, numbers, cut text', asy
 test('2024 sheet: items, spells and features from the sheet\'s saved data', async () => {
   const { auditCharacter } = await import('../importer/module/scripts/audit.js');
   const store = { integrants: { integrants: {
-    a1: { _id: 'a1', _enabled: true, type: 'Item', name: 'Obsidian Dagger', recordName: 'Dagger', description: 'A black blade.\n\n**Cursed.** It *hums*.', cost: '2 GP', weight: 1, quantity: 1, properties: 'Finesse, Light, Thrown', weaponData: { category: 'Simple', training: 'Simple', type: 'Melee' }, equipData: { equippable: true, equipped: true }, childIDs: '["a2"]' },
-    a2: { _id: 'a2', _enabled: true, type: 'Attack', name: 'Obsidian Dagger', diceCount: 1, diceSize: 'd4', damageType: 'Piercing' },
+    a1: { _id: 'a1', _enabled: true, type: 'Item', name: 'Obsidian Dagger', recordName: 'Dagger', description: 'A black blade.\n\n**Cursed.** It *hums*.', cost: '2 GP', weight: 1, quantity: 1, properties: '["Finesse","Light","Thrown"]', weaponData: { category: 'Melee', training: 'Simple', type: 'Dagger' }, equipData: { equippable: true, equipped: true }, childIDs: '["a2"]' },
+    a2: { _id: 'a2', _enabled: true, type: 'Attack', name: 'Obsidian Dagger', parentID: 'a1', source: 'Item', childIDs: '["a3"]' },
+    a3: { _id: 'a3', _enabled: true, type: 'Damage', name: 'Dagger Damage', _diceCount: 1, diceSize: 'd4', damageType: 'Force' },
     b1: { _id: 'b1', _enabled: true, type: 'Item', name: 'Gloves of the Great Wolf', description: 'Claws of the pack. Once per day the wearer may howl to call 1d4 wolves for an hour.', weight: 1, quantity: 1, equipData: { equippable: true, equipped: true } },
     s1: { _id: 's1', _enabled: true, type: 'Spells', name: 'Force Buckler', description: 'A shield of force.', castingTime: '1 Bonus Action', school: 'Abjuration', concentration: true, components: { verbal: true, somatic: true }, duration: '1 Minute', range: 'Self', level: 1 },
     f1: { _id: 'f1', _enabled: true, type: 'Features', name: 'Manifest Echo', description: 'x'.repeat(900) },
   } } };
   const snap = { type: 'pc', name: 'Nier', stats: { hp: 10, maxHp: 10, ac: 12 },
     items: [{ name: 'Obsidian Dagger', qty: 1, equipped: true, sub: 'Weapon' }, { name: 'Gloves of the Great Wolf', qty: 1 }],
+    attacks: [{ name: 'Obsidian Dagger', hit: '+5', dmg: [{ text: '1d4+3', type: 'Force' }] }, { name: 'Force Buckler', hit: '+5', dmg: [] }],
     spells: [{ name: 'Force Buckler', level: '1st Level', tags: ['C'] }],
     features: [{ section: 'Class Features', source: 'Echo Knight', name: 'Manifest Echo', desc: 'x'.repeat(600) }] };
   const ch = { id: '-C', name: 'Nier', attributes: [{ name: 'store', current: JSON.stringify(store) }], r20e_snapshot: snap };
   const c = cv.convertCharacter(ch);
-  const dag = c.lookups.find((l) => l.kind === 'gear' && l.name === 'Dagger');
-  assert.ok(dag, 'looked up by the sheet\'s base item');
-  assert.equal(dag.patch.name, 'Obsidian Dagger');
+  const dag = c.lookups.find((l) => l.kind === 'gear' && l.name === 'Obsidian Dagger');
+  assert.equal(dag.roll20, true, 'a weapon with saved damage keeps Roll20\'s numbers');
   assert.equal(dag.fallback.type, 'weapon');
-  assert.deepEqual(dag.fallback.system.damage.parts, [['1d4', 'piercing']]);
+  assert.equal(dag.fallback.system.type.value, 'simpleM');
+  assert.deepEqual(dag.fallback.system.damage.parts, [['1d4', 'force']]);
+  assert.equal(c.items.some((i) => i.type === 'weapon' && /Obsidian/.test(i.name)), false, 'its attack row is not a second weapon');
   assert.deepEqual(dag.fallback.system.properties, ['fin', 'lgt', 'thr']);
   assert.match(dag.fallback.system.description.value, /<strong>Cursed\.<\/strong> It <em>hums<\/em>/);
   assert.deepEqual(dag.fallback.system.price, { value: 2, denomination: 'gp' });

@@ -275,6 +275,7 @@ async function compendiumLookup(enabled, say) {
     say(`  ${packIndex.size} compendium entries.`);
   }
   return async function lookup(l) {
+    if (l.roll20) return l.fallback || null; // Roll20's own version wins
     const uuid = packIndex.get(l.kind + '|' + normName(l.name));
     if (uuid) {
       if (!docCache.has(uuid)) docCache.set(uuid, (await fromUuid(uuid))?.toObject() || null);

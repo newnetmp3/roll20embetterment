@@ -298,14 +298,52 @@ function inline(s) {
 const isSpell = (x) => x && (/spell/i.test(x.type || '') || 'castingTime' in x || 'school' in x);
 const isItem = (x) => x && (/^item/i.test(x.type || '') || 'equipData' in x || 'weaponData' in x || 'armorData' in x);
 const WEAPON_PROPS = { finesse: 'fin', light: 'lgt', heavy: 'hvy', thrown: 'thr', 'two-handed': 'two', versatile: 'ver', reach: 'rch', ammunition: 'amm', loading: 'lod', special: 'spc', silvered: 'sil', magical: 'mgc' };
-function storeDamage(x, kids) {
+// Damage from an entry and the attacks under it (one weapon's Standard,
+// Off-Hand and Thrown attacks repeat the same damage: keep each once).
+function storeDamage(x, kids, kit) {
   const parts = [];
-  for (const d of [x, ...kids]) {
+  const seenPart = new Set();
+  const visit = (d, depth) => {
+    if (!d || depth > 2) return;
     const count = num(d.diceCount ?? d._diceCount ?? d.dieCount);
     const size = num(d.diceSize ?? d.dieSize);
-    if (count && size) parts.push([count + 'd' + size, damageType(d.damageType || d.damage || '')]);
-  }
+    if (count && size && d.type !== 'Healing') {
+      const p = [count + 'd' + size + (num(d._bonus) ? ' + ' + num(d._bonus) : ''), damageType(d.damageType || d.damage || '')];
+      const k = p.join('|');
+      if (!seenPart.has(k)) { seenPart.add(k); parts.push(p); }
+    }
+    if (kit) for (const c of kit.children(d)) visit(c, depth + 1);
+  };
+  visit(x, 0);
+  if (!kit) for (const k of kids) visit(k, 1);
   return parts;
+}
+// A weapon's damage: its main attack, plus the two-handed (versatile) one.
+function weaponDamage(x, kids, kit) {
+  const attacks = kids.filter((k) => k.type === 'Attack');
+  if (!attacks.length) return { parts: storeDamage(x, kids, kit).slice(0, 1) };
+  const main = attacks.find((a) => !/off-?hand|two-?handed|versatile|thrown/i.test(a.name || '')) || attacks[0];
+  const two = attacks.find((a) => /two-?handed|versatile/i.test(a.name || ''));
+  const v = two && storeDamage(two, [], kit)[0];
+  return { parts: storeDamage(main, [], kit), ...(v ? { versatile: v[0] } : {}) };
+}
+// Healing under an entry (potions, kits): "2d4 + 2".
+function storeHealing(x, kit) {
+  const h = [x, ...kit.children(x), ...kit.children(x).flatMap((c) => kit.children(c))].find((d) => d.type === 'Healing' && num(d._diceCount ?? d.diceCount));
+  if (!h) return '';
+  return num(h._diceCount ?? h.diceCount) + String(h.diceSize || 'd4').replace(/^(\d)/, 'd$1') + (num(h._bonus) ? ' + ' + num(h._bonus) : '');
+}
+// Limited uses under an entry: { max, spent, recovery }.
+const PERIODS = { 'long rest': 'lr', 'short rest': 'sr', dawn: 'dawn', dusk: 'dusk', day: 'day', turn: 'turnStart', round: 'round' };
+export function storeUses(x, kit) {
+  const near = [...kit.children(x), ...kit.children(x).flatMap((c) => c.type === 'Attunement' ? kit.children(c) : [])];
+  const r = near.find((d) => d.type === 'Resource');
+  if (!r) return null;
+  const max = num(r.maxValueFormula?.flatValue) ?? num(r.maxValueFormula?.customFormula);
+  if (!max && !r.maxValueFormula?.customFormula) return null;
+  const recovery = Object.keys(r.recoveryRate || {}).map((k) => PERIODS[k.toLowerCase()]).filter(Boolean).map((period) => ({ period, type: 'recoverAll' }));
+  const value = num(r.value) ?? max;
+  return { max: max ? String(max) : String(r.maxValueFormula.customFormula), spent: max ? Math.max(0, max - value) : 0, recovery };
 }
 // An item from the sheet's saved data: weapon, armour or plain gear.
 export function storeItem(x, kit, qty, equipped) {
@@ -317,24 +355,117 @@ export function storeItem(x, kit, qty, equipped) {
     equipped: equipped ?? !!x.equipData?.equipped, attuned: !!x._attuned,
   };
   if (!base.price) delete base.price;
+  const uses = storeUses(x, kit);
+  if (uses) base.uses = uses;
+  const heal = storeHealing(x, kit);
+  if (heal && !x.weaponData?.type) {
+    return legacyItem('consumable', x.name, { ...base, type: { value: /potion|elixir|draught|tea|tonic/i.test(x.name) ? 'potion' : 'trinket' }, actionType: 'heal', activation: { type: 'action', cost: 1 }, damage: { parts: [[heal, 'healing']] } });
+  }
   if (x.weaponData && (x.weaponData.type || x.weaponData.category)) {
-    const ranged = /ranged/i.test(x.weaponData.type || '');
-    const cat = /martial/i.test(x.weaponData.category || '') ? 'martial' : 'simple';
-    const props = String(x.properties || '').split(/[,;]/).map((p) => WEAPON_PROPS[clean(p).toLowerCase().replace(/\s*\(.*\)$/, '')]).filter(Boolean);
-    const range = /(\d+)\s*\/\s*(\d+)/.exec(x.properties || '');
+    // weaponData: category Melee/Ranged, training Simple/Martial, type = base weapon.
+    const wd = x.weaponData;
+    const ranged = /ranged/i.test(wd.category || '') || (!/melee/i.test(wd.category || '') && /ranged/i.test(wd.type || ''));
+    const cat = /martial/i.test(wd.training || wd.category || '') ? 'martial' : 'simple';
+    let list = x.properties;
+    if (typeof list === 'string') { try { list = JSON.parse(list); } catch { list = list.split(/[,;]/); } }
+    const props = (Array.isArray(list) ? list : []).map((p) => WEAPON_PROPS[clean(p).toLowerCase().replace(/\s*\(.*\)$/, '')]).filter(Boolean);
+    const range = /(\d+)\s*\/\s*(\d+)/.exec(String(x.range || '') + ' ' + kids.map((k) => k.range || '').join(' '));
+    // "+2 Longsword": dnd5e's magical bonus adds to attack and damage itself.
+    const plus = num((/(?:^|\s)\+(\d)(?:\s|$)/.exec(x.name) || [])[1]);
+    const damage = weaponDamage(x, kids, kit);
+    if (plus) {
+      const strip = (f) => String(f).replace(new RegExp('\\s*\\+\\s*' + plus + '$'), '');
+      damage.parts = damage.parts.map(([f, t], i) => [i === 0 ? strip(f) : f, t]);
+      if (damage.versatile) damage.versatile = strip(damage.versatile);
+      if (!props.includes('mgc')) props.push('mgc');
+    }
     return legacyItem('weapon', x.name, {
-      ...base, type: { value: cat + (ranged ? 'R' : 'M') }, properties: props,
-      actionType: ranged ? 'rwak' : 'mwak', damage: { parts: storeDamage(x, kids) },
+      ...base, type: { value: cat + (ranged ? 'R' : 'M'), baseItem: clean(wd.type).toLowerCase().replace(/[^a-z]+/g, '') }, properties: props,
+      ...(plus ? { magicalBonus: plus } : {}),
+      actionType: ranged ? 'rwak' : 'mwak', damage,
       range: range ? { value: Number(range[1]), long: Number(range[2]), units: 'ft' } : { value: props.includes('rch') ? 10 : 5, long: null, units: 'ft' },
     });
   }
+  const acOf = () => kids.filter((k) => k.type === 'Armor Class').map((k) => num(k.valueFormula?.flatValue)).find((v) => v) ?? null;
+  if (x.shieldData) return legacyItem('equipment', x.name, { ...base, type: { value: 'shield' }, armor: { value: acOf() ?? 2 } });
   if (x.armorData && x.armorData.category) {
     const c = String(x.armorData.category).toLowerCase();
-    const ac = kids.map((k) => num(k.bonusValue ?? k.flatValue ?? k.value)).find((v) => v) || null;
-    return legacyItem('equipment', x.name, { ...base, type: { value: /shield/.test(c) ? 'shield' : /heavy/.test(c) ? 'heavy' : /medium/.test(c) ? 'medium' : 'light' }, armor: { value: ac } });
+    const kind = /shield/.test(c) ? 'shield' : /heavy/.test(c) ? 'heavy' : /medium/.test(c) ? 'medium' : 'light';
+    return legacyItem('equipment', x.name, { ...base, type: { value: kind }, armor: { value: acOf(), dex: kind === 'heavy' ? 0 : kind === 'medium' ? 2 : null } });
   }
   return legacyItem('loot', x.name, base);
 }
+
+// Classes in the saved data, with their levels, hit die and spellcasting.
+const ABBR = (s) => Object.keys(ABILITIES).find((k) => ABILITIES[k] === String(s || '').toLowerCase()) || '';
+const PROGRESSION = { full: 'full', half: 'half', third: 'third', pact: 'pact', artificer: 'artificer' };
+export function storeClasses(kit) {
+  const out = [];
+  for (const cl of kit.all.filter((x) => x.type === 'Class')) {
+    const ids = new Set([cl._id, cl.compendiumPageID].filter(Boolean));
+    const levels = Math.max(0, ...kit.all.filter((x) => x.type === 'Class Level' && ids.has(x.classID)).map((x) => num(x.level) || 0));
+    if (!levels) continue; // 2024-sheet NPCs carry a level-0 "class" named after themselves
+    const hd = kit.all.find((x) => x.type === 'Hit Dice' && ids.has(x.classID));
+    const sc = kit.all.find((x) => x.type === 'Spellcasting' && (ids.has(x.parentID) || ids.has(x.sourceID)));
+    out.push({
+      name: clean(cl.name), ids, levels, die: num(hd?.dieSize), description: cl.description || '',
+      identifier: clean(cl.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+      spellcasting: sc ? { ability: ABBR(sc.ability), progression: PROGRESSION[String(sc.casterType || '').toLowerCase()] || 'none' } : null,
+    });
+  }
+  return out;
+}
+const LANGS = { common: 'common', dwarvish: 'dwarvish', elvish: 'elvish', giant: 'giant', gnomish: 'gnomish', goblin: 'goblin', halfling: 'halfling', orc: 'orc', abyssal: 'abyssal', celestial: 'celestial', 'deep speech': 'deep', draconic: 'draconic', infernal: 'infernal', primordial: 'primordial', sylvan: 'sylvan', undercommon: 'undercommon', druidic: 'druidic', "thieves' cant": 'cant', 'common sign language': 'sign' };
+const DAMAGE_KEYS = ['acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'];
+const CONDITION_KEYS = ['blinded', 'charmed', 'deafened', 'exhaustion', 'frightened', 'grappled', 'incapacitated', 'invisible', 'paralyzed', 'petrified', 'poisoned', 'prone', 'restrained', 'stunned', 'unconscious'];
+const TOOLS = { "thieves' tools": 'thief', 'herbalism kit': 'herb', "smith's tools": 'smith', "alchemist's supplies": 'alchemist', "brewer's supplies": 'brewer', "calligrapher's supplies": 'calligrapher', "carpenter's tools": 'carpenter', "cartographer's tools": 'cartographer', "cobbler's tools": 'cobbler', "cook's utensils": 'cook', "glassblower's tools": 'glassblower', "jeweler's tools": 'jeweler', "leatherworker's tools": 'leatherworker', "mason's tools": 'mason', "painter's supplies": 'painter', "potter's tools": 'potter', "tinker's tools": 'tinker', "weaver's tools": 'weaver', "woodcarver's tools": 'woodcarver', 'disguise kit': 'disg', 'forgery kit': 'forg', "navigator's tools": 'navg', "poisoner's kit": 'pois', 'dice set': 'dice', 'playing card set': 'card', 'dragonchess set': 'chess', 'three-dragon ante set': 'card', "vehicles (land)": 'land', "vehicles (water)": 'water' };
+// Proficiencies, languages, defences, senses, size and coins from the saved data.
+export function storeTraits(kit) {
+  if (!kit.all.length) return {};
+  const traits = {};
+  const add = (key, val, custom) => {
+    traits[key] ||= { value: [], custom: '' };
+    if (val) { if (!traits[key].value.includes(val)) traits[key].value.push(val); } else if (custom && !traits[key].custom.split('; ').includes(custom)) traits[key].custom = [traits[key].custom, custom].filter(Boolean).join('; ');
+  };
+  const tools = {};
+  for (const p of kit.all.filter((x) => x.type === 'Proficiency')) {
+    const name = clean(p.proficiency || p.name);
+    const n = name.toLowerCase();
+    const level = /expert/i.test(p.proficiencyLevel || '') ? 2 : /half/i.test(p.proficiencyLevel || '') ? 0.5 : 1;
+    if (p.category === 'Weapon') add('weaponProf', /^simple/.test(n) ? 'sim' : /^martial/.test(n) ? 'mar' : '', name);
+    else if (p.category === 'Armor') add('armorProf', /^light/.test(n) ? 'lgt' : /^medium/.test(n) ? 'med' : /^heavy/.test(n) ? 'hvy' : /shield/.test(n) ? 'shl' : '', name);
+    else if (p.category === 'Tool') { const k = TOOLS[n.replace(/[’]/g, "'")]; if (k) tools[k] = { value: Math.max(tools[k]?.value || 0, level) }; else add('toolProf', '', name); }
+    else if (p.category === 'Language') add('languages', LANGS[n], name);
+  }
+  for (const l of kit.all.filter((x) => x.type === 'Language')) { const n = clean(l.name); add('languages', LANGS[n.toLowerCase()], n); }
+  for (const d of kit.all.filter((x) => x.type === 'Defense' && !x.cascades)) {
+    const what = clean(d.damage).toLowerCase();
+    const kind = /immun/i.test(d.defense || '') ? 'i' : /vulner/i.test(d.defense || '') ? 'v' : /resist/i.test(d.defense || '') ? 'r' : '';
+    if (!kind || !what) continue;
+    if (CONDITION_KEYS.includes(what)) add('ci', what);
+    else add('d' + kind, DAMAGE_KEYS.includes(what) ? what : '', clean(d.damage));
+  }
+  // toolProf isn't a dnd5e trait: keep those names with the languages' neighbours.
+  const otherTools = traits.toolProf?.custom;
+  delete traits.toolProf;
+  const size = kit.all.find((x) => x.type === 'Size' && x.sizeValue);
+  if (size && SIZES[String(size.sizeValue).toLowerCase()]) traits.size = SIZES[String(size.sizeValue).toLowerCase()];
+  const ranges = {};
+  for (const x of kit.all.filter((y) => y.type === 'Sense' && !y.cascades)) {
+    const k = clean(x.name).toLowerCase();
+    const v = num(x.valueFormula?.flatValue);
+    if (['darkvision', 'blindsight', 'tremorsense', 'truesight'].includes(k) && v) ranges[k] = Math.max(ranges[k] || 0, v);
+  }
+  const coins = { copper: 'cp', silver: 'sp', electrum: 'ep', gold: 'gp', platinum: 'pp' };
+  const currency = {};
+  for (const x of kit.all.filter((y) => y.type === 'Currency')) { const k = coins[String(x._id || x.name).toLowerCase()]; if (k) currency[k] = num(x.value) || 0; }
+  return {
+    traits, tools: Object.keys(tools).length ? tools : null, otherTools,
+    senses: Object.keys(ranges).length ? { ranges, units: 'ft' } : null,
+    currency: Object.keys(currency).length ? currency : null,
+  };
+}
+
 // A spell from the sheet's saved data.
 export function storeSpell(x, kit, level, prepared) {
   const kids = kit.children(x);
@@ -355,7 +486,7 @@ export function storeSpell(x, kit, level, prepared) {
     range: rangeOf(x.range), properties: props,
     preparation: { mode: 'prepared', prepared: lvl === 0 || prepared !== false },
   };
-  const parts = storeDamage(x, kids);
+  const parts = storeDamage(x, kids, kit);
   if (parts.length) system.damage = { parts };
   const atk = x.attack?.type || '';
   const save = x.save?.saveAbility;
@@ -417,9 +548,22 @@ export function convertSnapshot(ch, snap) {
   if (isNpc && st.cr) system.details.cr = parseCR(st.cr);
   const items = [];
   const lookups = [];
-  // Classes: the 2024 sheet shows one hit-die row per class, "D10 (Fighter)",
-  // with as many dice as levels in that class.
-  const hdRows = snap.hitDice || [];
+  // Full item, spell, feature and class data saved by the sheet itself.
+  const kit = storeIntegrants(sheetStore(ch));
+  // Classes: from the saved data (custom classes included, with their hit
+  // die and spellcasting), else from the hit-die rows ("D10 (Fighter)").
+  const classes = storeClasses(kit);
+  for (const c of classes) {
+    const sc = c.spellcasting;
+    lookups.push({ name: c.name, kind: 'class', patch: { system: { levels: c.levels } }, fallback: legacyItem('class', c.name, {
+      identifier: c.identifier, levels: c.levels, hd: { denomination: 'd' + (c.die || 8) },
+      description: { value: richText(c.description) },
+      ...(sc ? { spellcasting: { progression: sc.progression, ability: sc.ability } } : {}),
+    }) });
+  }
+  const casting = classes.find((c) => c.spellcasting?.ability);
+  if (casting) system.attributes.spellcasting = casting.spellcasting.ability;
+  const hdRows = classes.length ? [] : snap.hitDice || [];
   hdRows.forEach((h, i) => {
     const m = /d\s*(\d+)\s*\(([^)]+)\)/i.exec(h.label || h.name || '');
     if (!m) return;
@@ -427,10 +571,13 @@ export function convertSnapshot(ch, snap) {
     const levels = num((st.hitDice || [])[i] && st.hitDice[i].max) || (hdRows.length === 1 ? num(st.level) : null) || 1;
     lookups.push({ name: cls, kind: 'class', patch: { system: { levels } }, fallback: legacyItem('class', cls, { levels, hd: { denomination: 'd' + m[1] } }) });
   });
+  const tr = storeTraits(kit);
+  if (tr.traits) system.traits = { ...(system.traits || {}), ...tr.traits };
+  if (tr.currency) system.currency = tr.currency;
+  if (tr.tools) system.tools = tr.tools;
+  if (tr.senses) system.attributes.senses = tr.senses;
   const seen = new Set();
   const once = (name) => { const k = clean(name).toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; };
-  // Full item, spell and feature data saved by the sheet itself.
-  const kit = storeIntegrants(sheetStore(ch));
   for (const it of snap.items || []) {
     if (!once(it.name)) continue;
     const qty = num(it.qty) ?? 1;
@@ -440,7 +587,10 @@ export function convertSnapshot(ch, snap) {
     // "Obsidian Dagger" built on the sheet's Dagger: dnd5e's Dagger, renamed,
     // with the sheet's text.
     const record = x && clean(x.recordName);
-    if (record && keyName(record) !== keyName(it.name)) {
+    // Weapons keep Roll20's own numbers (the DM changes damage and types).
+    if (fallback.type === 'weapon' && fallback.system.damage?.parts?.length) {
+      lookups.push({ name: clean(it.name), kind: 'gear', patch, fallback, roll20: true });
+    } else if (record && keyName(record) !== keyName(it.name)) {
       lookups.push({ name: record, kind: 'gear', fallback, patch: { ...patch, name: clean(it.name), system: { ...patch.system, description: { value: fallback.system.description.value } } } });
     } else lookups.push({ name: clean(it.name), kind: 'gear', patch, fallback });
   }
@@ -458,8 +608,20 @@ export function convertSnapshot(ch, snap) {
   // dnd5e weapons carry those modes themselves, so keep one weapon per base.
   const weaponBase = (n) => clean(String(n || '').replace(/\s*\(.*\)\s*$/, '').replace(/^throw\s+/i, '')).toLowerCase();
   const weaponsMade = new Set();
+  const spellNames = new Set((snap.spells || []).map((x) => keyName(x.name)));
+  const attackOwner = (name) => {
+    const x = kit.find(name, (y) => y.type === 'Attack' || y.type === 'Action');
+    if (!x) return '';
+    const parent = kit.byId.get(x.parentID) || kit.byId.get(x.sourceID);
+    if (parent?.type === 'Spell' || /^spell/i.test(x.source || '')) return 'spell';
+    if (isItem(parent) || parent?.type === 'Attunement' || /^item/i.test(x.source || '')) return 'item';
+    return parent?.type || 'other';
+  };
   for (const a of snap.attacks || []) {
     const base = weaponBase(a.name);
+    // Attacks that belong to a spell or a carried item: those already have them.
+    const owner = attackOwner(a.name);
+    if (owner === 'spell' || owner === 'item' || [...spellNames].some((n) => n && (keyName(a.name) === n || keyName(a.name).startsWith(n + ' ')))) continue;
     if (gearNames.has(base) || weaponsMade.has(base) || !once(a.name)) continue;
     weaponsMade.add(base);
     const parts = (a.dmg || []).map((d) => [resolveFormula(String(d.text || '').replace(/[a-z]+$/i, '')), damageType(d.type || d.text)]).filter((x) => x[0]);
@@ -483,13 +645,16 @@ export function convertSnapshot(ch, snap) {
     const m = /^(use|drink|light|apply|read|eat|throw|activate)\s+(?:a |an |the )?(.+)$/i.exec(clean(n));
     return !!m && [...gearNames].some((g) => g && (g === m[2].toLowerCase() || g.includes(m[2].toLowerCase()) || m[2].toLowerCase().includes(g)));
   };
-  const rulesList = (n) => /^(bonus )?(actions|reactions|bonus actions) in combat$/i.test(clean(n));
+  // The rules' own actions (every character has them) and sheet rule lists.
+  const rulesList = (n) => /^(bonus )?(actions|reactions|bonus actions) in combat$/i.test(clean(n))
+    || /^(attack|dash|disengage|dodge|help|hide|influence|magic|ready|search|study|utilize|grapple|shove|opportunity attack)$/i.test(clean(n));
   const ACT = (t) => (/bonus/i.test(t) ? 'bonus' : /reaction/i.test(t) ? 'reaction' : /legendary/i.test(t) ? 'legendary' : /action/i.test(t) ? 'action' : '');
   // Same-named entries ("Landborn Magic" at levels 1, 3 and 5) become one
   // feature with all their text.
   const merged = new Map();
   for (const f of [...(snap.actions || []), ...(snap.features || [])]) {
-    if (rulesList(f.name) || weaponsMade.has(weaponBase(f.name)) || (snap.actions || []).includes(f) && itemAction(f.name)) continue;
+    const isAction = (snap.actions || []).includes(f);
+    if (rulesList(f.name) || weaponsMade.has(weaponBase(f.name)) || isAction && (itemAction(f.name) || attackOwner(f.name) === 'item' || attackOwner(f.name) === 'spell')) continue;
     const k = clean(f.name).toLowerCase();
     if (!k || seen.has(k)) continue;
     const m = merged.get(k);
@@ -522,7 +687,17 @@ export function convertSnapshot(ch, snap) {
     const act = ACT(f.timing || f.section || '');
     if (act) system.activation = { type: act, cost: 1 };
     if (r && r.max) system.uses = { max: String(r.max), spent: Math.max(0, r.max - (r.cur ?? r.max)) };
+    // The saved data also says when uses come back (short rest, long rest, dawn).
+    const fx = kit.find(f.name, (y) => y.type === 'Features' || y.type === 'Action');
+    const su = fx && storeUses(fx, kit);
+    if (su) system.uses = system.uses ? { ...system.uses, recovery: su.recovery } : su;
     items.push(legacyItem('feat', f.name, system, { flags: { r20import: { source: src, section: f.section || '' } } }));
+  }
+  // Weapon masteries the DM made up ("Fish Slap").
+  for (const m of kit.all.filter((x) => x.type === 'Weapon Mastery' && /custom/i.test(x.source || '') && once(x.name))) {
+    let on = m.defaultItems;
+    if (typeof on === 'string') { try { on = JSON.parse(on); } catch { on = [on]; } }
+    items.push(legacyItem('feat', 'Weapon Mastery: ' + clean(m.name), { description: { value: richText(m.description) + (Array.isArray(on) && on.length ? '<p><em>Weapons: ' + esc(on.join(', ')) + '</em></p>' : '') }, type: { value: 'feat' }, requirements: 'Weapon mastery' }));
   }
   // The species itself: dnd5e's when the name matches, else a custom species
   // item carrying its traits' text (the traits are on the actor as features).
