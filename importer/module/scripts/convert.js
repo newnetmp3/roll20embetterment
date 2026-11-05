@@ -245,6 +245,131 @@ export function spellItem(r, sheet, mods) {
   return legacyItem('spell', r.name, system);
 }
 
+
+// ---- 2024 sheet's saved data ----------------------------------------------------------
+// The 2024 sheet keeps everything in one JSON attribute, "store". Its
+// integrants are the sheet's items, spells, features, attacks and bonuses,
+// each with the full description.
+export function sheetStore(ch) {
+  const a = (ch.attributes || ch.attribs || []).find((x) => x.name === 'store');
+  if (!a) return null;
+  try { return typeof a.current === 'string' ? JSON.parse(a.current) : a.current; } catch { return null; }
+}
+const keyName = (s) => clean(s).toLowerCase().replace(/[’']/g, "'");
+export function storeIntegrants(store) {
+  const all = Object.values(store?.integrants?.integrants || {}).filter((x) => x && typeof x === 'object' && x._enabled !== false);
+  const byId = new Map(all.map((x) => [x._id, x]));
+  const byName = new Map();
+  for (const x of all) {
+    for (const k of new Set([keyName(x.name), keyName(x.label)])) {
+      if (!k) continue;
+      if (!byName.has(k)) byName.set(k, []);
+      byName.get(k).push(x);
+    }
+  }
+  const children = (x) => {
+    let ids = x.childIDs;
+    if (typeof ids === 'string') { try { ids = JSON.parse(ids); } catch { ids = ids.split(','); } }
+    return (Array.isArray(ids) ? ids : []).map((id) => byId.get(String(id).trim())).filter(Boolean);
+  };
+  return { all, byId, byName, children, find: (name, test = () => true) => {
+    // Prefer the entry with the most text (an item over its attack row).
+    const list = (byName.get(keyName(name)) || []).filter(test);
+    return list.sort((a, b) => String(b.description || '').length - String(a.description || '').length)[0] || null;
+  } };
+}
+// Descriptions are HTML or Markdown-style text.
+export function richText(s) {
+  const t = String(s ?? '').trim();
+  if (!t) return '';
+  if (/<\/?(p|br|div|span|strong|em|b|i|ul|ol|li|h\d|table)\b/i.test(t)) return t;
+  return t.split(/\n{2,}/).map((p) => {
+    const lines = p.split('\n');
+    if (lines.every((l) => /^\s*[-*•]\s+/.test(l))) return '<ul>' + lines.map((l) => '<li>' + inline(l.replace(/^\s*[-*•]\s+/, '')) + '</li>').join('') + '</ul>';
+    const h = /^#{1,6}\s+(.*)$/.exec(p);
+    if (h && lines.length === 1) return '<h4>' + inline(h[1]) + '</h4>';
+    return '<p>' + lines.map(inline).join('<br>') + '</p>';
+  }).join('');
+}
+function inline(s) {
+  return esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*(?!\s)(.+?)\*/g, '$1<em>$2</em>');
+}
+const isSpell = (x) => x && (/spell/i.test(x.type || '') || 'castingTime' in x || 'school' in x);
+const isItem = (x) => x && (/^item/i.test(x.type || '') || 'equipData' in x || 'weaponData' in x || 'armorData' in x);
+const WEAPON_PROPS = { finesse: 'fin', light: 'lgt', heavy: 'hvy', thrown: 'thr', 'two-handed': 'two', versatile: 'ver', reach: 'rch', ammunition: 'amm', loading: 'lod', special: 'spc', silvered: 'sil', magical: 'mgc' };
+function storeDamage(x, kids) {
+  const parts = [];
+  for (const d of [x, ...kids]) {
+    const count = num(d.diceCount ?? d._diceCount ?? d.dieCount);
+    const size = num(d.diceSize ?? d.dieSize);
+    if (count && size) parts.push([count + 'd' + size, damageType(d.damageType || d.damage || '')]);
+  }
+  return parts;
+}
+// An item from the sheet's saved data: weapon, armour or plain gear.
+export function storeItem(x, kit, qty, equipped) {
+  const kids = kit.children(x);
+  const base = {
+    description: { value: richText(x.description) }, quantity: qty ?? num(x.quantity) ?? 1,
+    weight: { value: num(x.weight) || 0, units: 'lb' }, rarity: clean(x.rarity).toLowerCase(),
+    price: (() => { const m = /([\d.,]+)\s*(cp|sp|ep|gp|pp)/i.exec(x.cost || ''); return m ? { value: Number(m[1].replace(/,/g, '')), denomination: m[2].toLowerCase() } : undefined; })(),
+    equipped: equipped ?? !!x.equipData?.equipped, attuned: !!x._attuned,
+  };
+  if (!base.price) delete base.price;
+  if (x.weaponData && (x.weaponData.type || x.weaponData.category)) {
+    const ranged = /ranged/i.test(x.weaponData.type || '');
+    const cat = /martial/i.test(x.weaponData.category || '') ? 'martial' : 'simple';
+    const props = String(x.properties || '').split(/[,;]/).map((p) => WEAPON_PROPS[clean(p).toLowerCase().replace(/\s*\(.*\)$/, '')]).filter(Boolean);
+    const range = /(\d+)\s*\/\s*(\d+)/.exec(x.properties || '');
+    return legacyItem('weapon', x.name, {
+      ...base, type: { value: cat + (ranged ? 'R' : 'M') }, properties: props,
+      actionType: ranged ? 'rwak' : 'mwak', damage: { parts: storeDamage(x, kids) },
+      range: range ? { value: Number(range[1]), long: Number(range[2]), units: 'ft' } : { value: props.includes('rch') ? 10 : 5, long: null, units: 'ft' },
+    });
+  }
+  if (x.armorData && x.armorData.category) {
+    const c = String(x.armorData.category).toLowerCase();
+    const ac = kids.map((k) => num(k.bonusValue ?? k.flatValue ?? k.value)).find((v) => v) || null;
+    return legacyItem('equipment', x.name, { ...base, type: { value: /shield/.test(c) ? 'shield' : /heavy/.test(c) ? 'heavy' : /medium/.test(c) ? 'medium' : 'light' }, armor: { value: ac } });
+  }
+  return legacyItem('loot', x.name, base);
+}
+// A spell from the sheet's saved data.
+export function storeSpell(x, kit, level, prepared) {
+  const kids = kit.children(x);
+  const props = [];
+  if (x.concentration) props.push('concentration');
+  if (x.ritual) props.push('ritual');
+  const comp = x.components || {};
+  if (comp.verbal) props.push('vocal');
+  if (comp.somatic) props.push('somatic');
+  if (comp.material) props.push('material');
+  const time = String(x.castingTime || '').toLowerCase();
+  const lvl = level ?? num(x.level) ?? 0;
+  const system = {
+    level: lvl, school: SCHOOLS[String(x.school || '').toLowerCase()] || '',
+    description: { value: richText(x.description) },
+    activation: { type: /bonus/.test(time) ? 'bonus' : /reaction/.test(time) ? 'reaction' : /minute/.test(time) ? 'minute' : /hour/.test(time) ? 'hour' : 'action', cost: num(time) || 1 },
+    duration: { value: num(x.duration), units: /hour/i.test(x.duration || '') ? 'hour' : /minute/i.test(x.duration || '') ? 'minute' : /round/i.test(x.duration || '') ? 'round' : /instant/i.test(x.duration || '') ? 'inst' : '' },
+    range: rangeOf(x.range), properties: props,
+    preparation: { mode: 'prepared', prepared: lvl === 0 || prepared !== false },
+  };
+  const parts = storeDamage(x, kids);
+  if (parts.length) system.damage = { parts };
+  const atk = x.attack?.type || '';
+  const save = x.save?.saveAbility;
+  if (/melee/i.test(atk)) system.actionType = 'msak';
+  else if (/ranged|spell/i.test(atk)) system.actionType = 'rsak';
+  else if (save) system.actionType = 'save';
+  else if (parts.length) system.actionType = 'other';
+  if (save) {
+    const ab = Object.keys(ABILITIES).find((k) => ABILITIES[k].startsWith(String(save).toLowerCase().slice(0, 3)));
+    if (ab) system.save = { ability: ab, dc: num(x.save.saveFlat) || null, scaling: num(x.save.saveFlat) ? 'flat' : 'spell' };
+  }
+  return legacyItem('spell', x.name, system);
+}
+
 // ---- characters ---------------------------------------------------------------------
 // Returns { actor, items, spells: [names to look up], gear: [names], notes }.
 // `itemsByName` lets app.js swap in compendium entries afterwards.
@@ -304,19 +429,29 @@ export function convertSnapshot(ch, snap) {
   });
   const seen = new Set();
   const once = (name) => { const k = clean(name).toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; };
+  // Full item, spell and feature data saved by the sheet itself.
+  const kit = storeIntegrants(sheetStore(ch));
   for (const it of snap.items || []) {
     if (!once(it.name)) continue;
     const qty = num(it.qty) ?? 1;
-    lookups.push({ name: clean(it.name), kind: 'gear', patch: { system: { quantity: qty, ...(it.equipped ? { equipped: true } : {}) } },
-      fallback: legacyItem('loot', it.name, { quantity: qty, description: { value: esc(it.sub || '') } }) });
+    const x = kit.find(it.name, isItem);
+    const fallback = x ? storeItem(x, kit, qty, it.equipped ?? undefined) : legacyItem('loot', it.name, { quantity: qty, description: { value: esc(it.sub || '') } });
+    const patch = { system: { quantity: qty, ...(it.equipped ? { equipped: true } : {}) } };
+    // "Obsidian Dagger" built on the sheet's Dagger: dnd5e's Dagger, renamed,
+    // with the sheet's text.
+    const record = x && clean(x.recordName);
+    if (record && keyName(record) !== keyName(it.name)) {
+      lookups.push({ name: record, kind: 'gear', fallback, patch: { ...patch, name: clean(it.name), system: { ...patch.system, description: { value: fallback.system.description.value } } } });
+    } else lookups.push({ name: clean(it.name), kind: 'gear', patch, fallback });
   }
   for (const sp of snap.spells || []) {
     if (!once('spell:' + sp.name)) continue;
     const level = /cantrip/i.test(sp.level) ? 0 : num(sp.level) ?? 0;
     const props = (sp.tags || []).includes('C') ? ['concentration'] : [];
     if ((sp.tags || []).includes('R')) props.push('ritual');
+    const x = kit.find(sp.name, isSpell);
     lookups.push({ name: clean(sp.name), kind: 'spell', patch: { system: { method: 'spell', prepared: level === 0 || sp.prepared !== false ? 1 : 0 } },
-      fallback: legacyItem('spell', sp.name, { level, range: rangeOf(sp.range), properties: props, preparation: { mode: 'prepared', prepared: sp.prepared !== false }, description: { value: '' } }) });
+      fallback: x ? storeSpell(x, kit, level, sp.prepared) : legacyItem('spell', sp.name, { level, range: rangeOf(sp.range), properties: props, preparation: { mode: 'prepared', prepared: sp.prepared !== false }, description: { value: '' } }) });
   }
   const gearNames = new Set((snap.items || []).map((i) => clean(i.name).toLowerCase()));
   // "Dagger (Off-Hand)", "Throw Handaxe": other ways of using one weapon.
@@ -371,7 +506,12 @@ export function convertSnapshot(ch, snap) {
   const subclassNames = [...new Set(feats.filter((f) => /class/i.test(f.section || '') && f.source && !classNames.has(clean(f.source).toLowerCase())).map((f) => clean(f.source)))];
   const known = new Set([...classNames, ...subclassNames.map((x) => x.toLowerCase()), speciesName.toLowerCase()]);
   const backgroundName = isNpc ? '' : mostCommon(feats.filter((f) => !isSpecies(f) && !/class|\bfeats?\b/i.test(f.section || '') && f.source && !known.has(clean(f.source).toLowerCase())).map((f) => clean(f.source)));
-  const html = (f) => f.descs.map(para).join('');
+  // The sheet's saved text when it is fuller than what was read off the page.
+  const html = (f) => {
+    const read = f.descs.map(para).join('');
+    const x = kit.find(f.name, (y) => !isItem(y) && !isSpell(y) && y.description);
+    return x && clean(x.description).length > f.descs.join(' ').length ? richText(x.description) : read;
+  };
   const listHTML = (list) => list.map((f) => '<h4>' + esc(f.name) + '</h4>' + html(f)).join('');
   for (const f of feats) {
     const r = f.res[0];

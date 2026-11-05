@@ -234,7 +234,9 @@ async function runAudit({ fix = false, campaign: name } = {}, say) {
 
 async function applyFixes(actor, findings, say) {
   const strip = (d) => { const c = foundry.utils.deepClone(d); delete c._id; return c; };
-  const add = findings.filter((f) => f.fix?.op === 'add').map((f) => strip(f.fix.data));
+  const add = findings.filter((f) => f.fix?.op === 'add' || f.fix?.op === 'replace').map((f) => strip(f.fix.data));
+  const remove = findings.filter((f) => f.fix?.op === 'replace').map((f) => f.fix.id);
+  if (remove.length) await actor.deleteEmbeddedDocuments('Item', remove);
   const itemUpdates = [];
   for (const f of findings) {
     if (f.fix?.op === 'desc') itemUpdates.push({ _id: f.fix.id, 'system.description.value': f.fix.html });

@@ -2,7 +2,7 @@
 // differs: missing features, items and spells; compendium items whose Roll20
 // text the DM changed; ability scores, HP, AC, speed and proficiencies.
 // Pure data in, findings out (each with the fix that would apply it).
-import { convertCharacter } from './convert.js';
+import { convertCharacter, sheetStore, storeIntegrants } from './convert.js';
 
 const normName = (s) => String(s ?? '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 export const plain = (h) => String(h ?? '').replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').toLowerCase()
@@ -88,8 +88,16 @@ export function auditCharacter(ch, resolved, actor, conv = convertCharacter(ch))
         fix: { op: 'desc', id: have.id, html: '<p><em>Roll20 version (the DM\'s text). Check the item\'s numbers against it.</em></p>' + r20 + '<hr><details><summary>dnd5e compendium text</summary>' + (have.desc || '') + '</details>' },
       });
     }
+    const mine = data.system?.description?.value || '';
+    // Brought over earlier as a bare name (plain loot): rebuild it as what
+    // Roll20's saved data says it is (weapon, armour…).
+    if (have.type !== data.type && have.type === 'loot' && ['weapon', 'equipment', 'consumable', 'tool'].includes(data.type)) {
+      add({ kind: 'text', name: data.name, detail: `rebuilt as ${data.type} from Roll20's saved data`, fix: { op: 'replace', id: have.id, data } });
+    } else if (!fromPack && textDiffers(mine, have.desc)) {
+      add({ kind: 'text', name: data.name, detail: 'Roll20 has the full text', fix: { op: 'desc', id: have.id, html: mine } });
+    }
     if (!fromPack && !['race', 'subclass', 'background', 'class'].includes(data.type)) {
-      add({ kind: 'custom', name: l.name, detail: data.type + ': not in any compendium, came across from Roll20 as is' });
+      add({ kind: 'custom', name: data.name, detail: data.type + (plain(mine).length > 40 ? ': homebrew, with Roll20\'s text' : ': not in any compendium, name only') });
     }
   });
 
@@ -112,7 +120,8 @@ export function auditCharacter(ch, resolved, actor, conv = convertCharacter(ch))
   const snap = conv.sheetKind === '2024' ? ch.r20e_snapshot : null;
   const all = snap ? [...(snap.features || []), ...(snap.actions || [])] : [];
   const full = all.some((f) => String(f.desc || '').length > 600);
-  const cut = full ? [] : all.filter((f) => String(f.desc || '').length === 600).map((f) => f.name);
+  const kit = snap ? storeIntegrants(sheetStore(ch)) : null;
+  const cut = full ? [] : all.filter((f) => String(f.desc || '').length === 600 && !(kit.find(f.name)?.description?.length > 600)).map((f) => f.name);
   if (cut.length) add({ kind: 'cut', name: [...new Set(cut)].join(', '), detail: 'descriptions cut off at 600 characters in this export' });
 
   // Things only Foundry has (added after the import, or renamed).
@@ -123,6 +132,6 @@ export function auditCharacter(ch, resolved, actor, conv = convertCharacter(ch))
 }
 
 export const KIND_LABEL = {
-  missing: 'Missing from Foundry', changed: 'DM-changed (compendium text replaced Roll20\'s)', text: 'Roll20 description longer',
+  missing: 'Missing from Foundry', changed: 'DM-changed (compendium text replaced Roll20\'s)', text: 'Roll20 has more (text or details)',
   stat: 'Numbers that differ', custom: 'Homebrew from Roll20', cut: 'Cut short in the export', extra: 'Only in Foundry',
 };

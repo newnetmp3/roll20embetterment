@@ -308,3 +308,45 @@ test('character check: missing items, DM-changed spells, numbers, cut text', asy
   const f2 = auditCharacter({ r20e_snapshot: snap }, [], { system: c2.actor.system, items: [{ id: 'a', name: 'Long One', type: 'feat', desc: c2.items[0].system.description.value }] }, c2).findings;
   assert.deepEqual(f2.map((f) => f.kind), ['cut']);
 });
+
+test('2024 sheet: items, spells and features from the sheet\'s saved data', async () => {
+  const { auditCharacter } = await import('../importer/module/scripts/audit.js');
+  const store = { integrants: { integrants: {
+    a1: { _id: 'a1', _enabled: true, type: 'Item', name: 'Obsidian Dagger', recordName: 'Dagger', description: 'A black blade.\n\n**Cursed.** It *hums*.', cost: '2 GP', weight: 1, quantity: 1, properties: 'Finesse, Light, Thrown', weaponData: { category: 'Simple', training: 'Simple', type: 'Melee' }, equipData: { equippable: true, equipped: true }, childIDs: '["a2"]' },
+    a2: { _id: 'a2', _enabled: true, type: 'Attack', name: 'Obsidian Dagger', diceCount: 1, diceSize: 'd4', damageType: 'Piercing' },
+    b1: { _id: 'b1', _enabled: true, type: 'Item', name: 'Gloves of the Great Wolf', description: 'Claws of the pack. Once per day the wearer may howl to call 1d4 wolves for an hour.', weight: 1, quantity: 1, equipData: { equippable: true, equipped: true } },
+    s1: { _id: 's1', _enabled: true, type: 'Spells', name: 'Force Buckler', description: 'A shield of force.', castingTime: '1 Bonus Action', school: 'Abjuration', concentration: true, components: { verbal: true, somatic: true }, duration: '1 Minute', range: 'Self', level: 1 },
+    f1: { _id: 'f1', _enabled: true, type: 'Features', name: 'Manifest Echo', description: 'x'.repeat(900) },
+  } } };
+  const snap = { type: 'pc', name: 'Nier', stats: { hp: 10, maxHp: 10, ac: 12 },
+    items: [{ name: 'Obsidian Dagger', qty: 1, equipped: true, sub: 'Weapon' }, { name: 'Gloves of the Great Wolf', qty: 1 }],
+    spells: [{ name: 'Force Buckler', level: '1st Level', tags: ['C'] }],
+    features: [{ section: 'Class Features', source: 'Echo Knight', name: 'Manifest Echo', desc: 'x'.repeat(600) }] };
+  const ch = { id: '-C', name: 'Nier', attributes: [{ name: 'store', current: JSON.stringify(store) }], r20e_snapshot: snap };
+  const c = cv.convertCharacter(ch);
+  const dag = c.lookups.find((l) => l.kind === 'gear' && l.name === 'Dagger');
+  assert.ok(dag, 'looked up by the sheet\'s base item');
+  assert.equal(dag.patch.name, 'Obsidian Dagger');
+  assert.equal(dag.fallback.type, 'weapon');
+  assert.deepEqual(dag.fallback.system.damage.parts, [['1d4', 'piercing']]);
+  assert.deepEqual(dag.fallback.system.properties, ['fin', 'lgt', 'thr']);
+  assert.match(dag.fallback.system.description.value, /<strong>Cursed\.<\/strong> It <em>hums<\/em>/);
+  assert.deepEqual(dag.fallback.system.price, { value: 2, denomination: 'gp' });
+  const gloves = c.lookups.find((l) => l.name === 'Gloves of the Great Wolf').fallback;
+  assert.match(gloves.system.description.value, /^<p>Claws of the pack\./);
+  const spell = c.lookups.find((l) => l.kind === 'spell').fallback;
+  assert.equal(spell.system.activation.type, 'bonus');
+  assert.equal(spell.system.school, 'abj');
+  assert.deepEqual(spell.system.properties, ['concentration', 'vocal', 'somatic']);
+  assert.match(spell.system.description.value, /shield of force/);
+  assert.equal(c.items.find((i) => i.name === 'Manifest Echo').system.description.value.length, 900 + 7);
+
+  // An earlier import left plain loot with only a subtitle: the fix rebuilds it.
+  const resolved = c.lookups.map((l) => l.fallback);
+  const items = [{ id: 'o', name: 'Gloves of the Great Wolf', type: 'loot', desc: '' }, { id: 'p', name: 'Obsidian Dagger', type: 'loot', desc: 'Weapon' }];
+  const f = auditCharacter(ch, resolved, { system: c.actor.system, items }, c).findings;
+  assert.equal(f.find((x) => x.name === 'Obsidian Dagger').fix.op, 'replace');
+  assert.equal(f.find((x) => x.name === 'Gloves of the Great Wolf' && x.fix).fix.op, 'desc');
+  assert.ok(!f.some((x) => x.kind === 'cut'), 'the saved data has the full text');
+  assert.ok(f.some((x) => x.kind === 'custom' && x.name === 'Obsidian Dagger'));
+});
