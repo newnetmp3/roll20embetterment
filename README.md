@@ -1,25 +1,25 @@
 # Roll20embetterment
 
-> **Foundry VTT:** the same bar is also available as a Foundry module for the
-> dnd5e system. See [foundry/README.md](foundry/README.md).
-
 A Firefox extension that adds a slim action bar beside Roll20's left toolbar.
-It reads the official **D&D 2024** character sheet (PCs and NPCs) and lets you
-attack, cast, use items and features, roll checks and saves, and track
-resources from cascading popup menus, without digging through the sheet.
+It reads the official **D&D 2024** character sheet (PCs and NPCs) and the
+**D&D 5E Classic** sheet, and lets you attack, cast, use items and features,
+roll checks and saves, and track resources from cascading popup menus,
+without digging through the sheet.
 
 Every action presses the sheet's own button, so Roll20 posts its normal chat
 card. Attacks keep the chat **Damage** button, and Roll20's roll visibility and
 advantage settings apply as usual.
 
-> This is v5, a from-scratch rewrite. The previous extension (v3, "Roll20
-> Embetterment") is preserved on the `main` branch history and its releases.
+Also in this repository:
 
+- **Foundry VTT module**: the same bar for the dnd5e system. See
+  [foundry/README.md](foundry/README.md).
+- **Roll20embetterment Campaign Exporter**: a separate Firefox add-on that
+  saves a whole Roll20 campaign. See [exporter/README.md](exporter/README.md).
+- **Roll20 Campaign Import**: brings that export into Foundry VTT. See
+  [importer/README.md](importer/README.md).
 
 > Unofficial fan tool, not affiliated with Roll20. MIT licensed (see `LICENSE`).
-> Listing text for addons.mozilla.org: `store/amo-listing.md`. `npm run build`
-> also writes `dist/firefox/roll20embetterment-<version>-amo.zip`, the upload
-> for the listed (Mozilla-hosted) version, which has no self-hosted update URL.
 
 ## What's on the bar
 
@@ -112,11 +112,6 @@ used this turn.
   spell slots and half the hit dice, and clears temp HP and death saves.
   Class resources are left alone, since they recharge on different rests.
 
-## Export a campaign to Foundry VTT
-
-A separate add-on, **Roll20embetterment Campaign Exporter**, saves a whole
-campaign for the Foundry importer. See [exporter/README.md](exporter/README.md).
-
 ## No setup for players
 
 When a player joins a game, Roll20embetterment finds the character they control
@@ -151,25 +146,17 @@ Turn this off with ⚙ → **Keep my character sheet loaded**.
 
 ## Install (Firefox / Floorp)
 
-Open the `.xpi` from the latest
+Open the `.xpi` from the
 [latest release](https://github.com/newnetmp3/roll20embetterment/releases?q=roll20embetterment)
 in Firefox and click **Add**. It is signed by Mozilla and updates itself.
-Disable the old Roll20 Embetterment add-on so the two don't overlap.
 
-To release a new version: bump `version` in `package.json`, set the same
-version in `release-request.json`, and push. The **Roll20embetterment signed release**
-workflow signs it, publishes the release and updates `updates.json`.
+## Limits
 
-For development, `npm run build` and load `dist/firefox/extension/manifest.json`
-from `about:debugging` → **Load Temporary Add-on…**.
-
-## Not yet known / limits
-
-- **Spell slots** aren't tracked yet: no slot-casting character has been
-  sampled. Cast posts the spell card; spend slots on the sheet.
+- **Spell slots** aren't tracked by the bar. Cast posts the spell card; spend
+  slots on the sheet.
 - Counters change through the sheet's own controls. If Roll20 refuses a
   change, the bar says so rather than pretending it worked.
-- Only the official D&D 2024 sheet is supported.
+- Only the official D&D 2024 and D&D 5E Classic sheets are read.
 
 ## Development
 
@@ -179,6 +166,16 @@ npm run build     # dist/firefox/extension + unsigned zip
 npm run check     # both
 node scripts/inspect-dump.mjs <saved-sheet.html>   # run the reader on a saved sheet
 ```
+
+To release a new version: bump `version` in `package.json`, set the same
+version in `release-request.json`, and push. The **Roll20embetterment signed
+release** workflow signs it, publishes the release and updates `updates.json`.
+`npm run build` also writes `dist/firefox/roll20embetterment-<version>-amo.zip`,
+the upload for addons.mozilla.org (no self-hosted update URL); the listing text
+is in `store/amo-listing.md`.
+
+To try a build, load `dist/firefox/extension/manifest.json` from
+`about:debugging` → **Load Temporary Add-on…**.
 
 Code layout:
 
