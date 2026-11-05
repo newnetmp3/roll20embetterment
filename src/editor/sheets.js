@@ -7,7 +7,7 @@
   const SHEET_ORIGIN = 'https://advanced-sheets.production.roll20preflight.net';
   const frames = new Map(); // charId -> { win, iframe }
   const pending = new Map(); // request id -> { resolve, timer }
-  const handlers = { snapshot: [], ready: [], dialogs: [] };
+  const handlers = { snapshot: [], ready: [], dialogs: [], description: [] };
   let seq = 0;
 
   const emit = (type, ...args) => handlers[type].forEach((fn) => { try { fn(...args); } catch (e) { console.error('[Roll20embetterment]', e); } });
@@ -33,6 +33,7 @@
     frames.set(msg.charId, { win: event.source, iframe });
     if (msg.type === 'snapshot' && msg.snap) emit('snapshot', msg.charId, msg.snap);
     else if (msg.type === 'ready') emit('ready', msg.charId);
+    else if (msg.type === 'description') emit('description', msg.charId, msg.info);
     else if (msg.type === 'result') {
       const p = pending.get(msg.id);
       if (p) { clearTimeout(p.timer); pending.delete(msg.id); p.resolve({ ok: !!msg.ok, msg: String(msg.msg || ''), gone: !!msg.gone }); }
@@ -243,6 +244,7 @@
     isOwned: (id) => owned.has(id),
     isLive: (id) => !!live(id),
     isOpen: (id) => !!dialogFor(id),
+    describe: (id) => post(id, { type: 'describe' }),
     refresh: (id) => { const f = live(id); if (f && f.classic) readClassic(id, f, true); else post(id, { type: 'hello' }); },
     classicInfo: (id) => { const f = live(id); return f && f.classic ? C.classic.describe(f.doc) : null; },
   };

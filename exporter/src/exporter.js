@@ -198,6 +198,16 @@
   }
 
   const pendingSnaps = new Map();
+  const pendingInfo = new Map();
+  if (C.sheets) C.sheets.on('description', (id, info) => { const r = pendingInfo.get(id); if (r) { pendingInfo.delete(id); r(info); } });
+  // Ask a sheet frame to describe itself (for the log when it can't be read).
+  function describeSheet(id) {
+    return new Promise((resolve) => {
+      pendingInfo.set(id, resolve);
+      try { C.sheets.describe(id); } catch { /* frame gone */ }
+      setTimeout(() => { if (pendingInfo.get(id) === resolve) { pendingInfo.delete(id); resolve(null); } }, 4000);
+    });
+  }
   if (C.sheets) C.sheets.on('snapshot', (id, snap) => { const r = pendingSnaps.get(id); if (r) { pendingSnaps.delete(id); r(snap); } });
   // Returns { snap } or { reason } saying which step failed.
   async function readSheet(ch) {
@@ -219,8 +229,11 @@
     // An already-open sheet won't send a new reading by itself: ask for one.
     for (let t = 0; t < 12 && pendingSnaps.has(id); t++) { try { C.sheets.refresh(id); } catch { /* not ready yet */ } await wait(2000); }
     const snap = await got;
+    let info = null;
+    if (!snap) info = await describeSheet(id);
     C.sheets.closeOwned(id);
-    return snap ? { snap } : { reason: 'its sheet loaded, but the exporter couldn\'t read it' };
+    if (snap) return { snap: { ...snap, name: snap.name || ch.name } };
+    return { reason: 'its sheet loaded, but the exporter couldn\'t read it. Sheet details: ' + (info ? JSON.stringify(info) : 'no answer') };
   }
 
   async function run(opts, say, set) {
