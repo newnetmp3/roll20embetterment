@@ -273,9 +273,10 @@ export function convertSnapshot(ch, snap) {
     const key = Object.keys(SKILLS).find((k) => SKILLS[k] === String(c.name || '').toLowerCase().replace(/\s+/g, '_'));
     if (!key) continue;
     const prof = String(c.prof || '').toLowerCase();
-    if (/expert/.test(prof)) skills[key] = { value: 2 };
-    else if (/half/.test(prof)) skills[key] = { value: 0.5 };
-    else if (/prof/.test(prof)) skills[key] = { value: 1 };
+    // Each skill keeps its ability; a bare { value } would lose it.
+    if (/expert/.test(prof)) skills[key] = { value: 2, ability: skillAbility(key) };
+    else if (/half/.test(prof)) skills[key] = { value: 0.5, ability: skillAbility(key) };
+    else if (/prof/.test(prof)) skills[key] = { value: 1, ability: skillAbility(key) };
   }
   const speeds = { ...(st.speeds || {}) };
   if (!speeds.walk && st.speed) speeds.walk = st.speed;
@@ -291,6 +292,16 @@ export function convertSnapshot(ch, snap) {
   if (isNpc && st.cr) system.details.cr = parseCR(st.cr);
   const items = [];
   const lookups = [];
+  // Classes: the 2024 sheet shows one hit-die row per class, "D10 (Fighter)",
+  // with as many dice as levels in that class.
+  const hdRows = snap.hitDice || [];
+  hdRows.forEach((h, i) => {
+    const m = /d\s*(\d+)\s*\(([^)]+)\)/i.exec(h.label || h.name || '');
+    if (!m) return;
+    const cls = clean(m[2]);
+    const levels = num((st.hitDice || [])[i] && st.hitDice[i].max) || (hdRows.length === 1 ? num(st.level) : null) || 1;
+    lookups.push({ name: cls, kind: 'class', patch: { system: { levels } }, fallback: legacyItem('class', cls, { levels, hd: { denomination: 'd' + m[1] } }) });
+  });
   const seen = new Set();
   const once = (name) => { const k = clean(name).toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; };
   for (const it of snap.items || []) {
@@ -331,7 +342,8 @@ export function convertSnapshot(ch, snap) {
     items.push(legacyItem('feat', f.name, system));
   }
   const bio = (ch.bio || '') + (ch.gmnotes ? '<section class="secret"><h3>GM notes (Roll20)</h3>' + ch.gmnotes + '</section>' : '');
-  system.details.biography = { value: (st.level ? '<p><em>Level ' + esc(st.level) + ' (2024 sheet: add the class from the compendium)</em></p>' : '') + bio };
+  const hasClass = lookups.some((l) => l.kind === 'class');
+  system.details.biography = { value: (st.level && !hasClass ? '<p><em>Level ' + esc(st.level) + ' (2024 sheet: add the class from the compendium)</em></p>' : '') + bio };
   return { actor: { name: clean(ch.name) || 'Unnamed', type: isNpc ? 'npc' : 'character', system }, items, lookups, isNpc, empty: false, sheetKind: '2024' };
 }
 
@@ -356,10 +368,10 @@ function convertClassic(ch, sheet) {
     if (isNpc) {
       const b = num(sheet.get('npc_' + full));
       const base = mods[Object.keys(ABILITIES).find((a) => a === skillAbility(k))] ?? 0;
-      if (b !== null && sheet.get('npc_' + full) !== '' && b > base) skills[k] = { value: b - base >= 2 * profFromCR(parseCR(sheet.get('npc_challenge'))) ? 2 : 1 };
+      if (b !== null && sheet.get('npc_' + full) !== '' && b > base) skills[k] = { value: b - base >= 2 * profFromCR(parseCR(sheet.get('npc_challenge'))) ? 2 : 1, ability: skillAbility(k) };
     } else {
       const p = sheet.get(full + '_prof');
-      if (p && p !== '0') skills[k] = { value: /\*\s*2|expertise/i.test(p) || sheet.get(full + '_type') === '2' ? 2 : 1 };
+      if (p && p !== '0') skills[k] = { value: /\*\s*2|expertise/i.test(p) || sheet.get(full + '_type') === '2' ? 2 : 1, ability: skillAbility(k) };
     }
   }
   const hpMax = num(sheet.max('hp')) ?? num(sheet.first('hp_max', 'npc_hp')) ?? num(sheet.get('hp'));

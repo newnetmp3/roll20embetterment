@@ -192,7 +192,8 @@ test('r20prep.py: unpacks, fixes image types, indexes ids, installs the module',
 
 test('2024-sheet characters: the exporter\'s sheet reading becomes a dnd5e actor', () => {
   const snap = {
-    type: 'pc', name: 'Nier', stats: { hp: 30, maxHp: 44, ac: 17, speed: 30, level: 5 },
+    type: 'pc', name: 'Nier', stats: { hp: 30, maxHp: 44, ac: 17, speed: 30, level: 5, hitDice: [{ cur: 3, max: 5 }] },
+    hitDice: [{ ref: 'hitdie:0:x', name: 'Roll a d10 hit die', label: 'D10 (Fighter)' }],
     abilities: [{ name: 'STR', score: 16, mod: '+3', save: '+6' }, { name: 'DEX', score: 14, mod: '+2', save: '+2' }],
     checks: [{ name: 'Stealth', bonus: '+5', prof: 'proficient' }, { name: 'Athletics', bonus: '+9', prof: 'expertise' }],
     attacks: [{ name: 'Dagger', hit: '+5 Attack', dmg: [{ text: '1d4+3', type: 'Piercing' }], range: '20/60' }, { name: 'Longsword', hit: '+6 Attack', dmg: [{ text: '1d8+3', type: 'Slashing' }] }],
@@ -206,6 +207,7 @@ test('2024-sheet characters: the exporter\'s sheet reading becomes a dnd5e actor
   const sys = c.actor.system;
   assert.deepEqual([sys.abilities.str.value, sys.abilities.str.proficient, sys.abilities.dex.proficient], [16, 1, undefined]);
   assert.deepEqual([sys.skills.ste.value, sys.skills.ath.value], [1, 2]);
+  assert.deepEqual([sys.skills.ste.ability, sys.skills.ath.ability], ['dex', 'str'], 'skills keep their ability');
   assert.deepEqual([sys.attributes.hp.value, sys.attributes.hp.max, sys.attributes.ac.flat], [30, 44, 17]);
   const names = c.items.map((i) => i.name);
   assert.deepEqual(names, ['Dagger', 'Second Wind', 'Weapon Mastery'], 'Longsword comes from the inventory; Second Wind once');
@@ -213,7 +215,9 @@ test('2024-sheet characters: the exporter\'s sheet reading becomes a dnd5e actor
   assert.deepEqual(c.items[0].system.damage.parts, [['1d4+3', 'piercing']]);
   assert.equal(c.items[1].system.activation.type, 'bonus');
   assert.equal(c.items[1].system.uses.spent, 1);
-  assert.deepEqual(c.lookups.map((l) => l.kind + ':' + l.name), ['gear:Longsword', 'spell:Shield']);
+  assert.deepEqual(c.lookups.map((l) => l.kind + ':' + l.name), ['class:Fighter', 'gear:Longsword', 'spell:Shield']);
+  assert.equal(c.lookups[0].patch.system.levels, 5);
+  assert.equal(c.lookups[0].fallback.system.hd.denomination, 'd10');
 });
 
 test('r20prep.py: a multi-part Roll20embetterment export (shared assets/)', () => {
