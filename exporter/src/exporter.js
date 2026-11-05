@@ -199,15 +199,28 @@
 
   const pendingSnaps = new Map();
   if (C.sheets) C.sheets.on('snapshot', (id, snap) => { const r = pendingSnaps.get(id); if (r) { pendingSnaps.delete(id); r(snap); } });
-  async function readSheet(id) {
-    const got = new Promise((resolve) => { pendingSnaps.set(id, resolve); setTimeout(() => { if (pendingSnaps.get(id) === resolve) { pendingSnaps.delete(id); resolve(null); } }, 25000); });
+  // Returns { snap } or { reason } saying which step failed.
+  async function readSheet(ch) {
+    const id = ch.id;
+    if (ch.archived) return { reason: 'archived in Roll20 (unarchive it to have its sheet read)' };
+    const inJournal = !!document.querySelector('#journalfolderroot li.journalitem[data-itemid="' + CSS.escape(id) + '"]');
+    const wasOpen = C.sheets.isOpen(id);
+    if (!inJournal && !wasOpen) return { reason: 'not in the Journal, so its sheet can\'t be opened' };
+    const got = new Promise((resolve) => { pendingSnaps.set(id, resolve); setTimeout(() => { if (pendingSnaps.get(id) === resolve) { pendingSnaps.delete(id); resolve(null); } }, 30000); });
     const opened = await C.sheets.open(id, { hidden: true });
-    if (!opened) { pendingSnaps.delete(id); return null; }
+    if (!opened) {
+      pendingSnaps.delete(id);
+      const open = C.sheets.isOpen(id);
+      C.sheets.closeOwned(id);
+      return { reason: !open ? 'its sheet window didn\'t open from the Journal'
+        : wasOpen ? 'its sheet was already open in a way the exporter can\'t read: close that sheet window and export again'
+          : 'its sheet window opened, but the sheet inside never finished loading' };
+    }
     // An already-open sheet won't send a new reading by itself: ask for one.
     for (let t = 0; t < 12 && pendingSnaps.has(id); t++) { try { C.sheets.refresh(id); } catch { /* not ready yet */ } await wait(2000); }
     const snap = await got;
     C.sheets.closeOwned(id);
-    return snap;
+    return snap ? { snap } : { reason: 'its sheet loaded, but the exporter couldn\'t read it' };
   }
 
   async function run(opts, say, set) {
@@ -226,12 +239,12 @@
         if (cancelled) throw new Error('Stopped.');
         set('Reading 2024 sheets: ' + ch.name, i, todo.length);
         try {
-          const snap = await readSheet(ch.id);
-          if (snap) { ch.r20e_snapshot = snap; got++; } else say('  could not read ' + ch.name);
+          const r = await readSheet(ch);
+          if (r.snap) { ch.r20e_snapshot = r.snap; got++; } else say('  could not read ' + ch.name + ': ' + r.reason);
         } catch (e) { say('  could not read ' + ch.name + ': ' + ((e && e.message) || e)); }
-        await wait(300);
+        await wait(1000); // let Roll20 finish closing the window before the next
       }
-      say(`  read ${got} of ${todo.length}.`);
+      say(`  read ${got} of ${todo.length}. The rest still export their saved data (name, art, bio, attributes).`);
     }
 
     let parts = 0;
