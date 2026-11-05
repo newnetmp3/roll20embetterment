@@ -242,6 +242,55 @@
     return { reason: 'its sheet loaded, but the exporter couldn\'t read it. Sheet details: ' + (info ? JSON.stringify(info) : 'no answer') };
   }
 
+  // Ask the page for one character's attributes and abilities.
+  let reqN = 0;
+  function sheetData(id) {
+    return new Promise((resolve) => {
+      const req = ++reqN;
+      const on = (e) => { const d = JSON.parse(e.detail); if (d.req !== req) return; document.removeEventListener('r20x-sheetdata', on); resolve(d); };
+      document.addEventListener('r20x-sheetdata', on);
+      document.dispatchEvent(new CustomEvent('r20x-sheetdata', { detail: JSON.stringify({ id, req }) }));
+      setTimeout(() => { document.removeEventListener('r20x-sheetdata', on); resolve({ attributes: [], abilities: [] }); }, 5000);
+    });
+  }
+  // Roll20 loads a character's attributes only when its sheet opens: open
+  // each sheet that came back empty (hidden), wait for them, close it.
+  async function loadBlankSheets(camp, say, set) {
+    const blank = camp.characters.filter((ch) => !(ch.attributes || []).length);
+    if (!blank.length) return;
+    say(`Opening ${blank.length} sheets Roll20 hasn't loaded yet (a few seconds each)…`);
+    const empty = [];
+    const skipped = [];
+    for (const [i, ch] of blank.entries()) {
+      if (cancelled) throw new Error('Stopped.');
+      set('Loading sheet: ' + ch.name, i, blank.length);
+      const inJournal = !!document.querySelector('#journalfolderroot li.journalitem[data-itemid="' + CSS.escape(ch.id) + '"]');
+      if (ch.archived || !inJournal) { skipped.push(ch.name + (ch.archived ? ' (archived)' : ' (not in the Journal)')); continue; }
+      const wasOpen = C.sheets.isOpen(ch.id);
+      // Don't wait for the whole sheet to draw: only for its attributes.
+      C.sheets.open(ch.id, { hidden: true }).catch(() => {});
+      let d = { attributes: [], abilities: [] };
+      let last = -1;
+      // Wait until the attributes stop arriving (or 15 s with none).
+      for (let t = 0; t < 30; t++) {
+        d = await sheetData(ch.id);
+        const n = d.attributes.length;
+        if (n && n === last) break;
+        last = n;
+        await wait(500);
+      }
+      if (!wasOpen) {
+        // The window may still be appearing: close it once it has.
+        for (let t = 0; t < 10 && !C.sheets.closeOwned(ch.id); t++) await wait(300);
+      }
+      if (d.attributes.length) { ch.attributes = d.attributes; ch.abilities = d.abilities.length ? d.abilities : ch.abilities; } else empty.push(ch.name);
+      await wait(300);
+    }
+    say(`  loaded ${blank.length - empty.length - skipped.length} of ${blank.length}.`);
+    if (empty.length) say(`  empty sheets in Roll20 (nothing to export): ${empty.join(', ')}.`);
+    if (skipped.length) say(`  not opened: ${skipped.join(', ')}. Unarchive them or put them in the Journal to include their sheets.`);
+  }
+
   async function run(opts, say, set) {
     const isGM = !!document.getElementById('layers-label') || !!(G.wrappedJSObject && G.wrappedJSObject.is_gm);
     if (!isGM) say('Note: you are not the GM here, so GM-only things (GM layer, GM notes, hidden handouts) will be missing.');
@@ -252,6 +301,7 @@
     const blank = camp.characters.filter((ch) => !(ch.attributes || []).length);
     say(`  sheet data for ${camp.characters.length - blank.length} of ${camp.characters.length} characters` + (blank.length ? ` (no sheet data saved in Roll20 for: ${blank.slice(0, 12).map((ch) => ch.name).join(', ')}${blank.length > 12 ? ', …' : ''})` : '') + '.');
 
+    if (opts.sheets && C.sheets) await loadBlankSheets(camp, say, set);
     if (opts.sheets && C.sheets) {
       const todo = camp.characters.filter((ch) => !isClassic(ch) && (ch.attributes || []).length >= 5);
       say(`Reading ${todo.length} characters on the 2024 sheet…`);

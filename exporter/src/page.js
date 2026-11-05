@@ -162,6 +162,18 @@
     for (let i = 0; i < n; i++) send('chunk', { i, n, s: text.slice(i * size, (i + 1) * size) });
   }
 
+  // One character's attributes and abilities as Roll20 holds them right now
+  // (after its sheet has been opened, which is when Roll20 loads them).
+  document.addEventListener('r20x-sheetdata', (e) => {
+    let req = null;
+    try {
+      const d = JSON.parse(e.detail);
+      req = d.req;
+      const c = window.Campaign && window.Campaign.characters.get(d.id);
+      send('sheetdata', { req, attributes: c ? list(c.attribs) : [], abilities: c ? list(c.abilities) : [] });
+    } catch (err) { send('sheetdata', { req, attributes: [], abilities: [], error: String(err && err.message || err) }); }
+  });
+
   document.addEventListener('r20x-collect', () => {
     collect().catch((e) => send('error', { message: String((e && e.message) || e) }));
   });
