@@ -126,7 +126,7 @@ test('Roll20 page -> scene: map image, token, hidden prop, wall, drawing, text',
   assert.deepEqual([tok.x, tok.y, tok.width, tok.height, tok.actorId], [70, 70, 2, 2, 'A1']);
   assert.equal(tok.delta.system.attributes.hp.value, 40);
   const map = scene.tiles.find((t) => t.flags.r20import.layer === 'map');
-  assert.deepEqual([map.x, map.y, map.width, map.height, map.hidden], [0, 0, 700, 560, false]);
+  assert.deepEqual([map.x, map.y, map.width, map.height, map.hidden], [350, 280, 700, 560, false], 'tiles are placed by their centre in v14');
   assert.equal(scene.tiles.find((t) => t.flags.r20import.layer === 'gmlayer').hidden, true);
   assert.deepEqual(scene.walls[0].c, [250, 100, 450, 100]);
   const rect = scene.drawings.find((d) => d.shape.type === 'p');

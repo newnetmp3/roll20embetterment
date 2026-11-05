@@ -628,6 +628,10 @@ export function convertPage(page, ctx) {
       stats.tokens++;
     } else {
       const b = box(g);
+      // Foundry v14 positions tiles by their centre (tokens stay top-left),
+      // which is also how Roll20 stores every graphic.
+      b.x += Math.round(b.width / 2);
+      b.y += Math.round(b.height / 2);
       scene.tiles.push({
         texture: { src, ...(g.fliph ? { scaleX: -1 } : {}), ...(g.flipv ? { scaleY: -1 } : {}) },
         ...b, rotation: Number(g.rotation) || 0, hidden: layer === 'gmlayer',
