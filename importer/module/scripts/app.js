@@ -188,7 +188,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
   }
   const subtreeHas = (e, type) => (e.i || []).some((x) => (typeof x === 'string' ? kindOf.get(x) === type : subtreeHas(x, type)));
   const rootFolder = {};
-  for (const type of ['Actor', 'JournalEntry', 'Scene', 'RollTable', 'Macro', 'Playlist']) {
+  for (const type of ['Actor', 'JournalEntry', 'Scene', 'RollTable', 'Macro', 'Playlist', 'Item']) {
     let id = null;
     rootFolder[type] = async () => (id ||= await folder(type, title, null, 0));
   }
@@ -203,7 +203,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
   const docCache = new Map();
   if (opt.compendium && opt.actors) {
     say('Indexing dnd5e compendiums…');
-    const kinds = { spell: ['spell'], gear: ['weapon', 'equipment', 'consumable', 'tool', 'loot', 'container'], class: ['class'], race: ['race'], background: ['background'] };
+    const kinds = { spell: ['spell'], gear: ['weapon', 'equipment', 'consumable', 'tool', 'loot', 'container'], class: ['class'], subclass: ['subclass'], race: ['race'], background: ['background'] };
     const packs = game.packs.filter((p) => p.documentName === 'Item');
     const rank = (p) => (p.collection.startsWith('dnd5e.') ? (/24$/.test(p.collection) ? 0 : 2) : 1);
     packs.sort((a, b) => rank(a) - rank(b));
@@ -237,6 +237,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
 
   // ---- actors ----------------------------------------------------------------------
   const actorByR20 = new Map();
+  const library = new Map(); // custom species / subclass / background -> shared Items
   const existingActors = found('Actor');
   if (opt.actors) {
     const chars = campaign.characters || [];
@@ -256,9 +257,20 @@ async function runImport(name, index, opt, userMap, say, progress) {
         const conv = convertCharacter({ ...ch, bio: localHTML(ch.bio), gmnotes: localHTML(ch.gmnotes) });
         if (conv.sheetKind === 'other') other++;
         const items = [...conv.items];
+        const before = items.length;
         for (const l of conv.lookups) {
           const it = await lookup(l);
           if (it) { items.push(it); if (it._stats?.compendiumSource) matched++; }
+        }
+        // Custom species, subclasses and backgrounds (not in any compendium)
+        // also go to a shared Items folder, species with their traits.
+        for (const it of items.slice(before)) {
+          if (it._stats?.compendiumSource || !['race', 'subclass', 'background'].includes(it.type)) continue;
+          const key = it.type + '|' + it.name.toLowerCase();
+          if (library.has(key)) continue;
+          const traitNames = new Set((it.flags?.r20import?.traits || []).map((n) => n.toLowerCase()));
+          const extras = it.type === 'race' ? conv.items.filter((x) => x.type === 'feat' && traitNames.has(x.name.toLowerCase())) : [];
+          library.set(key, { item: it, extras, from: conv.actor.name });
         }
         const dt = ch.defaulttoken && typeof ch.defaulttoken === 'object' ? ch.defaulttoken : {};
         const avatar = (dir && local(dir + '/avatar.png')) || assetFor(ch.avatar) || '';
@@ -283,6 +295,24 @@ async function runImport(name, index, opt, userMap, say, progress) {
       progress(5 + (35 * (i + 1)) / chars.length);
     }
     await flush();
+    if (library.size) {
+      say(`Saving ${library.size} custom species, subclasses and backgrounds to the Items sidebar…`);
+      const root = await rootFolder.Item();
+      const groups = { race: 'Species', subclass: 'Subclasses', background: 'Backgrounds' };
+      const existingItems = new Set(game.items.filter((i) => i.getFlag(MOD, 'libraryKey')).map((i) => i.getFlag(MOD, 'libraryKey')));
+      const sub = {};
+      for (const [key, { item, extras, from }] of library) {
+        if (existingItems.has(key)) continue;
+        sub[item.type] ||= await folder('Item', groups[item.type], root, 1);
+        let target = sub[item.type];
+        if (extras.length) target = await folder('Item', item.name, sub[item.type], 2);
+        const strip = (d) => { const c = foundry.utils.deepClone(d); delete c._id; return c; };
+        await Item.createDocuments([
+          { ...strip(item), folder: target, flags: { ...(item.flags || {}), [MOD]: { ...(item.flags?.[MOD] || {}), libraryKey: key, from } } },
+          ...extras.map((x) => ({ ...strip(x), folder: target })),
+        ]);
+      }
+    }
     say(`  ${actorByR20.size} actors ready; ${matched} spells/items/classes taken from compendiums.`);
     if (other) say(`  ${other} sheets weren't the Classic 5e sheet (likely the 2024 sheet): only name, art, bio and basics came across for those.`);
   } else for (const [k, v] of existingActors) actorByR20.set(k, v);

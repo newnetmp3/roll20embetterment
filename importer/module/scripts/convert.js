@@ -350,15 +350,61 @@ export function convertSnapshot(ch, snap) {
   };
   const rulesList = (n) => /^(bonus )?(actions|reactions|bonus actions) in combat$/i.test(clean(n));
   const ACT = (t) => (/bonus/i.test(t) ? 'bonus' : /reaction/i.test(t) ? 'reaction' : /legendary/i.test(t) ? 'legendary' : /action/i.test(t) ? 'action' : '');
+  // Same-named entries ("Landborn Magic" at levels 1, 3 and 5) become one
+  // feature with all their text.
+  const merged = new Map();
   for (const f of [...(snap.actions || []), ...(snap.features || [])]) {
     if (rulesList(f.name) || weaponsMade.has(weaponBase(f.name)) || (snap.actions || []).includes(f) && itemAction(f.name)) continue;
-    if (!once(f.name)) continue;
-    const r = (f.res || [])[0];
-    const system = { description: { value: para(f.desc) }, type: { value: isNpc ? 'monster' : /species|race/i.test(f.section || '') ? 'race' : /feat/i.test(f.section || '') ? 'feat' : 'class' } };
+    const k = clean(f.name).toLowerCase();
+    if (!k || seen.has(k)) continue;
+    const m = merged.get(k);
+    if (m) { if (f.desc && !m.descs.includes(f.desc)) m.descs.push(f.desc); if (!m.res.length && (f.res || []).length) m.res = f.res; if (!m.timing && f.timing) m.timing = f.timing; continue; }
+    merged.set(k, { ...f, descs: f.desc ? [f.desc] : [], res: f.res || [] });
+  }
+  const feats = [...merged.values()];
+  // Where each feature comes from, as the 2024 sheet labels it:
+  // Species Traits / "Elves of R'Ley", Class Features / "Echo Knight", Other / "Far Traveler".
+  const isSpecies = (f) => /species|race|racial|ancestry|lineage/i.test(f.section || '');
+  const classNames = new Set(lookups.filter((l) => l.kind === 'class').map((l) => l.name.toLowerCase()));
+  const mostCommon = (list) => { const c = new Map(); for (const x of list) if (x) c.set(x, (c.get(x) || 0) + 1); return [...c].sort((a, b) => b[1] - a[1])[0]?.[0] || ''; };
+  const speciesName = isNpc ? '' : mostCommon(feats.filter(isSpecies).map((f) => clean(f.source)).filter((x) => !/^(species|race)$/i.test(x)));
+  const subclassNames = [...new Set(feats.filter((f) => /class/i.test(f.section || '') && f.source && !classNames.has(clean(f.source).toLowerCase())).map((f) => clean(f.source)))];
+  const known = new Set([...classNames, ...subclassNames.map((x) => x.toLowerCase()), speciesName.toLowerCase()]);
+  const backgroundName = isNpc ? '' : mostCommon(feats.filter((f) => !isSpecies(f) && !/class|\bfeats?\b/i.test(f.section || '') && f.source && !known.has(clean(f.source).toLowerCase())).map((f) => clean(f.source)));
+  const html = (f) => f.descs.map(para).join('');
+  const listHTML = (list) => list.map((f) => '<h4>' + esc(f.name) + '</h4>' + html(f)).join('');
+  for (const f of feats) {
+    const r = f.res[0];
+    const src = clean(f.source);
+    const kind = isNpc ? 'monster' : isSpecies(f) ? 'race' : /\bfeats?\b/i.test(f.section || '') ? 'feat'
+      : backgroundName && src === backgroundName ? 'background' : /class/i.test(f.section || '') ? 'class' : '';
+    const system = { description: { value: html(f) }, type: { value: kind }, requirements: src && !/^(species|race)$/i.test(src) ? src : '' };
     const act = ACT(f.timing || f.section || '');
     if (act) system.activation = { type: act, cost: 1 };
     if (r && r.max) system.uses = { max: String(r.max), spent: Math.max(0, r.max - (r.cur ?? r.max)) };
-    items.push(legacyItem('feat', f.name, system));
+    items.push(legacyItem('feat', f.name, system, { flags: { r20import: { source: src, section: f.section || '' } } }));
+  }
+  // The species itself: dnd5e's when the name matches, else a custom species
+  // item carrying its traits' text (the traits are on the actor as features).
+  const speciesTraits = feats.filter(isSpecies);
+  if (speciesName) {
+    lookups.push({ name: speciesName, kind: 'race', fallback: legacyItem('race', speciesName, {
+      description: { value: '<p><em>Custom species from Roll20.</em></p>' + listHTML(speciesTraits) },
+      type: { value: 'humanoid' }, movement: { speeds: { walk: speeds.walk || 30 }, units: 'ft' },
+    }, { flags: { r20import: { customSpecies: true, traits: speciesTraits.map((f) => f.name) } } }) });
+  }
+  for (const sc of subclassNames) {
+    const cls = feats.find((f) => clean(f.source) === sc);
+    const parent = lookups.find((l) => l.kind === 'class');
+    lookups.push({ name: sc, kind: 'subclass', fallback: legacyItem('subclass', sc, {
+      classIdentifier: parent ? parent.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '',
+      description: { value: '<p><em>Subclass from Roll20.</em></p>' + listHTML(feats.filter((f) => clean(f.source) === sc)) },
+    }, { flags: { r20import: { custom: true, section: cls && cls.section } } }) });
+  }
+  if (backgroundName) {
+    lookups.push({ name: backgroundName, kind: 'background', fallback: legacyItem('background', backgroundName, {
+      description: { value: '<p><em>Background from Roll20.</em></p>' + listHTML(feats.filter((f) => clean(f.source) === backgroundName)) },
+    }, { flags: { r20import: { custom: true } } }) });
   }
   const bio = (ch.bio || '') + (ch.gmnotes ? '<section class="secret"><h3>GM notes (Roll20)</h3>' + ch.gmnotes + '</section>' : '');
   const hasClass = lookups.some((l) => l.kind === 'class');
@@ -443,7 +489,10 @@ function convertClassic(ch, sheet) {
       if (mc) lookups.push({ name: mc, kind: 'class', patch: { system: { levels: lv } }, fallback: legacyItem('class', mc, { levels: lv, hd: { denomination: 'd8' } }) });
     }
     const race = clean(sheet.first('subrace', 'race'));
-    if (race) lookups.push({ name: race, kind: 'race' });
+    // The race: dnd5e's when the name matches, else a custom species built from
+    // the sheet's "Racial" traits (added after the traits are read, below).
+    const raceLookup = race ? { name: race, kind: 'race' } : null;
+    if (raceLookup) lookups.push(raceLookup);
     const bg = clean(sheet.get('background'));
     if (bg) lookups.push({ name: bg, kind: 'background' });
     system.details.alignment = clean(sheet.get('alignment'));
@@ -487,9 +536,18 @@ function convertClassic(ch, sheet) {
       if (save && save.ability) system.save = save;
       items.push(legacyItem('feat', name, system));
     }
+    const racial = [];
     for (const r of sheet.rows('traits')) {
       if (!clean(r.name)) continue;
-      items.push(legacyItem('feat', r.name, { description: { value: para(r.description) }, type: { value: /class/i.test(r.source || '') ? 'class' : /racial|race|species/i.test(r.source || '') ? 'race' : /feat/i.test(r.source || '') ? 'feat' : '' }, source: { custom: clean(r.source_type) } }));
+      const isRace = /racial|race|species/i.test(r.source || '');
+      if (isRace) racial.push(r);
+      items.push(legacyItem('feat', r.name, { description: { value: para(r.description) }, type: { value: /class/i.test(r.source || '') ? 'class' : isRace ? 'race' : /feat/i.test(r.source || '') ? 'feat' : '' }, requirements: clean(r.source_type), source: { custom: clean(r.source_type) } }));
+    }
+    if (raceLookup) {
+      raceLookup.fallback = legacyItem('race', race, {
+        description: { value: '<p><em>Custom species from Roll20.</em></p>' + racial.map((r) => '<h4>' + esc(clean(r.name)) + '</h4>' + para(r.description)).join('') },
+        type: { value: 'humanoid' }, movement: { speeds: { walk: speeds.walk || 30 }, units: 'ft' },
+      }, { flags: { r20import: { customSpecies: true, traits: racial.map((r) => clean(r.name)) } } });
     }
     // Class / other resources become features with uses.
     const res = [['class_resource', 'class_resource_name'], ['other_resource', 'other_resource_name']].map(([v, n]) => ({ name: sheet.get(n), cur: num(sheet.get(v)), max: num(sheet.max(v)) }));

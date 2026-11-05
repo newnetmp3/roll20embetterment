@@ -59,6 +59,7 @@ imported are skipped.
 | Pages | Scenes: map images as tiles, tokens (linked to their actors), GM-layer items hidden, dynamic-lighting walls, drawings, text, grid and scale, vision and fog settings |
 | Characters (Classic 5e OGL sheet) | dnd5e actors: abilities, HP, AC, speeds, senses, CR, type, saves and skills, NPC actions as working attacks (to-hit, damage, saves, recharge, uses), traits, inventory, spells, class, currency, spell slots, bio and GM notes (as a secret section), art and token settings, lights and vision |
 | Spells, items, classes, species, backgrounds | Taken from the dnd5e compendiums (2024 first) when the name matches, else built from the sheet |
+| Custom species (homebrew races), subclasses, backgrounds | Built from the sheet's traits (2024 sheet: by their source label; Classic: "Racial" traits), put on the character and saved once to the Items sidebar (*Campaign › Species / Subclasses / Backgrounds*, each species with its traits) for reuse |
 | Handouts | Journal entries: image, notes, GM notes (GM-only page) |
 | Journal folders | Actor and Journal folders |
 | `controlledby` / `inplayerjournals` | Ownership for the mapped users |

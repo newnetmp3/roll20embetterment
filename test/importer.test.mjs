@@ -242,3 +242,35 @@ test('r20prep.py: a multi-part Roll20embetterment export (shared assets/)', () =
   assert.equal(index.tracks['-T1'], 'assets/00003.mp3');
   assert.ok(existsSync(join(data, 'r20import', 'two-parts', 'assets', '00003.mp3')));
 });
+
+test('custom species, subclass and background from the 2024 sheet', () => {
+  const F = (section, source, name, desc) => ({ section, source, name, desc, timing: '' });
+  const snap = {
+    type: 'pc', name: 'Nier', stats: { hp: 84, maxHp: 84, ac: 17, speed: 55, level: 5, hitDice: [{ cur: 5, max: 5 }] },
+    hitDice: [{ ref: 'hitdie:0:x', label: 'D10 (Fighter)' }],
+    features: [
+      F('Class Features', 'Fighter', 'Second Wind', 'Heal.'),
+      F('Class Features', 'Echo Knight', 'Manifest Echo', 'An echo.'),
+      F('Species Traits', 'Elves of R’Ley', 'Keen Senses', 'Perception.'),
+      F('Species Traits', 'Elves of R’Ley', 'Landborn Magic', 'Druidcraft.'),
+      F('Species Traits', 'Elves of R’Ley', 'Landborn Magic', 'Detect Magic at 3rd level.'),
+      F('Species Traits', 'Species', 'Size', '5 by 5 ft'),
+      F('Feats', 'Fighter', 'Mobile', 'Fast.'),
+      F('Other', 'Far Traveler', 'All Eyes on You', 'Accent.'),
+    ],
+  };
+  const c = cv.convertCharacter({ id: '-C', name: 'Nier', attributes: [{ name: 'x', current: 1 }], r20e_snapshot: snap });
+  const look = Object.fromEntries(c.lookups.map((l) => [l.kind, l]));
+  assert.equal(look.race.name, 'Elves of R’Ley');
+  assert.equal(look.race.fallback.type, 'race');
+  assert.match(look.race.fallback.system.description.value, /Keen Senses[\s\S]*Druidcraft[\s\S]*Detect Magic/);
+  assert.deepEqual(look.race.fallback.flags.r20import.traits, ['Keen Senses', 'Landborn Magic', 'Size']);
+  assert.equal(look.subclass.name, 'Echo Knight');
+  assert.equal(look.subclass.fallback.system.classIdentifier, 'fighter');
+  assert.equal(look.background.name, 'Far Traveler');
+  const feat = (n) => c.items.find((i) => i.name === n);
+  assert.equal(c.items.filter((i) => i.name === 'Landborn Magic').length, 1, 'repeated traits merge');
+  assert.match(feat('Landborn Magic').system.description.value, /Druidcraft[\s\S]*Detect Magic/);
+  assert.deepEqual(['Keen Senses', 'Mobile', 'All Eyes on You', 'Second Wind'].map((n) => feat(n).system.type.value), ['race', 'feat', 'background', 'class']);
+  assert.equal(feat('Manifest Echo').system.requirements, 'Echo Knight');
+});
