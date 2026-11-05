@@ -107,9 +107,12 @@ export function auditCharacter(ch, resolved, actor, conv = convertCharacter(ch))
     }
   }
 
-  // 2024-sheet text that an older exporter cut at 600 characters.
+  // 2024-sheet text that an older exporter cut at exactly 600 characters
+  // (newer exports keep the whole text, so longer is fine).
   const snap = conv.sheetKind === '2024' ? ch.r20e_snapshot : null;
-  const cut = snap ? [...(snap.features || []), ...(snap.actions || [])].filter((f) => String(f.desc || '').length >= 600).map((f) => f.name) : [];
+  const all = snap ? [...(snap.features || []), ...(snap.actions || [])] : [];
+  const full = all.some((f) => String(f.desc || '').length > 600);
+  const cut = full ? [] : all.filter((f) => String(f.desc || '').length === 600).map((f) => f.name);
   if (cut.length) add({ kind: 'cut', name: [...new Set(cut)].join(', '), detail: 'descriptions cut off at 600 characters in this export' });
 
   // Things only Foundry has (added after the import, or renamed).
