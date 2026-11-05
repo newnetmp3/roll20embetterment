@@ -161,10 +161,13 @@ async function linkSpeciesTraits(say) {
     if (list.some((a) => a.type === 'ItemGrant')) continue;
     const traits = game.items.filter((i) => i.type === 'feat' && i.folder && race.folder && i.folder.id === race.folder.id);
     if (!traits.length) continue;
-    await race.createAdvancement('ItemGrant', {
-      title: 'Species Traits', level: 0,
+    // Written straight to the item: dnd5e's createAdvancement opens its editor.
+    const source = foundry.utils.deepClone(race.toObject().system.advancement || []);
+    source.push({
+      _id: foundry.utils.randomID(), type: 'ItemGrant', title: 'Species Traits', level: 0,
       configuration: { items: traits.map((t) => ({ uuid: t.uuid, optional: false })) },
-    }, { showConfig: false });
+    });
+    await race.update({ 'system.advancement': source });
     n++;
   }
   if (n) say(`  Linked traits to ${n} custom species (drop one on a character to add its traits).`);
