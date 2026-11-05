@@ -196,10 +196,12 @@ test('2024-sheet characters: the exporter\'s sheet reading becomes a dnd5e actor
     hitDice: [{ ref: 'hitdie:0:x', name: 'Roll a d10 hit die', label: 'D10 (Fighter)' }],
     abilities: [{ name: 'STR', score: 16, mod: '+3', save: '+6' }, { name: 'DEX', score: 14, mod: '+2', save: '+2' }],
     checks: [{ name: 'Stealth', bonus: '+5', prof: 'proficient' }, { name: 'Athletics', bonus: '+9', prof: 'expertise' }],
-    attacks: [{ name: 'Dagger', hit: '+5 Attack', dmg: [{ text: '1d4+3', type: 'Piercing' }], range: '20/60' }, { name: 'Longsword', hit: '+6 Attack', dmg: [{ text: '1d8+3', type: 'Slashing' }] }],
-    actions: [{ name: 'Second Wind', section: 'Bonus Actions', desc: 'Heal.', res: [{ i: 0, name: 'Second Wind', cur: 1, max: 2 }] }],
+    attacks: [{ name: 'Dagger', hit: '+5 Attack', dmg: [{ text: '1d4+3', type: 'Piercing' }], range: '20/60' }, { name: 'Dagger (Off-Hand)', hit: '+5 Attack', dmg: [{ text: '1d4', type: 'Piercing' }] },
+      { name: 'Throw Handaxe', hit: '+6 Attack', dmg: [{ text: '1d6+4', type: 'Slashing' }], range: '20/60' }, { name: 'Longsword', hit: '+6 Attack', dmg: [{ text: '1d8+3', type: 'Slashing' }] }],
+    actions: [{ name: 'Second Wind', section: 'Bonus Actions', desc: 'Heal.', res: [{ i: 0, name: 'Second Wind', cur: 1, max: 2 }] },
+      { name: 'Actions in Combat', section: 'Actions' }, { name: 'Use Healer\'s Kit', section: 'Actions', res: [{ i: 0, cur: 9, max: 10 }] }],
     features: [{ name: 'Second Wind', section: 'Class Features', desc: 'dup' }, { name: 'Weapon Mastery', section: 'Class Features', desc: 'Masteries.' }],
-    items: [{ name: 'Longsword', qty: 1, equipped: true }],
+    items: [{ name: 'Longsword', qty: 1, equipped: true }, { name: 'Healer\'s Kit', qty: 1 }],
     spells: [{ name: 'Shield', level: '1ST', tags: [], prepared: true }],
   };
   const c = cv.convertCharacter({ id: '-C', name: 'Nier', attributes: [{ name: 'beacon', current: 1 }], r20e_snapshot: snap });
@@ -210,12 +212,14 @@ test('2024-sheet characters: the exporter\'s sheet reading becomes a dnd5e actor
   assert.deepEqual([sys.skills.ste.ability, sys.skills.ath.ability], ['dex', 'str'], 'skills keep their ability');
   assert.deepEqual([sys.attributes.hp.value, sys.attributes.hp.max, sys.attributes.ac.flat], [30, 44, 17]);
   const names = c.items.map((i) => i.name);
-  assert.deepEqual(names, ['Dagger', 'Second Wind', 'Weapon Mastery'], 'Longsword comes from the inventory; Second Wind once');
+  assert.deepEqual(names, ['Dagger', 'Handaxe', 'Second Wind', 'Weapon Mastery'], 'one weapon per base; Longsword from the inventory; no rules lists or item actions; Second Wind once');
+  assert.deepEqual(c.items.slice(0, 2).map((i) => i.type), ['weapon', 'weapon']);
+  assert.equal(c.items[0].system.equipped, true);
   assert.deepEqual(c.items[0].system.attack, { bonus: '5', flat: true });
-  assert.deepEqual(c.items[0].system.damage.parts, [['1d4+3', 'piercing']]);
-  assert.equal(c.items[1].system.activation.type, 'bonus');
-  assert.equal(c.items[1].system.uses.spent, 1);
-  assert.deepEqual(c.lookups.map((l) => l.kind + ':' + l.name), ['class:Fighter', 'gear:Longsword', 'spell:Shield']);
+  assert.deepEqual(c.items[0].system.damage.parts, [['1d4', 'piercing']], 'dnd5e adds the modifier to weapon damage');
+  assert.equal(c.items[2].system.activation.type, 'bonus');
+  assert.equal(c.items[2].system.uses.spent, 1);
+  assert.deepEqual(c.lookups.map((l) => l.kind + ':' + l.name), ['class:Fighter', 'gear:Longsword', 'gear:Healer\'s Kit', 'spell:Shield']);
   assert.equal(c.lookups[0].patch.system.levels, 5);
   assert.equal(c.lookups[0].fallback.system.hd.denomination, 'd10');
 });

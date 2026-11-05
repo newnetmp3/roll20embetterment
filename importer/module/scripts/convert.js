@@ -319,9 +319,14 @@ export function convertSnapshot(ch, snap) {
       fallback: legacyItem('spell', sp.name, { level, range: rangeOf(sp.range), properties: props, preparation: { mode: 'prepared', prepared: sp.prepared !== false }, description: { value: '' } }) });
   }
   const gearNames = new Set((snap.items || []).map((i) => clean(i.name).toLowerCase()));
+  // "Dagger (Off-Hand)", "Throw Handaxe": other ways of using one weapon.
+  // dnd5e weapons carry those modes themselves, so keep one weapon per base.
+  const weaponBase = (n) => clean(String(n || '').replace(/\s*\(.*\)\s*$/, '').replace(/^throw\s+/i, '')).toLowerCase();
+  const weaponsMade = new Set();
   for (const a of snap.attacks || []) {
-    const base = clean(String(a.name || '').replace(/\s*\(.*\)\s*$/, '')).toLowerCase();
-    if (gearNames.has(base) || !once(a.name)) continue;
+    const base = weaponBase(a.name);
+    if (gearNames.has(base) || weaponsMade.has(base) || !once(a.name)) continue;
+    weaponsMade.add(base);
     const parts = (a.dmg || []).map((d) => [resolveFormula(String(d.text || '').replace(/[a-z]+$/i, '')), damageType(d.type || d.text)]).filter((x) => x[0]);
     const system = { description: { value: '' }, type: { value: isNpc ? 'monster' : 'feat' }, activation: { type: 'action', cost: 1 }, damage: { parts }, range: rangeOf(a.range) };
     const bonus = /([+-]\d+)/.exec(a.hit || '');
@@ -329,10 +334,24 @@ export function convertSnapshot(ch, snap) {
     const dc = /DC\s*(\d+)\s*(\w+)?/i.exec(a.hit || '');
     if (dc) { const ab = Object.keys(ABILITIES).find((k) => dc[2] && ABILITIES[k].startsWith(dc[2].toLowerCase().slice(0, 3))); system.actionType = system.actionType || 'save'; system.save = { ability: ab || '', dc: Number(dc[1]), scaling: 'flat' }; }
     if (!system.actionType && parts.length) system.actionType = 'other';
-    items.push(legacyItem('feat', a.name, system));
+    if (isNpc) items.push(legacyItem('feat', a.name, system));
+    else {
+      // A weapon in the inventory, named for the weapon rather than the mode.
+      const named = /^throw\s+/i.test(a.name) || /\(.*\)\s*$/.test(a.name) ? base.replace(/\b\w/g, (c) => c.toUpperCase()) : a.name;
+      // dnd5e adds the ability modifier to weapon damage itself; keep only the dice.
+      const dice = (system.damage.parts || []).map(([f, t], i) => [i === 0 ? String(f).replace(/\s*[+-]\s*\d+\s*$/, '') : f, t]);
+      items.push(legacyItem('weapon', named, { ...system, damage: { parts: dice }, type: { value: /ranged|\//i.test(a.range || '') ? 'simpleR' : 'simpleM' }, quantity: 1, equipped: true }));
+    }
   }
+  // Sheet actions that only use an item you carry, and the sheet's rules lists.
+  const itemAction = (n) => {
+    const m = /^(use|drink|light|apply|read|eat|throw|activate)\s+(?:a |an |the )?(.+)$/i.exec(clean(n));
+    return !!m && [...gearNames].some((g) => g && (g === m[2].toLowerCase() || g.includes(m[2].toLowerCase()) || m[2].toLowerCase().includes(g)));
+  };
+  const rulesList = (n) => /^(bonus )?(actions|reactions|bonus actions) in combat$/i.test(clean(n));
   const ACT = (t) => (/bonus/i.test(t) ? 'bonus' : /reaction/i.test(t) ? 'reaction' : /legendary/i.test(t) ? 'legendary' : /action/i.test(t) ? 'action' : '');
   for (const f of [...(snap.actions || []), ...(snap.features || [])]) {
+    if (rulesList(f.name) || weaponsMade.has(weaponBase(f.name)) || (snap.actions || []).includes(f) && itemAction(f.name)) continue;
     if (!once(f.name)) continue;
     const r = (f.res || [])[0];
     const system = { description: { value: para(f.desc) }, type: { value: isNpc ? 'monster' : /species|race/i.test(f.section || '') ? 'race' : /feat/i.test(f.section || '') ? 'feat' : 'class' } };
