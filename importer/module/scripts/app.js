@@ -6,6 +6,10 @@ const MOD = 'r20import';
 const BASE = 'r20import';
 const OWN = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
 
+Hooks.once('ready', () => {
+  const mod = game.modules.get(MOD);
+  if (mod) mod.api = { linkSpeciesTraits: () => linkSpeciesTraits((m) => { console.log(m); ui.notifications.info(m); }) };
+});
 Hooks.once('init', () => {
   game.settings.registerMenu(MOD, 'open', {
     name: 'Roll20 Campaign Import', label: 'Open importer', icon: 'fa-solid fa-file-import',
@@ -125,6 +129,26 @@ async function findCampaigns() {
     const res = await FP.browse('data', BASE);
     return (res.dirs || []).map((d) => decodeURIComponent(d.split('/').pop())).sort();
   } catch { return []; }
+}
+
+// Custom species in the Items sidebar keep their trait items in the same folder.
+// dnd5e only hands traits to a character through an Item Grant advancement, so
+// add one listing those traits (dropping the species then adds them).
+async function linkSpeciesTraits(say) {
+  let n = 0;
+  for (const race of game.items.filter((i) => i.type === 'race' && i.getFlag(MOD, 'libraryKey'))) {
+    const adv = race.system.advancement;
+    const list = Array.isArray(adv) ? adv : Object.values(adv?.contents ?? adv ?? {});
+    if (list.some((a) => a.type === 'ItemGrant')) continue;
+    const traits = game.items.filter((i) => i.type === 'feat' && i.folder && race.folder && i.folder.id === race.folder.id);
+    if (!traits.length) continue;
+    await race.createAdvancement('ItemGrant', {
+      title: 'Species Traits', level: 0,
+      configuration: { items: traits.map((t) => ({ uuid: t.uuid, optional: false })) },
+    }, { showConfig: false });
+    n++;
+  }
+  if (n) say(`  Linked traits to ${n} custom species (drop one on a character to add its traits).`);
 }
 
 // ---------------------------------------------------------------------------------
@@ -339,6 +363,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
         ]);
       }
     }
+    await linkSpeciesTraits(say);
     say(`  ${actorByR20.size} actors ready; ${matched} spells/items/classes taken from compendiums.`);
     if (other) say(`  ${other} sheets weren't the Classic 5e sheet (likely the 2024 sheet): only name, art, bio and basics came across for those.`);
   } else for (const [k, v] of existingActors) actorByR20.set(k, v);
