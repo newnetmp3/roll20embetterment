@@ -1,5 +1,6 @@
 // Roll20 Campaign Import: the importer window and the steps that create
 // Foundry documents from a campaign unpacked by r20prep.py.
+import { auditCharacter, KIND_LABEL } from './audit.js';
 import { convertCharacter, convertPage, convertHandout, convertTable, relinkHTML, tokenSettings, listOf } from './convert.js';
 
 const MOD = 'r20import';
@@ -8,7 +9,13 @@ const OWN = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
 
 Hooks.once('ready', () => {
   const mod = game.modules.get(MOD);
-  if (mod) mod.api = { linkSpeciesTraits: () => linkSpeciesTraits((m) => { console.log(m); ui.notifications.info(m); }) };
+  const say = (m) => { console.log('[r20import]', m); };
+  if (mod) mod.api = {
+    open: () => new ImportApp().render(true),
+    linkSpeciesTraits: () => linkSpeciesTraits((m) => { say(m); ui.notifications.info(m); }),
+    // Compare player characters with Roll20; { fix: true } also applies the fixes.
+    audit: (opts = {}) => runAudit(opts, say),
+  };
 });
 Hooks.once('init', () => {
   game.settings.registerMenu(MOD, 'open', {
@@ -16,7 +23,6 @@ Hooks.once('init', () => {
     hint: 'Import a Roll20 campaign that r20prep.py unpacked into Data/r20import.',
     type: ImportApp, restricted: true,
   });
-  game.modules.get(MOD).api = { open: () => new ImportApp().render(true) };
 });
 
 // Path of an unpacked file as Foundry stores it (relative to Data, URL-encoded).
@@ -100,7 +106,20 @@ class ImportApp extends foundry.applications.api.ApplicationV2 {
         console.error(e); say('Stopped: ' + (e && e.message || e)); ui.notifications.error('Roll20 import stopped: ' + (e && e.message || e));
       } finally { this.running = false; go.disabled = false; }
     });
-    root.append(go, bar, log);
+    const check = h('button', 'Check characters against Roll20'); check.type = 'button';
+    const fixAll = h('button', 'Fix characters to match Roll20'); fixAll.type = 'button';
+    const audit = async (fix) => {
+      if (this.running) return;
+      if (fix && !(await foundry.applications.api.DialogV2.confirm({ window: { title: 'Fix characters' }, content: '<p>Add what is missing, use the Roll20 text where the DM changed it, and set ability scores, HP, AC, speeds and proficiencies to the Roll20 values, on every imported player character?</p><p>Things only in Foundry are left alone.</p>' }))) return;
+      this.running = true; go.disabled = check.disabled = fixAll.disabled = true;
+      const say = (t) => { log.textContent += t + '\n'; log.scrollTop = log.scrollHeight; console.log('[r20import]', t); };
+      try { await runAudit({ fix, campaign: this.chosen }, say); }
+      catch (e) { console.error(e); say('Stopped: ' + (e && e.message || e)); }
+      finally { this.running = false; go.disabled = check.disabled = fixAll.disabled = false; }
+    };
+    check.addEventListener('click', () => audit(false));
+    fixAll.addEventListener('click', () => audit(true));
+    root.append(go, bar, row(check, fixAll), log);
     return root;
   }
 
@@ -149,6 +168,118 @@ async function linkSpeciesTraits(say) {
     n++;
   }
   if (n) say(`  Linked traits to ${n} custom species (drop one on a character to add its traits).`);
+}
+
+// ---- audit: imported player characters vs their Roll20 data ---------------------
+async function runAudit({ fix = false, campaign: name } = {}, say) {
+  const pcs = game.actors.filter((a) => a.type === 'character' && a.getFlag(MOD, 'id'));
+  if (!pcs.length) { say('No imported player characters found.'); return; }
+  // The unpacked campaign these actors came from.
+  const names = name ? [name, ...(await findCampaigns()).filter((c) => c !== name)] : await findCampaigns();
+  let index = null;
+  for (const n of names) {
+    const idx = await fetchJSON(BASE + '/' + enc(n) + '/index.json').catch(() => null);
+    if (idx && pcs.some((a) => idx.characters?.[a.getFlag(MOD, 'id')] !== undefined)) { index = idx; name = n; break; }
+    if (idx && !index) { index = idx; name = n; }
+  }
+  if (!index) { say('No unpacked campaign found in Data/r20import.'); return; }
+  say(`Reading ${name}/campaign.json…`);
+  const campaign = await fetchJSON(BASE + '/' + enc(name) + '/campaign.json');
+  const byId = new Map((campaign.characters || []).map((c) => [c.id, c]));
+  const lookup = await compendiumLookup(true, say);
+  const results = [];
+  let fixed = 0;
+  for (const actor of pcs) {
+    const ch = byId.get(actor.getFlag(MOD, 'id'));
+    if (!ch) continue;
+    try {
+      const conv = convertCharacter(ch);
+      if (conv.isNpc || conv.empty) continue;
+      const resolved = [];
+      for (const l of conv.lookups) resolved.push(await lookup(l));
+      const items = actor.items.map((i) => ({ id: i.id, name: i.name, type: i.type, desc: i.system.description?.value || '', levels: i.system.levels }));
+      const { sheet, findings } = auditCharacter(ch, resolved, { system: actor.toObject().system, items }, conv);
+      results.push({ actor, sheet, findings, attribs: (ch.attributes || ch.attribs || []).length });
+      say(`${actor.name}: ${findings.filter((f) => f.fix).length} to fix, ${findings.filter((f) => !f.fix).length} notes.`);
+      if (fix) fixed += await applyFixes(actor, findings, say);
+    } catch (e) { console.error(e); say(`  ! ${actor.name}: ${e.message || e}`); }
+  }
+  // Report as a journal entry.
+  const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const order = ['missing', 'changed', 'text', 'stat', 'custom', 'cut', 'extra'];
+  let html = `<p>${results.length} player characters compared with <strong>${esc(name)}</strong> on ${new Date().toLocaleString()}.${fix ? ` ${fixed} fixes applied.` : ' Nothing was changed: use “Fix characters to match Roll20” to apply.'}</p>`;
+  const cutAny = results.some((r) => r.findings.some((f) => f.kind === 'cut'));
+  if (cutAny) html += '<p><strong>Some 2024-sheet descriptions were cut at 600 characters in this export.</strong> Export again with Roll20embetterment Campaign Exporter 1.0.5 or later for the full text, run r20prep.py, then run this check with fixes.</p>';
+  for (const r of results) {
+    html += `<h2>${esc(r.actor.name)}</h2><p><em>${r.sheet === '2024' ? '2024 sheet' : r.sheet === 'classic' ? 'Classic 5e sheet' : 'Sheet not read'}${r.sheet === '2024' ? `; Roll20 kept ${r.attribs} attributes for it` : ''}</em></p>`;
+    if (!r.findings.length) { html += '<p>Matches Roll20.</p>'; continue; }
+    for (const kind of order) {
+      const list = r.findings.filter((f) => f.kind === kind);
+      if (!list.length) continue;
+      html += `<h3>${KIND_LABEL[kind]} (${list.length})</h3><ul>` + list.map((f) => `<li><strong>${esc(f.name)}</strong>: ${esc(f.detail)}${f.r20 ? `<br><small>Roll20: ${esc(f.r20)}…</small>` : ''}</li>`).join('') + '</ul>';
+    }
+  }
+  const title = 'Roll20 character check' + (fix ? ' (fixed)' : '');
+  const entry = await JournalEntry.create({ name: title + ' ' + new Date().toISOString().slice(0, 16).replace('T', ' '), pages: [{ name: 'Report', type: 'text', text: { content: html } }] });
+  say(`Report saved to the Journal: “${entry.name}”.`);
+  entry.sheet.render(true);
+}
+
+async function applyFixes(actor, findings, say) {
+  const strip = (d) => { const c = foundry.utils.deepClone(d); delete c._id; return c; };
+  const add = findings.filter((f) => f.fix?.op === 'add').map((f) => strip(f.fix.data));
+  const itemUpdates = [];
+  for (const f of findings) {
+    if (f.fix?.op === 'desc') itemUpdates.push({ _id: f.fix.id, 'system.description.value': f.fix.html });
+    if (f.fix?.op === 'item') itemUpdates.push({ _id: f.fix.id, ...f.fix.update });
+  }
+  const sets = Object.fromEntries(findings.filter((f) => f.fix?.op === 'set').map((f) => [f.fix.path, f.fix.value]));
+  if (add.length) await actor.createEmbeddedDocuments('Item', add);
+  if (itemUpdates.length) await actor.updateEmbeddedDocuments('Item', itemUpdates);
+  if (Object.keys(sets).length) await actor.update(sets);
+  const n = add.length + itemUpdates.length + Object.keys(sets).length;
+  if (n) say(`  fixed ${n} on ${actor.name}`);
+  return n;
+}
+
+// Finds dnd5e compendium items by kind and name; anything not found uses the
+// lookup's Roll20 version.
+async function compendiumLookup(enabled, say) {
+  const packIndex = new Map(); // "kind|name" -> uuid
+  const docCache = new Map();
+  if (enabled) {
+    say('Indexing dnd5e compendiums…');
+    const kinds = { spell: ['spell'], gear: ['weapon', 'equipment', 'consumable', 'tool', 'loot', 'container'], class: ['class'], subclass: ['subclass'], race: ['race'], background: ['background'] };
+    const packs = game.packs.filter((p) => p.documentName === 'Item');
+    const rank = (p) => (p.collection.startsWith('dnd5e.') ? (/24$/.test(p.collection) ? 0 : 2) : 1);
+    packs.sort((a, b) => rank(a) - rank(b));
+    for (const p of packs) {
+      const idx = await p.getIndex({ fields: ['type'] });
+      for (const e of idx) {
+        for (const [kind, types] of Object.entries(kinds)) {
+          if (!types.includes(e.type)) continue;
+          const key = kind + '|' + normName(e.name);
+          if (!packIndex.has(key)) packIndex.set(key, e.uuid);
+        }
+      }
+    }
+    say(`  ${packIndex.size} compendium entries.`);
+  }
+  return async function lookup(l) {
+    const uuid = packIndex.get(l.kind + '|' + normName(l.name));
+    if (uuid) {
+      if (!docCache.has(uuid)) docCache.set(uuid, (await fromUuid(uuid))?.toObject() || null);
+      const base = docCache.get(uuid);
+      if (base) {
+        const data = foundry.utils.deepClone(base);
+        delete data._id;
+        foundry.utils.mergeObject(data, l.patch || {});
+        foundry.utils.setProperty(data, '_stats.compendiumSource', uuid);
+        return data;
+      }
+    }
+    return l.fallback || null;
+  };
 }
 
 // ---------------------------------------------------------------------------------
@@ -231,41 +362,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
   progress(5);
 
   // ---- compendium index ---------------------------------------------------------
-  const packIndex = new Map(); // "kind|name" -> uuid
-  const docCache = new Map();
-  if (opt.compendium && opt.actors) {
-    say('Indexing dnd5e compendiums…');
-    const kinds = { spell: ['spell'], gear: ['weapon', 'equipment', 'consumable', 'tool', 'loot', 'container'], class: ['class'], subclass: ['subclass'], race: ['race'], background: ['background'] };
-    const packs = game.packs.filter((p) => p.documentName === 'Item');
-    const rank = (p) => (p.collection.startsWith('dnd5e.') ? (/24$/.test(p.collection) ? 0 : 2) : 1);
-    packs.sort((a, b) => rank(a) - rank(b));
-    for (const p of packs) {
-      const idx = await p.getIndex({ fields: ['type'] });
-      for (const e of idx) {
-        for (const [kind, types] of Object.entries(kinds)) {
-          if (!types.includes(e.type)) continue;
-          const key = kind + '|' + normName(e.name);
-          if (!packIndex.has(key)) packIndex.set(key, e.uuid);
-        }
-      }
-    }
-    say(`  ${packIndex.size} compendium entries.`);
-  }
-  async function lookup(l) {
-    const uuid = packIndex.get(l.kind + '|' + normName(l.name));
-    if (uuid) {
-      if (!docCache.has(uuid)) docCache.set(uuid, (await fromUuid(uuid))?.toObject() || null);
-      const base = docCache.get(uuid);
-      if (base) {
-        const data = foundry.utils.deepClone(base);
-        delete data._id;
-        foundry.utils.mergeObject(data, l.patch || {});
-        foundry.utils.setProperty(data, '_stats.compendiumSource', uuid);
-        return data;
-      }
-    }
-    return l.fallback || null;
-  }
+  const lookup = await compendiumLookup(opt.compendium && opt.actors, say);
 
   // ---- actors ----------------------------------------------------------------------
   const actorByR20 = new Map();

@@ -274,3 +274,37 @@ test('custom species, subclass and background from the 2024 sheet', () => {
   assert.deepEqual(['Keen Senses', 'Mobile', 'All Eyes on You', 'Second Wind'].map((n) => feat(n).system.type.value), ['race', 'feat', 'background', 'class']);
   assert.equal(feat('Manifest Echo').system.requirements, 'Echo Knight');
 });
+
+test('character check: missing items, DM-changed spells, numbers, cut text', async () => {
+  const { auditCharacter, textDiffers } = await import('../importer/module/scripts/audit.js');
+  const ch = structuredClone(pc);
+  const R = '-Mabcdefghijklmnopq1';
+  ch.attributes.push(A(`repeating_spell-1_${R}_spelldescription`, 'An invisible barrier of magical force appears. You gain +7 to AC until the start of your next turn and resist fire damage.'));
+  const conv = cv.convertCharacter(ch);
+  const compendium = (l) => ({ name: l.name, type: { gear: 'weapon', spell: 'spell' }[l.kind] || l.kind, _stats: { compendiumSource: 'Compendium.dnd5e.x.' + l.name }, system: { levels: l.patch?.system?.levels, description: { value: l.kind === 'spell' ? '<p>An invisible barrier of magical force appears and protects you. Until the start of your next turn, you have a +5 bonus to AC.</p>' : '' } } });
+  const resolved = conv.lookups.map(compendium);
+  const items = [
+    { id: 'i1', name: 'Fighter', type: 'class', desc: '', levels: 4 },
+    { id: 'i2', name: 'Shield', type: 'spell', desc: resolved.find((r) => r.type === 'spell').system.description.value },
+    { id: 'i3', name: 'Javelin', type: 'weapon', desc: '' },
+    { id: 'i4', name: 'Homemade Hat', type: 'equipment', desc: '' },
+  ];
+  const system = structuredClone(conv.actor.system);
+  system.abilities.str.value = 15;
+  const { findings } = auditCharacter(ch, resolved, { system, items }, conv);
+  const by = (k) => findings.filter((f) => f.kind === k).map((f) => f.name);
+  assert.ok(by('missing').includes('Action Surge'));
+  assert.ok(by('missing').includes('Longsword'));
+  assert.deepEqual(by('changed'), ['Shield']);
+  assert.match(findings.find((f) => f.kind === 'changed').fix.html, /\+7 to AC[\s\S]*compendium text/);
+  assert.ok(by('stat').includes('Fighter'), 'class level');
+  assert.ok(by('stat').includes('STR'));
+  assert.equal(findings.find((f) => f.name === 'STR').fix.value, 16);
+  assert.deepEqual(by('extra'), ['Homemade Hat']);
+  assert.equal(textDiffers('Same words here in the description of a spell.', '<p>Same words here in the description of a spell.</p>'), false);
+
+  const snap = { type: 'pc', name: 'N', stats: { hp: 10, maxHp: 10, ac: 12 }, features: [{ section: 'Other', source: '', name: 'Long One', desc: 'x'.repeat(600) }] };
+  const c2 = cv.convertCharacter({ id: '-C', name: 'N', attributes: [{ name: 'x', current: 1 }], r20e_snapshot: snap });
+  const f2 = auditCharacter({ r20e_snapshot: snap }, [], { system: c2.actor.system, items: [{ id: 'a', name: 'Long One', type: 'feat', desc: c2.items[0].system.description.value }] }, c2).findings;
+  assert.deepEqual(f2.map((f) => f.kind), ['cut']);
+});

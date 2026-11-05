@@ -146,7 +146,15 @@
     text: text(b, 40),
     type: clean(attr(b.querySelector('.poly-icon--damage-icon'), 'aria-label'), 30),
   }));
-  const desc = (row, sel) => text(row.querySelector(sel), 600);
+  // The action bar only needs a preview; the campaign exporter sets
+  // R20C_DESC_MAX to keep whole descriptions, with their line breaks.
+  const DESC_MAX = G.R20C_DESC_MAX || 0;
+  const desc = (row, sel) => {
+    const el = row.querySelector(sel);
+    if (!el || !DESC_MAX) return text(el, 600);
+    const raw = el.innerText || spaced(el);
+    return String(raw).split('\n').map((l) => l.replace(/[ \t]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, DESC_MAX);
+  };
 
   // Walk, fly, swim... speeds, from classes like "speed__fly" / "speed-edit__swim".
   function speedModes(sc) {
@@ -260,7 +268,7 @@
       for (const r of rows(sc, 'npcfeature')) {
         snap.features.push({
           ref: r.ref, name: r.name, section: 'Features & Traits', source: '',
-          timing: '', desc: clean(attr(r.el.querySelector('.npc-feature__combined-name-desc'), 'value'), 600), res: [],
+          timing: '', desc: clean(attr(r.el.querySelector('.npc-feature__combined-name-desc'), 'value'), DESC_MAX || 600), res: [],
         });
       }
     });
