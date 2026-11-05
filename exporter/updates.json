@@ -3,9 +3,9 @@
     "roll20-campaign-exporter@newnetmp3.github.io": {
       "updates": [
         {
-          "version": "1.0.3",
-          "update_link": "https://github.com/newnetmp3/roll20embetterment/releases/download/roll20-campaign-exporter-v1.0.3/roll20-campaign-exporter-1.0.3.xpi",
-          "update_hash": "sha256:17cba0e1a5d6b71c9c584cb0d8aa4bee6cb9af2e1051191a66519444489f3e2d"
+          "version": "1.0.4",
+          "update_link": "https://github.com/newnetmp3/roll20embetterment/releases/download/roll20-campaign-exporter-v1.0.4/roll20-campaign-exporter-1.0.4.xpi",
+          "update_hash": "sha256:9b2a83c12cd7e4154015c7e3633738af96381b3a86f5a746f6c342a1c4870723"
         }
       ]
     }
