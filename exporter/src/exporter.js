@@ -86,7 +86,8 @@
   }
   // Roll20 image URLs end in original/max/med/thumb: try the most useful sizes.
   function variants(url, big) {
-    const u = url.replace(/^http:/, 'https:');
+    // Roll20's old S3 addresses now answer 403; the same files live on files.d20.io.
+    const u = url.replace(/^http:/, 'https:').replace(/^https:\/\/s3\.amazonaws\.com\/files\.d20\.io\//, 'https://files.d20.io/');
     const m = /\/(original|max|med|thumb)\.([a-z0-9]+)(\?.*)?$/i.exec(u);
     if (!m) return [u];
     const order = big ? ['original', 'max', 'med', 'thumb'] : ['max', 'original', 'med', 'thumb'];

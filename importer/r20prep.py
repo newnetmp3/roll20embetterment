@@ -86,6 +86,8 @@ SIZES = ["original", "max", "med", "thumb"]
 def url_variants(url, big):
     """Roll20 image URLs end in original/max/med/thumb; try the useful sizes."""
     url = re.sub(r"^http:", "https:", url.strip())
+    # Roll20's old S3 addresses now answer 403; the same files live on files.d20.io.
+    url = re.sub(r"^https://s3\.amazonaws\.com/files\.d20\.io/", "https://files.d20.io/", url)
     m = re.search(r"/(original|max|med|thumb)\.([a-z0-9]+)(\?.*)?$", url, re.I)
     if not m:
         return [url]
