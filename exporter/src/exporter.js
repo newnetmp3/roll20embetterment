@@ -59,7 +59,11 @@
       this.reset();
     }
   }
-  function save(blob, name) {
+  // Firefox saves through the add-on: no dialogs, into Downloads/Roll20 export/.
+  // If that's refused, fall back to a normal page download.
+  async function save(blob, name) {
+    const r = await browser.runtime.sendMessage({ type: 'r20x-save', blob, name }).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
+    if (r && r.ok) return r.path || name;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name;
@@ -67,6 +71,7 @@
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 120000);
+    return name + ' (save dialog: ' + ((r && r.error) || 'download refused') + ')';
   }
 
   // ---- file types ------------------------------------------------------------------
@@ -262,7 +267,19 @@
     }
 
     let parts = 0;
-    const zip = new ZipParts(title, (blob, name) => { parts++; say('Saving ' + name + ' (' + Math.round(blob.size / 1048576) + ' MB)'); save(blob, name); });
+    // Each export gets its own date and time, so two exports never mix.
+    const d = new Date();
+    const pad = (x) => String(x).padStart(2, '0');
+    const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}`;
+    const base = title + ' ' + stamp;
+    const saving = [];
+    const zip = new ZipParts(base, (blob, name) => {
+      parts++;
+      say('Saving ' + name + ' (' + Math.round(blob.size / 1048576) + ' MB)…');
+      // One at a time: wait for the previous part before handing over the next.
+      const prev = saving[saving.length - 1] || Promise.resolve();
+      saving.push(prev.then(() => save(blob, name)).then((where) => say('  saved ' + where)));
+    });
     camp.r20e.assets = {};
     camp.r20e.tracks = {};
     camp.r20e.failed = [];
@@ -314,8 +331,10 @@
     set('Writing campaign.json', 1, 1);
     zip.add('campaign.json', new TextEncoder().encode(JSON.stringify(camp)));
     zip.flush();
+    set('Saving zip files', 1, 1);
+    await Promise.all(saving);
     set(`Done: ${parts} zip file${parts === 1 ? '' : 's'}.`, 1, 1);
-    say('Done. On the Foundry server run:\n  sudo python3 r20prep.py "' + title + ' - Foundry export part 1.zip"\n(it finds the other parts next to it).');
+    say(`Done: ${parts} file${parts === 1 ? '' : 's'} named "${base} - Foundry export part N.zip", in Downloads/Roll20 export.\nCopy all ${parts === 1 ? 'of it' : parts + ' together'} to the Foundry server and run:\n  sudo python3 r20prep.py "${base} - Foundry export part 1.zip"\n(it finds the other parts next to it).`);
   }
 
   C.exporter = { open };

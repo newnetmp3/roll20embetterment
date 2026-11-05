@@ -13,6 +13,29 @@ browser.action.onClicked.addListener(async (tab) => {
   }
 });
 
+// Zip parts go straight into Downloads/Roll20 export/, one after another,
+// with no save dialogs.
+browser.runtime.onMessage.addListener((msg) => {
+  if (!msg || msg.type !== 'r20x-save' || !(msg.blob instanceof Blob)) return undefined;
+  return (async () => {
+    const url = URL.createObjectURL(msg.blob);
+    try {
+      const id = await browser.downloads.download({ url, filename: 'Roll20 export/' + msg.name, saveAs: false, conflictAction: 'uniquify' });
+      await new Promise((resolve) => {
+        const finish = () => { browser.downloads.onChanged.removeListener(done); resolve(); };
+        const done = (d) => { if (d.id === id && d.state && d.state.current !== 'in_progress') finish(); };
+        browser.downloads.onChanged.addListener(done);
+        // It may already have finished before the listener was added.
+        browser.downloads.search({ id }).then(([it]) => { if (it && it.state !== 'in_progress') finish(); });
+      });
+      const [item] = await browser.downloads.search({ id });
+      return { ok: item && item.state === 'complete', path: item && item.filename, error: item && item.error };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    } finally { setTimeout(() => URL.revokeObjectURL(url), 60000); }
+  })();
+});
+
 browser.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.type !== 'r20x-fetch' || typeof msg.url !== 'string') return undefined;
   return (async () => {

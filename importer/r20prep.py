@@ -197,7 +197,8 @@ def find_parts(given):
     out = []
     for g in given:
         out.append(os.path.abspath(g))
-        m = re.match(r"^(.*part )\d+(\.zip)$", os.path.basename(g), re.I)
+        # Firefox may add "(1)" to a repeated name: "... part 2(1).zip".
+        m = re.match(r"^(.*part )\d+((?:\s*\(\d+\))?\.zip)$", os.path.basename(g), re.I)
         if m:
             d = os.path.dirname(os.path.abspath(g))
             for f in sorted(os.listdir(d)):

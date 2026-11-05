@@ -19,8 +19,11 @@ export const exporterManifest = {
   icons: { 48: 'icons/icon.svg', 96: 'icons/icon.svg' },
   action: { default_title: 'Export this Roll20 campaign for Foundry', default_icon: 'icons/icon.svg' },
   background: { scripts: ['exporter/src/background.js'] },
-  // Download images and audio from Roll20 and its file storage.
-  host_permissions: ['https://app.roll20.net/*', 'https://*.roll20.net/*', 'https://s3.amazonaws.com/*', 'https://files.d20.io/*'],
+  // Save the zip parts straight into the Downloads folder (no save dialogs).
+  permissions: ['downloads'],
+  // Download images and audio from Roll20 and its file storage (uploaded
+  // audio is handed out from Amazon storage or its CDN).
+  host_permissions: ['https://app.roll20.net/*', 'https://*.roll20.net/*', 'https://s3.amazonaws.com/*', 'https://*.amazonaws.com/*', 'https://*.cloudfront.net/*', 'https://files.d20.io/*'],
   content_scripts: [
     { matches: ['https://app.roll20.net/editor*'], js: ['exporter/src/page.js'], run_at: 'document_start', world: 'MAIN' },
     { matches: ['https://app.roll20.net/editor*'], js: [TAG, 'src/shared/wire.js', 'src/editor/classic.js', 'src/editor/sheets.js', 'exporter/src/exporter.js'], run_at: 'document_idle' },
