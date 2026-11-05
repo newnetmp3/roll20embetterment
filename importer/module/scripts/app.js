@@ -44,7 +44,7 @@ class ImportApp extends foundry.applications.api.ApplicationV2 {
     if (!this.campaigns) this.campaigns = await findCampaigns();
     if (!this.chosen && this.campaigns.length) await this.choose(this.campaigns[0]);
     const root = document.createElement('div');
-    root.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:8px;';
+    root.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 80px);overflow-y:auto;';
     const h = (tag, text, css) => { const e = document.createElement(tag); if (text) e.textContent = text; if (css) e.style.cssText = css; return e; };
     if (!game.user.isGM) { root.append(h('p', 'Only a GM can import.')); return root; }
     if (!this.campaigns.length) {
@@ -119,7 +119,9 @@ class ImportApp extends foundry.applications.api.ApplicationV2 {
     };
     check.addEventListener('click', () => audit(false));
     fixAll.addEventListener('click', () => audit(true));
-    root.append(go, bar, row(check, fixAll), log);
+    const buttons = h('div', '', 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;');
+    buttons.append(go, check, fixAll);
+    root.append(buttons, bar, log);
     return root;
   }
 
