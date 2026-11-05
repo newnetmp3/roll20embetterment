@@ -138,6 +138,14 @@ async function runImport(name, index, opt, userMap, say, progress) {
   const assets = index.assets || {};
   const assetFor = (url) => { const r = url && assets[url]; return r ? enc(root + '/' + (files[r] || r)) : ''; };
   // Images inside handout and bio HTML: point them at the saved copies.
+  // Foundry only accepts some file types: actor/journal pictures must be images,
+  // token art may also be video. Anything else is dropped rather than failing.
+  const extOK = (path, video) => {
+    const ext = String(path || '').split(/[?#]/)[0].split('.').pop().toLowerCase();
+    return ext in CONST.IMAGE_FILE_EXTENSIONS || (video && ext in CONST.VIDEO_FILE_EXTENSIONS);
+  };
+  const pic = (...paths) => paths.find((p) => p && extOK(p)) || '';
+  const tex = (...paths) => paths.find((p) => p && extOK(p, true)) || '';
   const localHTML = (html) => String(html || '').replace(/(<img[^>]+src\s*=\s*["'])([^"']+)(["'])/gi, (m, a, url, b) => { const l = assetFor(url.replace(/&amp;/g, '&')); return l ? a + l + b : m; });
   const title = index.title || campaign.campaign_title || name;
   const found = (type) => new Map(game.collections.get(type).filter((d) => d.getFlag(MOD, 'id')).map((d) => [d.getFlag(MOD, 'id'), d]));
@@ -245,7 +253,24 @@ async function runImport(name, index, opt, userMap, say, progress) {
     const batch = [];
     const flush = async () => {
       if (!batch.length) return;
-      const made = await Actor.createDocuments(batch.splice(0), { keepEmbeddedIds: true });
+      const docs = batch.splice(0);
+      let made;
+      try { made = await Actor.createDocuments(docs, { keepEmbeddedIds: true }); }
+      catch {
+        // One bad actor fails the whole batch: make them one at a time,
+        // and if one still fails, try once more without its pictures.
+        made = [];
+        for (const d of docs) {
+          try { made.push(...await Actor.createDocuments([d], { keepEmbeddedIds: true })); }
+          catch (e) {
+            try {
+              const bare = { ...d, img: undefined, prototypeToken: { ...d.prototypeToken, texture: { ...d.prototypeToken.texture, src: undefined } } };
+              made.push(...await Actor.createDocuments([bare], { keepEmbeddedIds: true }));
+              say(`  ! ${d.name}: picture skipped (${e.message || e})`);
+            } catch (e2) { say(`  ! ${d.name}: not imported (${e2.message || e2})`); console.error(e2); }
+          }
+        }
+      }
       for (const a of made) actorByR20.set(a.getFlag(MOD, 'id'), a);
     };
     let matched = 0;
@@ -273,8 +298,9 @@ async function runImport(name, index, opt, userMap, say, progress) {
           library.set(key, { item: it, extras, from: conv.actor.name });
         }
         const dt = ch.defaulttoken && typeof ch.defaulttoken === 'object' ? ch.defaulttoken : {};
-        const avatar = (dir && local(dir + '/avatar.png')) || assetFor(ch.avatar) || '';
-        const tokenImg = (dir && local(dir + '/token.png')) || assetFor(dt.imgsrc) || avatar;
+        const avatarAny = (dir && local(dir + '/avatar.png')) || assetFor(ch.avatar) || '';
+        const tokenImg = tex((dir && local(dir + '/token.png')) || assetFor(dt.imgsrc), avatarAny);
+        const avatar = pic(avatarAny, tokenImg);
         const controlled = listOf(ch.controlledby).length > 0;
         const proto = tokenSettings(dt, 70);
         delete proto.rotation;
@@ -327,7 +353,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
     for (const h of hs) {
       if (opt.skipExisting && existingJournal.has(h.id)) { journalByR20.set(h.id, existingJournal.get(h.id)); continue; }
       const dir = index.handouts[h.id];
-      const img = (dir && local(dir + '/avatar.png')) || assetFor(h.avatar) || '';
+      const img = pic((dir && local(dir + '/avatar.png')) || assetFor(h.avatar));
       const j = convertHandout({ ...h, notes: localHTML(h.notes), gmnotes: localHTML(h.gmnotes) }, img);
       batch.push({ ...j, folder: folderOf.get(h.id) || (await rootFolder.JournalEntry()), ownership: ownership(h.inplayerjournals, OWN.OBSERVER), flags: { [MOD]: { id: h.id, archived: !!h.archived } } });
     }
@@ -364,8 +390,8 @@ async function runImport(name, index, opt, userMap, say, progress) {
       try {
         const dir = index.pages[page.id];
         // Local files only: Roll20's own image links can't be loaded from Foundry.
-        const imageFor = (pg, g) => (dir && local(dir + '/graphics/' + g.id + '.png')) || assetFor(g.imgsrc)
-          || (g.represents && index.characters[g.represents] && (local(index.characters[g.represents] + '/token.png') || local(index.characters[g.represents] + '/avatar.png'))) || '';
+        const imageFor = (pg, g) => tex((dir && local(dir + '/graphics/' + g.id + '.png')) || assetFor(g.imgsrc)
+          || (g.represents && index.characters[g.represents] && (local(index.characters[g.represents] + '/token.png') || local(index.characters[g.represents] + '/avatar.png'))));
         const { scene, stats } = convertPage(page, { imageFor, actorFor });
         scene.folder = await rootFolder.Scene();
         scene.navigation = page.id === campaign.playerpageid;
@@ -382,7 +408,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
   if (opt.tables) {
     const tables = campaign.tables || campaign.rollabletables || [];
     const existing = found('RollTable');
-    const data = tables.filter((t) => !(opt.skipExisting && existing.has(t.id))).map((t) => ({ ...convertTable(t, (it) => local('tables/' + t.id + '/' + (t.items || []).indexOf(it) + '.png') || assetFor(it.avatar)), folder: null, flags: { [MOD]: { id: t.id } } }));
+    const data = tables.filter((t) => !(opt.skipExisting && existing.has(t.id))).map((t) => ({ ...convertTable(t, (it) => pic(local('tables/' + t.id + '/' + (t.items || []).indexOf(it) + '.png') || assetFor(it.avatar))), folder: null, flags: { [MOD]: { id: t.id } } }));
     if (data.length) { const f = await rootFolder.RollTable(); data.forEach((d) => (d.folder = f)); await RollTable.createDocuments(data); }
     say(`Roll tables: ${data.length}`);
   }
