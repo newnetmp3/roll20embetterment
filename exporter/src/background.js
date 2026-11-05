@@ -17,7 +17,10 @@ browser.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.type !== 'r20x-fetch' || typeof msg.url !== 'string') return undefined;
   return (async () => {
     try {
-      const r = await fetch(msg.url, { credentials: 'include', redirect: 'follow', cache: 'no-store' });
+      // Only Roll20 itself needs the login (uploaded audio). Image servers
+      // answer anyone, and some refuse requests that carry cookies.
+      const own = /^https:\/\/app\.roll20\.net\//.test(msg.url);
+      const r = await fetch(msg.url, { credentials: own ? 'include' : 'omit', redirect: 'follow', cache: 'no-store' });
       if (!r.ok) return { ok: false, status: r.status };
       const buf = await r.arrayBuffer();
       return { ok: true, buf, type: r.headers.get('content-type') || '' };

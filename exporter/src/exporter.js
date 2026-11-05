@@ -278,12 +278,14 @@
         for (let item = next(); item; item = next()) {
           if (cancelled) return;
           let saved = '';
+          let why = '';
           for (const u of variants(item.url, item.big)) {
             if (busy.has(u)) await busy.get(u);
             if (byVariant.has(u)) { saved = byVariant.get(u); if (saved) break; continue; }
             let release;
             busy.set(u, new Promise((r) => { release = r; }));
-            const r = await fetchBytes(u).catch(() => null);
+            const r = await fetchBytes(u).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
+            if (r && !r.ok) why = r.status ? 'HTTP ' + r.status : r.error || 'failed';
             const bytes = r && r.ok && r.buf ? new Uint8Array(r.buf) : null;
             const ext = bytes && (sniff(bytes) || (item.track ? 'mp3' : null));
             if (ext) {
@@ -296,7 +298,10 @@
             if (saved) break;
           }
           if (saved) { if (item.track) camp.r20e.tracks[item.track] = saved; else camp.r20e.assets[item.url] = saved; }
-          else camp.r20e.failed.push(item.url);
+          else {
+            camp.r20e.failed.push(item.url);
+            if (camp.r20e.failed.length <= 5) say('  could not download ' + item.url.slice(0, 120) + ' (' + (why || 'not an image') + ')');
+          }
           done++;
           set('Downloading files', done, done + want.length);
         }
