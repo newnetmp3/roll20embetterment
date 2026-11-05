@@ -13,27 +13,37 @@ browser.action.onClicked.addListener(async (tab) => {
   }
 });
 
+// Save a URL into Downloads/Roll20 export/ and wait until it's done.
+async function saveDownload(url, filename) {
+  const id = await browser.downloads.download({ url, filename: 'Roll20 export/' + filename, saveAs: false, conflictAction: 'overwrite' });
+  await new Promise((resolve) => {
+    const finish = () => { browser.downloads.onChanged.removeListener(done); resolve(); };
+    const done = (d) => { if (d.id === id && d.state && d.state.current !== 'in_progress') finish(); };
+    browser.downloads.onChanged.addListener(done);
+    // It may already have finished before the listener was added.
+    browser.downloads.search({ id }).then(([it]) => { if (it && it.state !== 'in_progress') finish(); });
+  });
+  const [item] = await browser.downloads.search({ id });
+  return { ok: !!item && item.state === 'complete', path: item && item.filename, finalUrl: item && item.finalUrl, error: item && item.error };
+}
+
 // Zip parts go straight into Downloads/Roll20 export/, one after another,
 // with no save dialogs.
 browser.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.type !== 'r20x-save' || !(msg.blob instanceof Blob)) return undefined;
   return (async () => {
     const url = URL.createObjectURL(msg.blob);
-    try {
-      const id = await browser.downloads.download({ url, filename: 'Roll20 export/' + msg.name, saveAs: false, conflictAction: 'uniquify' });
-      await new Promise((resolve) => {
-        const finish = () => { browser.downloads.onChanged.removeListener(done); resolve(); };
-        const done = (d) => { if (d.id === id && d.state && d.state.current !== 'in_progress') finish(); };
-        browser.downloads.onChanged.addListener(done);
-        // It may already have finished before the listener was added.
-        browser.downloads.search({ id }).then(([it]) => { if (it && it.state !== 'in_progress') finish(); });
-      });
-      const [item] = await browser.downloads.search({ id });
-      return { ok: item && item.state === 'complete', path: item && item.filename, error: item && item.error };
-    } catch (e) {
-      return { ok: false, error: String((e && e.message) || e) };
-    } finally { setTimeout(() => URL.revokeObjectURL(url), 60000); }
+    try { return await saveDownload(url, msg.name); }
+    catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+    finally { setTimeout(() => URL.revokeObjectURL(url), 60000); }
   })();
+});
+
+// Uploaded jukebox audio: Roll20 hands it to a normal browser download (with
+// your login) but refuses the add-on's own request. Save it next to the zips.
+browser.runtime.onMessage.addListener((msg) => {
+  if (!msg || msg.type !== 'r20x-download' || !/^https:\/\/app\.roll20\.net\//.test(String(msg.url))) return undefined;
+  return saveDownload(msg.url, msg.filename).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
 });
 
 browser.runtime.onMessage.addListener((msg) => {

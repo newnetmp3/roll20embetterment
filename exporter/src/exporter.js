@@ -335,6 +335,11 @@
     camp.r20e.assets = {};
     camp.r20e.tracks = {};
     camp.r20e.failed = [];
+    // Audio saved by Firefox itself, in a folder beside the zips.
+    const audioFolder = base + ' - audio';
+    camp.r20e.audioFolder = audioFolder;
+    camp.r20e.audioFiles = {};
+    let audioSaved = 0;
     if (opts.assets) {
       const want = [...assetsOf(camp)].map(([url, big]) => ({ url, big }));
       for (const t of camp.jukebox || []) { const u = trackUrl(t, camp.campaign_id); if (u) want.push({ url: u, track: t.id }); }
@@ -367,6 +372,13 @@
             release();
             if (saved) break;
           }
+          // Uploaded audio the add-on can't fetch: let Firefox download it.
+          if (!saved && item.track && /^https:\/\/app\.roll20\.net\//.test(item.url)) {
+            const file = item.track.replace(/[^A-Za-z0-9_-]+/g, '_') + '.audio';
+            const r = await browser.runtime.sendMessage({ type: 'r20x-download', url: item.url.replace(/#.*$/, ''), filename: audioFolder + '/' + file }).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
+            if (r && r.ok) { camp.r20e.audioFiles[item.track] = file; audioSaved++; done++; set('Downloading files', done, done + want.length); continue; }
+            why = (r && r.error) || why;
+          }
           if (saved) { if (item.track) camp.r20e.tracks[item.track] = saved; else camp.r20e.assets[item.url] = saved; }
           else {
             camp.r20e.failed.push(item.url);
@@ -378,6 +390,7 @@
       };
       await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
       if (cancelled) throw new Error('Stopped.');
+      if (audioSaved) say(`  saved ${audioSaved} uploaded audio tracks to the folder "Roll20 export/${audioFolder}".`);
       say(`  saved ${n} files${camp.r20e.failed.length ? `, ${camp.r20e.failed.length} could not be downloaded (the prep script will retry them)` : ''}.`);
     }
     set('Writing campaign.json', 1, 1);
@@ -386,7 +399,7 @@
     set('Saving zip files', 1, 1);
     await Promise.all(saving);
     set(`Done: ${parts} zip file${parts === 1 ? '' : 's'}.`, 1, 1);
-    say(`Done: ${parts} file${parts === 1 ? '' : 's'} named "${base} - Foundry export part N.zip", in Downloads/Roll20 export.\nCopy all ${parts === 1 ? 'of it' : parts + ' together'} to the Foundry server and run:\n  sudo python3 r20prep.py "${base} - Foundry export part 1.zip"\n(it finds the other parts next to it).`);
+    say(`Done: ${parts} file${parts === 1 ? '' : 's'} named "${base} - Foundry export part N.zip", in Downloads/Roll20 export.\nCopy all ${parts === 1 ? 'of it' : parts + ' together'}${Object.keys(camp.r20e.audioFiles || {}).length ? ` and the folder "${audioFolder}"` : ''} to the same place on the Foundry server and run:\n  sudo python3 r20prep.py "${base} - Foundry export part 1.zip"\n(it finds the other parts next to it).`);
   }
 
   C.exporter = { open };

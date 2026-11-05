@@ -230,8 +230,10 @@ test('r20prep.py: a multi-part Roll20embetterment export (shared assets/)', () =
   const data = join(tmp, 'Data');
   mkdirSync(join(data, 'modules'), { recursive: true });
   const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9]);
-  const camp = { campaign_title: 'Two Parts', pages: [page], characters: [npc], handouts: [], players: [], jukebox: [{ id: '-T1', title: 'x' }], jukeboxfolder: ['-T1'],
-    r20e: { format: 1, assets: { 'https://x/max.png': 'assets/00001.png', 'https://x/o.png': 'assets/00002.jpg' }, tracks: { '-T1': 'assets/00003.mp3' } } };
+  const camp = { campaign_title: 'Two Parts', pages: [page], characters: [npc], handouts: [], players: [], jukebox: [{ id: '-T1', title: 'x' }, { id: '-T2', title: 'Tavern' }], jukeboxfolder: ['-T1', '-T2'],
+    r20e: { format: 1, assets: { 'https://x/max.png': 'assets/00001.png', 'https://x/o.png': 'assets/00002.jpg' }, tracks: { '-T1': 'assets/00003.mp3' }, audioFolder: 'Two Parts - audio', audioFiles: { '-T2': '-T2.audio' } } };
+  mkdirSync(join(tmp, 'Two Parts - audio'));
+  writeFileSync(join(tmp, 'Two Parts - audio', '-T2.audio'), Buffer.from('OggS\0\x02rest'));
   writeFileSync(join(tmp, 'Two Parts - Foundry export part 1.zip'), zip([['assets/00001.png', jpg], ['assets/00002.jpg', jpg]]));
   writeFileSync(join(tmp, 'Two Parts - Foundry export part 2.zip'), zip([['assets/00003.mp3', Buffer.from('ID3x')], ['campaign.json', Buffer.from(JSON.stringify(camp))]]));
   const out = execFileSync('python3', [join(root, 'importer/r20prep.py'), join(tmp, 'Two Parts - Foundry export part 1.zip'), '--data', data, '--user', process.env.USER || 'root', '--skip-module', '--no-download'], { encoding: 'utf8' });
@@ -241,6 +243,8 @@ test('r20prep.py: a multi-part Roll20embetterment export (shared assets/)', () =
   assert.equal(index.assets['https://x/max.png'], 'assets/00001.png');
   assert.equal(index.tracks['-T1'], 'assets/00003.mp3');
   assert.ok(existsSync(join(data, 'r20import', 'two-parts', 'assets', '00003.mp3')));
+  assert.equal(index.tracks['-T2'], 'audio/-T2.ogg', 'uploaded audio from the folder beside the zips');
+  assert.ok(existsSync(join(data, 'r20import', 'two-parts', 'audio', '-T2.ogg')));
 });
 
 test('custom species, subclass and background from the 2024 sheet', () => {

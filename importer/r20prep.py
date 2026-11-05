@@ -400,6 +400,27 @@ def main():
     walk(campaign.get("jukeboxfolder") or [], "jukebox")
     index["tracks"].update(r20e.get("tracks") or {})
 
+    # Uploaded audio Firefox saved beside the zips ("<export> - audio").
+    audio = r20e.get("audioFiles") or {}
+    if audio:
+        folder = os.path.join(os.path.dirname(paths[0]), r20e.get("audioFolder") or "")
+        got = 0
+        for tid, fn in audio.items():
+            src = os.path.join(folder, fn)
+            if not os.path.isfile(src):
+                continue
+            with open(src, "rb") as f:
+                ext = sniff(f.read(64)) or "ogg"
+            rel = f"audio/{os.path.splitext(fn)[0]}.{ext}"
+            os.makedirs(os.path.join(dest, "audio"), exist_ok=True)
+            shutil.copyfile(src, os.path.join(dest, rel))
+            files[rel] = rel
+            index["tracks"][tid] = rel
+            got += 1
+        print(f"Added {got} of {len(audio)} uploaded audio tracks from {folder}")
+        if got < len(audio):
+            print("  Copy that folder next to the zip files to include the rest.")
+
     # ---- images the exporter couldn't download ------------------------------------
     # Roll20 often refused the exporter's browser downloads, so those images are
     # missing from the zip. The browser can't fetch them later either, but the
