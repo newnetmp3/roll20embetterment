@@ -555,6 +555,20 @@ export function storeSpell(x, kit, level, prepared) {
   return legacyItem('spell', x.name, system);
 }
 
+// Point the actor at its species, background and first class: dnd5e only
+// does this when they're dropped on a sheet, not when an actor is created.
+export function linkDetails(system, items) {
+  for (const it of items) if (!it._id) it._id = randomID();
+  const race = items.find((i) => i.type === 'race');
+  const bg = items.find((i) => i.type === 'background');
+  const top = items.filter((i) => i.type === 'class').sort((a, b) => (b.system?.levels || 0) - (a.system?.levels || 0))[0];
+  system.details ||= {};
+  if (race) system.details.race = race._id;
+  if (bg) system.details.background = bg._id;
+  if (top && !system.details.originalClass) system.details.originalClass = top._id;
+  return system;
+}
+
 // ---- characters ---------------------------------------------------------------------
 // Returns { actor, items, spells: [names to look up], gear: [names], notes }.
 // `itemsByName` lets app.js swap in compendium entries afterwards.
@@ -786,16 +800,25 @@ export function convertSnapshot(ch, snap) {
   // item carrying its traits' text (the traits are on the actor as features).
   const speciesTraits = feats.filter(isSpecies);
   if (speciesName) {
-    lookups.push({ name: speciesName, kind: 'race', fallback: legacyItem('race', speciesName, {
-      description: { value: '<p><em>Custom species from Roll20.</em></p>' + listHTML(speciesTraits) },
+    // 2014 rules treat a subrace as its own species: name it with the subrace.
+    const sub = clean(kit.all.find((y) => y.type === 'Subspecies')?.name);
+    const fullName = sub && !speciesName.toLowerCase().includes(sub.toLowerCase()) ? speciesName + ' (' + sub + ')' : speciesName;
+    lookups.push({ name: speciesName, kind: 'race', fallback: legacyItem('race', fullName, {
+      description: { value: '<p><em>Custom species from Roll20.' + (sub ? ' Subrace: ' + esc(sub) + '.' : '') + '</em></p>' + listHTML(speciesTraits) },
       type: { value: 'humanoid' }, movement: { speeds: { walk: speeds.walk || 30 }, units: 'ft' },
     }, { flags: { r20import: { customSpecies: true, traits: speciesTraits.map((f) => f.name) } } }) });
   }
   for (const sc of subclassNames) {
     const cls = feats.find((f) => clean(f.source) === sc);
-    const parent = lookups.find((l) => l.kind === 'class');
-    lookups.push({ name: sc, kind: 'subclass', fallback: legacyItem('subclass', sc, {
-      classIdentifier: parent ? parent.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '',
+    // Its class: the saved data says which (Nier's Echo Knight is a Fighter
+    // subclass, not one of his other class); else the highest-level class.
+    const stored = kit.find(sc, (y) => y.type === 'Subclass');
+    const owner = stored && classes.find((c) => c.ids.has(stored.parentID) || c.ids.has(stored.sourceID));
+    const top = [...classes].sort((a, b) => b.levels - a.levels)[0];
+    const parentName = owner?.name || top?.name || lookups.find((l) => l.kind === 'class')?.name || '';
+    const ident = (n) => clean(n).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    lookups.push({ name: sc, kind: 'subclass', patch: { system: { classIdentifier: ident(parentName) } }, fallback: legacyItem('subclass', sc, {
+      identifier: ident(sc), classIdentifier: ident(parentName),
       description: { value: '<p><em>Subclass from Roll20.</em></p>' + listHTML(feats.filter((f) => clean(f.source) === sc)) },
     }, { flags: { r20import: { custom: true, section: cls && cls.section } } }) });
   }
@@ -899,7 +922,8 @@ function convertClassic(ch, sheet) {
     const raceLookup = race ? { name: race, kind: 'race' } : null;
     if (raceLookup) lookups.push(raceLookup);
     const bg = clean(sheet.get('background'));
-    if (bg) lookups.push({ name: bg, kind: 'background' });
+    // A background not in dnd5e's compendium comes across as a custom one.
+    if (bg) lookups.push({ name: bg, kind: 'background', fallback: legacyItem('background', bg, { description: { value: '<p><em>Background from Roll20.</em></p>' } }, { flags: { r20import: { custom: true } } }) });
     system.details.alignment = clean(sheet.get('alignment'));
     system.details.xp = { value: num(sheet.get('experience')) || 0 };
     for (const c of ['cp', 'sp', 'ep', 'gp', 'pp']) { const v = num(sheet.get(c)); if (v) system.currency[c] = v; }
@@ -951,7 +975,7 @@ function convertClassic(ch, sheet) {
       items.push(legacyItem('feat', r.name, { description: { value: para(r.description) }, type: { value: /class/i.test(r.source || '') ? 'class' : isRace ? 'race' : /feat/i.test(r.source || '') ? 'feat' : '' }, requirements: clean(r.source_type), source: { custom: clean(r.source_type) } }));
     }
     if (raceLookup) {
-      raceLookup.fallback = legacyItem('race', race, {
+      raceLookup.fallback = legacyItem('race', subrace ? race + ' (' + subrace + ')' : race, {
         description: { value: '<p><em>Custom species from Roll20.' + (subrace ? ' Subrace: ' + esc(subrace) + '.' : '') + '</em></p>' + racial.map((r) => '<h4>' + esc(clean(r.name)) + '</h4>' + para(r.description)).join('') },
         type: { value: 'humanoid' }, movement: { speeds: { walk: speeds.walk || 30 }, units: 'ft' },
       }, { flags: { r20import: { customSpecies: true, traits: racial.map((r) => clean(r.name)) } } });

@@ -76,6 +76,11 @@ export function auditCharacter(ch, resolved, actor, conv = convertCharacter(ch))
       add({ kind: 'missing', name: l.name, detail: data.type + (fromPack ? ' (compendium)' : ' (Roll20 version)'), fix: { op: 'add', data } });
       return;
     }
+    // A subclass hung on the wrong class (the importer once picked the first one).
+    const wantClass = l.patch?.system?.classIdentifier || data.system?.classIdentifier;
+    if (data.type === 'subclass' && wantClass && have.classIdentifier !== undefined && have.classIdentifier !== wantClass) {
+      add({ kind: 'stat', name: data.name, detail: `subclass of ${have.classIdentifier || 'no class'} in Foundry, ${wantClass} in Roll20`, fix: { op: 'item', id: have.id, update: { 'system.classIdentifier': wantClass } } });
+    }
     if (l.kind === 'class' && data.system?.levels && have.levels !== data.system.levels) {
       add({ kind: 'stat', name: l.name, detail: `level ${have.levels ?? '?'} in Foundry, ${data.system.levels} in Roll20`, fix: { op: 'item', id: have.id, update: { 'system.levels': data.system.levels } } });
     }
@@ -101,6 +106,16 @@ export function auditCharacter(ch, resolved, actor, conv = convertCharacter(ch))
     }
   });
 
+  // Species, background and first class linked on the sheet ("Add Race" otherwise).
+  if (conv.actor.type === 'character') {
+    const det = actor.system.details || {};
+    const race = actor.items.find((i) => i.type === 'race');
+    const bg = actor.items.find((i) => i.type === 'background');
+    const top = actor.items.filter((i) => i.type === 'class').sort((a, b) => (b.levels || 0) - (a.levels || 0))[0];
+    if (race && det.race !== race.id) add({ kind: 'stat', name: 'Species', detail: `${race.name} not shown on the sheet`, fix: { op: 'set', path: 'system.details.race', value: race.id } });
+    if (bg && det.background !== bg.id) add({ kind: 'stat', name: 'Background', detail: `${bg.name} not shown on the sheet`, fix: { op: 'set', path: 'system.details.background', value: bg.id } });
+    if (top && !det.originalClass) add({ kind: 'stat', name: 'Original class', detail: `${top.name} not set`, fix: { op: 'set', path: 'system.details.originalClass', value: top.id } });
+  }
   // Numbers on the sheet.
   const sys = conv.actor.system || {};
   for (const [path, want, label] of statPaths(sys)) {

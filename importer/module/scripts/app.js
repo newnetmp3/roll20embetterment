@@ -1,6 +1,7 @@
 // Roll20 Campaign Import: the importer window and the steps that create
 // Foundry documents from a campaign unpacked by r20prep.py.
 import { auditCharacter, KIND_LABEL } from './audit.js';
+import { linkDetails } from './convert.js';
 import { convertCharacter, convertPage, convertHandout, convertTable, relinkHTML, tokenSettings, listOf } from './convert.js';
 
 const MOD = 'r20import';
@@ -209,7 +210,7 @@ async function runAudit({ fix = false, campaign: name, rules } = {}, say) {
       if (conv.isNpc || conv.empty) continue;
       const resolved = [];
       for (const l of conv.lookups) resolved.push(await lookup(l));
-      const items = actor.items.map((i) => ({ id: i.id, name: i.name, type: i.type, desc: i.system.description?.value || '', levels: i.system.levels }));
+      const items = actor.items.map((i) => ({ id: i.id, name: i.name, type: i.type, desc: i.system.description?.value || '', levels: i.system.levels, classIdentifier: i.system.classIdentifier }));
       const { sheet, findings } = auditCharacter(ch, resolved, { system: actor.toObject().system, items }, conv);
       results.push({ actor, sheet, findings, attribs: (ch.attributes || ch.attribs || []).length });
       say(`${actor.name}: ${findings.filter((f) => f.fix).length} to fix, ${findings.filter((f) => !f.fix).length} notes.`);
@@ -251,6 +252,16 @@ async function applyFixes(actor, findings, say) {
   if (add.length) await actor.createEmbeddedDocuments('Item', add);
   if (itemUpdates.length) await actor.updateEmbeddedDocuments('Item', itemUpdates);
   if (Object.keys(sets).length) await actor.update(sets);
+  // Species or background added just now: link them on the sheet too.
+  if (actor.type === 'character' && add.length) {
+    const det = actor.system.details || {};
+    const race = actor.items.find((i) => i.type === 'race');
+    const bg = actor.items.find((i) => i.type === 'background');
+    const link = {};
+    if (race && (det.race?.id ?? det.race) !== race.id) link['system.details.race'] = race.id;
+    if (bg && (det.background?.id ?? det.background) !== bg.id) link['system.details.background'] = bg.id;
+    if (Object.keys(link).length) await actor.update(link);
+  }
   const n = add.length + itemUpdates.length + Object.keys(sets).length;
   if (n) say(`  fixed ${n} on ${actor.name}`);
   return n;
@@ -460,6 +471,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
           const extras = it.type === 'race' ? conv.items.filter((x) => x.type === 'feat' && traitNames.has(x.name.toLowerCase())) : [];
           library.set(key, { item: it, extras, from: conv.actor.name });
         }
+        if (conv.actor.type === 'character') linkDetails(conv.actor.system, items);
         const dt = ch.defaulttoken && typeof ch.defaulttoken === 'object' ? ch.defaulttoken : {};
         const avatarAny = (dir && local(dir + '/avatar.png')) || assetFor(ch.avatar) || '';
         const tokenImg = tex((dir && local(dir + '/token.png')) || assetFor(dt.imgsrc), avatarAny);

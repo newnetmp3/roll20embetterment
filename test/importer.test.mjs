@@ -383,3 +383,30 @@ test('Classic sheet: species and subrace, proficiencies, counters, spell attacks
   ogre.attributes = ogre.attributes.filter((a) => a.name !== 'hp');
   assert.equal(cv.convertCharacter(ogre).actor.system.attributes.hp.max, 59, '7d10+21 averages 59');
 });
+
+test('species, background and class are linked; a subclass goes to its own class', () => {
+  const store = { integrants: { integrants: {
+    c1: { _id: 'c1', _enabled: true, type: 'Class', name: 'Smug Bitch', childIDs: '["l1"]' },
+    l1: { _id: 'l1', _enabled: true, type: 'Class Level', classID: 'c1', level: 1 },
+    c2: { _id: 'c2', _enabled: true, type: 'Class', name: 'Fighter', compendiumPageID: 'F', childIDs: '[]' },
+    l2: { _id: 'l2', _enabled: true, type: 'Class Level', classID: 'F', level: 7 },
+    h2: { _id: 'h2', _enabled: true, type: 'Hit Dice', classID: 'F', dieSize: 10 },
+    s1: { _id: 's1', _enabled: true, type: 'Subclass', name: 'Echo Knight', parentID: 'F' },
+    sp: { _id: 'sp', _enabled: true, type: 'Subspecies', name: 'Deepwood Elves' },
+  } } };
+  const F = (section, source, name) => ({ section, source, name, desc: 'x', timing: '' });
+  const snap = { type: 'pc', name: 'Nier', stats: { hp: 84, maxHp: 84, ac: 17, level: 8 },
+    features: [F('Class Features', 'Echo Knight', 'Manifest Echo'), F('Species Traits', 'Elves of R’Ley', 'Trance'), F('Other', 'Far Traveler', 'All Eyes on You')] };
+  const c = cv.convertCharacter({ id: '-C', name: 'Nier', attributes: [{ name: 'store', current: store }], r20e_snapshot: snap });
+  const sub = c.lookups.find((l) => l.kind === 'subclass');
+  assert.equal(sub.fallback.system.classIdentifier, 'fighter');
+  assert.equal(sub.patch.system.classIdentifier, 'fighter', 'also on a compendium copy');
+  assert.equal(c.lookups.find((l) => l.kind === 'class' && l.name === 'Fighter').fallback.system.hd.denomination, 'd10');
+  assert.equal(c.lookups.find((l) => l.kind === 'race').fallback.name, 'Elves of R’Ley (Deepwood Elves)');
+  const items = [...c.items, ...c.lookups.map((l) => structuredClone(l.fallback))];
+  items.forEach((i) => { if (i.type === 'class') delete i._id; });
+  const sys = cv.linkDetails(structuredClone(c.actor.system), items);
+  assert.equal(sys.details.race, items.find((i) => i.type === 'race')._id);
+  assert.equal(sys.details.background, items.find((i) => i.type === 'background')._id);
+  assert.equal(sys.details.originalClass, items.find((i) => i.name === 'Fighter')._id, 'the highest-level class, given an id');
+});
