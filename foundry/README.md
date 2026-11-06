@@ -47,6 +47,14 @@ see an unidentified magic item's unidentified description only. A long
 description scrolls: move the mouse onto the tooltip and use the wheel (it
 stays open while the mouse is on it), or press Page Up / Page Down.
 
+## Damage button on chat cards
+
+dnd5e 6 shows a card's Attack and Damage buttons as small icons. With this
+module the **Damage** button is a full-width labelled button, and turns red
+(**Damage — hit!**) once the card's attack has hit a target (or crit). Turn it
+off in **Configure Settings → Foundryembetterment → Big Damage button on
+attack cards**.
+
 ## This turn
 
 - **Action, Bonus, Reaction** are marked when something with that activation

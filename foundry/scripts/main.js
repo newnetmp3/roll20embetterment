@@ -15,7 +15,76 @@
     game.settings.register(MOD, 'prefs', { scope: 'client', config: false, type: Object, default: {} });
     game.settings.register(MOD, 'barPos', { scope: 'client', config: false, type: Object, default: {} });
     game.settings.register(MOD, 'advantage', { scope: 'client', config: false, type: String, default: 'Ask each time' });
+    game.settings.register(MOD, 'bigDamage', {
+      name: 'Big Damage button on attack cards', scope: 'client', config: true, type: Boolean, default: true,
+      hint: 'Shows the Damage button on weapon and spell cards as a full-width button, red once the attack has hit.',
+      onChange: () => { try { ui.chat.render(); } catch { /* chat not ready */ } },
+    });
+    chatCards();
   });
+
+  // ---- chat cards: a big, clear Damage button ------------------------------------
+  // dnd5e 6 draws the card's Attack and Damage buttons as small icons. Make
+  // Damage a full-width labelled button, and red once the attack has hit.
+  function chatCards() {
+    const css = document.createElement('style');
+    css.id = 'foundryembetterment-chat';
+    css.textContent = `
+      .chat-message .fe-wrap { flex-wrap: wrap !important; }
+      .chat-message button.fe-damage { flex: 1 0 100% !important; width: 100% !important; max-width: none !important; min-height: 34px; margin-top: 4px;
+        display: flex !important; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 700; letter-spacing: .02em; }
+      .chat-message button.fe-damage .fe-label { display: inline !important; position: static !important; width: auto !important; height: auto !important;
+        clip: auto !important; clip-path: none !important; overflow: visible !important; margin: 0 !important; }
+      .chat-message button.fe-damage.fe-hit { background: linear-gradient(180deg, #a3262a, #761b1e) !important; color: #fff !important; border: 1px solid #e0605f !important;
+        box-shadow: 0 0 0 1px rgba(255,120,110,.35), 0 0 8px rgba(220,60,60,.55); }
+      .chat-message button.fe-damage.fe-hit:hover { filter: brightness(1.12); }
+      .chat-message button.fe-damage.fe-miss { opacity: .7; }`;
+    document.head.appendChild(css);
+
+    // What the card's last attack did: 'hit', 'miss' or '' (no attack / no targets).
+    function attackResult(card) {
+      let rolls = [];
+      try { rolls = (card.getAssociatedRolls && card.getAssociatedRolls('attack')) || []; } catch { rolls = []; }
+      const last = rolls[rolls.length - 1];
+      const roll = last && last.rolls && last.rolls[0];
+      if (!roll) return '';
+      if (roll.isCritical) return 'hit';
+      if (roll.isFumble) return 'miss';
+      const acs = ((last.system && last.system.targets) || []).map((t) => t && t.ac).filter((ac) => ac !== null && ac !== undefined);
+      if (!acs.length) return '';
+      return acs.some((ac) => roll.total >= ac) ? 'hit' : 'miss';
+    }
+    Hooks.on('renderChatMessageHTML', (message, html) => {
+      try {
+        if (!game.settings.get(MOD, 'bigDamage')) return;
+        const root = html instanceof HTMLElement ? html : html && html[0];
+        if (!root) return;
+        const buttons = root.querySelectorAll('button[data-action="rollDamage"]');
+        if (!buttons.length) return;
+        const result = attackResult(message);
+        for (const b of buttons) {
+          b.classList.add('fe-damage');
+          b.classList.toggle('fe-hit', result === 'hit');
+          b.classList.toggle('fe-miss', result === 'miss');
+          if (b.parentElement) b.parentElement.classList.add('fe-wrap');
+          let label = b.querySelector('.fe-label') || b.querySelector('span');
+          if (!label) { label = document.createElement('span'); b.appendChild(label); }
+          label.classList.add('fe-label');
+          label.textContent = result === 'hit' ? 'Damage — hit!' : 'Damage';
+        }
+      } catch (e) { console.warn('[Foundryembetterment] chat card', e); }
+    });
+    // An attack roll lands after its card was drawn: redraw the card so its
+    // Damage button shows the hit.
+    Hooks.on('createChatMessage', (msg) => {
+      try {
+        const o = msg.system && msg.system.origin;
+        const card = typeof o === 'string' ? game.messages.get(o) : o;
+        if (!card || !card.id) return;
+        setTimeout(() => { try { ui.chat.updateMessage(card); } catch { /* older chat log */ } }, 60);
+      } catch { /* not a dnd5e roll */ }
+    });
+  }
 
   Hooks.once('ready', () => {
     if (game.system.id !== 'dnd5e') { console.warn('[Foundryembetterment] needs the dnd5e system; bar not shown.'); return; }
