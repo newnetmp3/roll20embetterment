@@ -112,6 +112,16 @@ export function parseSenses(s) {
   return { ranges, special: rest.join(', ') };
 }
 
+// A dice formula Foundry will accept ("7d8 + 21)" -> "7d8 + 21"), or ''.
+export function cleanFormula(f) {
+  let t = clean(f).replace(/[^0-9dD+\-*/() ]/g, '');
+  let depth = 0;
+  t = [...t].filter((ch) => { if (ch === '(') { depth++; return true; } if (ch === ')') { if (!depth) return false; depth--; } return true; }).join('');
+  t += ')'.repeat(depth);
+  t = clean(t).replace(/[+\-*/]\s*$/, '').trim();
+  return /^[\s()]*\d*\s*d?\s*\d+([\s()]*[+\-*/][\s()]*\d*\s*d?\s*\d+)*[\s()]*$/i.test(t) ? t : '';
+}
+
 // Roll20 formula -> plain dice formula. @{strength_mod} etc. become numbers.
 export function resolveFormula(f, sheet, abilityMods = {}) {
   let s = String(f || '').replace(/\[\[|\]\]/g, '');
@@ -238,6 +248,7 @@ export function spellItem(r, sheet, mods) {
   else if (heal) system.actionType = 'heal';
   else if (parts.length) system.actionType = 'other';
   if (parts.length) system.damage = { parts };
+  if (r.level === 0 && parts.length) system.scaling = { mode: 'cantrip', formula: '' };
   if (r.spellsave) {
     const ab = Object.keys(ABILITIES).find((k) => ABILITIES[k].startsWith(String(r.spellsave).toLowerCase().slice(0, 3)));
     if (ab) system.save = { ability: ab, dc: null, scaling: 'spell' };
@@ -310,7 +321,9 @@ function storeDamage(x, kids, kit) {
     if (count && size && d.type !== 'Healing') {
       const p = [count + 'd' + size + (num(d._bonus) ? ' + ' + num(d._bonus) : ''), damageType(d.damageType || d.damage || '')];
       const k = p.join('|');
-      if (!seenPart.has(k)) { seenPart.add(k); parts.push(p); }
+      // An untyped copy of dice already listed is the same damage again.
+      const dup = !p[1] && parts.some((q) => q[0] === p[0]);
+      if (!seenPart.has(k) && !dup) { seenPart.add(k); parts.push(p); }
     }
     if (kit) for (const c of kit.children(d)) visit(c, depth + 1);
   };
@@ -371,8 +384,10 @@ export function storeItem(x, kit, qty, equipped) {
     const props = (Array.isArray(list) ? list : []).map((p) => WEAPON_PROPS[clean(p).toLowerCase().replace(/\s*\(.*\)$/, '')]).filter(Boolean);
     const range = /(\d+)\s*\/\s*(\d+)/.exec(String(x.range || '') + ' ' + kids.map((k) => k.range || '').join(' '));
     // "+2 Longsword": dnd5e's magical bonus adds to attack and damage itself.
-    const plus = num((/(?:^|\s)\+(\d)(?:\s|$)/.exec(x.name) || [])[1]);
     const damage = weaponDamage(x, kids, kit);
+    // Only when Roll20's damage carries the bonus too (it sometimes doesn't).
+    const named = num((/(?:^|\s)\+(\d)(?:\s|$)/.exec(x.name) || [])[1]);
+    const plus = named && new RegExp('\\+\\s*' + named + '$').test(String(damage.parts[0]?.[0] || '')) ? named : 0;
     if (plus) {
       const strip = (f) => String(f).replace(new RegExp('\\s*\\+\\s*' + plus + '$'), '');
       damage.parts = damage.parts.map(([f, t], i) => [i === 0 ? strip(f) : f, t]);
@@ -385,6 +400,15 @@ export function storeItem(x, kit, qty, equipped) {
       actionType: ranged ? 'rwak' : 'mwak', damage,
       range: range ? { value: Number(range[1]), long: Number(range[2]), units: 'ft' } : { value: props.includes('rch') ? 10 : 5, long: null, units: 'ft' },
     });
+  }
+  // Gear that carries its own attack ("Gloves of the Great Wolf Attack").
+  const ownAttack = kids.find((k) => k.type === 'Attack');
+  if (ownAttack && !x.armorData && !x.shieldData) {
+    const parts = storeDamage(ownAttack, [], kit);
+    if (parts.length) {
+      const ranged = /ranged/i.test(ownAttack.attack?.type || '');
+      return legacyItem('weapon', x.name, { ...base, type: { value: 'natural' }, actionType: ranged ? 'rwak' : 'mwak', damage: { parts }, range: rangeOf(ownAttack.range || (ranged ? '' : '5')) });
+    }
   }
   const acOf = () => kids.filter((k) => k.type === 'Armor Class').map((k) => num(k.valueFormula?.flatValue)).find((v) => v) ?? null;
   if (x.shieldData) return legacyItem('equipment', x.name, { ...base, type: { value: 'shield' }, armor: { value: acOf() ?? 2 } });
@@ -415,6 +439,9 @@ export function storeClasses(kit) {
   }
   return out;
 }
+const BASE_WEAPONS = new Set(['club', 'dagger', 'greatclub', 'handaxe', 'javelin', 'lighthammer', 'mace', 'quarterstaff', 'sickle', 'spear', 'lightcrossbow', 'dart', 'shortbow', 'sling', 'battleaxe', 'flail', 'glaive', 'greataxe', 'greatsword', 'halberd', 'lance', 'longsword', 'maul', 'morningstar', 'pike', 'rapier', 'scimitar', 'shortsword', 'trident', 'warpick', 'warhammer', 'whip', 'blowgun', 'handcrossbow', 'heavycrossbow', 'longbow', 'net']);
+// "Longswords" / "Light Crossbow" -> dnd5e's weapon id, so proficiency counts.
+export const weaponId = (name) => { const k = clean(name).toLowerCase().replace(/[^a-z]/g, ''); return BASE_WEAPONS.has(k) ? k : BASE_WEAPONS.has(k.replace(/s$/, '')) ? k.replace(/s$/, '') : ''; };
 const LANGS = { common: 'common', dwarvish: 'dwarvish', elvish: 'elvish', giant: 'giant', gnomish: 'gnomish', goblin: 'goblin', halfling: 'halfling', orc: 'orc', abyssal: 'abyssal', celestial: 'celestial', 'deep speech': 'deep', draconic: 'draconic', infernal: 'infernal', primordial: 'primordial', sylvan: 'sylvan', undercommon: 'undercommon', druidic: 'druidic', "thieves' cant": 'cant', 'common sign language': 'sign' };
 const DAMAGE_KEYS = ['acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'];
 const CONDITION_KEYS = ['blinded', 'charmed', 'deafened', 'exhaustion', 'frightened', 'grappled', 'incapacitated', 'invisible', 'paralyzed', 'petrified', 'poisoned', 'prone', 'restrained', 'stunned', 'unconscious'];
@@ -432,7 +459,7 @@ export function storeTraits(kit) {
     const name = clean(p.proficiency || p.name);
     const n = name.toLowerCase();
     const level = /expert/i.test(p.proficiencyLevel || '') ? 2 : /half/i.test(p.proficiencyLevel || '') ? 0.5 : 1;
-    if (p.category === 'Weapon') add('weaponProf', /^simple/.test(n) ? 'sim' : /^martial/.test(n) ? 'mar' : '', name);
+    if (p.category === 'Weapon') add('weaponProf', /^simple/.test(n) ? 'sim' : /^martial/.test(n) ? 'mar' : weaponId(name), name);
     else if (p.category === 'Armor') add('armorProf', /^light/.test(n) ? 'lgt' : /^medium/.test(n) ? 'med' : /^heavy/.test(n) ? 'hvy' : /shield/.test(n) ? 'shl' : '', name);
     else if (p.category === 'Tool') { const k = TOOLS[n.replace(/[’]/g, "'")]; if (k) tools[k] = { value: Math.max(tools[k]?.value || 0, level) }; else add('toolProf', '', name); }
     else if (p.category === 'Language') add('languages', LANGS[n], name);
@@ -466,6 +493,32 @@ export function storeTraits(kit) {
   };
 }
 
+// Ability scores, AC and walking speed worked out from the saved data, for
+// sheets whose page reading came back without them.
+export function storeStats(kit) {
+  const live = kit.all.filter((x) => !x.cascades);
+  const scores = {};
+  for (const [k, full] of Object.entries(ABILITIES)) {
+    const rows = live.filter((x) => x.type === 'Ability Score' && String(x.ability || '').toLowerCase() === full);
+    const base = rows.filter((x) => /set base/i.test(x.calculation || '')).map((x) => num(x.valueFormula?.flatValue)).filter((v) => v !== null);
+    if (!base.length) continue;
+    const add = rows.filter((x) => /modify/i.test(x.calculation || '')).reduce((t, x) => t + (num(x.valueFormula?.flatValue) || 0), 0);
+    scores[k] = Math.max(...base) + add;
+  }
+  const mod = (k) => Math.floor(((scores[k] ?? 10) - 10) / 2);
+  const acRows = live.filter((x) => x.type === 'Armor Class');
+  const armour = kit.all.find((x) => x.armorData && x.equipData?.equipped);
+  const acBase = acRows.filter((x) => /set base/i.test(x.calculation || '')).map((x) => num(x.valueFormula?.flatValue)).filter((v) => v !== null);
+  const acAdd = acRows.filter((x) => /modify/i.test(x.calculation || '')).reduce((t, x) => t + (num(x.valueFormula?.flatValue) || 0), 0);
+  const cat = String(armour?.armorData?.category || '').toLowerCase();
+  const dex = /heavy/.test(cat) ? 0 : /medium/.test(cat) ? Math.min(2, mod('dex')) : mod('dex');
+  const ac = (acBase.length ? Math.max(...acBase) : 10) + dex + acAdd;
+  const sp = live.filter((x) => x.type === 'Speed' && /^(all|walk|)$/i.test(String(x.speed || '')));
+  const spBase = sp.filter((x) => /set base/i.test(x.calculation || '')).map((x) => num(x.valueFormula?.flatValue)).filter((v) => v);
+  const speed = spBase.length ? Math.max(...spBase) + sp.filter((x) => /modify/i.test(x.calculation || '')).reduce((t, x) => t + (num(x.valueFormula?.flatValue) || 0), 0) : null;
+  return { scores, ac, speed };
+}
+
 // A spell from the sheet's saved data.
 export function storeSpell(x, kit, level, prepared) {
   const kids = kit.children(x);
@@ -488,6 +541,7 @@ export function storeSpell(x, kit, level, prepared) {
   };
   const parts = storeDamage(x, kids, kit);
   if (parts.length) system.damage = { parts };
+  if (lvl === 0 && parts.length) system.scaling = { mode: 'cantrip', formula: '' };
   const atk = x.attack?.type || '';
   const save = x.save?.saveAbility;
   if (/melee/i.test(atk)) system.actionType = 'msak';
@@ -517,30 +571,59 @@ export function convertSnapshot(ch, snap) {
   const st = snap.stats || {};
   const abilities = {};
   const mods = {};
+  const saveRows = {};
   for (const a of snap.abilities || []) {
     const k = String(a.name || '').toLowerCase().slice(0, 3);
     if (!ABILITIES[k]) continue;
     abilities[k] = { value: num(a.score) ?? 10 };
     mods[k] = num(a.mod) ?? Math.floor(((num(a.score) ?? 10) - 10) / 2);
-    if (num(a.save) !== null && num(a.save) > mods[k]) abilities[k].proficient = 1;
+    saveRows[k] = num(a.save);
+  }
+  // A reading without ability scores, AC or speed: work them out from the
+  // sheet's saved data instead.
+  const kit0 = storeIntegrants(sheetStore(ch));
+  const fromStore = storeStats(kit0);
+  const storeLevel = storeClasses(kit0).reduce((t, c) => t + c.levels, 0);
+  if (!Object.keys(abilities).length) {
+    for (const [k, v] of Object.entries(fromStore.scores)) { abilities[k] = { value: v }; mods[k] = Math.floor((v - 10) / 2); }
+  }
+  // Proficiency bonus, to turn the sheet's totals into proficiency + bonus.
+  const pb = isNpc ? profFromCR(parseCR(st.cr)) : 2 + Math.floor(((num(st.level) || storeLevel || 1) - 1) / 4);
+  for (const [k, total] of Object.entries(saveRows)) {
+    if (total === null || !abilities[k]) continue;
+    const diff = total - mods[k];
+    const prof = diff >= pb ? 1 : 0;
+    if (prof) abilities[k].proficient = 1;
+    const extra = diff - prof * pb;
+    if (extra) abilities[k].bonuses = { save: (extra > 0 ? '+' : '') + extra };
   }
   const skills = {};
   for (const c of snap.checks || []) {
     const key = Object.keys(SKILLS).find((k) => SKILLS[k] === String(c.name || '').toLowerCase().replace(/\s+/g, '_'));
     if (!key) continue;
     const prof = String(c.prof || '').toLowerCase();
-    // Each skill keeps its ability; a bare { value } would lose it.
-    if (/expert/.test(prof)) skills[key] = { value: 2, ability: skillAbility(key) };
-    else if (/half/.test(prof)) skills[key] = { value: 0.5, ability: skillAbility(key) };
-    else if (/prof/.test(prof)) skills[key] = { value: 1, ability: skillAbility(key) };
+    const ab = ABBR(ABILITIES[String(c.ability || '').toLowerCase().slice(0, 3)] || '') || skillAbility(key);
+    const total = num(c.bonus);
+    let value = /expert/.test(prof) ? 2 : /half/.test(prof) ? 0.5 : /prof/.test(prof) ? 1 : 0;
+    // The sheet's total is what counts: when the label doesn't explain it
+    // (NPC sheets show only totals), pick the closest proficiency level and
+    // add the rest as a bonus.
+    if (total !== null && mods[ab] !== undefined) {
+      const diff = total - mods[ab];
+      const of = (v) => Math.floor(v * pb);
+      if (diff !== of(value)) value = [0, 0.5, 1, 2].reduce((b, v) => (Math.abs(diff - of(v)) < Math.abs(diff - of(b)) ? v : b), value);
+      const extra = diff - of(value);
+      if (value || extra || ab !== skillAbility(key)) skills[key] = { value, ability: ab, ...(extra ? { bonuses: { check: (extra > 0 ? '+' : '') + extra } } : {}) };
+    } else if (value) skills[key] = { value, ability: skillAbility(key) };
   }
   const speeds = { ...(st.speeds || {}) };
   if (!speeds.walk && st.speed) speeds.walk = st.speed;
+  if (!speeds.walk && fromStore.speed) speeds.walk = fromStore.speed;
   const system = {
     abilities, skills,
     attributes: {
       hp: { value: st.hp ?? st.maxHp ?? 1, max: st.maxHp ?? st.hp ?? 1, temp: st.tempHp || 0 },
-      ac: { calc: 'flat', flat: st.ac ?? 10 },
+      ac: { calc: 'flat', flat: st.ac ?? (Object.keys(fromStore.scores).length ? fromStore.ac : 10) },
       movement: { speeds, units: 'ft' },
     },
     details: {},
@@ -767,7 +850,7 @@ function convertClassic(ch, sheet) {
     abilities,
     skills,
     attributes: {
-      hp: { value: hpVal ?? hpMax ?? 1, max: hpMax ?? hpVal ?? 1, temp: num(sheet.get('hp_temp')) || 0, ...(isNpc && sheet.get('npc_hpformula') ? { formula: clean(sheet.get('npc_hpformula')) } : {}) },
+      hp: { value: hpVal ?? hpMax ?? 1, max: hpMax ?? hpVal ?? 1, temp: num(sheet.get('hp_temp')) || 0, ...(isNpc && cleanFormula(sheet.get('npc_hpformula')) ? { formula: cleanFormula(sheet.get('npc_hpformula')) } : {}) },
       ac: { calc: 'flat', flat: num(isNpc ? sheet.first('npc_ac', 'ac') : sheet.first('ac')) ?? 10 },
       movement: { speeds, units: 'ft', hover },
       senses: parseSenses(isNpc ? sheet.get('npc_senses') : sheet.first('senses')),
@@ -905,7 +988,7 @@ function convertClassic(ch, sheet) {
       const n = name.toLowerCase();
       if (!name) continue;
       const t = String(r.prof_type || 'LANGUAGE').toUpperCase();
-      if (t === 'WEAPON') prof('weaponProf', /^simple/.test(n) ? 'sim' : /^martial/.test(n) ? 'mar' : '', name);
+      if (t === 'WEAPON') prof('weaponProf', /^simple/.test(n) ? 'sim' : /^martial/.test(n) ? 'mar' : weaponId(name), name);
       else if (t === 'ARMOR') prof('armorProf', /^light/.test(n) ? 'lgt' : /^medium/.test(n) ? 'med' : /^heavy/.test(n) ? 'hvy' : /shield/.test(n) ? 'shl' : '', name);
       else if (t === 'LANGUAGE') prof('languages', LANGS[n], name);
     }

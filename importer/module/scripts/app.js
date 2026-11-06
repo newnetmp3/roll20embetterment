@@ -90,6 +90,10 @@ class ImportApp extends foundry.applications.api.ApplicationV2 {
       l.append(c, document.createTextNode(label)); box.append(l);
     }
     root.append(box);
+    // Which compendium versions to use: follows the world's dnd5e Rules Version.
+    const rulesSel = h('select'); rulesSel.dataset.rules = '1';
+    for (const [v, label] of [['2014', '2014 rules (legacy)'], ['2024', '2024 rules (modern)']]) { const o = h('option', label); o.value = v; o.selected = (v === '2014') === legacyRules(); rulesSel.append(o); }
+    root.append(row(h('label', 'Compendium versions'), rulesSel));
     const bar = h('progress', '', 'width:100%;'); bar.max = 100; bar.value = 0;
     const log = h('pre', '', 'height:180px;overflow:auto;margin:0;padding:6px;font-size:12px;white-space:pre-wrap;background:rgba(0,0,0,.08);border-radius:4px;');
     const go = h('button', 'Import'); go.type = 'button';
@@ -97,6 +101,7 @@ class ImportApp extends foundry.applications.api.ApplicationV2 {
       if (this.running) return;
       this.running = true; go.disabled = true;
       const options = Object.fromEntries([...root.querySelectorAll('[data-opt]')].map((c) => [c.dataset.opt, c.checked]));
+      options.rules = rulesSel.value;
       const users = Object.fromEntries([...root.querySelectorAll('[data-player]')].map((s) => [s.dataset.player, s.value]).filter(([, v]) => v));
       const say = (t) => { log.textContent += t + '\n'; log.scrollTop = log.scrollHeight; console.log('[r20import]', t); };
       try {
@@ -113,7 +118,7 @@ class ImportApp extends foundry.applications.api.ApplicationV2 {
       if (fix && !(await foundry.applications.api.DialogV2.confirm({ window: { title: 'Fix characters' }, content: '<p>Add what is missing, use the Roll20 text where the DM changed it, and set ability scores, HP, AC, speeds and proficiencies to the Roll20 values, on every imported player character?</p><p>Things only in Foundry are left alone.</p>' }))) return;
       this.running = true; go.disabled = check.disabled = fixAll.disabled = true;
       const say = (t) => { log.textContent += t + '\n'; log.scrollTop = log.scrollHeight; console.log('[r20import]', t); };
-      try { await runAudit({ fix, campaign: this.chosen }, say); }
+      try { await runAudit({ fix, campaign: this.chosen, rules: root.querySelector('[data-rules]')?.value }, say); }
       catch (e) { console.error(e); say('Stopped: ' + (e && e.message || e)); }
       finally { this.running = false; go.disabled = check.disabled = fixAll.disabled = false; }
     };
@@ -178,7 +183,7 @@ async function linkSpeciesTraits(say) {
 }
 
 // ---- audit: imported player characters vs their Roll20 data ---------------------
-async function runAudit({ fix = false, campaign: name } = {}, say) {
+async function runAudit({ fix = false, campaign: name, rules } = {}, say) {
   const pcs = game.actors.filter((a) => a.type === 'character' && a.getFlag(MOD, 'id'));
   if (!pcs.length) { say('No imported player characters found.'); return; }
   // The unpacked campaign these actors came from.
@@ -193,7 +198,7 @@ async function runAudit({ fix = false, campaign: name } = {}, say) {
   say(`Reading ${name}/campaign.json…`);
   const campaign = await fetchJSON(BASE + '/' + enc(name) + '/campaign.json');
   const byId = new Map((campaign.characters || []).map((c) => [c.id, c]));
-  const lookup = await compendiumLookup(true, say);
+  const lookup = await compendiumLookup(true, say, rules ? rules === '2014' : legacyRules());
   const results = [];
   let fixed = 0;
   for (const actor of pcs) {
@@ -253,14 +258,39 @@ async function applyFixes(actor, findings, say) {
 
 // Finds dnd5e compendium items by kind and name; anything not found uses the
 // lookup's Roll20 version.
-async function compendiumLookup(enabled, say) {
+// Roll20's first damage part against the compendium item's first damage
+// part: a different die size or damage type means the DM changed it.
+function differentDamage(r20, base) {
+  const p = r20?.system?.damage?.parts?.[0];
+  const m = p && /(\d+)\s*d\s*(\d+)/i.exec(String(p[0]));
+  if (!m) return false;
+  const acts = Object.values(base.system?.activities || {});
+  const part = acts.map((a) => a.damage?.parts?.[0]).find((x) => x && x.denomination);
+  if (!part) return false;
+  const types = [...(part.types || [])];
+  return Number(m[2]) !== Number(part.denomination) || (!!p[1] && types.length > 0 && !types.includes(p[1]));
+}
+
+// 2014 ("legacy") or 2024 ("modern") rules: the world's dnd5e setting decides
+// which compendium versions win when both have the same name.
+function legacyRules() {
+  try { return game.settings.get('dnd5e', 'rulesVersion') !== 'modern'; } catch { return true; }
+}
+async function compendiumLookup(enabled, say, legacy = legacyRules()) {
   const packIndex = new Map(); // "kind|name" -> uuid
   const docCache = new Map();
   if (enabled) {
     say('Indexing dnd5e compendiums…');
     const kinds = { spell: ['spell'], gear: ['weapon', 'equipment', 'consumable', 'tool', 'loot', 'container'], class: ['class'], subclass: ['subclass'], race: ['race'], background: ['background'] };
     const packs = game.packs.filter((p) => p.documentName === 'Item');
-    const rank = (p) => (p.collection.startsWith('dnd5e.') ? (/24$/.test(p.collection) ? 0 : 2) : 1);
+    // 2014 rules: dnd5e's 2014 SRD first, then other modules, 2024 last.
+    // 2024 rules: the 2024 packs first.
+    const rank = (p) => {
+      const is24 = /24$/.test(p.collection);
+      if (!p.collection.startsWith('dnd5e.')) return 1;
+      return legacy ? (is24 ? 2 : 0) : (is24 ? 0 : 2);
+    };
+    say(`  using ${legacy ? '2014' : '2024'} rules versions first`);
     packs.sort((a, b) => rank(a) - rank(b));
     for (const p of packs) {
       const idx = await p.getIndex({ fields: ['type'] });
@@ -280,6 +310,8 @@ async function compendiumLookup(enabled, say) {
     if (uuid) {
       if (!docCache.has(uuid)) docCache.set(uuid, (await fromUuid(uuid))?.toObject() || null);
       const base = docCache.get(uuid);
+      // The DM changed the dice (or damage type): keep Roll20's version.
+      if (base && differentDamage(l.fallback, base)) return l.fallback;
       if (base) {
         const data = foundry.utils.deepClone(base);
         delete data._id;
@@ -372,7 +404,7 @@ async function runImport(name, index, opt, userMap, say, progress) {
   progress(5);
 
   // ---- compendium index ---------------------------------------------------------
-  const lookup = await compendiumLookup(opt.compendium && opt.actors, say);
+  const lookup = await compendiumLookup(opt.compendium && opt.actors, say, opt.rules ? opt.rules === '2014' : legacyRules());
 
   // ---- actors ----------------------------------------------------------------------
   const actorByR20 = new Map();
