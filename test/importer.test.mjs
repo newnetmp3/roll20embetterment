@@ -357,3 +357,29 @@ test('2024 sheet: items, spells and features from the sheet\'s saved data', asyn
   assert.ok(!f.some((x) => x.kind === 'cut'), 'the saved data has the full text');
   assert.ok(f.some((x) => x.kind === 'custom' && x.name === 'Obsidian Dagger'));
 });
+
+test('Classic sheet: species and subrace, proficiencies, counters, spell attacks, HP formula', () => {
+  const R1 = '-Mabcdefghijklmnopq7';
+  const R2 = '-Mabcdefghijklmnopq8';
+  const ch = structuredClone(pc);
+  ch.attributes = ch.attributes.filter((a) => a.name !== 'race');
+  ch.attributes.push(A('race', 'Bree'), A('subrace', 'Bone-Dredger'),
+    A(`repeating_proficiencies_${R1}_name`, 'Martial Weapons'), A(`repeating_proficiencies_${R1}_prof_type`, 'WEAPON'),
+    A(`repeating_proficiencies_${R2}_name`, 'Old Breenic'),
+    A(`repeating_tool_${R1}_toolname`, "Alchemist's supplies"),
+    A(`repeating_traits_${R2}_name`, 'Bombs'), A(`repeating_traits_${R2}_description`, 'Throw a bomb.'),
+    A('other_resource_name', 'Bombs 30/60'), A('other_resource', '3', '5'),
+    A(`repeating_attack_${R1}_atkname`, 'Shield'), A(`repeating_attack_${R1}_dmgbase`, '1d4'));
+  const c = cv.convertCharacter(ch);
+  assert.equal(c.lookups.find((l) => l.kind === 'race').name, 'Bree');
+  assert.ok(c.actor.system.traits.weaponProf.value.includes('mar'));
+  assert.match(c.actor.system.traits.languages.custom, /Old Breenic/);
+  assert.equal(c.actor.system.tools.alchemist.value, 1);
+  const bombs = c.items.filter((i) => /^Bombs/.test(i.name));
+  assert.equal(bombs.length, 1, 'the counter joins its feature');
+  assert.deepEqual(bombs[0].system.uses, { max: '5', spent: 2 });
+  assert.equal(c.items.some((i) => i.name === 'Shield' && i.type === 'feat'), false, 'a spell\'s attack row is not a feature');
+  const ogre = structuredClone(npc);
+  ogre.attributes = ogre.attributes.filter((a) => a.name !== 'hp');
+  assert.equal(cv.convertCharacter(ogre).actor.system.attributes.hp.max, 59, '7d10+21 averages 59');
+});

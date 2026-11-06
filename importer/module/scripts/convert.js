@@ -754,7 +754,12 @@ function convertClassic(ch, sheet) {
       if (p && p !== '0') skills[k] = { value: /\*\s*2|expertise/i.test(p) || sheet.get(full + '_type') === '2' ? 2 : 1, ability: skillAbility(k) };
     }
   }
-  const hpMax = num(sheet.max('hp')) ?? num(sheet.first('hp_max', 'npc_hp')) ?? num(sheet.get('hp'));
+  // NPCs with no HP filled in: the average of their HP formula ("13d8 + 91").
+  const avgOf = (f) => {
+    const m = /^\s*(\d+)\s*d\s*(\d+)\s*(?:([+-])\s*(\d+))?\s*$/i.exec(String(f || ''));
+    return m ? Math.max(1, Math.floor(Number(m[1]) * (Number(m[2]) + 1) / 2) + (m[3] === '-' ? -1 : 1) * Number(m[4] || 0)) : null;
+  };
+  const hpMax = num(sheet.max('hp')) ?? num(sheet.first('hp_max', 'npc_hp')) ?? num(sheet.get('hp')) ?? avgOf(sheet.get('npc_hpformula'));
   const hpVal = num(sheet.get('hp'));
   const speedText = isNpc ? sheet.first('npc_speed', 'speed') : sheet.first('speed');
   const { speeds, hover } = parseSpeeds(speedText || '30');
@@ -803,7 +808,9 @@ function convertClassic(ch, sheet) {
       const lv = num(sheet.get('multiclass' + i + '_lvl')) || 1;
       if (mc) lookups.push({ name: mc, kind: 'class', patch: { system: { levels: lv } }, fallback: legacyItem('class', mc, { levels: lv, hd: { denomination: 'd8' } }) });
     }
-    const race = clean(sheet.first('subrace', 'race'));
+    // "Bree" with the subrace "Bone-Dredger": the species is Bree.
+    const race = clean(sheet.get('race')) || clean(sheet.get('subrace'));
+    const subrace = clean(sheet.get('race')) && clean(sheet.get('subrace'));
     // The race: dnd5e's when the name matches, else a custom species built from
     // the sheet's "Racial" traits (added after the traits are read, below).
     const raceLookup = race ? { name: race, kind: 'race' } : null;
@@ -834,9 +841,11 @@ function convertClassic(ch, sheet) {
     }
     // Attacks not already covered by an inventory weapon.
     const gearNames = new Set(sheet.rows('inventory').map((r) => clean(r.itemname).toLowerCase()));
+    const spellNames = new Set(spellRows(sheet).map((r) => r.name.toLowerCase()));
     for (const r of sheet.rows('attack')) {
       const name = clean(r.atkname);
-      if (!name || gearNames.has(name.toLowerCase())) continue;
+      // Rows the sheet made for a spell or an inventory item: those carry it.
+      if (!name || gearNames.has(name.toLowerCase()) || spellNames.has(name.toLowerCase()) || r.spellid || (r.itemid && gearNames.size)) continue;
       const parts = [];
       const base = resolveFormula(r.dmgbase, sheet, mods);
       const attr = resolveFormula(r.dmgattr, sheet, mods);
@@ -860,7 +869,7 @@ function convertClassic(ch, sheet) {
     }
     if (raceLookup) {
       raceLookup.fallback = legacyItem('race', race, {
-        description: { value: '<p><em>Custom species from Roll20.</em></p>' + racial.map((r) => '<h4>' + esc(clean(r.name)) + '</h4>' + para(r.description)).join('') },
+        description: { value: '<p><em>Custom species from Roll20.' + (subrace ? ' Subrace: ' + esc(subrace) + '.' : '') + '</em></p>' + racial.map((r) => '<h4>' + esc(clean(r.name)) + '</h4>' + para(r.description)).join('') },
         type: { value: 'humanoid' }, movement: { speeds: { walk: speeds.walk || 30 }, units: 'ft' },
       }, { flags: { r20import: { customSpecies: true, traits: racial.map((r) => clean(r.name)) } } });
     }
@@ -870,9 +879,39 @@ function convertClassic(ch, sheet) {
       res.push({ name: r.resource_left_name, cur: num(r.resource_left), max: num(r.resource_left_max) });
       res.push({ name: r.resource_right_name, cur: num(r.resource_right), max: num(r.resource_right_max) });
     }
+    // A counter named after a feature ("Bombs 30/60" for Bombs) becomes that
+    // feature's uses; one named after carried gear ("Crossbow Bolts 80/320")
+    // is just its ammunition count.
+    const norm = (n) => clean(n).toLowerCase().replace(/\s+\d+\s*\/\s*\d+$/, '').replace(/\s*\(.*\)$/, '');
+    const usedRes = new Set();
     for (const r of res) {
-      if (!clean(r.name) || !r.max) continue;
-      items.push(legacyItem('feat', r.name, { type: { value: 'class' }, uses: { max: String(r.max), spent: Math.max(0, r.max - (r.cur ?? r.max)) }, description: { value: '' } }));
+      if (!clean(r.name) || !r.max || usedRes.has(norm(r.name))) continue;
+      usedRes.add(norm(r.name));
+      const uses = { max: String(r.max), spent: Math.max(0, r.max - (r.cur ?? r.max)) };
+      const feat = items.find((i) => i.type === 'feat' && norm(i.name) === norm(r.name));
+      if (feat) { feat.system.uses = uses; continue; }
+      if ([...gearNames].some((g) => g && norm(r.name) === norm(g))) continue;
+      items.push(legacyItem('feat', r.name, { type: { value: 'class' }, uses, description: { value: '' } }));
+    }
+    // Proficiencies, languages and tools (rows without a type are languages).
+    const prof = (key, val, custom) => {
+      system.traits[key] ||= { value: [], custom: '' };
+      system.traits[key].value ||= [];
+      if (val) { if (!system.traits[key].value.includes(val)) system.traits[key].value.push(val); }
+      else if (custom) system.traits[key].custom = [system.traits[key].custom, custom].filter(Boolean).join('; ');
+    };
+    for (const r of sheet.rows('proficiencies')) {
+      const name = clean(r.name);
+      const n = name.toLowerCase();
+      if (!name) continue;
+      const t = String(r.prof_type || 'LANGUAGE').toUpperCase();
+      if (t === 'WEAPON') prof('weaponProf', /^simple/.test(n) ? 'sim' : /^martial/.test(n) ? 'mar' : '', name);
+      else if (t === 'ARMOR') prof('armorProf', /^light/.test(n) ? 'lgt' : /^medium/.test(n) ? 'med' : /^heavy/.test(n) ? 'hvy' : /shield/.test(n) ? 'shl' : '', name);
+      else if (t === 'LANGUAGE') prof('languages', LANGS[n], name);
+    }
+    for (const r of sheet.rows('tool')) {
+      const k = TOOLS[clean(r.toolname).toLowerCase().replace(/[’]/g, "'")];
+      if (k) (system.tools ||= {})[k] = { value: /expert|2\s*\*/i.test(r.toolbonus_base || '') ? 2 : 1 };
     }
     // Spell slots remaining.
     const spells = {};
