@@ -260,6 +260,15 @@
     return [config, dialog];
   }
   C.foundryAdvMode = advMode;
+  // The chat card each attack last posted, so rolls made from the bar attach
+  // to it (dnd5e then offers Apply Damage on it, as from the card's buttons).
+  const lastCard = new Map();
+  const keyOf = (a) => a.uuid || a.id;
+  function originOf(a) {
+    const id = lastCard.get(keyOf(a));
+    const msgs = G.game && G.game.messages;
+    return id && (!msgs || msgs.get(id)) ? { data: { system: { origin: id } } } : {};
+  }
 
   // A roll returns null when its dialog is closed without rolling.
   // (dnd5e returns null or nothing when a roll or use dialog is closed.)
@@ -335,11 +344,23 @@
     switch (act.op) {
       case 'hit': {
         const a = activity || acts.find((x) => x.type === 'attack');
-        return a ? rolled(await a.rollAttack(...d20())) : rolled(await item.use(), 'Used.');
+        if (!a) return rolled(await item.use(), 'Used.');
+        // A spell's attack: the spell was cast already (Cast posts its card).
+        if (item.type === 'spell' || typeof a.use !== 'function') return rolled(await a.rollAttack(...d20(), originOf(a)));
+        // As the sheet does it: the item's card (with its Damage button and
+        // Apply Damage), ammunition and uses spent, then the attack roll tied
+        // to that card. A set roll mode rolls the attack here with it.
+        const ask = advMode() === ADV_MODES[0];
+        const res = await a.use({ subsequentActions: ask });
+        if (!res) return { ok: false, msg: 'Cancelled.' };
+        if (res.message && res.message.id) lastCard.set(keyOf(a), res.message.id);
+        if (ask) return { ok: true, msg: 'Attack.' };
+        return rolled(await a.rollAttack(...d20(), originOf(a)));
       }
       case 'dmg': {
         const a = activity && dmgOf(activity).length ? activity : acts.find((x) => dmgOf(x).length);
-        return a ? rolled(await a.rollDamage()) : { ok: false, msg: 'Nothing to roll.' };
+        // Tied to the item's card from the last attack, like its Damage button.
+        return a ? rolled(await a.rollDamage({}, {}, originOf(a))) : { ok: false, msg: 'Nothing to roll.' };
       }
       case 'chat':
         if (item.type === 'spell') return rolled(await item.use(), 'Cast.');

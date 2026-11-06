@@ -31,9 +31,9 @@ function mockActor() {
   const coll = (arr) => { const m = new Map(arr.map((x) => [x.id, x])); return m; };
   const activity = (id, type, o = {}) => ({
     id, type, name: o.name || '', activation: { type: o.act || 'action' }, labels: o.labels || {},
-    rollAttack: async () => { calls.push(['rollAttack', id]); return [{}]; },
+    rollAttack: async (...args) => { calls.push(['rollAttack', id, ...(args.length ? [JSON.parse(JSON.stringify(args))] : [])]); return [{}]; },
     rollDamage: async () => { calls.push(['rollDamage', id]); return [{}]; },
-    use: async () => { calls.push(['use', id]); return {}; },
+    use: async (u) => { calls.push(['use', id, ...(u ? [JSON.parse(JSON.stringify(u))] : [])]); return { message: { id: 'card-' + id } }; },
   });
   const item = (id, type, name, system, acts = []) => ({
     id, type, name, system: { ...system, activities: coll(acts) }, labels: {},
@@ -112,7 +112,7 @@ test('Foundry: bar actions call the dnd5e API', async () => {
   await go({ ref: 'hd:d10', op: 'press' });
   await go({ ref: 'rest:long', op: 'press' });
   assert.deepEqual(plain(calls), [
-    ['rollAttack', 'a1'], ['rollDamage', 'a1'], ['item.use', 'bl'],
+    ['use', 'a1', { subsequentActions: true }], ['rollDamage', 'a1'], ['item.use', 'bl'],
     ['update', 'sw2', { 'system.uses.spent': 2 }], ['update', 'pot', { 'system.quantity': 1 }],
     ['applyDamage', 7], ['applyDamage', -3],
     ['rollSavingThrow', { ability: 'con' }, {}], ['rollConcentration', { target: 13 }, {}], ['rollSkill', { skill: 'ste' }, {}],
@@ -141,6 +141,10 @@ test('Foundry: roll settings - who sees rolls, and advantage for the bar\'s d20 
     await C.foundryPerform(actor, { op: 'mode', arg: 'Advantage' });
     await C.foundryPerform(actor, { ref: 'skill:ste', op: 'check' });
     assert.deepEqual(plain(calls.at(-1)), ['rollSkill', { skill: 'ste', advantage: true }, { configure: false }]);
+    // A weapon attack posts the item's card first, then rolls with advantage tied to it.
+    await C.foundryPerform(actor, { ref: 'act:sw:a1', op: 'hit' });
+    assert.deepEqual(plain(calls.slice(-2)), [['use', 'a1', { subsequentActions: false }],
+      ['rollAttack', 'a1', [{ advantage: true }, { configure: false }, { data: { system: { origin: 'card-a1' } } }]]]);
     const menus = C.buildMenus(snap, {}, { foundry: true });
     const settings = JSON.stringify(menus.find((m) => m.key === 'settings'));
     assert.match(settings, /Roll visibility/);

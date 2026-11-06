@@ -2,7 +2,7 @@
   "id": "foundryembetterment",
   "title": "Foundryembetterment",
   "description": "A compact action bar beside the scene controls for D&D 5e: attacks, spells, items, features, resources, checks, hit points, concentration and death saves one click away, plus what you've used this turn (action, bonus action, reaction and movement). Unofficial; a port of the Roll20embetterment Firefox add-on.",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "compatibility": {
     "minimum": "14",
     "verified": "14.370"
@@ -18,5 +18,5 @@
   "bugs": "https://github.com/newnetmp3/roll20embetterment/issues",
   "license": "LICENSE",
   "manifest": "https://raw.githubusercontent.com/newnetmp3/roll20embetterment/main/foundry/module.json",
-  "download": "https://github.com/newnetmp3/roll20embetterment/releases/download/foundryembetterment-v1.4.2/foundryembetterment.zip"
+  "download": "https://github.com/newnetmp3/roll20embetterment/releases/download/foundryembetterment-v1.4.3/foundryembetterment.zip"
 }
