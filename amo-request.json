@@ -1,4 +1,4 @@
 {
-"version": "5.7.2",
-"notes": "New since 5.5.0: description tooltips for attacks, spells, items and features (no chat needed; long ones scroll); spell slots left by level, with -/+ on Classic sheets; token markers on and off; End turn when your token is up; right-click anything to pin it to Favorites; tracking of actions, bonus actions, reactions and movement each turn; concentration save DCs and death saves; the bar lights up on your turn. Unofficial; not affiliated with Roll20."
+"version": "5.7.3",
+"notes": "New since 5.5.0: description tooltips for attacks, spells, items and features (no chat needed; long ones scroll); spell slots left by level, with -/+ on Classic sheets; token markers on and off; End turn when your token is up; right-click anything to pin it to Favorites; tracking of actions, bonus actions, reactions and movement each turn; concentration save DCs and death saves; the bar lights up on your turn. Unofficial; not affiliated with Roll20. Also fixes tooltips showing the word \"null\"."
 }

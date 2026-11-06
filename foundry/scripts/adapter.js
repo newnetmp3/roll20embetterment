@@ -72,6 +72,7 @@
       else text = t.replace(/<[^>]+>/g, '');
     } catch { text = t.replace(/<[^>]+>/g, ''); }
     text = text.replace(/[ \t\u00a0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    if (/^(null|undefined)$/i.test(text)) return '';
     return text.length > max ? text.slice(0, max).replace(/\s+\S*$/, '') + '…' : text;
   }
   // "1st-level Evocation · V, S, M · Concentration, up to 1 minute"

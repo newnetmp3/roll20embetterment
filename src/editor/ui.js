@@ -137,6 +137,11 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     emptyPeople: 'Open a character sheet, or open the Journal tab once', ...(C.TEXT || {}),
   })[k];
 
+  // Text that is really "nothing": empty, or the words null / undefined
+  // (which Roll20 and some sheets save in place of an empty field).
+  const blank = (v) => v === null || v === undefined || /^\s*(null|undefined)?\s*$/i.test(String(v));
+  // A detail line without its empty pieces: "60 ft · null" -> "60 ft".
+  const tidy = (v) => (blank(v) ? '' : String(v).split('\n').map((l) => l.split(' · ').filter((p) => !blank(p)).join(' · ')).filter((l, i, a) => l || (i > 0 && a[i - 1])).join('\n').trim());
   function el(tag, cls, html) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -400,7 +405,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (!n.header && handlers.pin && (n.run || (n.controls && n.controls.length))) {
         row.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); handlers.pin(n.key); });
       }
-      if (!n.header && (n.desc || n.info)) {
+      if (!n.header && (tidy(n.desc) || !blank(n.info))) {
         row.addEventListener('mouseenter', () => { clearTimeout(tipTimer); tipTimer = setTimeout(() => { if (!tip.matches(':hover')) showTip(n, row); }, 280); });
         row.addEventListener('mouseleave', () => { clearTimeout(tipTimer); hideSoon(); });
         row.addEventListener('focus', () => { if (row.matches(':focus-visible')) showTip(n, row); });
@@ -408,7 +413,8 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       }
       if (n.checked !== undefined && !n.header) row.appendChild(el('span', 'chk', n.checked ? '✓' : ''));
       row.appendChild(el('span', 'lab', n.label));
-      if (n.hint) { const h = el('span', 'hint', n.hint); h.title = n.hint; row.appendChild(h); }
+      const hint = tidy(n.hint);
+      if (hint) { const h = el('span', 'hint', hint); h.title = hint; row.appendChild(h); }
       if (n.input) {
         const input = el('input', 'num');
         input.type = 'number'; input.min = '0'; input.placeholder = n.input.placeholder || '';
@@ -479,8 +485,12 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     function showTip(n, row) {
       if (!row.isConnected) return;
       clearTimeout(tipHide);
-      tip.replaceChildren(el('div', 'tt', n.label), n.desc ? el('div', 'tm', n.desc) : null, n.info ? el('div', 'tb', n.info) : null,
-        handlers.pin && (n.run || (n.controls && n.controls.length)) ? el('div', 'tf', 'Right-click to pin to Favorites') : null);
+      const desc = tidy(n.desc);
+      const info = blank(n.info) ? '' : String(n.info);
+      if (!desc && !info) { hideTip(); return; }
+      // replaceChildren() would write a missing part out as the text "null".
+      tip.replaceChildren(...[el('div', 'tt', n.label), desc ? el('div', 'tm', desc) : null, info ? el('div', 'tb', info) : null,
+        handlers.pin && (n.run || (n.controls && n.controls.length)) ? el('div', 'tf', 'Right-click to pin to Favorites') : null].filter(Boolean));
       tip.scrollTop = 0;
       tip.hidden = false;
       // Beside the menu the row is in, on the side with more room.
