@@ -55,7 +55,7 @@
   // A dnd5e description (HTML with enrichers) as readable plain text for the
   // bar's tooltip. Parsed with DOMParser, which never runs scripts or loads
   // anything; only its text is kept.
-  function plainText(html, max = 2500) {
+  function plainText(html, max = 8000) {
     let t = String(html || '');
     if (!t.trim()) return '';
     t = t.replace(/<(script|style|template)[^>]*>[\s\S]*?<\/\1>/gi, '')

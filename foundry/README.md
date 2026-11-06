@@ -43,7 +43,9 @@ Modules**). Each player sees their own bar; nothing to set up per player.
 Hover over an attack, spell, item, feature or effect (or move to it with the
 arrow keys) to read its description in a tooltip, without posting anything to
 chat. Spells also show their level, school, components and duration. Players
-see an unidentified magic item's unidentified description only.
+see an unidentified magic item's unidentified description only. A long
+description scrolls: move the mouse onto the tooltip and use the wheel (it
+stays open while the mouse is on it), or press Page Up / Page Down.
 
 ## This turn
 

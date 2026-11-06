@@ -96,7 +96,7 @@
 @media (prefers-reduced-motion: reduce) { .strip.myturn { animation: none; } }
 .meter .sub { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--mute); }
 /* Tooltip: what a row does and its description, without posting to chat. */
-.tip { position: fixed; z-index: 2147483020; max-width: 340px; max-height: 60vh; overflow-y: auto; pointer-events: none;
+.tip { position: fixed; z-index: 2147483020; max-width: 340px; max-height: 60vh; overflow-y: auto; overscroll-behavior: contain;
      background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; box-shadow: 4px 4px 16px rgba(0,0,0,.45);
      font-size: 12px; line-height: 1.45; color: var(--fg); }
 .tip[hidden] { display: none; }
@@ -396,8 +396,8 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       row.dataset.key = n.key;
       if (!n.header) { row.tabIndex = -1; row.setAttribute('role', 'menuitem'); }
       if (!n.header && (n.desc || n.info)) {
-        row.addEventListener('mouseenter', () => { clearTimeout(tipTimer); tipTimer = setTimeout(() => showTip(n, row), 280); });
-        row.addEventListener('mouseleave', hideTip);
+        row.addEventListener('mouseenter', () => { clearTimeout(tipTimer); tipTimer = setTimeout(() => { if (!tip.matches(':hover')) showTip(n, row); }, 280); });
+        row.addEventListener('mouseleave', () => { clearTimeout(tipTimer); hideSoon(); });
         row.addEventListener('focus', () => { if (row.matches(':focus-visible')) showTip(n, row); });
         row.addEventListener('blur', hideTip);
       }
@@ -473,7 +473,9 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     let tipTimer = 0;
     function showTip(n, row) {
       if (!row.isConnected) return;
+      clearTimeout(tipHide);
       tip.replaceChildren(el('div', 'tt', n.label), n.desc ? el('div', 'tm', n.desc) : null, n.info ? el('div', 'tb', n.info) : null);
+      tip.scrollTop = 0;
       tip.hidden = false;
       // Beside the menu the row is in, on the side with more room.
       const menu = row.closest('.menu');
@@ -486,7 +488,13 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       tip.style.left = Math.round(left) + 'px';
       tip.style.top = Math.round(Math.max(4, Math.min(rr.top - 6, innerHeight - h - 4))) + 'px';
     }
-    function hideTip() { clearTimeout(tipTimer); tip.hidden = true; }
+    function hideTip() { clearTimeout(tipTimer); clearTimeout(tipHide); tip.hidden = true; }
+    // Leaving the row: wait a moment, so the mouse can move onto the tooltip
+    // to scroll a long description; it stays while the mouse is on it.
+    let tipHide = 0;
+    function hideSoon() { clearTimeout(tipHide); tipHide = setTimeout(() => { if (!tip.matches(':hover')) hideTip(); }, 350); }
+    tip.addEventListener('mouseenter', () => { clearTimeout(tipHide); clearTimeout(tipTimer); });
+    tip.addEventListener('mouseleave', hideSoon);
 
     let menus = [];
     function renderMenus() {
@@ -572,6 +580,12 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (path.length && !e.composedPath().includes(host)) { path = []; render(); }
     }, true);
     root.addEventListener('keydown', (e) => {
+      // Page Up / Page Down scroll a long description in the tooltip.
+      if ((e.key === 'PageDown' || e.key === 'PageUp') && !tip.hidden && tip.scrollHeight > tip.clientHeight) {
+        e.preventDefault();
+        tip.scrollBy({ top: (e.key === 'PageDown' ? 1 : -1) * (tip.clientHeight - 30) });
+        return;
+      }
       const level = Number(e.target.closest && e.target.closest('.menu')?.dataset.level);
       if (e.key === 'Escape') {
         if (path.length > 1) { path.length = path.length - 1; render(); const r = root.querySelector('.row.open'); if (r) r.focus(); }
