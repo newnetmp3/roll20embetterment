@@ -52,9 +52,47 @@
     return key;
   }
 
+  // A dnd5e description (HTML with enrichers) as readable plain text for the
+  // bar's tooltip. Parsed with DOMParser, which never runs scripts or loads
+  // anything; only its text is kept.
+  function plainText(html, max = 2500) {
+    let t = String(html || '');
+    if (!t.trim()) return '';
+    t = t.replace(/<(script|style|template)[^>]*>[\s\S]*?<\/\1>/gi, '')
+      .replace(/@\w+\[[^\]]*\]\{([^}]*)\}/g, '$1')
+      .replace(/@(\w+)\[([^\]]*)\]/g, (m, k, v) => String(v).split(/[.|]/).pop())
+      .replace(/\[\[\/\w+\s+([^\]]*?)\]\](?:\{([^}]*)\})?/g, (m, f, l) => l || f)
+      .replace(/\[\[([^\]]*)\]\]/g, '$1')
+      .replace(/&Reference\[([^\]]*)\](?:\{([^}]*)\})?/g, (m, r, l) => l || String(r).split(/[ =]/)[0])
+      .replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|h\d|li|tr|section|blockquote)>/gi, '\n').replace(/<li[^>]*>/gi, '• ');
+    let text = t;
+    try {
+      const P = G.DOMParser || (typeof DOMParser !== 'undefined' ? DOMParser : null);
+      if (P) text = new P().parseFromString('<body>' + t + '</body>', 'text/html').body.textContent || '';
+      else text = t.replace(/<[^>]+>/g, '');
+    } catch { text = t.replace(/<[^>]+>/g, ''); }
+    text = text.replace(/[ \t\u00a0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    return text.length > max ? text.slice(0, max).replace(/\s+\S*$/, '') + '…' : text;
+  }
+  // "1st-level Evocation · V, S, M · Concentration, up to 1 minute"
+  function spellLine(item, level) {
+    const L = item.labels || {};
+    const comp = L.components && (L.components.vsm || (Array.isArray(L.components.all) ? L.components.all.map((c) => c.abbr || c.label).join(', ') : ''));
+    const school = L.school || '';
+    return [level === 0 ? (school ? school + ' cantrip' : 'Cantrip') : ORD(level) + '-level' + (school ? ' ' + school : ''), comp, L.duration, L.materials].filter(Boolean).join(' · ');
+  }
+  // Players see an unidentified item's own description, not the real one.
+  function infoOf(item) {
+    const s = item.system || {};
+    const gm = !!(G.game && G.game.user && G.game.user.isGM);
+    if (s.identified === false && !gm) return plainText(s.unidentified && s.unidentified.description);
+    return plainText(s.description && s.description.value);
+  }
+
   function addItem(snap, item) {
     const s = item.system || {};
     const ref = 'item:' + item.id;
+    const info = infoOf(item);
     const acts = activities(item);
     const timing = itemActivation(item);
     const range = (item.labels && item.labels.range) || '';
@@ -69,6 +107,7 @@
         dmg: dmgOf(acts.find((a) => dmgOf(a).length)),
         tags: [has(s.properties, 'concentration') ? 'C' : '', has(s.properties, 'ritual') ? 'R' : ''].filter(Boolean),
         prepared: prepares ? num(s.prepared) > 0 : null,
+        info: [spellLine(item, level), info].filter(Boolean).join('\n\n'),
       });
       return;
     }
@@ -79,7 +118,7 @@
         ref: 'act:' + item.id + ':' + a.id,
         name: attacks.length > 1 ? item.name + ' (' + (generic ? 'Attack ' + (i + 1) : a.name) + ')' : item.name,
         section: timing || 'Action', sub: '', range: (a.labels && a.labels.range) || range,
-        hit: a.labels && a.labels.toHit ? a.labels.toHit + ' Attack' : 'Attack', dmg: dmgOf(a), chips: [],
+        hit: a.labels && a.labels.toHit ? a.labels.toHit + ' Attack' : 'Attack', dmg: dmgOf(a), chips: [], info,
       });
     });
     if (GEAR[item.type]) {
@@ -88,7 +127,7 @@
         ref, name: item.name, section: GEAR[item.type], sub: '',
         qty: num(s.quantity), weight: w && num(w.value) ? w.value + ' ' + (w.units || 'lb') : '',
         equipped: 'equipped' in s && (item.type === 'weapon' || item.type === 'equipment') ? !!s.equipped : null,
-        consumable: item.type === 'consumable', usable: acts.length > 0 && !attacks.length, timing,
+        consumable: item.type === 'consumable', usable: acts.length > 0 && !attacks.length, timing, info,
       });
       return;
     }
@@ -96,9 +135,9 @@
       const res = usesOf(item);
       const kind = s.type && s.type.value;
       if (acts.length && !attacks.length && timing) {
-        snap.actions.push({ ref, name: item.name, section: SECTION_OF_TIMING(timing), desc: '', roll: '', res });
+        snap.actions.push({ ref, name: item.name, section: SECTION_OF_TIMING(timing), desc: '', roll: '', res, info });
       }
-      snap.features.push({ ref, name: item.name, section: FEAT_SECTIONS[kind] || 'Features', source: '', timing, desc: '', res, usable: acts.length > 0 });
+      snap.features.push({ ref, name: item.name, section: FEAT_SECTIONS[kind] || 'Features', source: '', timing, desc: '', res, usable: acts.length > 0, info });
     }
   }
 
@@ -174,7 +213,7 @@
     for (const e of all) {
       if (!e || (e.statuses && [...e.statuses].some((x) => statusIds.has(x)))) continue;
       const from = e.parent && e.parent !== actor ? e.parent.name : '';
-      snap.effects.push({ ref: 'effect:' + e.id, name: e.name || 'Effect', active: !e.disabled, source: from });
+      snap.effects.push({ ref: 'effect:' + e.id, name: e.name || 'Effect', active: !e.disabled, source: from, info: plainText(e.description) });
     }
 
     // The sheet's favorites, as the bar names the same things.

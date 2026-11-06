@@ -95,6 +95,14 @@
 @keyframes r20turn { 50% { box-shadow: 0 0 0 3px rgba(217,164,65,.25), 2px 2px 16px rgba(217,164,65,.5); } }
 @media (prefers-reduced-motion: reduce) { .strip.myturn { animation: none; } }
 .meter .sub { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--mute); }
+/* Tooltip: what a row does and its description, without posting to chat. */
+.tip { position: fixed; z-index: 2147483020; max-width: 340px; max-height: 60vh; overflow-y: auto; pointer-events: none;
+     background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; box-shadow: 4px 4px 16px rgba(0,0,0,.45);
+     font-size: 12px; line-height: 1.45; color: var(--fg); }
+.tip[hidden] { display: none; }
+.tip .tt { font-weight: 700; color: var(--acc); margin-bottom: 2px; }
+.tip .tm { color: var(--mute); margin-bottom: 4px; white-space: pre-wrap; }
+.tip .tb { white-space: pre-wrap; border-top: 1px solid var(--line); padding-top: 5px; margin-top: 3px; }
 .row { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 6px 3px 8px; border-radius: 5px; cursor: pointer;
      outline: none; }
 .row:hover, .row.open { background: var(--bg2); }
@@ -387,7 +395,12 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       const row = el('div', 'row' + (n.header ? ' hdr' : '') + (n.disabled ? ' dis' : '') + (path[level + 1] === n.key ? ' open' : '') + (busy.has(n.key) ? ' busy' : ''));
       row.dataset.key = n.key;
       if (!n.header) { row.tabIndex = -1; row.setAttribute('role', 'menuitem'); }
-      if (n.desc) row.title = n.desc;
+      if (!n.header && (n.desc || n.info)) {
+        row.addEventListener('mouseenter', () => { clearTimeout(tipTimer); tipTimer = setTimeout(() => showTip(n, row), 280); });
+        row.addEventListener('mouseleave', hideTip);
+        row.addEventListener('focus', () => { if (row.matches(':focus-visible')) showTip(n, row); });
+        row.addEventListener('blur', hideTip);
+      }
       if (n.checked !== undefined && !n.header) row.appendChild(el('span', 'chk', n.checked ? '✓' : ''));
       row.appendChild(el('span', 'lab', n.label));
       if (n.hint) { const h = el('span', 'hint', n.hint); h.title = n.hint; row.appendChild(h); }
@@ -452,8 +465,32 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       act(n, n.run);
     }
 
+    // ---- tooltip ----------------------------------------------------------------
+    const tip = el('div', 'tip');
+    tip.hidden = true;
+    tip.setAttribute('role', 'tooltip');
+    wrap.appendChild(tip);
+    let tipTimer = 0;
+    function showTip(n, row) {
+      if (!row.isConnected) return;
+      tip.replaceChildren(el('div', 'tt', n.label), n.desc ? el('div', 'tm', n.desc) : null, n.info ? el('div', 'tb', n.info) : null);
+      tip.hidden = false;
+      // Beside the menu the row is in, on the side with more room.
+      const menu = row.closest('.menu');
+      const mr = (menu || row).getBoundingClientRect();
+      const rr = row.getBoundingClientRect();
+      const w = tip.offsetWidth;
+      const h = tip.offsetHeight;
+      const right = mr.right + 6;
+      const left = right + w <= innerWidth - 4 ? right : Math.max(4, mr.left - 6 - w);
+      tip.style.left = Math.round(left) + 'px';
+      tip.style.top = Math.round(Math.max(4, Math.min(rr.top - 6, innerHeight - h - 4))) + 'px';
+    }
+    function hideTip() { clearTimeout(tipTimer); tip.hidden = true; }
+
     let menus = [];
     function renderMenus() {
+      hideTip();
       const scrolls = menus.map((m) => m.scrollTop);
       menus.forEach((m) => m.remove());
       menus = [];

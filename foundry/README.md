@@ -38,6 +38,13 @@ Modules**). Each player sees their own bar; nothing to set up per player.
 | 🎲 Checks | Initiative, abilities and saves, skills, tools. |
 | ⚙ Settings | Roll visibility (Public, Private GM, Blind GM, Self: Foundry's roll mode), roll mode for the bar's d20 rolls (Ask each time, Normal, Advantage, Disadvantage), follow the selected token, highlight on your turn, dock, copy diagnostics. |
 
+## Descriptions
+
+Hover over an attack, spell, item, feature or effect (or move to it with the
+arrow keys) to read its description in a tooltip, without posting anything to
+chat. Spells also show their level, school, components and duration. Players
+see an unidentified magic item's unidentified description only.
+
 ## This turn
 
 - **Action, Bonus, Reaction** are marked when something with that activation

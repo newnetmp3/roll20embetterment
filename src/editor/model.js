@@ -1,7 +1,7 @@
 // Turns a sheet snapshot into the sidebar's cascading menus. Pure data in,
 // pure data out: no DOM, so it is unit-tested directly.
 //
-// Node: { key, label, hint?, desc?, header?, checked?, disabled?,
+// Node: { key, label, hint?, desc?, info? (long description for the tooltip), header?, checked?, disabled?,
 //         run?: Act, controls?: [{label, title?, run: Act}], children?: [Node],
 //         input?: {placeholder, run: (value) => Act} }
 // Act:  { ref, op, arg?, say? }  — performed on the sheet by the frame.
@@ -63,7 +63,7 @@
     const heals = a.dmg.length && a.dmg.every((d) => /heal/i.test(d.type));
     return {
       key: a.ref, label, hint: a.range,
-      desc: [name !== label ? name : '', a.sub, a.range, ...(a.chips || [])].filter(Boolean).join(' · '),
+      desc: [name !== label ? name : '', a.sub, a.range, ...(a.chips || [])].filter(Boolean).join(' · '), info: a.info || '',
       run: a.hit ? withEcon({ ref: a.ref, op: 'hit', say: name + ' attack' }, econ)
         : heals ? withEcon({ ref: a.ref, op: 'dmg', arg: 0, say: name + ' healing' }, econ) : { ref: a.ref, op: 'chat', say: name },
       controls,
@@ -104,7 +104,7 @@
     controls.push({ label: '💬', title: 'Show in chat', run: { ref: x.ref, op: 'chat', say: x.name } });
     const empty = res.length && res[0].cur === 0;
     return {
-      key: x.ref, label: x.name, desc: x.desc,
+      key: x.ref, label: x.name, desc: x.desc, info: x.info || '',
       hint: res.length ? res.map(counter).join(' ') : x.roll,
       disabled: !!empty,
       run: withEcon({ ref: x.ref, op: 'use', say: x.name }, econ),
@@ -168,7 +168,7 @@
     return {
       key: item.ref, label: item.name,
       hint: (item.qty !== null && item.qty !== 1 ? '×' + item.qty : '') + (item.equipped ? ' ●' : ''),
-      desc: [item.sub, item.weight !== '--' ? item.weight : ''].filter(Boolean).join(' · '),
+      desc: [item.sub, item.weight !== '--' ? item.weight : ''].filter(Boolean).join(' · '), info: item.info || '',
       children,
     };
   }
@@ -186,7 +186,7 @@
     const res = f.res || [];
     const controls = [...resControls(f.ref, res), { label: '💬', title: 'Show in chat', run: { ref: f.ref, op: 'chat', say: f.name } }];
     return {
-      key: f.ref, label: f.name, desc: [f.source, f.timing].filter(Boolean).join(' · ') + (f.desc ? '\n' + f.desc : ''),
+      key: f.ref, label: f.name, desc: [f.source, f.timing].filter(Boolean).join(' · ') + (f.desc ? '\n' + f.desc : ''), info: f.info || '',
       hint: res.length ? res.map(counter).join(' ') : f.timing,
       disabled: !!(res.length && res[0].cur === 0),
       run: withEcon(res.length ? { ref: f.ref, op: 'use', say: f.name } : { ref: f.ref, op: 'chat', say: f.name }, econOf(f.timing) || null),
@@ -213,7 +213,7 @@
       return {
         key: s.ref, label: s.name,
         hint: [s.tags.join(''), s.prepared === false ? 'unprepared' : ''].filter(Boolean).join(' '),
-        desc: [s.time, s.range].filter(Boolean).join(' · '),
+        desc: [s.time, s.range].filter(Boolean).join(' · '), info: s.info || '',
         run: withEcon({ ref: s.ref, op: 'chat', say: 'Cast ' + s.name }, econ, conc),
         controls,
       };
@@ -224,7 +224,7 @@
   function effects(snap) {
     const out = [];
     for (const e of snap.effects || []) {
-      out.push({ key: e.ref, label: e.name, hint: e.source || '', checked: !!e.active, desc: e.desc || '',
+      out.push({ key: e.ref, label: e.name, hint: e.source || '', checked: !!e.active, desc: e.desc || '', info: e.info || '',
         run: { ref: e.ref, op: 'effect', say: e.name + (e.active ? ' off' : ' on') } });
     }
     if ((snap.conditions || []).length) {

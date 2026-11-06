@@ -177,3 +177,22 @@ test('Foundry: spell slots, effects and conditions, favorites', async () => {
   const turn = C.turnMenu({ used: {}, inOrder: true, canEnd: true });
   assert.ok(turn.items.some((i) => i.key === 'turn:end'));
 });
+
+test('Foundry: tooltips carry descriptions as plain text, without posting to chat', () => {
+  const C = setup();
+  const { actor, calls } = mockActor();
+  const sword = actor.items.get('sw');
+  sword.system.description = { value: '<p>A fine blade. Deals [[/r 1d8]] extra to @UUID[Compendium.dnd5e.monsters.Item.x]{Goblins}.</p><ul><li>One</li><li>Two</li></ul><script>alert(1)</script>' };
+  const bless = actor.items.get('bl');
+  bless.system.description = { value: '<p>You bless up to three creatures.</p>' };
+  bless.labels = { school: 'Enchantment', components: { vsm: 'V, S, M' }, duration: 'Concentration, up to 1 minute' };
+  const snap = C.foundrySnap(actor);
+  const atk = snap.attacks.find((a) => a.name === 'Longsword');
+  assert.equal(atk.info, 'A fine blade. Deals 1d8 extra to Goblins.\n• One\n• Two');
+  const sp = snap.spells.find((x) => x.name === 'Bless');
+  assert.equal(sp.info, '1st-level Enchantment · V, S, M · Concentration, up to 1 minute\n\nYou bless up to three creatures.');
+  const menus = C.buildMenus(snap, {}, { foundry: true });
+  const find = (list) => { for (const n of list) { if (n.key === 'item:bl') return n; const c = n.children && find(n.children); if (c) return c; } return null; };
+  assert.match(find(menus.find((m) => m.key === 'spells').items).info, /bless up to three/);
+  assert.equal(calls.length, 0, 'reading descriptions posts nothing');
+});
