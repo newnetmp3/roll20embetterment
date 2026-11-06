@@ -1,0 +1,65 @@
+name: Roll20embetterment on addons.mozilla.org
+# Submits the extension to Mozilla's public listing (listed channel, reviewed
+# by Mozilla) using the build without a self-hosted update URL. Start it by
+# setting amo-request.json to the package.json version and pushing. Mozilla
+# never accepts the same version twice, in either channel, so this version
+# must not have been signed for a GitHub release.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [amo-request.json]
+permissions:
+  contents: read
+concurrency:
+  group: roll20embetterment-amo
+  cancel-in-progress: false
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: firefox-signing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run check
+      - name: Check request
+        id: req
+        run: |
+          version=$(node -p "require('./package.json').version")
+          requested=$(node -p "require('./amo-request.json').version")
+          if [ "$version" != "$requested" ]; then
+            echo "::error::amo-request.json ($requested) must match package.json ($version)"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Check AMO credentials
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::error::AMO_JWT_ISSUER / AMO_JWT_SECRET are not available to this branch in the firefox-signing environment."; exit 1
+          fi
+      - name: Unpack the listed build
+        env:
+          VERSION: ${{ steps.req.outputs.version }}
+        run: |
+          mkdir -p dist/amo-src
+          unzip -q "dist/firefox/roll20embetterment-$VERSION-amo.zip" -d dist/amo-src
+          if grep -q update_url dist/amo-src/manifest.json; then echo "::error::listed build must not have update_url"; exit 1; fi
+          node -e "const fs=require('fs');const notes=fs.readFileSync('amo-request.json','utf8');const r=JSON.parse(notes);fs.writeFileSync('dist/amo-metadata.json',JSON.stringify({version:{license:'MIT',release_notes:{'en-US':r.notes||''}}}))"
+      - name: Submit to Mozilla (listed)
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          npx --yes web-ext@8.3.0 sign \
+            --source-dir dist/amo-src \
+            --artifacts-dir dist/amo-signed \
+            --channel listed \
+            --amo-metadata dist/amo-metadata.json \
+            --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET" \
+            --approval-timeout 0 --no-input

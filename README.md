@@ -187,6 +187,12 @@ release** workflow signs it, publishes the release and updates `updates.json`.
 the upload for addons.mozilla.org (no self-hosted update URL); the listing text
 is in `store/amo-listing.md`.
 
+To publish on addons.mozilla.org (the public listing, reviewed by Mozilla):
+set `package.json` and `amo-request.json` (`version` and release `notes`) to
+a version Mozilla hasn't signed yet and push. The **Roll20embetterment on
+addons.mozilla.org** workflow submits the build without the self-hosted
+update URL. Listing text: `store/amo-listing.md`.
+
 To try a build, load `dist/firefox/extension/manifest.json` from
 `about:debugging` → **Load Temporary Add-on…**.
 

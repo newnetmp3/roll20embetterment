@@ -25,6 +25,9 @@ Roll20embetterment adds a compact action bar beside Roll20's left toolbar for D&
 - Tracks each turn: Action, Bonus Action and Reaction used, and how far your token has moved against its speed (Dash, difficult terrain, fly/swim speeds). Resets when your turn comes up, and the bar lights up when it's your turn.
 - Keeps the sheet it needs loaded in the background, so actions work without opening a sheet window.
 - Works with the "D&D Fifth Edition (5E & 5.5E) by Roll20" sheet and the older "D&D 5E (Classic) by Roll20" sheet, for player characters and NPCs.
+- Hover over anything for its full description in a tooltip (spells with level, school, components and duration), without posting to chat.
+- Spell slots left by level; on Classic sheets, spend and restore them from the bar.
+- Token markers on and off, End turn when your token is up in the turn order, and right-click anything to pin it to Favorites.
 - Drag the bar anywhere; Alt+Shift+C puts it back.
 
 This is an unofficial fan tool. It is not made, endorsed or supported by Roll20. "Roll20" is a trademark of The Orr Group, LLC.
@@ -34,7 +37,9 @@ Privacy: the add-on collects and sends no data. It runs only on app.roll20.net a
 **Notes to reviewer:**
 
 - Source is plain, unminified JavaScript; the uploaded files are the repository's `src/` files as-is (built by `scripts/build.mjs`, which only copies files and writes the manifest). Repository: https://github.com/newnetmp3/roll20embetterment
-- `src/editor/selection.js` runs in the page (MAIN world) and only reads Roll20's own `window.MeshManager.engine.tabletop.getSelection()` to learn which character the selected token represents. It sends the result to the content script as a JSON string in a DOM CustomEvent. It changes nothing in the page.
+- `src/editor/selection.js` runs in the page (MAIN world) and reads Roll20's own `window.MeshManager.engine.tabletop.getSelection()` to learn which character the selected token represents. It sends the result to the content script as a JSON string in a DOM CustomEvent.
+- The same script reads, read-only, the active character's saved sheet attributes from `window.Campaign` to show descriptions and spell slots in tooltips and menus, and replies to the content script with plain text (HTML tags removed; nothing is inserted into the page as HTML).
+- It changes Roll20 data in exactly three cases, each only when the user clicks the matching bar entry: toggling a status marker on the character's token (`token.save({ statusmarkers })`), ending the user's turn when their token is first in the turn order (`Campaign.save({ turnorder })`), and spending or restoring a Classic sheet's spell slot (`attribute.save({ current })`).
 - The same script also reads, read-only, Roll20's `window.Campaign` page data (token positions, the page's grid scale and the turn order) to measure how far each token moved this turn. It sends only distances and token ids to the content script, the same way.
 - Two actions write to Roll20's own UI, both only when the user clicks them: a death or Constitution save on a sheet without its own button types a d20 roll into Roll20's chat box and presses Send; the Classic sheet's Long Rest sets the sheet's own HP, spell slot and hit dice fields.
 - `wrappedJSObject` is used read-only to look up the current player id, whether the user is the GM, and the characters they control.
