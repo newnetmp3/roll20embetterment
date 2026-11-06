@@ -210,7 +210,7 @@ async function runAudit({ fix = false, campaign: name, rules } = {}, say) {
       if (conv.isNpc || conv.empty) continue;
       const resolved = [];
       for (const l of conv.lookups) resolved.push(await lookup(l));
-      const items = actor.items.map((i) => ({ id: i.id, name: i.name, type: i.type, desc: i.system.description?.value || '', levels: i.system.levels, classIdentifier: i.system.classIdentifier }));
+      const items = actor.items.map((i) => ({ id: i.id, name: i.name, type: i.type, desc: i.system.description?.value || '', levels: i.system.levels, classIdentifier: i.system.classIdentifier, hd: i.type === 'class' ? i.system._source?.hd ?? i.toObject().system.hd : undefined }));
       const { sheet, findings } = auditCharacter(ch, resolved, { system: actor.toObject().system, items }, conv);
       results.push({ actor, sheet, findings, attribs: (ch.attributes || ch.attribs || []).length });
       say(`${actor.name}: ${findings.filter((f) => f.fix).length} to fix, ${findings.filter((f) => !f.fix).length} notes.`);

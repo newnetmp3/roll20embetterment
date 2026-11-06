@@ -81,6 +81,14 @@ export function auditCharacter(ch, resolved, actor, conv = convertCharacter(ch))
     if (data.type === 'subclass' && wantClass && have.classIdentifier !== undefined && have.classIdentifier !== wantClass) {
       add({ kind: 'stat', name: data.name, detail: `subclass of ${have.classIdentifier || 'no class'} in Foundry, ${wantClass} in Roll20`, fix: { op: 'item', id: have.id, update: { 'system.classIdentifier': wantClass } } });
     }
+    // Hit dice: a class with none in Roll20, and dice already spent.
+    if (l.kind === 'class' && have.hd) {
+      const want = { ...(data.system?.hd || {}), ...(l.patch?.system?.hd || {}) };
+      const upd = {};
+      if (want.spent !== undefined && (have.hd.spent || 0) !== want.spent) upd['system.hd.spent'] = want.spent;
+      if (want.additional !== undefined && String(have.hd.additional || '') !== String(want.additional)) upd['system.hd.additional'] = want.additional;
+      if (Object.keys(upd).length) add({ kind: 'stat', name: l.name + ' hit dice', detail: want.additional ? 'Roll20 gives this class no hit dice' : `${want.spent} spent in Roll20`, fix: { op: 'item', id: have.id, update: upd } });
+    }
     if (l.kind === 'class' && data.system?.levels && have.levels !== data.system.levels) {
       add({ kind: 'stat', name: l.name, detail: `level ${have.levels ?? '?'} in Foundry, ${data.system.levels} in Roll20`, fix: { op: 'item', id: have.id, update: { 'system.levels': data.system.levels } } });
     }

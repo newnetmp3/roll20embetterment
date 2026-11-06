@@ -650,10 +650,19 @@ export function convertSnapshot(ch, snap) {
   // Classes: from the saved data (custom classes included, with their hit
   // die and spellcasting), else from the hit-die rows ("D10 (Fighter)").
   const classes = storeClasses(kit);
+  // Hit dice already spent, from the sheet's rows ("D10 (Fighter)": 5 of 7 left).
+  const spentHD = {};
+  (snap.hitDice || []).forEach((h, i) => {
+    const m = /\(([^)]+)\)/.exec(h.label || h.name || '');
+    const row = (st.hitDice || [])[i];
+    if (m && row && num(row.max) !== null) spentHD[clean(m[1]).toLowerCase()] = Math.max(0, num(row.max) - (num(row.cur) ?? num(row.max)));
+  });
   for (const c of classes) {
     const sc = c.spellcasting;
-    lookups.push({ name: c.name, kind: 'class', patch: { system: { levels: c.levels } }, fallback: legacyItem('class', c.name, {
-      identifier: c.identifier, levels: c.levels, hd: { denomination: 'd' + (c.die || 8) },
+    // A class with no hit dice in Roll20 (a DM's 1-level extra) adds none here.
+    const hd = c.die ? { denomination: 'd' + c.die, spent: spentHD[c.name.toLowerCase()] || 0 } : { denomination: 'd8', additional: String(-c.levels), spent: 0 };
+    lookups.push({ name: c.name, kind: 'class', patch: { system: { levels: c.levels, hd: { spent: hd.spent } } }, fallback: legacyItem('class', c.name, {
+      identifier: c.identifier, levels: c.levels, hd,
       description: { value: richText(c.description) },
       ...(sc ? { spellcasting: { progression: sc.progression, ability: sc.ability } } : {}),
     }) });
