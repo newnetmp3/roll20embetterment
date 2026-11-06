@@ -212,7 +212,9 @@
     // Classic sheet: repeating rows.
     const rows = {};
     for (const [name, a] of Object.entries(by)) {
-      const m = /^repeating_(.+?)_(-[A-Za-z0-9_-]{19,})_(.+)$/.exec(name);
+      // Roll20 row ids are exactly 20 characters ("-O0H9D4ZHgyV8LXrvXTG"); a longer
+      // match would swallow the start of the field name ("_attack_onhit").
+      const m = /^repeating_(.+?)_(-[A-Za-z0-9_-]{19})_(.+)$/.exec(name);
       if (!m) continue;
       const k = m[1] + '|' + m[2];
       (rows[k] ||= { sec: m[1].toLowerCase() })[m[3].toLowerCase()] = g(a, 'current');
@@ -226,7 +228,19 @@
       }
       else if (r.sec === 'inventory' && r.itemname) put(r.itemname, r.itemcontent);
       else if (r.sec === 'traits' && r.name) put(r.name, r.description);
-      else if (/^npc/.test(r.sec) && r.name) put(r.name, r.description || r.desc);
+      else if (/^npc/.test(r.sec) && r.name) {
+        // An NPC attack's line is built by the sheet from its fields, as shown on it:
+        // "Melee Weapon Attack: +8, Range 5 ft., one target. Hit: 9 (1d6r1 + 6) piercing damage."
+        const lines = [];
+        const tr = String(r.attack_tohitrange || '').trim();
+        const hit = String(r.attack_onhit || '').replace(/\s+/g, ' ').trim();
+        const isAtk = /^(on|1)$/i.test(String(r.attack_flag || '')) && tr && tr !== '+0';
+        if (isAtk) lines.push(String(r.attack_type || '').trim() + ' Weapon Attack: ' + tr + '.' + (hit ? ' Hit: ' + hit + '.' : ''));
+        else if (hit && r.attack_damage) lines.push('Hit: ' + hit + '.');
+        const text = String(r.description || r.desc || '').trim();
+        if (text && !/^(null|undefined)$/i.test(text)) lines.push(text);
+        put(r.name, lines.join('\n\n'));
+      }
       else if (r.sec === 'attack' && r.atkname) put(r.atkname, r.atk_desc);
     }
     if (!ints) {
