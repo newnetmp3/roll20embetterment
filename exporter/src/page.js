@@ -164,7 +164,8 @@
 
   // One character's attributes and abilities as Roll20 holds them right now
   // (after its sheet has been opened, which is when Roll20 loads them).
-  document.addEventListener('r20x-sheetdata', (e) => {
+  // Requests come in as r20x-sheetdata-get; the answer goes out as r20x-sheetdata.
+  document.addEventListener('r20x-sheetdata-get', (e) => {
     let req = null;
     try {
       const d = JSON.parse(e.detail);

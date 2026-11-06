@@ -247,9 +247,9 @@
   function sheetData(id) {
     return new Promise((resolve) => {
       const req = ++reqN;
-      const on = (e) => { const d = JSON.parse(e.detail); if (d.req !== req) return; document.removeEventListener('r20x-sheetdata', on); resolve(d); };
+      const on = (e) => { const d = JSON.parse(e.detail); if (d.req !== req) return; document.removeEventListener('r20x-sheetdata', on); resolve({ ...d, attributes: d.attributes || [], abilities: d.abilities || [] }); };
       document.addEventListener('r20x-sheetdata', on);
-      document.dispatchEvent(new CustomEvent('r20x-sheetdata', { detail: JSON.stringify({ id, req }) }));
+      document.dispatchEvent(new CustomEvent('r20x-sheetdata-get', { detail: JSON.stringify({ id, req }) }));
       setTimeout(() => { document.removeEventListener('r20x-sheetdata', on); resolve({ attributes: [], abilities: [] }); }, 5000);
     });
   }
