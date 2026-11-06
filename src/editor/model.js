@@ -104,7 +104,7 @@
     controls.push({ label: '💬', title: 'Show in chat', run: { ref: x.ref, op: 'chat', say: x.name } });
     const empty = res.length && res[0].cur === 0;
     return {
-      key: x.ref, label: x.name, desc: x.desc, info: x.info || '',
+      key: x.ref, label: x.name, desc: x.info ? '' : x.desc, info: x.info || '',
       hint: res.length ? res.map(counter).join(' ') : x.roll,
       disabled: !!empty,
       run: withEcon({ ref: x.ref, op: 'use', say: x.name }, econ),
@@ -186,7 +186,7 @@
     const res = f.res || [];
     const controls = [...resControls(f.ref, res), { label: '💬', title: 'Show in chat', run: { ref: f.ref, op: 'chat', say: f.name } }];
     return {
-      key: f.ref, label: f.name, desc: [f.source, f.timing].filter(Boolean).join(' · ') + (f.desc ? '\n' + f.desc : ''), info: f.info || '',
+      key: f.ref, label: f.name, desc: [f.source, f.timing].filter(Boolean).join(' · ') + (f.desc && !f.info ? '\n' + f.desc : ''), info: f.info || '',
       hint: res.length ? res.map(counter).join(' ') : f.timing,
       disabled: !!(res.length && res[0].cur === 0),
       run: withEcon(res.length ? { ref: f.ref, op: 'use', say: f.name } : { ref: f.ref, op: 'chat', say: f.name }, econOf(f.timing) || null),
@@ -199,7 +199,8 @@
     // Spell slots left (VTTs that report them), each with −/+.
     const slots = (snap.slots || []).map((x) => ({
       key: x.ref, label: x.label, hint: counter(x), disabled: x.cur === 0,
-      controls: resControls(x.ref, [{ i: 0, name: x.label + ' slot' }]),
+      controls: x.readOnly ? [] : resControls(x.ref, [{ i: 0, name: x.label + ' slot' }]),
+      desc: x.readOnly ? 'Spend and restore these on the sheet.' : '',
     }));
     const head = slots.length ? [{ key: 's:slots', label: 'Spell slots', hint: slots.map((x) => x.hint).join(' · '), children: slots }] : [];
     return head.concat(bySection(snap.spells.map((s) => ({ ...s, section: label(s.level) })), (s) => {
@@ -228,7 +229,7 @@
         run: { ref: e.ref, op: 'effect', say: e.name + (e.active ? ' off' : ' on') } });
     }
     if ((snap.conditions || []).length) {
-      out.push({ key: 'cond:h', header: true, label: 'Conditions' });
+      out.push({ key: 'cond:h', header: true, label: snap.conditionsLabel || 'Conditions' });
       for (const c of snap.conditions) out.push({ key: c.ref, label: c.name, checked: !!c.active, run: { ref: c.ref, op: 'status', say: c.name + (c.active ? ' off' : ' on') } });
     }
     return out;
@@ -441,7 +442,7 @@
       { key: 'items', icon: 'bag', label: 'Inventory', items: safe('items', () => inventory(snap)) },
       { key: 'features', icon: 'star', label: 'Features & traits', items: safe('features', () => bySection(snap.features, featureNode)) },
       { key: 'resources', icon: 'hourglass', label: 'Resources', items: safe('resources', () => resources(snap)) },
-      { key: 'effects', icon: 'aura', label: 'Effects & conditions', items: safe('effects', () => effects(snap)) },
+      { key: 'effects', icon: 'aura', label: snap.effectsLabel || 'Effects & conditions', items: safe('effects', () => effects(snap)) },
       { key: 'checks', icon: 'd20', label: 'Checks & saves', items: safe('checks', () => checks(snap)) },
       { key: 'settings', icon: 'gear', label: 'Roll settings', items: safe('settings', () => rollSettings(snap, prefs)) },
     ];

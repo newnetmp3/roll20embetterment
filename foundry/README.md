@@ -25,7 +25,7 @@ Modules**). Each player sees their own bar; nothing to set up per player.
 | Button | Opens |
 | --- | --- |
 | Portrait | The character: follows the token you select. Click to pick another of your characters (GMs: anything on the scene). |
-| 📌 Favorites | The character sheet's favorites (items, spells, attacks, skills, spell slots), when there are any. |
+| 📌 Favorites | The character sheet's favorites (items, spells, attacks, skills, spell slots), plus anything you pin from the bar: right-click an entry to pin or unpin it. |
 | ♥ Hit points | Health bar, take damage / heal / temp HP (dnd5e's own damage, temp HP first), concentration and its save, death saving throw at 0 HP, Short and Long Rest, hit dice. |
 | 👢 This turn | Action / Bonus / Reaction used, and movement against speed. |
 | ⚔ Attacks | Weapons and other attacks: attack and damage rolls, or show in chat. |

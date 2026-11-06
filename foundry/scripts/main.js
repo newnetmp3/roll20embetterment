@@ -100,6 +100,20 @@
       select: (id) => select(id),
       pref: (k, v) => { prefs = { ...prefs, [k]: v }; game.settings.set(MOD, 'prefs', prefs); if (k === 'turnCue') myTurn = myTurn && v; refresh(); },
       toggleHidden: () => {},
+      // Right-click an entry: pin it to (or unpin it from) Favorites.
+      pin: (key) => {
+        const actor = actorOf(active);
+        if (!actor || !key) return;
+        const pins = { ...(prefs.pins || {}) };
+        const list = (pins[actor.uuid] || []).slice();
+        const i = list.indexOf(key);
+        if (i >= 0) list.splice(i, 1); else list.push(key);
+        pins[actor.uuid] = list;
+        prefs = { ...prefs, pins };
+        game.settings.set(MOD, 'prefs', prefs);
+        ui.toast(i >= 0 ? 'Removed from Favorites.' : 'Pinned to Favorites.');
+        refresh();
+      },
       savePos: (pos) => game.settings.set(MOD, 'barPos', pos || {}),
       diag: async () => {
         const actor = actorOf(active);
@@ -198,6 +212,8 @@
       let snap = null;
       if (actor && actor.system) {
         try { snap = C.foundrySnap(actor); } catch (e) { note('read', e); }
+        // Favorites: the sheet's own, then anything pinned from the bar.
+        if (snap) snap.favorites = [...new Set([...(snap.favorites || []), ...((prefs.pins && prefs.pins[actor.uuid]) || [])])];
       }
       try {
         const conc = actor && actor.system ? C.foundryConcentration(actor, lastDc.get(actor.uuid)) : null;

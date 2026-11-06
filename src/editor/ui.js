@@ -102,6 +102,7 @@
 .tip[hidden] { display: none; }
 .tip .tt { font-weight: 700; color: var(--acc); margin-bottom: 2px; }
 .tip .tm { color: var(--mute); margin-bottom: 4px; white-space: pre-wrap; }
+.tip .tf { color: var(--mute); font-size: 11px; margin-top: 6px; }
 .tip .tb { white-space: pre-wrap; border-top: 1px solid var(--line); padding-top: 5px; margin-top: 3px; }
 .row { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 6px 3px 8px; border-radius: 5px; cursor: pointer;
      outline: none; }
@@ -395,6 +396,10 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       const row = el('div', 'row' + (n.header ? ' hdr' : '') + (n.disabled ? ' dis' : '') + (path[level + 1] === n.key ? ' open' : '') + (busy.has(n.key) ? ' busy' : ''));
       row.dataset.key = n.key;
       if (!n.header) { row.tabIndex = -1; row.setAttribute('role', 'menuitem'); }
+      // Right-click: pin to Favorites (or unpin).
+      if (!n.header && handlers.pin && (n.run || (n.controls && n.controls.length))) {
+        row.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); handlers.pin(n.key); });
+      }
       if (!n.header && (n.desc || n.info)) {
         row.addEventListener('mouseenter', () => { clearTimeout(tipTimer); tipTimer = setTimeout(() => { if (!tip.matches(':hover')) showTip(n, row); }, 280); });
         row.addEventListener('mouseleave', () => { clearTimeout(tipTimer); hideSoon(); });
@@ -474,7 +479,8 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     function showTip(n, row) {
       if (!row.isConnected) return;
       clearTimeout(tipHide);
-      tip.replaceChildren(el('div', 'tt', n.label), n.desc ? el('div', 'tm', n.desc) : null, n.info ? el('div', 'tb', n.info) : null);
+      tip.replaceChildren(el('div', 'tt', n.label), n.desc ? el('div', 'tm', n.desc) : null, n.info ? el('div', 'tb', n.info) : null,
+        handlers.pin && (n.run || (n.controls && n.controls.length)) ? el('div', 'tf', 'Right-click to pin to Favorites') : null);
       tip.scrollTop = 0;
       tip.hidden = false;
       // Beside the menu the row is in, on the side with more room.

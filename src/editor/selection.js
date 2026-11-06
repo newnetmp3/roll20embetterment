@@ -3,8 +3,10 @@
 // this reads it from Roll20's own window.MeshManager global, read-only:
 //   MeshManager.engine.tabletop.getSelection() -> nodes -> dataWrapper.model
 //   -> model.get('represents') = character id.
-// It only reads; it never calls into Roll20 to change anything. Results go to
-// the extension as a DOM event carrying a JSON string.
+// Mostly it only reads. It changes Roll20 only when the person asks from the
+// bar: toggling a token marker, ending their turn in the turn order, or
+// spending/restoring a Classic sheet's spell slot. Results go to the
+// extension as a DOM event carrying a JSON string.
 (function () {
   'use strict';
   if (window.top !== window || window.__r20cSelection) return;
@@ -159,6 +161,133 @@
     if (m) { m.difficult = !!d.difficult; moveKey = ''; }
   });
   setInterval(() => { try { trackMoves(); } catch { /* Roll20 not ready */ } }, 250);
+
+  // ---- sheet details, spell slots, token markers, end turn ----------------------
+  // The bar asks with r20c-call { fn, req, args } and gets r20c-call-reply { req, result }.
+  const norm = (n) => String(n || '').toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
+  const strip = (t) => String(t || '')
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|h\d|li|tr)>/gi, '\n').replace(/<li[^>]*>/gi, '• ').replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\[\[\s*([^\]]*?)\s*\]\]/g, '$1').replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
+  const ORD = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10] || 'th');
+  const LEVELS = ['FIRST', 'SECOND', 'THIRD', 'FOURTH', 'FIFTH', 'SIXTH', 'SEVENTH', 'EIGHTH', 'NINTH'];
+  const charOf = (id) => { try { return window.Campaign.characters.get(id) || null; } catch { return null; } };
+  const attrsOf = (c) => { try { return (c.attribs && c.attribs.models) || []; } catch { return []; } };
+  const tokenModel = (id) => { const p = pageOf(); try { return (p && p.thegraphics && p.thegraphics.get(id)) || null; } catch { return null; } };
+
+  // Long descriptions (and spell details) by name, and spell slots.
+  function details(c) {
+    const info = {};
+    const put = (name, text) => { const k = norm(name); const t = strip(text); if (k && t && t.length > (info[k] || '').length) info[k] = t; };
+    const attrs = attrsOf(c);
+    const by = {};
+    for (const a of attrs) by[String(g(a, 'name'))] = a;
+    const slots = [];
+    // 2024 sheet: everything is in one JSON attribute, "store".
+    let store = by.store && g(by.store, 'current');
+    if (typeof store === 'string') { try { store = JSON.parse(store); } catch { store = null; } }
+    const ints = store && store.integrants && store.integrants.integrants;
+    if (ints) {
+      const maxBy = {};
+      for (const x of Object.values(ints)) {
+        if (!x || x._enabled === false) continue;
+        if (x.type === 'Spell Slot') { const m = /level\s*(\d)/i.exec(x.name || ''); if (m) maxBy[m[1]] = (maxBy[m[1]] || 0) + (Number(x.valueFormula && x.valueFormula.flatValue) || 0); continue; }
+        if (!x.description) continue;
+        let text = x.description;
+        if (x.type === 'Spell' || 'castingTime' in x) {
+          const comp = x.components ? ['verbal', 'somatic', 'material'].filter((k) => x.components[k]).map((k) => k[0].toUpperCase()).join(', ') : '';
+          const lvl = Number(x.level) || 0;
+          const line = [lvl ? ORD(lvl) + '-level ' + (x.school || '') : (x.school ? x.school + ' cantrip' : 'Cantrip'), x.castingTime, x.range, comp, x.duration].filter(Boolean).join(' · ');
+          text = line + '\n\n' + text;
+        }
+        put(x.name, text);
+        if (x.label) put(x.label, text);
+      }
+      const cur = (store.spellSlots && store.spellSlots.currentByLevel) || {};
+      for (let l = 1; l <= 9; l++) if (maxBy[l]) slots.push({ level: l, cur: Number(cur[LEVELS[l - 1]]) || 0, max: maxBy[l], editable: false });
+    }
+    // Classic sheet: repeating rows.
+    const rows = {};
+    for (const [name, a] of Object.entries(by)) {
+      const m = /^repeating_(.+?)_(-[A-Za-z0-9_-]{19,})_(.+)$/.exec(name);
+      if (!m) continue;
+      const k = m[1] + '|' + m[2];
+      (rows[k] ||= { sec: m[1].toLowerCase() })[m[3].toLowerCase()] = g(a, 'current');
+    }
+    for (const r of Object.values(rows)) {
+      if (/^spell-/.test(r.sec) && r.spellname) {
+        const lvl = r.sec === 'spell-cantrip' ? 0 : Number(r.sec.slice(6)) || 0;
+        const comp = [r.spellcomp_v && r.spellcomp_v !== '0' ? 'V' : '', r.spellcomp_s && r.spellcomp_s !== '0' ? 'S' : '', r.spellcomp_m && r.spellcomp_m !== '0' ? 'M' : ''].filter(Boolean).join(', ');
+        const line = [lvl ? ORD(lvl) + '-level ' + (r.spellschool || '') : 'Cantrip', r.spellcastingtime, r.spellrange, comp, r.spellduration].filter(Boolean).join(' · ');
+        put(r.spellname, line + '\n\n' + (r.spelldescription || '') + (r.spellathigherlevels ? '\n\nAt Higher Levels. ' + r.spellathigherlevels : ''));
+      }
+      else if (r.sec === 'inventory' && r.itemname) put(r.itemname, r.itemcontent);
+      else if (r.sec === 'traits' && r.name) put(r.name, r.description);
+      else if (/^npc/.test(r.sec) && r.name) put(r.name, r.description || r.desc);
+      else if (r.sec === 'attack' && r.atkname) put(r.atkname, r.atk_desc);
+    }
+    if (!ints) {
+      for (let l = 1; l <= 9; l++) {
+        const tot = Number(by['lvl' + l + '_slots_total'] && g(by['lvl' + l + '_slots_total'], 'current'));
+        if (tot > 0) slots.push({ level: l, cur: Number(by['lvl' + l + '_slots_expended'] && g(by['lvl' + l + '_slots_expended'], 'current')) || 0, max: tot, editable: true });
+      }
+    }
+    return { info, slots };
+  }
+  // Token markers: the campaign's set (plus Roll20's colour dots), and which
+  // ones the token shows.
+  const COLOURS = ['red', 'blue', 'green', 'brown', 'purple', 'pink', 'yellow', 'dead'];
+  function markers(tokenId) {
+    let set = [];
+    try { const raw = window.Campaign.get('token_markers'); set = (typeof raw === 'string' ? JSON.parse(raw) : raw) || []; } catch { set = []; }
+    const list = COLOURS.map((t) => ({ tag: t, name: t })).concat(set.filter((m) => m && m.tag).map((m) => ({ tag: String(m.tag), name: String(m.name || m.tag) })));
+    const t = tokenModel(tokenId);
+    const on = t ? String(g(t, 'statusmarkers') || '').split(',').map((x) => x.split('@')[0]).filter(Boolean) : [];
+    return { token: !!t, list, on };
+  }
+  const calls = {
+    details: ({ id }) => { const c = charOf(id); return c ? details(c) : null; },
+    markers: ({ token }) => markers(token),
+    toggleMarker: ({ token, tag }) => {
+      const t = tokenModel(token);
+      if (!t) return { ok: false, msg: 'No token for this character on this page.' };
+      const cur = String(g(t, 'statusmarkers') || '').split(',').filter(Boolean);
+      const has = cur.some((x) => x.split('@')[0] === tag);
+      const next = has ? cur.filter((x) => x.split('@')[0] !== tag) : cur.concat(tag);
+      t.save({ statusmarkers: next.join(',') });
+      return { ok: true, on: !has };
+    },
+    endTurn: ({ token }) => {
+      const raw = window.Campaign.get('turnorder');
+      const list = typeof raw === 'string' ? (raw ? JSON.parse(raw) : []) : (raw || []).slice();
+      if (!list.length || String(list[0].id) !== String(token)) return { ok: false, msg: 'It isn\'t this token\'s turn.' };
+      list.push(list.shift());
+      window.Campaign.save({ turnorder: JSON.stringify(list) });
+      return { ok: true };
+    },
+    slot: ({ id, level, delta }) => {
+      const c = charOf(id);
+      const by = {};
+      for (const a of attrsOf(c)) by[String(g(a, 'name'))] = a;
+      const tot = by['lvl' + level + '_slots_total'];
+      const left = by['lvl' + level + '_slots_expended'];
+      if (!tot || !left) return { ok: false, msg: 'Change this spell slot on the sheet.' };
+      const max = Number(g(tot, 'current')) || 0;
+      const v = Math.max(0, Math.min(max, (Number(g(left, 'current')) || 0) + (Number(delta) || 0)));
+      left.save({ current: String(v) });
+      return { ok: true, cur: v, max };
+    },
+  };
+  document.addEventListener('r20c-call', (e) => {
+    let d;
+    try { d = JSON.parse(e.detail); } catch { return; }
+    let result;
+    try { result = calls[d.fn] ? calls[d.fn](d.args || {}) : { ok: false, msg: 'Unknown request.' }; }
+    catch (err) { result = { ok: false, msg: String((err && err.message) || err) }; }
+    document.dispatchEvent(new CustomEvent('r20c-call-reply', { detail: JSON.stringify({ req: d.req, result }) }));
+  });
 
   setInterval(tick, 300);
   document.addEventListener('r20c-selection-status', () => {

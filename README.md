@@ -25,14 +25,16 @@ Also in this repository:
 
 | Button | Opens |
 | --- | --- |
+| 📌 Favorites | Entries you've pinned: right-click anything in a menu to pin or unpin it. Shown once something is pinned. |
 | Portrait | The selected token's character. Click for the picker: open sheets and the Journal, with search. Eye button hides or shows a sheet window. |
 | ♥ Hit points | Take damage, heal, temp HP, short/long rest, hit dice (PC), concentration, death saves at 0 HP. NPCs show average HP and AC. |
 | 👢 This turn | Action / Bonus / Reaction used this turn, and movement against speed. See below. |
 | ⚔ Attacks | Weapons, each opening its attacks (e.g. Dagger → Standard / Finesse / Off-Hand / Thrown) with attack, damage and chat buttons. |
 | ⚡ Actions | Actions, Bonus Actions, Reactions and Free Actions. **Use** rolls and spends a use. |
-| ✦ Spells | Spells by level: cast (posts the spell card), attack/save and damage buttons. |
+| ✦ Spells | Spell slots left by level (−/+ on Classic sheets; 2024 sheets change them on the sheet), then spells by level: cast (posts the spell card), attack/save and damage buttons. |
 | 👜 Inventory | Consumables first, then the sheet's sections. Each item: use (linked action or attack), quantity −/+, equip, show in chat. |
 | ★ Features | Class features, species traits and feats, with use counters. |
+| ✧ Token markers | The campaign's token markers, switched on and off on the character's token. |
 | ⧗ Resources | Every tracked counter and consumable quantity in one list, with −/+. |
 | 🎲 Checks | Initiative, abilities and saves, skills, tools, hit dice. |
 | ⚙ Settings | Roll visibility (Public/Whisper), roll mode (Advantage/Disadvantage/Automatic/Query), Roll20embetterment options, **Copy diagnostics**. |
@@ -46,6 +48,15 @@ Lost the bar? **Alt+Shift+C** brings it back beside the toolbar.
 
 Keyboard: arrow keys move through menus (→ opens, ← goes back), Enter
 activates, Esc closes.
+
+## Descriptions
+
+Hover over an attack, spell, item, feature or action (or move to it with the
+arrow keys) to read its full description in a tooltip, without posting
+anything to chat. Spells also show their level, school, casting time, range,
+components and duration. A long description scrolls: move the mouse onto the
+tooltip and use the wheel, or press Page Up / Page Down. Descriptions come
+from the character's saved sheet data, for both the 2024 and Classic sheets.
 
 ## Follows the selected token
 
@@ -95,7 +106,8 @@ used this turn.
 - Everything clears when that token's turn starts in the turn order. Outside
   the turn order, use **Start a new turn**.
 - **Your turn**: when one of your characters comes up in the turn order, the
-  bar glows and switches to that character. Turn it off in ⚙ → **Highlight
+  bar glows and switches to that character. **End turn** passes the turn
+  order on to the next token. Turn it off in ⚙ → **Highlight
   the bar on my turn**.
 
 ## Concentration, death saves and rests
@@ -152,8 +164,9 @@ in Firefox and click **Add**. It is signed by Mozilla and updates itself.
 
 ## Limits
 
-- **Spell slots** aren't tracked by the bar. Cast posts the spell card; spend
-  slots on the sheet.
+- Casting from the bar doesn't spend a spell slot by itself. Classic sheets'
+  slots can be spent and restored from the Spells menu; 2024 sheets' on the
+  sheet (the bar shows how many are left).
 - Counters change through the sheet's own controls. If Roll20 refuses a
   change, the bar says so rather than pretending it worked.
 - Only the official D&D 2024 and D&D 5E Classic sheets are read.

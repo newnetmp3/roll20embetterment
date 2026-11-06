@@ -155,3 +155,31 @@ test('concentration and death saves in the hit point menu', () => {
   assert.equal(healthy.some((n) => n.key === 'death'), false);
   assert.equal(healthy.find((n) => n.key === 'conc').checked, false);
 });
+
+
+test('Roll20: descriptions, spell slots, token markers and pinned favorites', () => {
+  const C = model();
+  const snap = snapOf('pc-sheet.html');
+  const spell = snap.spells[0];
+  const feat = snap.features.find((f) => f.desc) || snap.features[0];
+  const extra = {
+    ...snap,
+    spells: snap.spells.map((s) => (s === spell ? { ...s, info: '1st-level Divination · 1 action\n\nYou sense magic.' } : s)),
+    features: snap.features.map((f) => (f === feat ? { ...f, info: 'The whole text.' } : f)),
+    slots: [{ ref: 'slot:1', label: '1st level', cur: 3, max: 4, readOnly: true }, { ref: 'slot:2', label: '2nd level', cur: 1, max: 2 }],
+    conditions: [{ ref: 'marker:sleepy', name: 'Sleepy', active: true }], effectsLabel: 'Token markers', conditionsLabel: 'Markers on the token',
+    favorites: [spell.ref],
+  };
+  const cats = C.buildMenus(extra, {});
+  const walk = (list, key) => { for (const n of list) { if (n.key === key) return n; const c = n.children && walk(n.children, key); if (c) return c; } return null; };
+  assert.equal(walk(cat(cats, 'spells').items, spell.ref).info, '1st-level Divination · 1 action\n\nYou sense magic.');
+  const fn = walk(cat(cats, 'features').items, feat.ref);
+  assert.equal(fn.info, 'The whole text.');
+  assert.ok(!String(fn.desc).includes(String(feat.desc || '§')), 'the short text is not shown twice');
+  const slots = cat(cats, 'spells').items[0];
+  assert.equal(slots.label, 'Spell slots');
+  assert.equal(slots.children[0].controls.length, 0, '2024 slots are changed on the sheet');
+  assert.equal(slots.children[1].controls.length, 2, 'Classic slots have −/+');
+  assert.equal(cat(cats, 'effects').label, 'Token markers');
+  assert.equal(cat(cats, 'favorites').items[0].key, spell.ref);
+});

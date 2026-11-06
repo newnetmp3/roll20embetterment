@@ -34,6 +34,7 @@
 
   const ui = C.createUI({
     run: async (act) => {
+      if (act.op === 'end-turn' || act.op === 'status' || /^slot:/.test(String(act.ref || ''))) return pageAction(act);
       if (LOCAL_OPS.has(act.op)) return localAction(act);
       if (!active) return { ok: false, msg: 'Choose a character first.' };
       const id = active;
@@ -43,6 +44,19 @@
     select: (id) => { chosen = true; return select(id, true); },
     pref: (k, v) => { prefs = { ...prefs, [k]: v }; set('prefs', prefs); if (k === 'turnCue') myTurn = myTurn && v; refresh(); },
     toggleHidden: (id) => { C.sheets.setHidden(id, !C.sheets.isHidden(id)); refresh(); },
+    // Right-click an entry: pin it to (or unpin it from) Favorites.
+    pin: (key) => {
+      if (!active || !key) return;
+      const pins = { ...(prefs.pins || {}) };
+      const list = (pins[active] || []).slice();
+      const i = list.indexOf(key);
+      if (i >= 0) list.splice(i, 1); else list.push(key);
+      pins[active] = list;
+      prefs = { ...prefs, pins };
+      set('prefs', prefs);
+      ui.toast(i >= 0 ? 'Removed from Favorites.' : 'Pinned to Favorites.');
+      refresh();
+    },
     savePos: (pos) => set('barPos', pos),
     diag: async () => {
       const snap = active ? snaps.get(active) : null;
@@ -93,7 +107,7 @@
       live: !!(active && C.sheets.isLive(active)),
       cats: (() => {
         let cats = [];
-        try { cats = C.buildMenus(snap, prefs, { conc: active ? conc.get(active) || null : null }); } catch (e) { note('menus', e); }
+        try { cats = C.buildMenus(withDetails(snap), prefs, { conc: active ? conc.get(active) || null : null }); } catch (e) { note('menus', e); }
         try {
           if (snap) { const i = cats.findIndex((c) => c.key === 'hp'); cats.splice(i + 1, 0, C.turnMenu(turnFor(snap))); }
         } catch (e) { note('turn', e); }
@@ -268,8 +282,8 @@
     return id ? id + ':' + moveState.tokens[id].seq : 'c:' + active + ':' + (ownSeq.get(active) || 0);
   }
   function turnFor(snap) {
-    const out = { used: used.get(turnKey()) || {}, inOrder: !!moveState.turn, move: null };
     const id = moveToken();
+    const out = { used: used.get(turnKey()) || {}, inOrder: !!moveState.turn, canEnd: !!id && id === moveState.turn, move: null };
     if (!id) return out;
     const t = moveState.tokens[id];
     const stats = (snap && snap.stats) || {};
@@ -285,6 +299,82 @@
     const u = { ...(used.get(key) || {}) };
     u[kind] = on;
     used.set(key, u);
+  }
+
+  // ---- details from Roll20's page: descriptions, spell slots, token markers ----
+  let reqN = 0;
+  function pageCall(fn, args, ms = 3000) {
+    return new Promise((resolve) => {
+      const req = ++reqN;
+      const on = (e) => { let d; try { d = JSON.parse(e.detail); } catch { return; } if (d.req !== req) return; document.removeEventListener('r20c-call-reply', on); resolve(d.result); };
+      document.addEventListener('r20c-call-reply', on);
+      document.dispatchEvent(new CustomEvent('r20c-call', { detail: JSON.stringify({ fn, req, args }) }));
+      setTimeout(() => { document.removeEventListener('r20c-call-reply', on); resolve(null); }, ms);
+    });
+  }
+  const details = new Map(); // charId -> { info, slots, at }
+  const markerState = new Map(); // tokenId -> { list, on, at }
+  const fetching = new Set();
+  function freshen(key, map, fn, args) {
+    const have = map.get(key);
+    if ((have && Date.now() - have.at < 4000) || fetching.has(key)) return;
+    fetching.add(key);
+    pageCall(fn, args).then((r) => { fetching.delete(key); if (r) { map.set(key, { ...r, at: Date.now() }); refresh(); } });
+  }
+  const nname = (n) => String(n || '').toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
+  const pretty = (t) => String(t).replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  // The sheet reading plus what only Roll20's page knows.
+  function withDetails(snap) {
+    if (!snap || !active) return snap;
+    freshen(active, details, 'details', { id: active });
+    const d = details.get(active);
+    const out = { ...snap };
+    if (d) {
+      const info = (x) => {
+        const n = nname(x.name);
+        return d.info[n] || d.info[nname(String(x.name).replace(/\s*\(.*\)\s*$/, ''))] || '';
+      };
+      for (const k of ['attacks', 'actions', 'features', 'items', 'spells']) out[k] = (snap[k] || []).map((x) => ({ ...x, info: info(x) }));
+      out.slots = (d.slots || []).map((x) => ({ ref: 'slot:' + x.level, label: ORD(x.level) + ' level', cur: x.cur, max: x.max, readOnly: !x.editable }));
+    }
+    const tok = moveToken();
+    if (tok) {
+      freshen(tok, markerState, 'markers', { token: tok });
+      const m = markerState.get(tok);
+      if (m && m.token) {
+        out.conditions = m.list.map((x) => ({ ref: 'marker:' + x.tag, name: pretty(x.name), active: m.on.includes(x.tag) }))
+          .sort((a, b) => (b.active - a.active) || 0);
+        out.effectsLabel = 'Token markers';
+        out.conditionsLabel = 'Markers on the token';
+      }
+    }
+    out.favorites = (prefs.pins && prefs.pins[active]) || [];
+    return out;
+  }
+  const ORD = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : n % 10] || 'th');
+  // Bar actions that Roll20's page carries out.
+  async function pageAction(act) {
+    const ref = String(act.ref || '');
+    if (act.op === 'end-turn') {
+      const tok = moveToken();
+      const r = tok ? await pageCall('endTurn', { token: tok }) : { ok: false, msg: 'No token for this character on this page.' };
+      return r && r.ok ? { ok: true, msg: 'Turn ended.' } : r || { ok: false, msg: 'Roll20 didn’t answer.' };
+    }
+    if (act.op === 'status' && ref.startsWith('marker:')) {
+      const tok = moveToken();
+      const tag = ref.slice(7);
+      const r = tok ? await pageCall('toggleMarker', { token: tok, tag }) : { ok: false, msg: 'No token for this character on this page.' };
+      markerState.delete(tok);
+      refresh();
+      return r && r.ok ? { ok: true, msg: pretty(tag) + (r.on ? ' on.' : ' off.') } : r || { ok: false, msg: 'Roll20 didn’t answer.' };
+    }
+    if (ref.startsWith('slot:')) {
+      const r = await pageCall('slot', { id: active, level: Number(ref.slice(5)), delta: Number(act.arg && act.arg.delta) || 0 });
+      details.delete(active);
+      refresh();
+      return r && r.ok ? { ok: true, msg: r.cur + '/' + r.max } : r || { ok: false, msg: 'Roll20 didn’t answer.' };
+    }
+    return { ok: false, msg: 'Unknown action.' };
   }
 
   // Anything the bar does that changes no sheet.
