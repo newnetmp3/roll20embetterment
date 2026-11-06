@@ -433,8 +433,9 @@ def main():
 
     with open(os.path.join(dest, "index.json"), "w") as f:
         json.dump(index, f)
-    print(f"Indexed {len(index['characters'])} characters, {len(index['handouts'])} handouts, "
-          f"{len(index['pages'])} pages, {len(index['tracks'])} audio tracks.")
+    c = index["counts"]
+    print(f"Indexed {c['characters']} characters, {c['handouts']} handouts, "
+          f"{c['pages']} pages, {len(index['tracks'])} audio tracks.")
 
     # ---- the Foundry module ----------------------------------------------------
     if not args.skip_module:
