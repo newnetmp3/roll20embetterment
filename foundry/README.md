@@ -25,14 +25,16 @@ Modules**). Each player sees their own bar; nothing to set up per player.
 | Button | Opens |
 | --- | --- |
 | Portrait | The character: follows the token you select. Click to pick another of your characters (GMs: anything on the scene). |
+| 📌 Favorites | The character sheet's favorites (items, spells, attacks, skills, spell slots), when there are any. |
 | ♥ Hit points | Health bar, take damage / heal / temp HP (dnd5e's own damage, temp HP first), concentration and its save, death saving throw at 0 HP, Short and Long Rest, hit dice. |
 | 👢 This turn | Action / Bonus / Reaction used, and movement against speed. |
 | ⚔ Attacks | Weapons and other attacks: attack and damage rolls, or show in chat. |
 | ⚡ Actions | Features you activate, by Actions, Bonus Actions, Reactions, Legendary Actions. |
-| ✦ Spells | By level: cast (dnd5e's usage dialog spends the slot), attack or save, damage. |
+| ✦ Spells | Spell slots left by level (and pact slots), with −/+; then spells by level: cast (dnd5e's usage dialog spends the slot), attack or save, damage. |
 | 👜 Inventory | Consumables first, then weapons, equipment, tools and loot: use, quantity −/+, equip. |
 | ★ Features | Class features, species traits and feats, with use counters. |
 | ⧗ Resources | Every limited-use counter and consumable quantity in one list, with −/+. |
+| ✧ Effects & conditions | Effects on the character (from spells, items, features) and the conditions, switched on and off. |
 | 🎲 Checks | Initiative, abilities and saves, skills, tools. |
 | ⚙ Settings | Roll visibility (Public, Private GM, Blind GM, Self: Foundry's roll mode), roll mode for the bar's d20 rolls (Ask each time, Normal, Advantage, Disadvantage), follow the selected token, highlight on your turn, dock, copy diagnostics. |
 
@@ -48,7 +50,8 @@ Modules**). Each player sees their own bar; nothing to set up per player.
 - Everything clears when that combatant's turn starts. **Start a new turn**
   clears it by hand (and the token's movement history).
 - When one of your characters comes up in the combat tracker, the bar glows
-  and switches to that character.
+  and switches to that character, and **End turn** passes to the next
+  combatant.
 
 ## Concentration
 

@@ -147,3 +147,33 @@ test('Foundry: roll settings - who sees rolls, and advantage for the bar\'s d20 
     assert.match(settings, /Blind GM/);
   }
 });
+
+test('Foundry: spell slots, effects and conditions, favorites', async () => {
+  const C = setup();
+  C.__ctx.CONFIG.statusEffects = [{ id: 'prone', name: 'Prone' }, { id: 'blinded', name: 'Blinded' }, { id: 'concentrating', name: 'Concentrating' }];
+  const { actor, calls } = mockActor();
+  actor.system.spells = { spell1: { value: 2, max: 4 }, spell2: { value: 0, max: 0 }, pact: { value: 1, max: 2, level: 3 } };
+  actor.statuses = new Set(['prone']);
+  const bless = { id: 'ef1', name: 'Bless', disabled: false, parent: actor, statuses: new Set(), update: async (u) => { calls.push(['effect.update', u]); } };
+  const pr = { id: 'ef2', name: 'Prone', disabled: false, parent: actor, statuses: new Set(['prone']) };
+  actor.allApplicableEffects = function* () { yield bless; yield pr; };
+  actor.toggleStatusEffect = async (id) => { calls.push(['toggleStatusEffect', id]); return true; };
+  actor.system.favorites = [{ type: 'item', id: '.Item.sw' }, { type: 'skill', id: 'ste' }, { type: 'slots', id: 'spell1' }];
+  const snap = C.foundrySnap(actor);
+  assert.deepEqual(plain(snap.slots), [{ ref: 'slot:spell1', label: '1st level', cur: 2, max: 4 }, { ref: 'slot:pact', label: 'Pact (3rd)', cur: 1, max: 2 }]);
+  assert.deepEqual(plain(snap.conditions.map((c) => [c.name, c.active])), [['Blinded', false], ['Prone', true]]);
+  assert.deepEqual(plain(snap.effects.map((e) => e.name)), ['Bless'], 'status effects listed as conditions, not twice');
+  const menus = C.buildMenus(snap, {}, { foundry: true });
+  assert.equal(menus[1].key, 'favorites', 'right after hit points');
+  assert.deepEqual(plain(menus[1].items.map((n) => n.key)), ['act:sw:a1', 'skill:ste', 'slot:spell1']);
+  const spells = menus.find((m) => m.key === 'spells');
+  assert.equal(spells.items[0].label, 'Spell slots');
+  assert.equal(spells.items[0].hint, '2/4 · 1/2');
+  assert.ok(menus.find((m) => m.key === 'effects'));
+  await C.foundryPerform(actor, { ref: 'slot:spell1', op: 'res', arg: { i: 0, delta: -1 } });
+  await C.foundryPerform(actor, { ref: 'status:blinded', op: 'status' });
+  await C.foundryPerform(actor, { ref: 'effect:ef1', op: 'effect' });
+  assert.deepEqual(plain(calls.slice(-3)), [['update', { 'system.spells.spell1.value': 1 }], ['toggleStatusEffect', 'blinded'], ['effect.update', { disabled: true }]]);
+  const turn = C.turnMenu({ used: {}, inOrder: true, canEnd: true });
+  assert.ok(turn.items.some((i) => i.key === 'turn:end'));
+});

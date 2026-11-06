@@ -196,7 +196,13 @@
 
   function spells(snap) {
     const label = (l) => ({ CANTRIPS: 'Cantrips' }[l] || (/^\d/.test(l) ? l.toLowerCase() + ' level' : l || 'Spells'));
-    return bySection(snap.spells.map((s) => ({ ...s, section: label(s.level) })), (s) => {
+    // Spell slots left (VTTs that report them), each with −/+.
+    const slots = (snap.slots || []).map((x) => ({
+      key: x.ref, label: x.label, hint: counter(x), disabled: x.cur === 0,
+      controls: resControls(x.ref, [{ i: 0, name: x.label + ' slot' }]),
+    }));
+    const head = slots.length ? [{ key: 's:slots', label: 'Spell slots', hint: slots.map((x) => x.hint).join(' · '), children: slots }] : [];
+    return head.concat(bySection(snap.spells.map((s) => ({ ...s, section: label(s.level) })), (s) => {
       // Casting uses an action unless the casting time says otherwise;
       // a "C" tag means casting it starts concentration.
       const econ = econOf(s.time) ?? 'action';
@@ -211,7 +217,37 @@
         run: withEcon({ ref: s.ref, op: 'chat', say: 'Cast ' + s.name }, econ, conc),
         controls,
       };
-    });
+    }));
+  }
+
+  // Active effects and conditions, switched on and off (VTTs that report them).
+  function effects(snap) {
+    const out = [];
+    for (const e of snap.effects || []) {
+      out.push({ key: e.ref, label: e.name, hint: e.source || '', checked: !!e.active, desc: e.desc || '',
+        run: { ref: e.ref, op: 'effect', say: e.name + (e.active ? ' off' : ' on') } });
+    }
+    if ((snap.conditions || []).length) {
+      out.push({ key: 'cond:h', header: true, label: 'Conditions' });
+      for (const c of snap.conditions) out.push({ key: c.ref, label: c.name, checked: !!c.active, run: { ref: c.ref, op: 'status', say: c.name + (c.active ? ' off' : ' on') } });
+    }
+    return out;
+  }
+
+  // The character sheet's favorites: the same entries as in the other menus.
+  function favorites(snap, cats) {
+    const want = snap.favorites || [];
+    if (!want.length) return [];
+    const nodes = [];
+    const walk = (list) => { for (const n of list || []) { if (n.children) walk(n.children); else if (n.key) nodes.push(n); } };
+    for (const c of cats) walk(c.items);
+    const out = [];
+    const seen = new Set();
+    for (const f of want) {
+      const n = nodes.find((x) => x.key === f || String(x.key).split(':').includes(f));
+      if (n && !seen.has(n.key)) { seen.add(n.key); out.push(n); }
+    }
+    return out;
   }
 
   // All tracked counters in one place. A feature and its action twin share
@@ -377,6 +413,8 @@
       badge = String(Math.round(mv.feet));
       over = left != null && left < 0;
     }
+    // It's this character's turn in combat: end it from the bar.
+    if (t.canEnd) items.push({ key: 'turn:end', label: 'End turn', desc: 'Passes to the next combatant in the combat tracker.', run: { op: 'end-turn', say: 'Turn ended' } });
     items.push({ key: 'turn:reset', label: 'Start a new turn', hint: t.inOrder ? 'resets on its turn' : 'not in turn order',
       desc: 'Clears actions used and movement. Happens by itself when this token’s turn comes up.', run: { op: 'turn-reset', say: 'New turn' } });
     return { key: 'turn', icon: 'boot', label: 'This turn', badge, over, items };
@@ -403,9 +441,12 @@
       { key: 'items', icon: 'bag', label: 'Inventory', items: safe('items', () => inventory(snap)) },
       { key: 'features', icon: 'star', label: 'Features & traits', items: safe('features', () => bySection(snap.features, featureNode)) },
       { key: 'resources', icon: 'hourglass', label: 'Resources', items: safe('resources', () => resources(snap)) },
+      { key: 'effects', icon: 'aura', label: 'Effects & conditions', items: safe('effects', () => effects(snap)) },
       { key: 'checks', icon: 'd20', label: 'Checks & saves', items: safe('checks', () => checks(snap)) },
       { key: 'settings', icon: 'gear', label: 'Roll settings', items: safe('settings', () => rollSettings(snap, prefs)) },
     ];
+    const fav = safe('favorites', () => favorites(snap, cats));
+    if (fav.length) cats.splice(1, 0, { key: 'favorites', icon: 'pin', label: 'Favorites', items: fav });
     C.lastMenuErrors = errors;
     return cats.filter((c) => c.items.length);
   };

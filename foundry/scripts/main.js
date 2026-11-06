@@ -79,7 +79,9 @@
     }
     function turnFor(actor, snap) {
       const key = turnKey(actor);
-      const out = { used: used.get(key) || {}, inOrder: !!combatantOf(actor), move: null };
+      const c = combatantOf(actor);
+      const canEnd = !!(c && game.combat && game.combat.started && game.combat.combatant && game.combat.combatant.id === c.id && (c.isOwner || game.user.isGM));
+      const out = { used: used.get(key) || {}, inOrder: !!c, canEnd, move: null };
       const doc = tokenOf(actor);
       if (!doc) return out;
       const speeds = (snap.stats && snap.stats.speeds) || {};
@@ -150,6 +152,13 @@
         if (!doc) return { ok: false, msg: 'No token for this character on the scene.' };
         await doc.update({ movementAction: act.arg });
         return { ok: true, msg: '' };
+      }
+      if (act.op === 'end-turn') {
+        const combat = game.combat;
+        const c = combatantOf(actor);
+        if (!combat || !c || !combat.combatant || combat.combatant.id !== c.id) return { ok: false, msg: 'It isn\'t this character\'s turn.' };
+        await combat.nextTurn();
+        return { ok: true, msg: 'Turn ended.' };
       }
       if (act.op === 'turn-reset') {
         const c = combatantOf(actor);

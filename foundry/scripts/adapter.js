@@ -153,6 +153,41 @@
       snap.deathSave = { ref: 'death' };
     }
     snap.rests.push({ ref: 'rest:short', name: 'Short Rest' }, { ref: 'rest:long', name: 'Long Rest' });
+
+    // Spell slots left, by level, then pact slots.
+    snap.slots = [];
+    const sp = sys.spells || {};
+    for (let l = 1; l <= 9; l++) {
+      const x = sp['spell' + l];
+      if (x && num(x.max) > 0) snap.slots.push({ ref: 'slot:spell' + l, label: ORD(l) + ' level', cur: num(x.value) ?? 0, max: num(x.max) });
+    }
+    if (sp.pact && num(sp.pact.max) > 0) snap.slots.push({ ref: 'slot:pact', label: 'Pact (' + ORD(num(sp.pact.level) || 1) + ')', cur: num(sp.pact.value) ?? 0, max: num(sp.pact.max) });
+
+    // Conditions the token can have, and the other effects on the character.
+    const statusList = list(G.CONFIG && G.CONFIG.statusEffects).filter((e) => e && e.id && e.hud !== false && !['concentrating', 'exhaustion', 'dead'].includes(e.id));
+    const on = actor.statuses || new Set();
+    snap.conditions = statusList.map((e) => ({ ref: 'status:' + e.id, name: loc(e.name || e.label || e.id), active: on.has(e.id) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const statusIds = new Set(statusList.map((e) => e.id).concat(['concentrating', 'exhaustion', 'dead']));
+    snap.effects = [];
+    const all = typeof actor.allApplicableEffects === 'function' ? [...actor.allApplicableEffects()] : list(actor.effects);
+    for (const e of all) {
+      if (!e || (e.statuses && [...e.statuses].some((x) => statusIds.has(x)))) continue;
+      const from = e.parent && e.parent !== actor ? e.parent.name : '';
+      snap.effects.push({ ref: 'effect:' + e.id, name: e.name || 'Effect', active: !e.disabled, source: from });
+    }
+
+    // The sheet's favorites, as the bar names the same things.
+    snap.favorites = [];
+    for (const f of list(sys.favorites)) {
+      const id = String(f && f.id || '');
+      if (f.type === 'item') snap.favorites.push(id.split('.').pop());
+      else if (f.type === 'activity') snap.favorites.push(id.split('.').filter(Boolean).slice(-3)[0] || id);
+      else if (f.type === 'skill') snap.favorites.push('skill:' + id);
+      else if (f.type === 'tool') snap.favorites.push('tool:' + id);
+      else if (f.type === 'slots') snap.favorites.push('slot:' + id);
+      else if (f.type === 'effect') snap.favorites.push('effect:' + id.split('.').pop());
+    }
     return snap;
   };
 
@@ -232,6 +267,24 @@
     if (kind === 'rest') {
       const r = a1 === 'long' ? await actor.longRest() : await actor.shortRest();
       return r === false || r === null ? { ok: false, msg: 'Cancelled.' } : { ok: true, msg: 'Rested.' };
+    }
+    if (kind === 'slot' && act.op === 'res') {
+      const x = ((actor.system && actor.system.spells) || {})[a1] || {};
+      const max = num(x.max) || 0;
+      const v = Math.min(max, Math.max(0, (num(x.value) || 0) + (Number(act.arg && act.arg.delta) || 0)));
+      await actor.update({ ['system.spells.' + a1 + '.value']: v });
+      return { ok: true, msg: v + '/' + max };
+    }
+    if (kind === 'status') {
+      const active = await actor.toggleStatusEffect(a1);
+      return { ok: true, msg: (active ? 'On: ' : 'Off: ') + a1 };
+    }
+    if (kind === 'effect') {
+      const all = typeof actor.allApplicableEffects === 'function' ? [...actor.allApplicableEffects()] : list(actor.effects);
+      const e = all.find((x) => x.id === a1);
+      if (!e) return { ok: false, msg: 'That effect is gone.' };
+      await e.update({ disabled: !e.disabled });
+      return { ok: true, msg: e.name + (e.disabled ? ' off' : ' on') };
     }
     if (kind !== 'item' && kind !== 'act') return { ok: false, msg: 'Unknown action.' };
     const item = actor.items.get(a1);
