@@ -50,7 +50,7 @@ jobs:
           mkdir -p dist/amo-src
           unzip -q "dist/firefox/roll20embetterment-$VERSION-amo.zip" -d dist/amo-src
           if grep -q update_url dist/amo-src/manifest.json; then echo "::error::listed build must not have update_url"; exit 1; fi
-          node -e "const fs=require('fs');const notes=fs.readFileSync('amo-request.json','utf8');const r=JSON.parse(notes);fs.writeFileSync('dist/amo-metadata.json',JSON.stringify({version:{license:'MIT',release_notes:{'en-US':r.notes||''}}}))"
+          node -e "const fs=require('fs');const notes=fs.readFileSync('amo-request.json','utf8');const r=JSON.parse(notes);fs.writeFileSync('dist/amo-metadata.json',JSON.stringify({categories:['games-entertainment'],version:{license:'MIT',release_notes:{'en-US':r.notes||''}}}))"
       - name: Submit to Mozilla (listed)
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
