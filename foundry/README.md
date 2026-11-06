@@ -34,7 +34,7 @@ Modules**). Each player sees their own bar; nothing to set up per player.
 | ★ Features | Class features, species traits and feats, with use counters. |
 | ⧗ Resources | Every limited-use counter and consumable quantity in one list, with −/+. |
 | 🎲 Checks | Initiative, abilities and saves, skills, tools. |
-| ⚙ Settings | Follow the selected token, highlight on your turn, dock, copy diagnostics. |
+| ⚙ Settings | Roll visibility (Public, Private GM, Blind GM, Self: Foundry's roll mode), roll mode for the bar's d20 rolls (Ask each time, Normal, Advantage, Disadvantage), follow the selected token, highlight on your turn, dock, copy diagnostics. |
 
 ## This turn
 

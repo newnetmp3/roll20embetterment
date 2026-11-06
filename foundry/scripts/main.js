@@ -14,6 +14,7 @@
   Hooks.once('init', () => {
     game.settings.register(MOD, 'prefs', { scope: 'client', config: false, type: Object, default: {} });
     game.settings.register(MOD, 'barPos', { scope: 'client', config: false, type: Object, default: {} });
+    game.settings.register(MOD, 'advantage', { scope: 'client', config: false, type: String, default: 'Ask each time' });
   });
 
   Hooks.once('ready', () => {

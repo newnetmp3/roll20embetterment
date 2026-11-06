@@ -22,6 +22,7 @@ function setup() {
     },
   });
   for (const f of ['src/editor/model.js', 'foundry/scripts/adapter.js']) vm.runInContext(readFileSync(root + f, 'utf8'), ctx, { filename: f });
+  Object.defineProperty(ctx.R20C, '__ctx', { value: ctx });
   return ctx.R20C;
 }
 
@@ -114,8 +115,8 @@ test('Foundry: bar actions call the dnd5e API', async () => {
     ['rollAttack', 'a1'], ['rollDamage', 'a1'], ['item.use', 'bl'],
     ['update', 'sw2', { 'system.uses.spent': 2 }], ['update', 'pot', { 'system.quantity': 1 }],
     ['applyDamage', 7], ['applyDamage', -3],
-    ['rollSavingThrow', { ability: 'con' }], ['rollConcentration', { target: 13 }], ['rollSkill', { skill: 'ste' }],
-    ['rollDeathSave'], ['rollHitDie', { denomination: 'd10' }], ['longRest'],
+    ['rollSavingThrow', { ability: 'con' }, {}], ['rollConcentration', { target: 13 }, {}], ['rollSkill', { skill: 'ste' }, {}],
+    ['rollDeathSave', {}, {}], ['rollHitDie', { denomination: 'd10' }], ['longRest'],
   ]);
   assert.equal((await go({ ref: 'item:gone', op: 'use' })).ok, false);
 });
@@ -124,4 +125,25 @@ test('Foundry: module.json download link names its own version', () => {
   const mod = JSON.parse(readFileSync(root + 'foundry/module.json', 'utf8'));
   assert.ok(mod.download.endsWith('/foundryembetterment-v' + mod.version + '/foundryembetterment.zip'), mod.download);
   assert.deepEqual(mod.scripts, ['scripts/model.js', 'scripts/ui.js', 'scripts/adapter.js', 'scripts/main.js']);
+});
+
+test('Foundry: roll settings - who sees rolls, and advantage for the bar\'s d20 rolls', async () => {
+  const C = setup();
+  const store = { 'core.rollMode': 'publicroll', 'foundryembetterment.advantage': 'Ask each time' };
+  C.__ctx.game = { settings: { get: (m, k) => store[m + '.' + k], set: async (m, k, v) => { store[m + '.' + k] = v; } } };
+  {
+    const { actor, calls } = mockActor();
+    const snap = C.foundrySnap(actor);
+    assert.equal(snap.privacy.value, 'Public');
+    assert.deepEqual(plain(snap.mode.options), ['Ask each time', 'Normal', 'Advantage', 'Disadvantage']);
+    assert.equal((await C.foundryPerform(actor, { op: 'privacy', arg: 'Blind GM' })).ok, true);
+    assert.equal(store['core.rollMode'], 'blindroll');
+    await C.foundryPerform(actor, { op: 'mode', arg: 'Advantage' });
+    await C.foundryPerform(actor, { ref: 'skill:ste', op: 'check' });
+    assert.deepEqual(plain(calls.at(-1)), ['rollSkill', { skill: 'ste', advantage: true }, { configure: false }]);
+    const menus = C.buildMenus(snap, {}, { foundry: true });
+    const settings = JSON.stringify(menus.find((m) => m.key === 'settings'));
+    assert.match(settings, /Roll visibility/);
+    assert.match(settings, /Blind GM/);
+  }
 });

@@ -122,7 +122,8 @@
         deathSaves: isPc ? { ok: num(death.success) || 0, fail: num(death.failure) || 0 } : null,
         initiative: signed(attr.init && (attr.init.total ?? attr.init.mod)),
       },
-      privacy: null, mode: null,
+      privacy: { options: ROLL_MODES.map((m) => m[0]), value: (ROLL_MODES.find((m) => m[1] === coreRollMode()) || ROLL_MODES[0])[0] },
+      mode: { options: ADV_MODES, value: advMode() },
       attacks: [], actions: [], features: [], items: [], spells: [],
       abilities: [], checks: [], hitDice: [], rests: [], initiative: null, errors: [],
     };
@@ -167,6 +168,24 @@
     const hp = (actor.system && actor.system.attributes && actor.system.attributes.hp) || {};
     return 'HP ' + hp.value + (hp.temp ? ' (+' + hp.temp + ' temp)' : '');
   };
+  // Roll settings, as on Roll20: who sees the roll (Foundry's roll mode) and
+  // advantage for the bar's d20 rolls.
+  const ROLL_MODES = [['Public', 'publicroll'], ['Private GM', 'gmroll'], ['Blind GM', 'blindroll'], ['Self', 'selfroll']];
+  const ADV_MODES = ['Ask each time', 'Normal', 'Advantage', 'Disadvantage'];
+  function coreRollMode() { try { return game.settings.get('core', 'rollMode'); } catch { return 'publicroll'; } }
+  function advMode() { try { return game.settings.get('foundryembetterment', 'advantage') || ADV_MODES[0]; } catch { return ADV_MODES[0]; } }
+  // [config, dialog] for a dnd5e d20 roll: advantage / disadvantage / no dialog.
+  function d20(extra = {}) {
+    const m = advMode();
+    const config = { ...extra };
+    const dialog = {};
+    if (m === 'Advantage') { config.advantage = true; dialog.configure = false; }
+    else if (m === 'Disadvantage') { config.disadvantage = true; dialog.configure = false; }
+    else if (m === 'Normal') dialog.configure = false;
+    return [config, dialog];
+  }
+  C.foundryAdvMode = advMode;
+
   // A roll returns null when its dialog is closed without rolling.
   // (dnd5e returns null or nothing when a roll or use dialog is closed.)
   const rolled = (r, msg) => (r === null || r === undefined ? { ok: false, msg: 'Cancelled.' } : { ok: true, msg: msg || 'Rolled.' });
@@ -192,14 +211,23 @@
       case 'conc-end':
         await actor.endConcentration();
         return { ok: true, msg: 'Concentration ended.' };
+      case 'privacy': {
+        const m = ROLL_MODES.find((x) => x[0] === act.arg);
+        if (m) await game.settings.set('core', 'rollMode', m[1]);
+        return { ok: !!m, msg: 'Rolls: ' + act.arg };
+      }
+      case 'mode':
+        if (!ADV_MODES.includes(act.arg)) return { ok: false, msg: 'Unknown roll mode.' };
+        await game.settings.set('foundryembetterment', 'advantage', act.arg);
+        return { ok: true, msg: 'Roll mode: ' + act.arg };
       default: break;
     }
-    if (act.clearsDc) return rolled(await actor.rollConcentration({ target: Number(act.dc) || 10 }));
-    if (kind === 'ability') return rolled(act.op === 'save' ? await actor.rollSavingThrow({ ability: a1 }) : await actor.rollAbilityCheck({ ability: a1 }));
-    if (kind === 'skill') return rolled(await actor.rollSkill({ skill: a1 }));
-    if (kind === 'tool') return rolled(await actor.rollToolCheck({ tool: a1 }));
+    if (act.clearsDc) return rolled(await actor.rollConcentration(...d20({ target: Number(act.dc) || 10 })));
+    if (kind === 'ability') return rolled(act.op === 'save' ? await actor.rollSavingThrow(...d20({ ability: a1 })) : await actor.rollAbilityCheck(...d20({ ability: a1 })));
+    if (kind === 'skill') return rolled(await actor.rollSkill(...d20({ skill: a1 })));
+    if (kind === 'tool') return rolled(await actor.rollToolCheck(...d20({ tool: a1 })));
     if (kind === 'init') { await actor.rollInitiativeDialog(); return { ok: true, msg: '' }; }
-    if (kind === 'death') return rolled(await actor.rollDeathSave());
+    if (kind === 'death') return rolled(await actor.rollDeathSave(...d20()));
     if (kind === 'hd') return rolled(await actor.rollHitDie({ denomination: a1 }));
     if (kind === 'rest') {
       const r = a1 === 'long' ? await actor.longRest() : await actor.shortRest();
@@ -214,7 +242,7 @@
     switch (act.op) {
       case 'hit': {
         const a = activity || acts.find((x) => x.type === 'attack');
-        return a ? rolled(await a.rollAttack()) : rolled(await item.use(), 'Used.');
+        return a ? rolled(await a.rollAttack(...d20())) : rolled(await item.use(), 'Used.');
       }
       case 'dmg': {
         const a = activity && dmgOf(activity).length ? activity : acts.find((x) => dmgOf(x).length);
