@@ -292,7 +292,7 @@ export function storeIntegrants(store) {
 // Descriptions are HTML or Markdown-style text.
 export function richText(s) {
   const t = String(s ?? '').trim();
-  if (!t) return '';
+  if (!t || /^(null|undefined)$/i.test(t)) return '';
   if (/<\/?(p|br|div|span|strong|em|b|i|ul|ol|li|h\d|table)\b/i.test(t)) return t;
   return t.split(/\n{2,}/).map((p) => {
     const lines = p.split('\n');

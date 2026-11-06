@@ -180,7 +180,8 @@
   // Long descriptions (and spell details) by name, and spell slots.
   function details(c) {
     const info = {};
-    const put = (name, text) => { const k = norm(name); const t = strip(text); if (k && t && t.length > (info[k] || '').length) info[k] = t; };
+    // Roll20 sometimes saves the word "null" as a description: that's no text.
+    const put = (name, text) => { const k = norm(name); const t = strip(text); if (k && t && !/^(null|undefined)$/i.test(t) && t.length > (info[k] || '').length) info[k] = t; };
     const attrs = attrsOf(c);
     const by = {};
     for (const a of attrs) by[String(g(a, 'name'))] = a;
@@ -194,7 +195,7 @@
       for (const x of Object.values(ints)) {
         if (!x || x._enabled === false) continue;
         if (x.type === 'Spell Slot') { const m = /level\s*(\d)/i.exec(x.name || ''); if (m) maxBy[m[1]] = (maxBy[m[1]] || 0) + (Number(x.valueFormula && x.valueFormula.flatValue) || 0); continue; }
-        if (!x.description) continue;
+        if (!x.description || typeof x.description !== 'string' || /^\s*(null|undefined)\s*$/i.test(x.description)) continue;
         let text = x.description;
         if (x.type === 'Spell' || 'castingTime' in x) {
           const comp = x.components ? ['verbal', 'somatic', 'material'].filter((k) => x.components[k]).map((k) => k[0].toUpperCase()).join(', ') : '';

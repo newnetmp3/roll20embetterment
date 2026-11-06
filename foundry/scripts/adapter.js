@@ -57,7 +57,7 @@
   // anything; only its text is kept.
   function plainText(html, max = 8000) {
     let t = String(html || '');
-    if (!t.trim()) return '';
+    if (!t.trim() || /^\s*(null|undefined)\s*$/i.test(t)) return '';
     t = t.replace(/<(script|style|template)[^>]*>[\s\S]*?<\/\1>/gi, '')
       .replace(/@\w+\[[^\]]*\]\{([^}]*)\}/g, '$1')
       .replace(/@(\w+)\[([^\]]*)\]/g, (m, k, v) => String(v).split(/[.|]/).pop())
