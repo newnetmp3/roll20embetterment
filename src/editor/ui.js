@@ -403,7 +403,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (!n.header) { row.tabIndex = -1; row.setAttribute('role', 'menuitem'); }
       // Right-click: pin to Favorites (or unpin).
       if (!n.header && handlers.pin && (n.run || (n.controls && n.controls.length))) {
-        row.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); handlers.pin(n.key); });
+        row.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); handlers.pin(n.key, n.label); });
       }
       if (!n.header && (tidy(n.desc) || !blank(n.info))) {
         row.addEventListener('mouseenter', () => { clearTimeout(tipTimer); tipTimer = setTimeout(() => { if (!tip.matches(':hover')) showTip(n, row); }, 280); });
@@ -482,9 +482,12 @@ input.txt { width: 100%; margin: 2px 0 4px; }
     tip.setAttribute('role', 'tooltip');
     wrap.appendChild(tip);
     let tipTimer = 0;
+    let tipNode = null; // { key, level } of the row the tooltip belongs to
     function showTip(n, row) {
       if (!row.isConnected) return;
       clearTimeout(tipHide);
+      const inMenu = row.closest('.menu');
+      tipNode = { key: n.key, level: inMenu ? Number(inMenu.dataset.level) : 0 };
       const desc = tidy(n.desc);
       const info = blank(n.info) ? '' : String(n.info);
       if (!desc && !info) { hideTip(); return; }
@@ -504,7 +507,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       tip.style.left = Math.round(left) + 'px';
       tip.style.top = Math.round(Math.max(4, Math.min(rr.top - 6, innerHeight - h - 4))) + 'px';
     }
-    function hideTip() { clearTimeout(tipTimer); clearTimeout(tipHide); tip.hidden = true; }
+    function hideTip() { clearTimeout(tipTimer); clearTimeout(tipHide); tip.hidden = true; tipNode = null; }
     // Leaving the row: wait a moment, so the mouse can move onto the tooltip
     // to scroll a long description; it stays while the mouse is on it.
     let tipHide = 0;
@@ -514,6 +517,8 @@ input.txt { width: 100%; margin: 2px 0 4px; }
 
     let menus = [];
     function renderMenus() {
+      // A tooltip being read stays open, at its scroll position, through a redraw.
+      const keep = !tip.hidden && tipNode ? { ...tipNode, scroll: tip.scrollTop } : null;
       hideTip();
       const scrolls = menus.map((m) => m.scrollTop);
       menus.forEach((m) => m.remove());
@@ -538,6 +543,11 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         menus.push(m);
       }
       positionMenus();
+      if (keep) {
+        const n = (nodesAt(keep.level) || []).find((x) => x.key === keep.key);
+        const row = menus[keep.level] && menus[keep.level].querySelector('.row[data-key="' + CSS.escape(keep.key) + '"]');
+        if (n && row) { showTip(n, row); tip.scrollTop = keep.scroll; }
+      }
     }
     function positionMenus() {
       const sr = strip.getBoundingClientRect();
@@ -628,9 +638,16 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       }
     });
 
+    let lastSig = null;
     return {
       update(next) {
         if ('pos' in next) { custom = next.pos || null; delete next.pos; place(); }
+        // Nothing the bar shows changed: don't redraw (a redraw would reset
+        // hover, tooltips and scrolling for nothing).
+        let sig = null;
+        try { sig = JSON.stringify({ ...model, ...next }); } catch { sig = null; }
+        if (sig && sig === lastSig) return;
+        lastSig = sig;
         model = { ...model, ...next };
         // Keep open menus open across updates; drop levels that vanished.
         for (let level = 1; level < path.length; level++) {

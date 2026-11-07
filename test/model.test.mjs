@@ -183,3 +183,18 @@ test('Roll20: descriptions, spell slots, token markers and pinned favorites', ()
   assert.equal(cat(cats, 'effects').label, 'Token markers');
   assert.equal(cat(cats, 'favorites').items[0].key, spell.ref);
 });
+
+test('long marker lists go into submenus; pins are found by name when their key moved', () => {
+  const C = model();
+  const snap = snapOf('pc-sheet.html');
+  const conds = [
+    ...['red', 'blue'].map((t) => ({ ref: 'marker:' + t, name: t, active: t === 'blue', group: 'Colour dots' })),
+    ...Array.from({ length: 30 }, (_, i) => ({ ref: 'marker:m' + i, name: 'Marker ' + i, active: false, group: 'Markers' })),
+  ];
+  const spell = snap.spells[0];
+  const cats = C.buildMenus({ ...snap, conditions: conds, favorites: [{ key: 'spell:99:gone', label: spell.name }] }, {});
+  const fx = cat(cats, 'effects').items;
+  assert.deepEqual(plain(fx.map((n) => n.label)), ['Conditions', 'blue', 'Colour dots', 'Markers'], 'what is on first, then a submenu per group');
+  assert.equal(fx[3].children.length, 30);
+  assert.equal(cat(cats, 'favorites').items[0].key, spell.ref, 'pin found again by its name');
+});

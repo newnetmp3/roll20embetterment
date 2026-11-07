@@ -45,12 +45,13 @@
     pref: (k, v) => { prefs = { ...prefs, [k]: v }; set('prefs', prefs); if (k === 'turnCue') myTurn = myTurn && v; refresh(); },
     toggleHidden: (id) => { C.sheets.setHidden(id, !C.sheets.isHidden(id)); refresh(); },
     // Right-click an entry: pin it to (or unpin it from) Favorites.
-    pin: (key) => {
+    pin: (key, label) => {
       if (!active || !key) return;
       const pins = { ...(prefs.pins || {}) };
+      // Pins remember the entry's name too, so they survive the sheet reordering.
       const list = (pins[active] || []).slice();
-      const i = list.indexOf(key);
-      if (i >= 0) list.splice(i, 1); else list.push(key);
+      const i = list.findIndex((p) => (typeof p === 'string' ? p : p.key) === key);
+      if (i >= 0) list.splice(i, 1); else list.push({ key, label: String(label || '') });
       pins[active] = list;
       prefs = { ...prefs, pins };
       set('prefs', prefs);
@@ -315,35 +316,53 @@
   const details = new Map(); // charId -> { info, slots, at }
   const markerState = new Map(); // tokenId -> { list, on, at }
   const fetching = new Set();
-  function freshen(key, map, fn, args) {
+  // stamp: re-read when it changes (the sheet's reading time), else after maxAge.
+  function freshen(key, map, fn, args, stamp = null, maxAge = 4000) {
     const have = map.get(key);
-    if ((have && Date.now() - have.at < 4000) || fetching.has(key)) return;
+    const fresh = have && (stamp !== null ? have.stamp === stamp && Date.now() - have.at < maxAge : Date.now() - have.at < maxAge);
+    if (fresh || fetching.has(key)) return;
     fetching.add(key);
-    pageCall(fn, args).then((r) => { fetching.delete(key); if (r) { map.set(key, { ...r, at: Date.now() }); refresh(); } });
+    pageCall(fn, args).then((r) => {
+      fetching.delete(key);
+      // Remember failures too, so a character Roll20 can't describe isn't asked about on every redraw.
+      map.set(key, { ...(r || { info: {}, slots: [], list: [], on: [], token: false }), at: Date.now(), stamp });
+      if (r) refresh();
+    });
   }
   const nname = (n) => String(n || '').toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
   const pretty = (t) => String(t).replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   // The sheet reading plus what only Roll20's page knows.
   function withDetails(snap) {
     if (!snap || !active) return snap;
-    freshen(active, details, 'details', { id: active });
+    // Descriptions change only when the sheet does: re-read with a new sheet
+    // reading (or once a minute); markers can change any time (every 4 s).
+    freshen(active, details, 'details', { id: active }, snap.at || null, 60000);
     const d = details.get(active);
     const out = { ...snap };
     if (d) {
-      const info = (x) => {
-        const n = nname(x.name);
-        return d.info[n] || d.info[nname(String(x.name).replace(/\s*\(.*\)\s*$/, ''))] || '';
+      // Each list looks in its own kind first (a Shield item and the Shield
+      // spell have different texts), then in the others.
+      const ORDER = { attacks: ['attack', 'item', 'spell', 'feature'], actions: ['feature', 'attack', 'item', 'spell'],
+        features: ['feature', 'spell', 'item'], items: ['item', 'attack', 'feature'], spells: ['spell', 'attack', 'feature'] };
+      const bags = d.info && !d.info.spell && typeof d.info === 'object' ? { feature: d.info } : d.info || {};
+      const info = (x, list) => {
+        const names = [nname(x.name), nname(String(x.name).replace(/\s*\(.*\)\s*$/, '').replace(/^throw\s+/i, ''))];
+        for (const kind of ORDER[list]) for (const n of names) if (bags[kind] && bags[kind][n]) return bags[kind][n];
+        return '';
       };
-      for (const k of ['attacks', 'actions', 'features', 'items', 'spells']) out[k] = (snap[k] || []).map((x) => ({ ...x, info: info(x) }));
-      out.slots = (d.slots || []).map((x) => ({ ref: 'slot:' + x.level, label: ORD(x.level) + ' level', cur: x.cur, max: x.max, readOnly: !x.editable }));
+      for (const k of Object.keys(ORDER)) out[k] = (snap[k] || []).map((x) => ({ ...x, info: info(x, k) }));
+      out.slots = (d.slots || []).map((x) => ({
+        ref: (x.pact ? 'pact:' : 'slot:') + x.level, label: x.pact ? 'Pact (' + ORD(x.level) + ')' : ORD(x.level) + ' level',
+        cur: x.cur, max: x.max || null, readOnly: !x.editable,
+      }));
     }
     const tok = moveToken();
     if (tok) {
       freshen(tok, markerState, 'markers', { token: tok });
       const m = markerState.get(tok);
       if (m && m.token) {
-        out.conditions = m.list.map((x) => ({ ref: 'marker:' + x.tag, name: pretty(x.name), active: m.on.includes(x.tag) }))
-          .sort((a, b) => (b.active - a.active) || 0);
+        const COLOURS = new Set(['red', 'blue', 'green', 'brown', 'purple', 'pink', 'yellow']);
+        out.conditions = m.list.map((x) => ({ ref: 'marker:' + x.tag, name: pretty(x.name), active: m.on.includes(x.tag), group: COLOURS.has(x.tag) ? 'Colour dots' : 'Markers' }));
         out.effectsLabel = 'Token markers';
         out.conditionsLabel = 'Markers on the token';
       }

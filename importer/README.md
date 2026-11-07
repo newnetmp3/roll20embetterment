@@ -21,7 +21,7 @@ Compared with r20Exporter it:
   is much smaller;
 - reads characters on the **2024 sheet** by opening each one hidden, so their
   stats, skills, attacks, actions, features, items and spells come across;
-- saves zip files of up to 1 GB each ("… part 1.zip", "… part 2.zip", …).
+- saves zip files of up to 500 MB each ("… part 1.zip", "… part 2.zip", …).
   Give `r20prep.py` part 1; it finds the other parts in the same folder.
 
 r20Exporter zips still work: `r20prep.py` downloads the images they're

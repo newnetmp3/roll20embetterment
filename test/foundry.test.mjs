@@ -200,3 +200,25 @@ test('Foundry: tooltips carry descriptions as plain text, without posting to cha
   assert.match(find(menus.find((m) => m.key === 'spells').items).info, /bless up to three/);
   assert.equal(calls.length, 0, 'reading descriptions posts nothing');
 });
+
+test('Foundry: damage rolls like the card\'s Damage button (crit, thrown, upcast spell level)', async () => {
+  const C = setup();
+  const calls = [];
+  const clone = { system: { activities: new Map([['a1', { id: 'a1', rollDamage: async (...args) => { calls.push(['clone.rollDamage', ...plain(args)]); return [{}]; } }]]) } };
+  const activity = {
+    id: 'a1', uuid: 'Item.x.Activity.a1',
+    item: { clone: (data, opts) => { calls.push(['clone', plain(data), plain(opts)]); return clone; } },
+    createConsumedFlag: () => null,
+    rollDamage: async (...args) => { calls.push(['rollDamage', ...plain(args)]); return [{}]; },
+  };
+  const card = { id: 'card1', system: { scaling: 2, deltas: null }, getAssociatedActor: () => ({}) };
+  const attack = { system: { origin: card, ability: 'dex', ammunitionItem: null, mode: 'thrown' }, rolls: [{ isCritical: true }] };
+  await C.foundryRollDamage(activity, { attack });
+  assert.deepEqual(calls[0], ['clone', { 'flags.dnd5e': { consumed: null, scaling: 2 } }, { keepId: true }], 'cast two levels up');
+  assert.deepEqual(calls[1], ['clone.rollDamage', { event: null, isCritical: true, ability: 'dex', ammunition: null, attackMode: 'thrown' },
+    { options: { defaultButton: 'critical' } }, { data: { system: { origin: 'card1' } } }]);
+  // No card, no attack: a plain roll.
+  calls.length = 0;
+  await C.foundryRollDamage(activity, {});
+  assert.deepEqual(calls, [['rollDamage', { event: null, isCritical: false }, {}, {}]]);
+});

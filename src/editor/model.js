@@ -228,9 +228,21 @@
       out.push({ key: e.ref, label: e.name, hint: e.source || '', checked: !!e.active, desc: e.desc || '', info: e.info || '',
         run: { ref: e.ref, op: 'effect', say: e.name + (e.active ? ' off' : ' on') } });
     }
-    if ((snap.conditions || []).length) {
+    const conds = snap.conditions || [];
+    if (conds.length) {
+      const node = (c) => ({ key: c.ref, label: c.name, checked: !!c.active, run: { ref: c.ref, op: 'status', say: c.name + (c.active ? ' off' : ' on') } });
       out.push({ key: 'cond:h', header: true, label: snap.conditionsLabel || 'Conditions' });
-      for (const c of snap.conditions) out.push({ key: c.ref, label: c.name, checked: !!c.active, run: { ref: c.ref, op: 'status', say: c.name + (c.active ? ' off' : ' on') } });
+      const groups = [...new Set(conds.map((c) => c.group).filter(Boolean))];
+      if (!groups.length && conds.length <= 24) for (const c of conds) out.push(node(c));
+      else {
+        // A long list: what's on first, then each group in its own submenu.
+        for (const c of conds.filter((x) => x.active)) out.push(node(c));
+        const by = groups.length ? groups : ['All'];
+        for (const g of by) {
+          const list = conds.filter((c) => (groups.length ? c.group === g : true));
+          if (list.length) out.push({ key: 'cond:g:' + norm(g), label: g, hint: String(list.length), children: list.map(node) });
+        }
+      }
     }
     return out;
   }
@@ -244,8 +256,13 @@
     for (const c of cats) walk(c.items);
     const out = [];
     const seen = new Set();
-    for (const f of want) {
-      const n = nodes.find((x) => x.key === f || String(x.key).split(':').includes(f));
+    for (const w of want) {
+      // A pin is a key, or { key, label }: found by key, else by its name
+      // (Roll20 keys can shift when the sheet's rows move).
+      const f = typeof w === 'string' ? w : w && w.key;
+      const label = typeof w === 'object' && w ? w.label : '';
+      let n = nodes.find((x) => x.key === f || String(x.key).split(':').includes(f));
+      if (!n && label) { const same = nodes.filter((x) => x.label === label); if (same.length === 1) n = same[0]; }
       if (n && !seen.has(n.key)) { seen.add(n.key); out.push(n); }
     }
     return out;

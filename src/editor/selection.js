@@ -178,10 +178,18 @@
   const tokenModel = (id) => { const p = pageOf(); try { return (p && p.thegraphics && p.thegraphics.get(id)) || null; } catch { return null; } };
 
   // Long descriptions (and spell details) by name, and spell slots.
+  // Which list an entry belongs to, so a Shield item and the Shield spell
+  // each get their own description.
+  const KIND_2024 = { Spell: 'spell', Item: 'item', Attack: 'attack', Action: 'feature' };
   function details(c) {
-    const info = {};
+    const info = { spell: {}, item: {}, feature: {}, attack: {} };
     // Roll20 sometimes saves the word "null" as a description: that's no text.
-    const put = (name, text) => { const k = norm(name); const t = strip(text); if (k && t && !/^(null|undefined)$/i.test(t) && t.length > (info[k] || '').length) info[k] = t; };
+    const put = (kind, name, text) => {
+      const k = norm(name);
+      const t = strip(text);
+      const bag = info[kind] || info.feature;
+      if (k && t && !/^(null|undefined)$/i.test(t) && t.length > (bag[k] || '').length) bag[k] = t;
+    };
     const attrs = attrsOf(c);
     const by = {};
     for (const a of attrs) by[String(g(a, 'name'))] = a;
@@ -192,9 +200,18 @@
     const ints = store && store.integrants && store.integrants.integrants;
     if (ints) {
       const maxBy = {};
+      const pactMax = {};
+      const slotClasses = new Set(); // classes granting slots ("Cleric Level 1 Spell Slot 3" -> cleric)
       for (const x of Object.values(ints)) {
         if (!x || x._enabled === false) continue;
-        if (x.type === 'Spell Slot') { const m = /level\s*(\d)/i.exec(x.name || ''); if (m) maxBy[m[1]] = (maxBy[m[1]] || 0) + (Number(x.valueFormula && x.valueFormula.flatValue) || 0); continue; }
+        if (/slot/i.test(x.type || '') && !/prepared/i.test(x.type || '')) {
+          const m = /level\s*(\d)/i.exec(x.name || '');
+          if (!m) continue;
+          const n = Number(x.valueFormula && x.valueFormula.flatValue) || 0;
+          if (/pact/i.test((x.type || '') + ' ' + (x.name || ''))) pactMax[m[1]] = (pactMax[m[1]] || 0) + n;
+          else { maxBy[m[1]] = (maxBy[m[1]] || 0) + n; slotClasses.add(norm(String(x.name || '').split(/\s+level\s/i)[0])); }
+          continue;
+        }
         if (!x.description || typeof x.description !== 'string' || /^\s*(null|undefined)\s*$/i.test(x.description)) continue;
         let text = x.description;
         if (x.type === 'Spell' || 'castingTime' in x) {
@@ -203,11 +220,24 @@
           const line = [lvl ? ORD(lvl) + '-level ' + (x.school || '') : (x.school ? x.school + ' cantrip' : 'Cantrip'), x.castingTime, x.range, comp, x.duration].filter(Boolean).join(' · ');
           text = line + '\n\n' + text;
         }
-        put(x.name, text);
-        if (x.label) put(x.label, text);
+        const kind = KIND_2024[x.type] || 'feature';
+        put(kind, x.name, text);
+        if (x.label) put(kind, x.label, text);
       }
       const cur = (store.spellSlots && store.spellSlots.currentByLevel) || {};
-      for (let l = 1; l <= 9; l++) if (maxBy[l]) slots.push({ level: l, cur: Number(cur[LEVELS[l - 1]]) || 0, max: maxBy[l], editable: false });
+      const curPact = (store.spellSlots && store.spellSlots.currentPactByLevel) || {};
+      // Several classes with slots (multiclass): their slots don't simply add
+      // up (5e uses a combined table), so show only what's left.
+      const multi = slotClasses.size > 1;
+      for (let l = 1; l <= 9; l++) {
+        const left = Number(cur[LEVELS[l - 1]]) || 0;
+        if (maxBy[l] || (multi && left)) slots.push({ level: l, cur: left, max: multi ? null : maxBy[l], editable: false });
+      }
+      // Warlock pact slots are kept apart.
+      for (let l = 1; l <= 9; l++) {
+        const left = Number(curPact[LEVELS[l - 1]]) || 0;
+        if (pactMax[l] || left) slots.push({ level: l, pact: true, cur: left, max: pactMax[l] || null, editable: false });
+      }
     }
     // Classic sheet: repeating rows.
     const rows = {};
@@ -224,10 +254,10 @@
         const lvl = r.sec === 'spell-cantrip' ? 0 : Number(r.sec.slice(6)) || 0;
         const comp = [r.spellcomp_v && r.spellcomp_v !== '0' ? 'V' : '', r.spellcomp_s && r.spellcomp_s !== '0' ? 'S' : '', r.spellcomp_m && r.spellcomp_m !== '0' ? 'M' : ''].filter(Boolean).join(', ');
         const line = [lvl ? ORD(lvl) + '-level ' + (r.spellschool || '') : 'Cantrip', r.spellcastingtime, r.spellrange, comp, r.spellduration].filter(Boolean).join(' · ');
-        put(r.spellname, line + '\n\n' + (r.spelldescription || '') + (r.spellathigherlevels ? '\n\nAt Higher Levels. ' + r.spellathigherlevels : ''));
+        put('spell', r.spellname, line + '\n\n' + (r.spelldescription || '') + (r.spellathigherlevels ? '\n\nAt Higher Levels. ' + r.spellathigherlevels : ''));
       }
-      else if (r.sec === 'inventory' && r.itemname) put(r.itemname, r.itemcontent);
-      else if (r.sec === 'traits' && r.name) put(r.name, r.description);
+      else if (r.sec === 'inventory' && r.itemname) put('item', r.itemname, r.itemcontent);
+      else if (r.sec === 'traits' && r.name) put('feature', r.name, r.description);
       else if (/^npc/.test(r.sec) && r.name) {
         // An NPC attack's line is built by the sheet from its fields, as shown on it:
         // "Melee Weapon Attack: +8, Range 5 ft., one target. Hit: 9 (1d6r1 + 6) piercing damage."
@@ -239,9 +269,9 @@
         else if (hit && r.attack_damage) lines.push('Hit: ' + hit + '.');
         const text = String(r.description || r.desc || '').trim();
         if (text && !/^(null|undefined)$/i.test(text)) lines.push(text);
-        put(r.name, lines.join('\n\n'));
+        put(isAtk ? 'attack' : 'feature', r.name, lines.join('\n\n'));
       }
-      else if (r.sec === 'attack' && r.atkname) put(r.atkname, r.atk_desc);
+      else if (r.sec === 'attack' && r.atkname) put('attack', r.atkname, r.atk_desc);
     }
     if (!ints) {
       for (let l = 1; l <= 9; l++) {
@@ -262,12 +292,36 @@
     const on = t ? String(g(t, 'statusmarkers') || '').split(',').map((x) => x.split('@')[0]).filter(Boolean) : [];
     return { token: !!t, list, on };
   }
+  // Who may change what: the GM, or players controlling the token or its character.
+  const me = () => { try { return window.currentPlayer && String(window.currentPlayer.id || ''); } catch { return ''; } };
+  const isGM = () => { try { return !!window.is_gm; } catch { return false; } };
+  const controls = (list) => { const ids = String(list || '').split(',').map((x) => x.trim()); const id = me(); return ids.includes('all') || (!!id && ids.includes(id)); };
+  function mayChangeToken(t) {
+    if (isGM()) return true;
+    if (!me()) return true; // can't tell who this is: Roll20 itself decides
+    if (controls(g(t, 'controlledby'))) return true;
+    const c = charOf(String(g(t, 'represents') || ''));
+    return !!c && controls(g(c, 'controlledby'));
+  }
+  function mayChangeChar(c) { return isGM() || !me() || (!!c && controls(g(c, 'controlledby'))); }
+  const NOT_YOURS = { ok: false, msg: 'Only the GM or this character\'s player can change that.' };
+  // A turn order counter's formula ("+1" for a round counter), as Roll20 applies
+  // it when the entry comes up.
+  function applyFormula(entry) {
+    const f = String(entry.formula || '').replace(/\s+/g, '');
+    if (!/^[+-]?\d+(\.\d+)?$/.test(f)) return entry;
+    const pr = Number(entry.pr) || 0;
+    const v = Math.round((pr + Number(f)) * 1000) / 1000;
+    return { ...entry, pr: String(v) };
+  }
+
   const calls = {
     details: ({ id }) => { const c = charOf(id); return c ? details(c) : null; },
     markers: ({ token }) => markers(token),
     toggleMarker: ({ token, tag }) => {
       const t = tokenModel(token);
       if (!t) return { ok: false, msg: 'No token for this character on this page.' };
+      if (!mayChangeToken(t)) return NOT_YOURS;
       const cur = String(g(t, 'statusmarkers') || '').split(',').filter(Boolean);
       const has = cur.some((x) => x.split('@')[0] === tag);
       const next = has ? cur.filter((x) => x.split('@')[0] !== tag) : cur.concat(tag);
@@ -278,12 +332,17 @@
       const raw = window.Campaign.get('turnorder');
       const list = typeof raw === 'string' ? (raw ? JSON.parse(raw) : []) : (raw || []).slice();
       if (!list.length || String(list[0].id) !== String(token)) return { ok: false, msg: 'It isn\'t this token\'s turn.' };
+      const t = tokenModel(token);
+      if (t && !mayChangeToken(t)) return NOT_YOURS;
       list.push(list.shift());
+      // The entry now up is a counter (e.g. "Round", formula +1): tick it, as Roll20 does.
+      if (list[0] && (String(list[0].id) === '-1' || list[0].custom) && list[0].formula) list[0] = applyFormula(list[0]);
       window.Campaign.save({ turnorder: JSON.stringify(list) });
       return { ok: true };
     },
     slot: ({ id, level, delta }) => {
       const c = charOf(id);
+      if (!mayChangeChar(c)) return NOT_YOURS;
       const by = {};
       for (const a of attrsOf(c)) by[String(g(a, 'name'))] = a;
       const tot = by['lvl' + level + '_slots_total'];

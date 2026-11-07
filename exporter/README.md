@@ -32,7 +32,7 @@ need the Roll20embetterment action bar, and the two can be installed together.
   Incompetech), each downloaded once and stored under `assets/`.
   `campaign.json` records which Roll20 link each file came from.
 
-Zips are at most about 1 GB each; `campaign.json` is in the last one.
+Zips are at most about 500 MB each; `campaign.json` is in the last one.
 
 ## Permissions
 

@@ -15,7 +15,8 @@
   const C = G.R20C;
   if (!C || window.top !== window) return;
 
-  const PART_LIMIT = 1000 * 1024 * 1024;
+  // 500 MB a part: each part is held in memory (about twice, while saving).
+  const PART_LIMIT = 500 * 1024 * 1024;
   const PART_FILES = 60000;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 

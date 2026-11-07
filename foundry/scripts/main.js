@@ -55,68 +55,77 @@
     }
     const isAttack = (m) => m && (m.type === 'attack' || (m.flags && m.flags.dnd5e && m.flags.dnd5e.roll && m.flags.dnd5e.roll.type === 'attack'));
 
+    // Add the button for attack roll `message` inside `root` (the attack's own
+    // message, or its summary inside the item's card).
+    function addRollDamage(message, root) {
+      if (!root || root.querySelector('.fe-roll-damage')) return;
+      if (!isAttack(message) || hitOf(message) !== true) return;
+      // dnd5e can hide from players whether an attack hit: then don't show
+      // the button (it appearing only on a hit would tell them).
+      if (message.shouldDisplayChallenge === false) return;
+      const activity = message.getAssociatedActivity && message.getAssociatedActivity();
+      if (!activity || typeof activity.rollDamage !== 'function') return;
+      if (!(game.user.isGM || (activity.actor && activity.actor.isOwner))) return;
+      const crit = !!message.rolls[0].isCritical;
+      // Built as one of the card's own rows (icon, then the box), so it lines
+      // up under the roll's total and stacks with it.
+      const box = document.createElement('section');
+      box.className = 'icon-row fe-roll-damage';
+      const gutter = document.createElement('i');
+      gutter.className = 'fa-fw fa-solid fa-burst';
+      gutter.setAttribute('aria-hidden', 'true');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      if (crit) btn.classList.add('crit');
+      btn.textContent = crit ? 'Roll Critical Damage' : 'Roll Damage';
+      box.append(gutter, btn);
+      btn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        btn.disabled = true;
+        try {
+          // As the card's Damage button: this attack's ability, ammunition,
+          // mode and crit, at the spell level the card was cast at.
+          await C.foundryRollDamage(activity, { attack: message, event });
+        } catch (e) { console.error('[Foundryembetterment] damage roll', e); ui.notifications.warn('Could not roll damage: ' + (e.message || e)); }
+        finally { btn.disabled = false; }
+      });
+      // Directly under the roll's total (the dice row), else at the end.
+      // dnd5e 6: <section class="icon-row"><i fa-dice> <button class="dice-roll">…total…</button></section>
+      const rolls = root.querySelectorAll('.dice-roll');
+      const last = rolls.length ? rolls[rolls.length - 1] : null;
+      const anchor = last ? (last.closest('.icon-row') || last) : null;
+      if (anchor && root.contains(anchor)) anchor.after(box);
+      else (root.querySelector('.message-content') || root).appendChild(box);
+      // Same layout, height and corners as the total's row, once on screen.
+      if (last) {
+        const match = (tries) => {
+          if (!last.isConnected || !last.offsetHeight) { if (tries > 0) requestAnimationFrame(() => match(tries - 1)); return; }
+          const cs = getComputedStyle(last);
+          if (anchor && anchor !== last) {
+            const rs = getComputedStyle(anchor);
+            for (const k of ['display', 'gridTemplateColumns', 'alignItems', 'columnGap', 'gap']) box.style[k] = rs[k];
+          }
+          btn.style.height = last.offsetHeight + 'px';
+          btn.style.borderRadius = cs.borderRadius;
+          const gi = anchor && anchor.querySelector(':scope > i');
+          if (gi) { const g = getComputedStyle(gi); gutter.style.width = g.width; gutter.style.fontSize = g.fontSize; }
+        };
+        requestAnimationFrame(() => match(30));
+      }
+    }
+
     Hooks.on('dnd5e.renderChatMessage', (message, html) => {
       try {
-        if (!game.settings.get(MOD, 'bigDamage') || !isAttack(message)) return;
+        if (!game.settings.get(MOD, 'bigDamage')) return;
         const root = html instanceof HTMLElement ? html : html && html[0];
-        if (!root || root.querySelector('.fe-roll-damage')) return;
-        if (hitOf(message) !== true) return;
-        const activity = message.getAssociatedActivity && message.getAssociatedActivity();
-        if (!activity || typeof activity.rollDamage !== 'function') return;
-        if (!(game.user.isGM || (activity.actor && activity.actor.isOwner))) return;
-        const roll = message.rolls[0];
-        const crit = !!roll.isCritical;
-        // Built as one of the card's own rows (icon, then the box), so it lines
-        // up under the roll's total and stacks with it.
-        const box = document.createElement('section');
-        box.className = 'icon-row fe-roll-damage';
-        const gutter = document.createElement('i');
-        gutter.className = 'fa-fw fa-solid fa-burst';
-        gutter.setAttribute('aria-hidden', 'true');
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        if (crit) btn.classList.add('crit');
-        btn.textContent = crit ? 'Roll Critical Damage' : 'Roll Damage';
-        box.append(gutter, btn);
-        btn.addEventListener('click', async (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          btn.disabled = true;
-          try {
-            const sys = message.system || {};
-            const o = sys.origin;
-            const origin = typeof o === 'string' ? o : o && o.id;
-            await activity.rollDamage(
-              { event, ability: sys.ability, ammunition: sys.ammunitionItem, attackMode: sys.mode, isCritical: crit },
-              crit ? { options: { defaultButton: 'critical' } } : {},
-              origin ? { data: { system: { origin } } } : {},
-            );
-          } catch (e) { console.error('[Foundryembetterment] damage roll', e); ui.notifications.warn('Could not roll damage: ' + (e.message || e)); }
-          finally { btn.disabled = false; }
-        });
-        // Directly under the roll's total (the dice row), else at the end of the message.
-        const rolls = root.querySelectorAll('.dice-roll');
-        // dnd5e 6: <section class="icon-row"><i fa-dice> <button class="dice-roll">…total…</button></section>
-        const last = rolls.length ? rolls[rolls.length - 1] : null;
-        const anchor = last ? (last.closest('.icon-row') || last) : null;
-        if (anchor) anchor.after(box);
-        else (root.querySelector('.message-content') || root).appendChild(box);
-        // Same height and corners as the total's box, once both are on screen.
-        if (last) {
-          const match = (tries) => {
-            if (!last.isConnected || !last.offsetHeight) { if (tries > 0) requestAnimationFrame(() => match(tries - 1)); return; }
-            const cs = getComputedStyle(last);
-            // The row lays out like the total's row (dnd5e's own .icon-row rules).
-            if (anchor && anchor !== last) {
-              const rs = getComputedStyle(anchor);
-              for (const k of ['display', 'gridTemplateColumns', 'alignItems', 'columnGap', 'gap']) box.style[k] = rs[k];
-            }
-            btn.style.height = last.offsetHeight + 'px';
-            btn.style.borderRadius = cs.borderRadius;
-            const gi = anchor && anchor.querySelector(':scope > i');
-            if (gi) { const g = getComputedStyle(gi); gutter.style.width = g.width; gutter.style.fontSize = g.fontSize; }
-          };
-          requestAnimationFrame(() => match(30));
+        if (!root) return;
+        addRollDamage(message, root);
+        // dnd5e's "chat card summary" setting draws attack rolls inside the
+        // item's card instead: <div class="card-summary" data-message-id=…>.
+        for (const sum of root.querySelectorAll('.card-summary[data-message-id]')) {
+          const m = game.messages.get(sum.dataset.messageId);
+          if (m) addRollDamage(m, sum);
         }
       } catch (e) { console.warn('[Foundryembetterment] chat card', e); }
     });
@@ -207,13 +216,13 @@
       pref: (k, v) => { prefs = { ...prefs, [k]: v }; game.settings.set(MOD, 'prefs', prefs); if (k === 'turnCue') myTurn = myTurn && v; refresh(); },
       toggleHidden: () => {},
       // Right-click an entry: pin it to (or unpin it from) Favorites.
-      pin: (key) => {
+      pin: (key, label) => {
         const actor = actorOf(active);
         if (!actor || !key) return;
         const pins = { ...(prefs.pins || {}) };
         const list = (pins[actor.uuid] || []).slice();
-        const i = list.indexOf(key);
-        if (i >= 0) list.splice(i, 1); else list.push(key);
+        const i = list.findIndex((p) => (typeof p === 'string' ? p : p.key) === key);
+        if (i >= 0) list.splice(i, 1); else list.push({ key, label: String(label || '') });
         pins[actor.uuid] = list;
         prefs = { ...prefs, pins };
         game.settings.set(MOD, 'prefs', prefs);
@@ -319,7 +328,7 @@
       if (actor && actor.system) {
         try { snap = C.foundrySnap(actor); } catch (e) { note('read', e); }
         // Favorites: the sheet's own, then anything pinned from the bar.
-        if (snap) snap.favorites = [...new Set([...(snap.favorites || []), ...((prefs.pins && prefs.pins[actor.uuid]) || [])])];
+        if (snap) snap.favorites = [...(snap.favorites || []), ...((prefs.pins && prefs.pins[actor.uuid]) || [])];
       }
       try {
         const conc = actor && actor.system ? C.foundryConcentration(actor, lastDc.get(actor.uuid)) : null;
@@ -341,10 +350,30 @@
       if (!controlled || !prefs.follow || !token.actor || !token.actor.isOwner) return;
       if (token.actor.uuid !== active) select(token.actor.uuid);
     });
+    // Refresh for changes to the character on the bar (its items, effects and
+    // tokens), not for every token moving or actor changing in the world.
+    const ownerActor = (doc) => {
+      if (!doc) return null;
+      if (doc.documentName === 'Actor') return doc;
+      if (doc.documentName === 'Token') return doc.actor || null;
+      const p = doc.parent;
+      if (!p) return null;
+      if (p.documentName === 'Actor') return p;
+      if (p.documentName === 'Item') return p.parent || null;
+      return null;
+    };
+    const concernsActive = (doc) => {
+      const a = ownerActor(doc);
+      if (!a || !active) return !a; // unknown: refresh to be safe
+      const cur = actorOf(active);
+      return a.uuid === active || (cur && (a.id === cur.id || (a.token && cur.token && a.token.id === cur.token.id)));
+    };
     for (const h of ['updateActor', 'createItem', 'updateItem', 'deleteItem', 'createActiveEffect', 'updateActiveEffect', 'deleteActiveEffect',
-      'updateToken', 'moveToken', 'createToken', 'deleteToken', 'canvasReady', 'createCombatant', 'deleteCombatant', 'deleteCombat']) {
-      Hooks.on(h, () => refresh());
+      'updateToken', 'moveToken']) {
+      Hooks.on(h, (doc) => { if (concernsActive(doc)) refresh(); });
     }
+    // Tokens added or removed change the GM's character picker too.
+    for (const h of ['createToken', 'deleteToken', 'canvasReady', 'createCombatant', 'deleteCombatant', 'deleteCombat']) Hooks.on(h, () => refresh());
     // Anything used through dnd5e (bar, sheet or hotbar) marks its part of the turn.
     Hooks.on('dnd5e.postUseActivity', (activity) => {
       try {

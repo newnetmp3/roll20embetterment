@@ -28,11 +28,17 @@ jobs:
       - run: npm run check
       - name: Check request
         id: req
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(node -p "require('./package.json').version")
           requested=$(node -p "require('./amo-request.json').version")
           if [ "$version" != "$requested" ]; then
             echo "::error::amo-request.json ($requested) must match package.json ($version)"; exit 1
+          fi
+          # Mozilla never signs a version twice, in either channel.
+          if gh release view "roll20embetterment-v$version" >/dev/null 2>&1; then
+            echo "::error::$version was already signed for a GitHub release; use a new version."; exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Check AMO credentials

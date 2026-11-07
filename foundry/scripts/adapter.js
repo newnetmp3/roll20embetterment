@@ -269,6 +269,42 @@
     const msgs = G.game && G.game.messages;
     return id && (!msgs || msgs.get(id)) ? { data: { system: { origin: id } } } : {};
   }
+  // Cards posted by any use (bar, sheet, hotbar) count as the activity's last card.
+  if (G.Hooks && typeof G.Hooks.on === 'function') {
+    G.Hooks.on('dnd5e.postUseActivity', (activity, config, results) => {
+      try { if (activity && results && results.message && results.message.id) lastCard.set(keyOf(activity), results.message.id); } catch { /* ignore */ }
+    });
+  }
+  const cardOf = (m) => { const o = m && m.system && m.system.origin; return typeof o === 'string' ? (G.game && G.game.messages && G.game.messages.get(o)) || null : o || null; };
+  // The activity as its card used it: spell slot level (upcasting) and what
+  // was spent, exactly as dnd5e's own card buttons rebuild it.
+  function asCardUsed(activity, card) {
+    if (!card || !activity || !activity.item) return activity;
+    try {
+      const scaling = (card.system && card.system.scaling) || 0;
+      const actor = typeof card.getAssociatedActor === 'function' ? card.getAssociatedActor() : activity.actor;
+      const consumed = typeof activity.createConsumedFlag === 'function' ? activity.createConsumedFlag(actor, card.system && card.system.deltas) : null;
+      if (!scaling && !consumed) return activity;
+      const item = activity.item.clone({ 'flags.dnd5e': { consumed, scaling } }, { keepId: true });
+      return (item.system.activities && item.system.activities.get(activity.id)) || activity;
+    } catch { return activity; }
+  }
+  /**
+   * Roll damage the way the card's Damage button does: from the attack roll
+   * `attack` (ability, ammunition, attack mode, critical), with the card's
+   * spell level, tied to the card. Without an attack, from the card alone.
+   */
+  async function rollDamageLikeCard(activity, { attack = null, card = null, event = null } = {}) {
+    card = card || cardOf(attack);
+    const a = asCardUsed(activity, card);
+    const sys = (attack && attack.system) || {};
+    const crit = !!(attack && attack.rolls && attack.rolls[0] && attack.rolls[0].isCritical);
+    const config = { event, isCritical: crit };
+    if (attack) Object.assign(config, { ability: sys.ability, ammunition: sys.ammunitionItem, attackMode: sys.mode });
+    return a.rollDamage(config, crit ? { options: { defaultButton: 'critical' } } : {}, card ? { data: { system: { origin: card.id } } } : {});
+  }
+  C.foundryRollDamage = rollDamageLikeCard;
+  C.foundryCardOf = cardOf;
 
   // A roll returns null when its dialog is closed without rolling.
   // (dnd5e returns null or nothing when a roll or use dialog is closed.)
@@ -359,8 +395,14 @@
       }
       case 'dmg': {
         const a = activity && dmgOf(activity).length ? activity : acts.find((x) => dmgOf(x).length);
-        // Tied to the item's card from the last attack, like its Damage button.
-        return a ? rolled(await a.rollDamage({}, {}, originOf(a))) : { ok: false, msg: 'Nothing to roll.' };
+        if (!a) return { ok: false, msg: 'Nothing to roll.' };
+        // Like the card's Damage button: from the card's last attack (crit,
+        // thrown/off-hand, ammunition) at the level the card was used at.
+        const id = lastCard.get(keyOf(a));
+        const card = id && G.game && G.game.messages ? G.game.messages.get(id) : null;
+        let attack = null;
+        try { attack = card && typeof card.getAssociatedRolls === 'function' ? card.getAssociatedRolls('attack').pop() || null : null; } catch { attack = null; }
+        return rolled(await rollDamageLikeCard(a, { attack, card }));
       }
       case 'chat':
         if (item.type === 'spell') return rolled(await item.use(), 'Cast.');

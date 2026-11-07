@@ -187,6 +187,11 @@ release** workflow signs it, publishes the release and updates `updates.json`.
 the upload for addons.mozilla.org (no self-hosted update URL); the listing text
 is in `store/amo-listing.md`.
 
+Mozilla never signs the same version twice, in either channel, so each
+version goes to one channel only. Normal releases go to the public listing;
+use the GitHub (unlisted) channel for test builds. Both workflows stop early
+if a version was already used by the other.
+
 To publish on addons.mozilla.org (the public listing, reviewed by Mozilla):
 set `package.json` and `amo-request.json` (`version` and release `notes`) to
 a version Mozilla hasn't signed yet and push. The **Roll20embetterment on

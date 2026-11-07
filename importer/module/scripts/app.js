@@ -504,6 +504,17 @@ async function runImport(name, index, opt, userMap, say, progress) {
       const sub = {};
       for (const [key, { item, extras, from }] of library) {
         if (existingItems.has(key)) continue;
+        // An earlier import saved this species without its subrace in the name
+        // ("Elves of R'Ley" vs "Elves of R'Ley (Deepwood Elves)"): update that
+        // one rather than adding a second copy.
+        const base = item.type === 'race' ? item.name.replace(/\s*\([^()]*(\([^()]*\))?[^()]*\)\s*$/, '') : '';
+        const older = base && base !== item.name ? game.items.find((i) => i.getFlag(MOD, 'libraryKey') === 'race|' + base.toLowerCase()) : null;
+        if (older) {
+          await older.update({ name: item.name, 'system.description.value': item.system?.description?.value || '', [`flags.${MOD}.libraryKey`]: key });
+          if (older.folder && older.folder.name === base) await older.folder.update({ name: item.name });
+          existingItems.add(key);
+          continue;
+        }
         sub[item.type] ||= await folder('Item', groups[item.type], root, 1);
         let target = sub[item.type];
         if (extras.length) target = await folder('Item', item.name, sub[item.type], 2);

@@ -34,6 +34,10 @@ jobs:
           if [ "$version" != "$requested" ]; then
             echo "::error::release-request.json ($requested) must match package.json ($version)"; exit 1
           fi
+          # Mozilla never signs a version twice, in either channel.
+          if [ -f amo-request.json ] && [ "$version" = "$(node -p "require('./amo-request.json').version")" ]; then
+            echo "::error::$version was submitted to addons.mozilla.org (amo-request.json); use a new version."; exit 1
+          fi
           if gh release view "roll20embetterment-v$version" >/dev/null 2>&1; then
             echo "::error::roll20embetterment-v$version is already released; bump the version."; exit 1
           fi
