@@ -30,15 +30,16 @@
     const css = document.createElement('style');
     css.id = 'foundryembetterment-chat';
     css.textContent = `
-      .chat-message .fe-wrap { flex-wrap: wrap !important; }
-      .chat-message button.fe-damage { flex: 1 0 100% !important; width: 100% !important; max-width: none !important; min-height: 34px; margin-top: 4px;
-        display: flex !important; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 700; letter-spacing: .02em; }
-      .chat-message button.fe-damage .fe-label { display: inline !important; position: static !important; width: auto !important; height: auto !important;
-        clip: auto !important; clip-path: none !important; overflow: visible !important; margin: 0 !important; }
-      .chat-message button.fe-damage.fe-hit { background: linear-gradient(180deg, #a3262a, #761b1e) !important; color: #fff !important; border: 1px solid #e0605f !important;
+      .fe-wrap { flex-wrap: wrap !important; }
+      .fe-damage-li { flex: 1 0 100% !important; width: 100% !important; max-width: none !important; list-style: none; }
+      button.fe-damage { width: 100% !important; max-width: none !important; min-width: 0 !important; height: auto !important; min-height: 34px; margin: 4px 0 0 !important;
+        padding: 4px 10px !important; display: flex !important; align-items: center; justify-content: center; gap: 6px;
+        font-size: 14px !important; font-weight: 700; letter-spacing: .02em; line-height: 1.2 !important; border-radius: 4px; }
+      button.fe-damage .fe-label { display: inline !important; }
+      button.fe-damage.fe-hit { background: linear-gradient(180deg, #a3262a, #761b1e) !important; color: #fff !important; border: 1px solid #e0605f !important;
         box-shadow: 0 0 0 1px rgba(255,120,110,.35), 0 0 8px rgba(220,60,60,.55); }
-      .chat-message button.fe-damage.fe-hit:hover { filter: brightness(1.12); }
-      .chat-message button.fe-damage.fe-miss { opacity: .7; }`;
+      button.fe-damage.fe-hit:hover { filter: brightness(1.12); }
+      button.fe-damage.fe-miss { opacity: .7; }`;
     document.head.appendChild(css);
 
     // What the card's last attack did: 'hit', 'miss' or '' (no attack / no targets).
@@ -54,7 +55,10 @@
       if (!acs.length) return '';
       return acs.some((ac) => roll.total >= ac) ? 'hit' : 'miss';
     }
-    Hooks.on('renderChatMessageHTML', (message, html) => {
+    // dnd5e fills in its cards after Foundry's renderChatMessageHTML hook, so
+    // wait for its own hook, which fires once the card is complete.
+    // Its buttons: <li><button class="icon" data-action="rollDamage" aria-label="Damage">
+    Hooks.on('dnd5e.renderChatMessage', (message, html) => {
       try {
         if (!game.settings.get(MOD, 'bigDamage')) return;
         const root = html instanceof HTMLElement ? html : html && html[0];
@@ -66,10 +70,11 @@
           b.classList.add('fe-damage');
           b.classList.toggle('fe-hit', result === 'hit');
           b.classList.toggle('fe-miss', result === 'miss');
-          if (b.parentElement) b.parentElement.classList.add('fe-wrap');
-          let label = b.querySelector('.fe-label') || b.querySelector('span');
-          if (!label) { label = document.createElement('span'); b.appendChild(label); }
-          label.classList.add('fe-label');
+          const li = b.closest('li');
+          if (li) { li.classList.add('fe-damage-li'); if (li.parentElement) li.parentElement.classList.add('fe-wrap'); }
+          else if (b.parentElement) b.parentElement.classList.add('fe-wrap');
+          let label = b.querySelector('.fe-label');
+          if (!label) { label = document.createElement('span'); label.className = 'fe-label'; b.appendChild(label); }
           label.textContent = result === 'hit' ? 'Damage — hit!' : 'Damage';
         }
       } catch (e) { console.warn('[Foundryembetterment] chat card', e); }
