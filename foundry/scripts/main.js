@@ -16,80 +16,90 @@
     game.settings.register(MOD, 'barPos', { scope: 'client', config: false, type: Object, default: {} });
     game.settings.register(MOD, 'advantage', { scope: 'client', config: false, type: String, default: 'Ask each time' });
     game.settings.register(MOD, 'bigDamage', {
-      name: 'Big Damage button on attack cards', scope: 'client', config: true, type: Boolean, default: true,
-      hint: 'Shows the Damage button on weapon and spell cards as a full-width button, red once the attack has hit.',
+      name: 'Roll Damage button under hits', scope: 'client', config: true, type: Boolean, default: true,
+      hint: 'Adds a large Roll Damage button under an attack roll that hit a target (or crit).',
       onChange: () => { try { ui.chat.render(); } catch { /* chat not ready */ } },
     });
     chatCards();
   });
 
-  // ---- chat cards: a big, clear Damage button ------------------------------------
-  // dnd5e 6 draws the card's Attack and Damage buttons as small icons. Make
-  // Damage a full-width labelled button, and red once the attack has hit.
+  // ---- chat: a large Roll Damage button under a hit ---------------------------
+  // dnd5e 6 shows a card's Damage button as a small icon. Under an attack roll
+  // that hit, add our own large button that rolls damage the way the card's
+  // button does (ability, ammunition and attack mode from that attack; critical
+  // after a crit). The system's own card is left as it is.
   function chatCards() {
     const css = document.createElement('style');
     css.id = 'foundryembetterment-chat';
     css.textContent = `
-      .fe-wrap { flex-wrap: wrap !important; }
-      .fe-damage-li { flex: 1 0 100% !important; width: 100% !important; max-width: none !important; list-style: none; }
-      button.fe-damage { width: 100% !important; max-width: none !important; min-width: 0 !important; height: auto !important; min-height: 34px; margin: 4px 0 0 !important;
-        padding: 4px 10px !important; display: flex !important; align-items: center; justify-content: center; gap: 6px;
-        font-size: 14px !important; font-weight: 700; letter-spacing: .02em; line-height: 1.2 !important; border-radius: 4px; }
-      button.fe-damage .fe-label { display: inline !important; }
-      button.fe-damage.fe-hit { background: linear-gradient(180deg, #a3262a, #761b1e) !important; color: #fff !important; border: 1px solid #e0605f !important;
-        box-shadow: 0 0 0 1px rgba(255,120,110,.35), 0 0 8px rgba(220,60,60,.55); }
-      button.fe-damage.fe-hit:hover { filter: brightness(1.12); }
-      button.fe-damage.fe-miss { opacity: .7; }`;
+      .fe-roll-damage { margin: 6px 0 2px; }
+      .fe-roll-damage button { width: 100%; min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 8px;
+        font-size: 15px; font-weight: 700; letter-spacing: .02em; line-height: 1.2; cursor: pointer; border-radius: 5px;
+        background: linear-gradient(180deg, #a3262a, #761b1e); color: #fff; border: 1px solid #e0605f;
+        box-shadow: 0 0 0 1px rgba(255,120,110,.35), 0 0 8px rgba(220,60,60,.5); }
+      .fe-roll-damage button:hover { filter: brightness(1.12); }
+      .fe-roll-damage button.crit { background: linear-gradient(180deg, #c27a12, #8a5208); border-color: #f0b44a; box-shadow: 0 0 0 1px rgba(255,200,110,.4), 0 0 10px rgba(240,170,60,.6); }
+      .fe-roll-damage button:disabled { opacity: .6; cursor: default; }`;
     document.head.appendChild(css);
 
-    // What the card's last attack did: 'hit', 'miss' or '' (no attack / no targets).
-    function attackResult(card) {
-      let rolls = [];
-      try { rolls = (card.getAssociatedRolls && card.getAssociatedRolls('attack')) || []; } catch { rolls = []; }
-      const last = rolls[rolls.length - 1];
-      const roll = last && last.rolls && last.rolls[0];
-      if (!roll) return '';
-      if (roll.isCritical) return 'hit';
-      if (roll.isFumble) return 'miss';
-      const acs = ((last.system && last.system.targets) || []).map((t) => t && t.ac).filter((ac) => ac !== null && ac !== undefined);
-      if (!acs.length) return '';
-      return acs.some((ac) => roll.total >= ac) ? 'hit' : 'miss';
+    // Did this attack roll hit? true / false / null (no targets to tell).
+    function hitOf(message) {
+      const roll = message.rolls && message.rolls[0];
+      if (!roll) return null;
+      if (roll.isCritical) return true;
+      if (roll.isFumble) return false;
+      const acs = ((message.system && message.system.targets) || []).map((t) => t && t.ac).filter((ac) => ac !== null && ac !== undefined);
+      if (!acs.length) return null;
+      return acs.some((ac) => roll.total >= ac);
     }
-    // dnd5e fills in its cards after Foundry's renderChatMessageHTML hook, so
-    // wait for its own hook, which fires once the card is complete.
-    // Its buttons: <li><button class="icon" data-action="rollDamage" aria-label="Damage">
+    const isAttack = (m) => m && (m.type === 'attack' || (m.flags && m.flags.dnd5e && m.flags.dnd5e.roll && m.flags.dnd5e.roll.type === 'attack'));
+
     Hooks.on('dnd5e.renderChatMessage', (message, html) => {
       try {
-        if (!game.settings.get(MOD, 'bigDamage')) return;
+        if (!game.settings.get(MOD, 'bigDamage') || !isAttack(message)) return;
         const root = html instanceof HTMLElement ? html : html && html[0];
-        if (!root) return;
-        const buttons = root.querySelectorAll('button[data-action="rollDamage"]');
-        if (!buttons.length) return;
-        const result = attackResult(message);
-        for (const b of buttons) {
-          b.classList.add('fe-damage');
-          b.classList.toggle('fe-hit', result === 'hit');
-          b.classList.toggle('fe-miss', result === 'miss');
-          const li = b.closest('li');
-          if (li) { li.classList.add('fe-damage-li'); if (li.parentElement) li.parentElement.classList.add('fe-wrap'); }
-          else if (b.parentElement) b.parentElement.classList.add('fe-wrap');
-          let label = b.querySelector('.fe-label');
-          if (!label) { label = document.createElement('span'); label.className = 'fe-label'; b.appendChild(label); }
-          label.textContent = result === 'hit' ? 'Damage — hit!' : 'Damage';
-        }
+        if (!root || root.querySelector('.fe-roll-damage')) return;
+        if (hitOf(message) !== true) return;
+        const activity = message.getAssociatedActivity && message.getAssociatedActivity();
+        if (!activity || typeof activity.rollDamage !== 'function') return;
+        if (!(game.user.isGM || (activity.actor && activity.actor.isOwner))) return;
+        const roll = message.rolls[0];
+        const crit = !!roll.isCritical;
+        const box = document.createElement('div');
+        box.className = 'fe-roll-damage';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        if (crit) btn.classList.add('crit');
+        btn.innerHTML = '<i class="fa-solid fa-burst"></i>';
+        btn.append(document.createTextNode(crit ? 'Roll Critical Damage' : 'Roll Damage'));
+        btn.addEventListener('click', async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          btn.disabled = true;
+          try {
+            const sys = message.system || {};
+            const o = sys.origin;
+            const origin = typeof o === 'string' ? o : o && o.id;
+            await activity.rollDamage(
+              { event, ability: sys.ability, ammunition: sys.ammunitionItem, attackMode: sys.mode, isCritical: crit },
+              crit ? { options: { defaultButton: 'critical' } } : {},
+              origin ? { data: { system: { origin } } } : {},
+            );
+          } catch (e) { console.error('[Foundryembetterment] damage roll', e); ui.notifications.warn('Could not roll damage: ' + (e.message || e)); }
+          finally { btn.disabled = false; }
+        });
+        box.appendChild(btn);
+        // Directly under the roll's total (the dice row), else at the end of the message.
+        const rolls = root.querySelectorAll('.dice-roll');
+        // dnd5e 6: <section class="icon-row"><i fa-dice> <button class="dice-roll">…total…</button></section>
+        const last = rolls.length ? rolls[rolls.length - 1] : null;
+        const anchor = last ? (last.closest('.icon-row') || last) : null;
+        if (anchor) anchor.after(box);
+        else (root.querySelector('.message-content') || root).appendChild(box);
       } catch (e) { console.warn('[Foundryembetterment] chat card', e); }
     });
-    // An attack roll lands after its card was drawn: redraw the card so its
-    // Damage button shows the hit.
-    Hooks.on('createChatMessage', (msg) => {
-      try {
-        const o = msg.system && msg.system.origin;
-        const card = typeof o === 'string' ? game.messages.get(o) : o;
-        if (!card || !card.id) return;
-        setTimeout(() => { try { ui.chat.updateMessage(card); } catch { /* older chat log */ } }, 60);
-      } catch { /* not a dnd5e roll */ }
-    });
   }
+
 
   Hooks.once('ready', () => {
     if (game.system.id !== 'dnd5e') { console.warn('[Foundryembetterment] needs the dnd5e system; bar not shown.'); return; }
