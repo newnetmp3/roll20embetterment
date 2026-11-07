@@ -333,7 +333,8 @@
       const list = typeof raw === 'string' ? (raw ? JSON.parse(raw) : []) : (raw || []).slice();
       if (!list.length || String(list[0].id) !== String(token)) return { ok: false, msg: 'It isn\'t this token\'s turn.' };
       const t = tokenModel(token);
-      if (t && !mayChangeToken(t)) return NOT_YOURS;
+      // A token on another page can't be checked: only the GM may pass its turn.
+      if (t ? !mayChangeToken(t) : !isGM() && !!me()) return NOT_YOURS;
       list.push(list.shift());
       // The entry now up is a counter (e.g. "Round", formula +1): tick it, as Roll20 does.
       if (list[0] && (String(list[0].id) === '-1' || list[0].custom) && list[0].formula) list[0] = applyFormula(list[0]);

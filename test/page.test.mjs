@@ -94,3 +94,12 @@ test('page: end turn passes the turn and ticks a round counter that comes up', (
   const other = page({ player: 'P2' });
   assert.equal(other.call('endTurn', { token: 'T1' }).ok, false, 'another player can\'t end it');
 });
+
+test('page: a player can\'t pass the turn of a token that isn\'t on their page', () => {
+  const { call, campaign } = page({ player: 'P1' });
+  campaign.turnorder = JSON.stringify([{ id: 'ELSEWHERE', pr: 12 }, { id: 'T1', pr: 10 }]);
+  assert.equal(call('endTurn', { token: 'ELSEWHERE' }).ok, false);
+  const gm = page({ gm: true, player: 'G' });
+  gm.campaign.turnorder = JSON.stringify([{ id: 'ELSEWHERE', pr: 12 }, { id: 'T1', pr: 10 }]);
+  assert.equal(gm.call('endTurn', { token: 'ELSEWHERE' }).ok, true);
+});

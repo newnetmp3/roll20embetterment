@@ -449,11 +449,13 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       if (!run) return;
       busy.add(node.key);
       render();
-      Promise.resolve(handlers.run(run, node)).then((res) => {
+      const done = (res) => {
         busy.delete(node.key);
         toast((run.say ? run.say + ' — ' : '') + (res && res.msg ? res.msg : ''), !res || !res.ok);
         render();
-      });
+      };
+      // An action that fails outright must not leave its row stuck as busy.
+      Promise.resolve().then(() => handlers.run(run, node)).then(done, (e) => done({ ok: false, msg: String((e && e.message) || e) }));
     }
 
     function onRowClick(level, n) {

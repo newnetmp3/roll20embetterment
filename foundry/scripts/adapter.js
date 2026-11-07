@@ -214,7 +214,10 @@
     for (const e of all) {
       if (!e || (e.statuses && [...e.statuses].some((x) => statusIds.has(x)))) continue;
       const from = e.parent && e.parent !== actor ? e.parent.name : '';
-      snap.effects.push({ ref: 'effect:' + e.id, name: e.name || 'Effect', active: !e.disabled, source: from, info: plainText(e.description) });
+      // "On" means applying now: an effect from an unequipped (or unattuned)
+      // item is suppressed even though it isn't switched off.
+      const applying = typeof e.active === 'boolean' ? e.active : !e.disabled && !e.isSuppressed;
+      snap.effects.push({ ref: 'effect:' + e.id, name: e.name || 'Effect', active: applying, source: from + (e.isSuppressed && !e.disabled ? (from ? ' · ' : '') + 'inactive' : ''), info: plainText(e.description) });
     }
 
     // The sheet's favorites, as the bar names the same things.
@@ -399,7 +402,10 @@
         // Like the card's Damage button: from the card's last attack (crit,
         // thrown/off-hand, ammunition) at the level the card was used at.
         const id = lastCard.get(keyOf(a));
-        const card = id && G.game && G.game.messages ? G.game.messages.get(id) : null;
+        let card = id && G.game && G.game.messages ? G.game.messages.get(id) : null;
+        // Only a recent card: an attack from rounds ago (a crit, say) mustn't
+        // shape a damage roll made now without a new attack.
+        if (card && card.timestamp && Date.now() - card.timestamp > 10 * 60 * 1000) card = null;
         let attack = null;
         try { attack = card && typeof card.getAssociatedRolls === 'function' ? card.getAssociatedRolls('attack').pop() || null : null; } catch { attack = null; }
         return rolled(await rollDamageLikeCard(a, { attack, card }));

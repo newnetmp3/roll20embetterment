@@ -507,7 +507,9 @@ async function runImport(name, index, opt, userMap, say, progress) {
         // An earlier import saved this species without its subrace in the name
         // ("Elves of R'Ley" vs "Elves of R'Ley (Deepwood Elves)"): update that
         // one rather than adding a second copy.
-        const base = item.type === 'race' ? item.name.replace(/\s*\([^()]*(\([^()]*\))?[^()]*\)\s*$/, '') : '';
+        // Only when the importer added a subrace to the name (not a species
+        // that is simply called "Human (Variant)").
+        const base = item.type === 'race' ? String(item.flags?.r20import?.speciesBase || '') : '';
         const older = base && base !== item.name ? game.items.find((i) => i.getFlag(MOD, 'libraryKey') === 'race|' + base.toLowerCase()) : null;
         if (older) {
           await older.update({ name: item.name, 'system.description.value': item.system?.description?.value || '', [`flags.${MOD}.libraryKey`]: key });

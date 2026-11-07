@@ -815,7 +815,7 @@ export function convertSnapshot(ch, snap) {
     lookups.push({ name: speciesName, kind: 'race', fallback: legacyItem('race', fullName, {
       description: { value: '<p><em>Custom species from Roll20.' + (sub ? ' Subrace: ' + esc(sub) + '.' : '') + '</em></p>' + listHTML(speciesTraits) },
       type: { value: 'humanoid' }, movement: { speeds: { walk: speeds.walk || 30 }, units: 'ft' },
-    }, { flags: { r20import: { customSpecies: true, traits: speciesTraits.map((f) => f.name) } } }) });
+    }, { flags: { r20import: { customSpecies: true, traits: speciesTraits.map((f) => f.name), ...(fullName !== speciesName ? { speciesBase: speciesName } : {}) } } }) });
   }
   for (const sc of subclassNames) {
     const cls = feats.find((f) => clean(f.source) === sc);
@@ -987,7 +987,7 @@ function convertClassic(ch, sheet) {
       raceLookup.fallback = legacyItem('race', subrace ? race + ' (' + subrace + ')' : race, {
         description: { value: '<p><em>Custom species from Roll20.' + (subrace ? ' Subrace: ' + esc(subrace) + '.' : '') + '</em></p>' + racial.map((r) => '<h4>' + esc(clean(r.name)) + '</h4>' + para(r.description)).join('') },
         type: { value: 'humanoid' }, movement: { speeds: { walk: speeds.walk || 30 }, units: 'ft' },
-      }, { flags: { r20import: { customSpecies: true, traits: racial.map((r) => clean(r.name)) } } });
+      }, { flags: { r20import: { customSpecies: true, traits: racial.map((r) => clean(r.name)), ...(subrace ? { speciesBase: race } : {}) } } });
     }
     // Class / other resources become features with uses.
     const res = [['class_resource', 'class_resource_name'], ['other_resource', 'other_resource_name']].map(([v, n]) => ({ name: sheet.get(n), cur: num(sheet.get(v)), max: num(sheet.max(v)) }));
