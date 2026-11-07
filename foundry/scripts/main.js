@@ -32,13 +32,14 @@
     const css = document.createElement('style');
     css.id = 'foundryembetterment-chat';
     css.textContent = `
-      .fe-roll-damage { margin: 6px 0 2px; }
-      .fe-roll-damage button { width: 100%; min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 8px;
-        font-size: 15px; font-weight: 700; letter-spacing: .02em; line-height: 1.2; cursor: pointer; border-radius: 5px;
+      .fe-roll-damage { margin-top: 3px; display: flex; align-items: center; gap: 4px; }
+      .fe-roll-damage > i { opacity: .85; }
+      .fe-roll-damage button { flex: 1 1 auto; min-width: 0; margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px;
+        font-size: 15px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; line-height: 1.1; cursor: pointer;
         background: linear-gradient(180deg, #a3262a, #761b1e); color: #fff; border: 1px solid #e0605f;
-        box-shadow: 0 0 0 1px rgba(255,120,110,.35), 0 0 8px rgba(220,60,60,.5); }
+        box-shadow: 0 0 6px rgba(220,60,60,.45); }
       .fe-roll-damage button:hover { filter: brightness(1.12); }
-      .fe-roll-damage button.crit { background: linear-gradient(180deg, #c27a12, #8a5208); border-color: #f0b44a; box-shadow: 0 0 0 1px rgba(255,200,110,.4), 0 0 10px rgba(240,170,60,.6); }
+      .fe-roll-damage button.crit { background: linear-gradient(180deg, #c27a12, #8a5208); border-color: #f0b44a; box-shadow: 0 0 8px rgba(240,170,60,.55); }
       .fe-roll-damage button:disabled { opacity: .6; cursor: default; }`;
     document.head.appendChild(css);
 
@@ -65,13 +66,18 @@
         if (!(game.user.isGM || (activity.actor && activity.actor.isOwner))) return;
         const roll = message.rolls[0];
         const crit = !!roll.isCritical;
-        const box = document.createElement('div');
-        box.className = 'fe-roll-damage';
+        // Built as one of the card's own rows (icon, then the box), so it lines
+        // up under the roll's total and stacks with it.
+        const box = document.createElement('section');
+        box.className = 'icon-row fe-roll-damage';
+        const gutter = document.createElement('i');
+        gutter.className = 'fa-fw fa-solid fa-burst';
+        gutter.setAttribute('aria-hidden', 'true');
         const btn = document.createElement('button');
         btn.type = 'button';
         if (crit) btn.classList.add('crit');
-        btn.innerHTML = '<i class="fa-solid fa-burst"></i>';
-        btn.append(document.createTextNode(crit ? 'Roll Critical Damage' : 'Roll Damage'));
+        btn.textContent = crit ? 'Roll Critical Damage' : 'Roll Damage';
+        box.append(gutter, btn);
         btn.addEventListener('click', async (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -88,7 +94,6 @@
           } catch (e) { console.error('[Foundryembetterment] damage roll', e); ui.notifications.warn('Could not roll damage: ' + (e.message || e)); }
           finally { btn.disabled = false; }
         });
-        box.appendChild(btn);
         // Directly under the roll's total (the dice row), else at the end of the message.
         const rolls = root.querySelectorAll('.dice-roll');
         // dnd5e 6: <section class="icon-row"><i fa-dice> <button class="dice-roll">…total…</button></section>
@@ -96,6 +101,23 @@
         const anchor = last ? (last.closest('.icon-row') || last) : null;
         if (anchor) anchor.after(box);
         else (root.querySelector('.message-content') || root).appendChild(box);
+        // Same height and corners as the total's box, once both are on screen.
+        if (last) {
+          const match = (tries) => {
+            if (!last.isConnected || !last.offsetHeight) { if (tries > 0) requestAnimationFrame(() => match(tries - 1)); return; }
+            const cs = getComputedStyle(last);
+            // The row lays out like the total's row (dnd5e's own .icon-row rules).
+            if (anchor && anchor !== last) {
+              const rs = getComputedStyle(anchor);
+              for (const k of ['display', 'gridTemplateColumns', 'alignItems', 'columnGap', 'gap']) box.style[k] = rs[k];
+            }
+            btn.style.height = last.offsetHeight + 'px';
+            btn.style.borderRadius = cs.borderRadius;
+            const gi = anchor && anchor.querySelector(':scope > i');
+            if (gi) { const g = getComputedStyle(gi); gutter.style.width = g.width; gutter.style.fontSize = g.fontSize; }
+          };
+          requestAnimationFrame(() => match(30));
+        }
       } catch (e) { console.warn('[Foundryembetterment] chat card', e); }
     });
   }
