@@ -129,10 +129,61 @@
     }
   }
 
+  // Sheets that must stay loaded (the player's own, kept in the background):
+  // closing one hides it again instead, so the bar's rolls always have it.
+  // Our own programmatic closes (untrusted clicks) still go through.
+  const kept = new Set();
+  function keepLoaded(id, on = true) { if (on) kept.add(id); else kept.delete(id); }
+  function keptDialogOf(el) {
+    const d = el.closest && (el.closest('.characterdialog[data-characterid]')
+      || (el.closest('.ui-dialog') && el.closest('.ui-dialog').querySelector('.characterdialog[data-characterid]')));
+    const id = d && d.getAttribute('data-characterid');
+    return id && kept.has(id) ? id : null;
+  }
+  function hideInstead(e, id) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    setHidden(id, true);
+    owned.add(id);
+    quietUntil.set(id, Date.now() + 1500);
+    emit('dialogs', openIds(), []);
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.isTrusted || !e.target.closest) return;
+    const btn = e.target.closest('.asv__close, .ui-dialog-titlebar-close');
+    const id = btn && keptDialogOf(btn);
+    if (id) hideInstead(e, id);
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (!e.isTrusted || e.key !== 'Escape' || !e.target || !e.target.closest) return;
+    const id = keptDialogOf(e.target);
+    if (id && !hidden.has(id)) hideInstead(e, id);
+  }, true);
+
   // Open a character's sheet the way a person would: click its Journal entry.
   // With { hidden: true } it loads in the background and is never shown.
-  async function open(id, opts = {}) {
+  // One opening per character at a time: an action and the background
+  // reload asking together share it (two Journal clicks can close it again).
+  const opening = new Map(); // charId -> Promise<boolean>
+  function open(id, opts = {}) {
+    if (live(id)) return Promise.resolve(true);
+    if (opening.has(id)) return opening.get(id);
+    const p = openNow(id, opts).finally(() => opening.delete(id));
+    opening.set(id, p);
+    return p;
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function openNow(id, opts) {
     if (live(id)) return true;
+    // A window still on screen with no sheet connected: Roll20 closing it (the
+    // player just closed it), or a sheet that hasn't introduced itself yet.
+    if (dialogFor(id)) {
+      greetAll();
+      if (await waitReady(id, 2000)) return true;
+      for (let t = 0; t < 12 && dialogFor(id); t++) await sleep(150); // let a closing window finish
+      if (live(id)) return true;
+    }
     if (!dialogFor(id)) {
       if (opts.hidden) { setHidden(id, true); owned.add(id); quietUntil.set(id, Date.now() + 5000); }
       const entry = document.querySelector('#journalfolderroot li.journalitem[data-itemid="' + esc(id) + '"]');
@@ -183,7 +234,7 @@
     const reqId = 'r' + ++seq;
     return new Promise((resolve) => {
       const timer = setTimeout(() => { pending.delete(reqId); resolve({ ok: false, noAnswer: true, msg: 'The sheet did not answer.' }); }, opened ? 15000 : 8000);
-      pending.set(reqId, { resolve, timer });
+      pending.set(reqId, { resolve, timer, charId: id });
       if (!post(id, { type: 'invoke', id: reqId, ref: act.ref, op: act.op, arg: act.arg, opts: { spend: opts.spend } })) {
         clearTimeout(timer); pending.delete(reqId); resolve({ ok: false, noAnswer: true, msg: 'Sheet is not connected.' });
       }
@@ -226,12 +277,18 @@
     watchRaised();
     try { scanClassic(); } catch (e) { console.error('[Roll20embetterment]', e); }
     const ids = openIds();
+    // Actions waiting on a sheet that has been closed won't be answered: say
+    // so now, so they're retried on a fresh copy instead of timing out.
+    for (const [reqId, p] of pending) {
+      if (p.charId && !ids.includes(p.charId)) { clearTimeout(p.timer); pending.delete(reqId); frames.delete(p.charId); p.resolve({ ok: false, gone: true, msg: 'The sheet was closed.' }); }
+    }
     const key = ids.join(',');
     if (key !== lastDialogs) {
       const before = new Set(lastDialogs ? lastDialogs.split(',') : []);
       lastDialogs = key;
       // A closed sheet is no longer ours to hide.
       for (const id of [...hidden]) if (!ids.includes(id) && Date.now() > (quietUntil.get(id) || 0)) { hidden.delete(id); owned.delete(id); zSeen.delete(id); }
+
       writeStyle();
       emit('dialogs', ids, ids.filter((x) => !before.has(x) && !hidden.has(x)));
       setTimeout(greetAll, 800);
@@ -240,7 +297,8 @@
 
   C.sheets = {
     on: (type, fn) => handlers[type].push(fn),
-    journal, open, invoke, setHidden, isHidden, greetAll, closeOwned,
+    journal, open, invoke, setHidden, isHidden, greetAll, closeOwned, keepLoaded,
+    isKept: (id) => kept.has(id),
     isOwned: (id) => owned.has(id),
     isLive: (id) => !!live(id),
     isOpen: (id) => !!dialogFor(id),

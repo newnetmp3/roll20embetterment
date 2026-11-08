@@ -188,10 +188,13 @@
     return active && inJournal.has(active) ? active : null;
   }
   async function keeper() {
-    if (!prefs.background || isGM()) return;
+    if (!prefs.background || isGM()) { if (keep) { C.sheets.keepLoaded(keep, false); keep = null; } return; }
     const id = backgroundTarget();
     if (!id) return;
-    if (keep && keep !== id) C.sheets.closeOwned(keep); // only closes a hidden sheet we opened
+    // The kept sheet can't be closed (closing hides it again), so rolls always
+    // go to it. Switching characters releases the previous one.
+    if (keep && keep !== id) { C.sheets.keepLoaded(keep, false); C.sheets.closeOwned(keep); } // only closes a hidden sheet we opened
+    C.sheets.keepLoaded(id, true);
     if (keep !== id) retryAt = 0;
     keep = id;
     if (!chosen && active !== id) select(id);

@@ -132,7 +132,9 @@ and actions never wait for a sheet to open. It never gets in the way:
 
 - If the player opens that sheet themselves (Journal, token, anywhere), it is
   shown and becomes theirs; Roll20embetterment stops hiding it.
-- When they close it, it is quietly reloaded in the background.
+- Closing it doesn't unload it: the window is just hidden again, so the bar's
+  rolls always go to that same sheet. Opening it from the Journal shows it
+  again.
 - Sheets the player opens for other characters are never hidden or closed.
 - GMs don't get a background sheet; they pick characters from the portrait
   menu, and a sheet opens (hidden) when an action needs it.
