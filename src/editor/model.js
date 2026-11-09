@@ -174,12 +174,16 @@
   }
 
   function inventory(snap) {
-    const consumables = snap.items.filter((i) => isConsumable(i, snap));
+    // One Consumables group first: everything that gets used up, plus the
+    // sheet's own "Consumables" section (Foundry has one), which then isn't
+    // listed a second time under the same name.
+    const ownSection = (i) => norm(i.section) === 'consumables';
+    const consumables = snap.items.filter((i) => isConsumable(i, snap) || ownSection(i));
     const out = [];
     if (consumables.length) {
       out.push({ key: 's:consumables', label: 'Consumables', hint: String(consumables.length), children: consumables.map((i) => itemNode(i, snap)) });
     }
-    return out.concat(bySection(snap.items, (i) => itemNode(i, snap)));
+    return out.concat(bySection(snap.items.filter((i) => !ownSection(i)), (i) => itemNode(i, snap)));
   }
 
   function featureNode(f) {

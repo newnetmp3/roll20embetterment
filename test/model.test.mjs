@@ -198,3 +198,19 @@ test('long marker lists go into submenus; pins are found by name when their key 
   assert.equal(fx[3].children.length, 30);
   assert.equal(cat(cats, 'favorites').items[0].key, spell.ref, 'pin found again by its name');
 });
+
+test('inventory: one Consumables group, even when the sheet has its own Consumables section (Foundry)', () => {
+  const C = model();
+  const item = (ref, name, section, extra = {}) => ({ ref, name, section, sub: '', qty: 1, weight: '', equipped: null, ...extra });
+  const snap = { ...snapOf('pc-sheet.html'), actions: [], attacks: [], items: [
+    item('i1', 'Potion of Healing', 'Consumables', { consumable: true }),
+    item('i2', 'Holy Water', 'Consumables', { consumable: true }),
+    item('i3', 'Arrows', 'Loot'),
+    item('i4', 'Rope', 'Loot'),
+    item('i5', 'Longsword', 'Weapons'),
+  ] };
+  const inv = cat(C.buildMenus(snap, {}, { foundry: true }), 'items').items;
+  assert.deepEqual(plain(inv.map((n) => n.label)), ['Consumables', 'Loot', 'Weapons']);
+  assert.deepEqual(plain(inv[0].children.map((n) => n.label)), ['Potion of Healing', 'Holy Water', 'Arrows']);
+  assert.equal(inv[1].hint, '2', 'Arrows still listed with the loot they belong to');
+});
