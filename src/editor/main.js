@@ -91,7 +91,7 @@
         sheet: snap ? {
           classic: !!snap.classic, type: snap.type, name: snap.name, stats: snap.stats,
           counts: Object.fromEntries(['attacks', 'actions', 'features', 'items', 'spells', 'abilities', 'checks', 'hitDice', 'rests'].map((k) => [k, count(k)])),
-          privacy: snap.privacy, mode: snap.mode,
+          privacy: snap.privacy, mode: snap.mode, unread: snap.unread || [],
         } : null,
       };
       try { await navigator.clipboard.writeText(JSON.stringify(info, null, 2)); return true; } catch { return false; }

@@ -16,7 +16,9 @@ test('weapon names group into variants', () => {
 test('Attacks menu: weapon -> attack, with attack/damage/chat buttons', () => {
   const cats = plain(model().buildMenus(snapOf('pc-sheet.html'), {}));
   const attacks = cat(cats, 'attacks').items;
-  assert.deepEqual(attacks.map((n) => n.label), ['Dagger', 'Longbow']);
+  assert.deepEqual(attacks.map((n) => n.label), ['Dagger', 'Longbow', 'Scorching Ray', 'Mystery Bolt']);
+  // A spell attack listed with the attacks: clicking it rolls the attack.
+  assert.deepEqual(plain(attacks[2].run), { ref: 'attack:0:Scorching Ray', op: 'hit', say: 'Scorching Ray attack', econ: 'action' });
   assert.deepEqual(attacks[0].children.map((n) => n.label), ['Standard', 'Thrown']);
   assert.deepEqual(plain(attacks[0].children[1].run), { ref: 'attack:0:Dagger (Thrown)', op: 'hit', say: 'Dagger (Thrown) attack', econ: 'action' });
   assert.deepEqual(attacks[1].controls.map((c) => c.label), ['+5', '1d8+2', '💬']);

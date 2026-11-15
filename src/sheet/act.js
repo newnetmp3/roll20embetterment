@@ -210,7 +210,7 @@
     const row = found.el;
     const k = found.kind;
     switch (op) {
-      case 'hit': return press(q(row, k === 'spell' ? '.spell-item__hit-dc button' : '.poly-button--hit-dc button'))
+      case 'hit': return press(k === 'spell' ? q(row, '.spell-item__hit-dc button') : (C.hitButton ? C.hitButton(row) : q(row, '.poly-button--hit-dc button')))
         ? { ok: true, msg: 'Attack rolled.' } : { ok: false, msg: 'No attack button.' };
       case 'dmg': {
         const list = row.querySelectorAll(k === 'spell' ? '.spell-item__damage button' : (C.DMG_BUTTONS || '.poly-button--damage button'));

@@ -20,7 +20,11 @@ test('PC sheet: reads the desktop layout only, across all tabs', () => {
   const s = plain(C.parseSheet(document));
   // The mobile copy says +9; the desktop copy (the one we read) says +6.
   assert.deepEqual(s.attacks.map((a) => [a.name, a.hit, a.section]),
-    [['Dagger', '+6 Attack', 'Attacks'], ['Dagger (Thrown)', '+6 Attack', 'Attacks'], ['Longbow', '+5 Attack', 'Attacks']]);
+    [['Dagger', '+6 Attack', 'Attacks'], ['Dagger (Thrown)', '+6 Attack', 'Attacks'], ['Longbow', '+5 Attack', 'Attacks'],
+      ['Scorching Ray', '+7', 'Attacks'], ['Mystery Bolt', '', 'Attacks']]);
+  // A spell attack whose attack button isn't styled like a weapon's is still found (by its "+7");
+  // a row whose attack button can't be recognised is listed for diagnostics.
+  assert.deepEqual(s.unread, [{ row: 'Mystery Bolt', buttons: ['poly-button--item-row-chat: ', 'poly-button--odd-roll: Roll', 'poly-button--damage: 1d10'] }]);
   assert.equal(s.attacks[0].dmg[0].type, 'piercing');
   assert.equal(s.attacks[1].range, '20/60 ft.');
   // Hidden tabs (display:none) are still read.

@@ -89,6 +89,13 @@ test('casting a spell from the bar rolls it: attack first, else damage, else its
   assert.match(thoughts.msg, /posted to chat/);
 });
 
+test('a spell attack in the Attacks list rolls its attack, not its description', async () => {
+  const { C, document, presses } = sheet();
+  const r = await C.perform(document, 'attack:0:Scorching Ray', 'hit');
+  assert.equal(r.ok, true);
+  assert.deepEqual(presses, ['+7']);
+});
+
 test('unknown rows fail without pressing anything', async () => {
   const { C, document, presses } = sheet();
   const r = await C.perform(document, 'attack:0:Greatsword', 'hit');

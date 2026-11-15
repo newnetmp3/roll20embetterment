@@ -137,11 +137,22 @@
     return out;
   }
 
-  const buttonText = (sel) => (row) => text(row.querySelector(sel), 40);
-  const hitText = buttonText('.poly-button--hit-dc button');
   // Damage and healing buttons, in sheet order (act.js presses by index).
   const DMG_BUTTONS = '.poly-button--damage button, .poly-button--healing button';
   C.DMG_BUTTONS = DMG_BUTTONS;
+  // A row's attack (or save DC) button. Weapons use .poly-button--hit-dc;
+  // a spell attack listed with the attacks can use another button, so also
+  // take any button that shows a bonus ("+7", "+7 Attack") or a "DC 15",
+  // other than its damage, healing or chat buttons.
+  const HIT_LOOK = /^\s*[+\-\u2212]\s?\d+\b|\bDC\s?\d+/i;
+  function hitButton(row) {
+    const own = row.querySelector('.poly-button--hit-dc button');
+    if (own) return own;
+    return [...row.querySelectorAll('button')].find((b) => !b.matches(DMG_BUTTONS) && !b.closest('.poly-button--item-row-chat, [class*="__chat"]')
+      && !b.matches('[role="switch"], [role="radio"]') && HIT_LOOK.test(text(b, 40))) || null;
+  }
+  C.hitButton = hitButton;
+  const hitText = (row) => text(hitButton(row), 40);
   const dmgList = (row) => [...row.querySelectorAll(DMG_BUTTONS)].map((b) => ({
     text: text(b, 40),
     type: clean(attr(b.querySelector('.poly-icon--damage-icon'), 'aria-label'), 30),
@@ -240,6 +251,12 @@
           hit: hitText(r.el), dmg: dmgList(r.el),
           chips: [...r.el.querySelectorAll('.attack-item__type-range .poly-chip__label')].map((c) => text(c, 60)),
         });
+        // For diagnostics: an attack row with no attack button found, and
+        // what buttons it does have.
+        if (!snap.attacks[snap.attacks.length - 1].hit && (snap.unread = snap.unread || []).length < 6) {
+          snap.unread.push({ row: r.name, buttons: [...r.el.querySelectorAll('button')].slice(0, 8).map((b) =>
+            (String((b.closest('.poly-button') || b).className || '').split(/\s+/).filter((c) => /--/.test(c)).slice(0, 2).join(' ') || 'button') + ': ' + text(b, 30)) });
+        }
       }
     });
     part(snap, 'action', () => {
