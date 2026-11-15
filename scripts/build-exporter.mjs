@@ -28,7 +28,9 @@ export const exporterManifest = {
     { matches: ['https://app.roll20.net/editor*'], js: ['exporter/src/page.js'], run_at: 'document_start', world: 'MAIN' },
     { matches: ['https://app.roll20.net/editor*'], js: [TAG, 'src/shared/wire.js', 'src/editor/classic.js', 'src/editor/sheets.js', 'exporter/src/exporter.js'], run_at: 'document_idle' },
     {
-      matches: ['https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/*'],
+      // Also the popped-out sheet, whose address is longer:
+      // .../https://storage.googleapis.com/.../dnd2024byroll20/sheet
+      matches: ['https://advanced-sheets.production.roll20preflight.net/*dnd2024byroll20/*'],
       js: [TAG, 'src/shared/wire.js', 'src/sheet/parse.js', 'src/sheet/act.js', 'src/sheet/main.js'], all_frames: true, run_at: 'document_idle',
     },
   ],

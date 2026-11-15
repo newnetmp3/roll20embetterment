@@ -27,6 +27,15 @@
     if (event.origin !== SHEET_ORIGIN) return;
     const msg = C.wire.decode(event.data);
     if (!msg || typeof msg.charId !== 'string') return;
+    // A popped-out sheet that doesn't know its character yet: find it in the
+    // Journal by name (only when exactly one character has that name).
+    if (!msg.charId) {
+      const name = String(msg.sheetName || '').trim().toLowerCase();
+      const hits = name ? journal().filter((c) => c.name.toLowerCase() === name) : [];
+      if (hits.length !== 1 || !popoutOf(event.source, hits[0].id)) return;
+      try { event.source.postMessage(C.wire.encode({ type: 'hello', charId: hits[0].id }), SHEET_ORIGIN); } catch { /* gone */ }
+      return; // it answers as that character
+    }
     // Only frames inside a real character dialog, named for that character,
     // or a sheet popped out into a window this page opened.
     const iframe = iframeFor(event.source);

@@ -23,7 +23,9 @@ export const manifest = {
     { matches: ['https://app.roll20.net/editor*'], js: [PAGE_SCRIPT], run_at: 'document_start', world: 'MAIN' },
     { matches: ['https://app.roll20.net/editor*'], js: EDITOR_SCRIPTS, run_at: 'document_idle' },
     {
-      matches: ['https://advanced-sheets.production.roll20preflight.net/dnd2024byroll20/*'],
+      // Also the popped-out sheet, whose address is longer:
+      // .../https://storage.googleapis.com/.../dnd2024byroll20/sheet
+      matches: ['https://advanced-sheets.production.roll20preflight.net/*dnd2024byroll20/*'],
       js: SHEET_SCRIPTS, all_frames: true, run_at: 'document_idle',
     },
   ],

@@ -82,8 +82,8 @@ function roll20() {
     sendPop({ type: 'ready' });
     return { closeWindow: () => { popWin.closed = true; frameWin.closed = true; } };
   }
-  const deliver = (source, m) => listeners.forEach((fn) => fn({ origin: ORIGIN, source, data: 'r20-companion:v5:' + JSON.stringify({ ...m, charId: 'C1' }) }));
-  return { C: ctx.R20C, clicks: () => clicks, close, doc, answers, silence: (n) => { silent = n; }, popOut, deliver };
+  const deliver = (source, m) => listeners.forEach((fn) => fn({ origin: ORIGIN, source, data: 'r20-companion:v5:' + JSON.stringify({ charId: 'C1', ...m }) }));
+  return { C: ctx.R20C, clicks: () => clicks, close, doc, answers, silence: (n) => { silent = n; }, popOut, deliver, win };
 }
 
 test('sheets: a popped-out sheet is used for actions while its window is open', async () => {
@@ -104,6 +104,36 @@ test('sheets: a popped-out sheet is used for actions while its window is open', 
   const again = await r.C.sheets.invoke('C1', { ref: 'x', op: 'hit' }, { autoHide: true });
   assert.equal(again.ok, true);
   assert.equal(r.clicks(), 1, 'reopened in the page from the Journal');
+});
+
+test('sheets: a popped-out sheet window (no id, just its name) is matched through the Journal', async () => {
+  const r = roll20();
+  // What Roll20 really does: the sheet page itself is the new window, opened by
+  // the game page, on another site; it only knows its title.
+  let charId = '';
+  const popWin = {
+    opener: null, closed: false,
+    postMessage: (data) => {
+      const msg = JSON.parse(String(data).slice(String(data).indexOf(':v5:') + 4));
+      if (msg.type === 'hello' && !charId) charId = msg.charId; // learns who it is
+      if (msg.charId !== charId) return;
+      if (msg.type === 'hello') { say({ type: 'ready' }); say({ type: 'snapshot', snap: { name: 'Nier' } }); }
+      if (msg.type === 'invoke') setTimeout(() => say({ type: 'result', id: msg.id, ok: true, msg: 'Rolled from the pop-out.' }), 30);
+    },
+  };
+  popWin.top = popWin;
+  const say = (m) => r.deliver(popWin, { ...m, charId, ...(charId ? {} : { sheetName: 'Nier' }) });
+  // A window the game page didn't open is never matched.
+  say({ type: 'ready' });
+  assert.equal(charId, '', 'a window this page did not open gets no answer');
+  popWin.opener = r.win;
+  say({ type: 'ready' });
+  await wait(20);
+  assert.equal(charId, 'C1', 'told which character it is');
+  assert.equal(r.C.sheets.isPopout('C1'), true);
+  const res = await r.C.sheets.invoke('C1', { ref: 'x', op: 'hit' }, { autoHide: true });
+  assert.equal(res.msg, 'Rolled from the pop-out.');
+  assert.equal(r.clicks(), 0);
 });
 
 test('sheets: a sheet frame in some other window is ignored', async () => {

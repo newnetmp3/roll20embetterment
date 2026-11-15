@@ -1,22 +1,30 @@
 // Sheet-frame entry point. Roll20 names each character sheet frame
 // "iframe_<characterId>", so the frame knows which character it shows.
 // Other sheet frames (settings, Roll20's hidden headless frame) are ignored.
+//
+// A popped-out sheet is different: Roll20 opens the sheet itself as a window
+// of its own (no frame, no character id in its name), from the game page.
+// It introduces itself by the character's name (its title); the game page
+// matches that to the Journal and tells it which character it is.
 (function (G) {
   'use strict';
   const C = G.R20C;
+  if (G.R20C_SHEET_STARTED) return; // never twice in one frame
+  G.R20C_SHEET_STARTED = true;
   const EDITOR = 'https://app.roll20.net';
   const m = /^iframe_(.+)$/.exec(window.name || '');
-  if (!m || window.parent === window) return;
-  const charId = m[1];
-
-  // A sheet popped out into its own window sits in a window that Roll20's game
-  // page opened, not in the game page itself: talk to that game page too.
+  const topLevel = window.parent === window;
+  // The game page that opened this window (a popped-out sheet), or that
+  // opened the window this frame sits in.
   const opener = (() => {
     try { const o = window.top.opener; return o && o !== window.parent ? o : null; } catch { return null; }
   })();
+  if (m ? topLevel : !(topLevel && opener)) return;
+  let charId = m ? m[1] : ''; // a pop-out learns its id from the game page
+
   const send = (msg) => {
-    const data = C.wire.encode({ ...msg, charId });
-    for (const w of [window.parent, opener]) if (w) try { w.postMessage(data, EDITOR); } catch { /* window gone */ }
+    const data = C.wire.encode({ ...msg, charId, ...(charId ? {} : { sheetName: document.title || '' }) });
+    for (const w of [topLevel ? null : window.parent, opener]) if (w) try { w.postMessage(data, EDITOR); } catch { /* window gone */ }
   };
 
   let last = '';
@@ -43,7 +51,10 @@
   window.addEventListener('message', async (event) => {
     if (event.origin !== EDITOR || (event.source !== window.parent && event.source !== opener)) return;
     const msg = C.wire.decode(event.data);
-    if (!msg || msg.charId !== charId) return;
+    if (!msg) return;
+    // A popped-out sheet: the game page names the character it found for us.
+    if (!charId && event.source === opener && msg.type === 'hello' && typeof msg.charId === 'string' && msg.charId) charId = msg.charId;
+    if (msg.charId !== charId) return;
     if (msg.type === 'hello') { send({ type: 'ready' }); publish(true); return; }
     if (msg.type === 'describe') { send({ type: 'description', info: describe() }); return; }
     if (msg.type === 'invoke') {
