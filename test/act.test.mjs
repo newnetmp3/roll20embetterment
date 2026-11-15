@@ -61,6 +61,23 @@ test('roll visibility and roll mode press the sheet radios', async () => {
   assert.equal(presses.length, 2);
 });
 
+test('a roll answered in the bar (Query mode) sets the mode, rolls, and sets it back', async () => {
+  const { C, document, presses } = sheet();
+  const r = await C.perform(document, 'attack:0:Dagger (Thrown)', 'hit', null, { rollAs: 'Advantage', rollBack: 'Query' });
+  assert.equal(r.ok, true);
+  assert.equal(presses.length, 3);
+  assert.equal(presses[1], '+6 Attack', 'the roll happens between the two mode changes');
+  assert.match(presses[0], /Advantage/);
+  assert.match(presses[2], /Query/);
+});
+
+test('a roll mode the sheet lacks stops the roll', async () => {
+  const { C, document, presses } = sheet();
+  const r = await C.perform(document, 'attack:0:Dagger (Thrown)', 'hit', null, { rollAs: 'Sideways', rollBack: 'Query' });
+  assert.equal(r.ok, false);
+  assert.deepEqual(presses, []);
+});
+
 test('unknown rows fail without pressing anything', async () => {
   const { C, document, presses } = sheet();
   const r = await C.perform(document, 'attack:0:Greatsword', 'hit');

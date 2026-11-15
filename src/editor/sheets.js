@@ -235,7 +235,7 @@
     return new Promise((resolve) => {
       const timer = setTimeout(() => { pending.delete(reqId); resolve({ ok: false, noAnswer: true, msg: 'The sheet did not answer.' }); }, opened ? 15000 : 8000);
       pending.set(reqId, { resolve, timer, charId: id });
-      if (!post(id, { type: 'invoke', id: reqId, ref: act.ref, op: act.op, arg: act.arg, opts: { spend: opts.spend } })) {
+      if (!post(id, { type: 'invoke', id: reqId, ref: act.ref, op: act.op, arg: act.arg, opts: { spend: opts.spend, rollAs: act.rollAs, rollBack: act.rollBack } })) {
         clearTimeout(timer); pending.delete(reqId); resolve({ ok: false, noAnswer: true, msg: 'Sheet is not connected.' });
       }
     });

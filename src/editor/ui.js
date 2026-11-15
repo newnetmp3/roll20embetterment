@@ -129,6 +129,10 @@ input.txt { width: 100%; margin: 2px 0 4px; }
 .toast { position: fixed; z-index: 2147483020; max-width: 320px; padding: 8px 10px; border-radius: 6px; background: var(--bg);
      border: 1px solid var(--line); border-left: 3px solid var(--ok); box-shadow: 2px 2px 10px rgba(0,0,0,.4); font-size: 12px; }
 .toast.bad { border-left-color: var(--bad); }
+.ask { position: fixed; z-index: 2147483021; padding: 8px 10px; border-radius: 6px; background: var(--bg);
+     border: 1px solid var(--line); border-left: 3px solid var(--acc); box-shadow: 2px 2px 10px rgba(0,0,0,.4); font-size: 12px; }
+.ask .q { margin-bottom: 6px; }
+.ask .opts { display: flex; gap: 6px; }
 `;
 
   // Wording and docking that differ between Roll20 and Foundry builds.
@@ -590,6 +594,46 @@ input.txt { width: 100%; margin: 2px 0 4px; }
       toastTimer = setTimeout(() => t.remove(), bad ? 6000 : 3000);
     }
 
+    // A question with a few answers beside the bar (the sheet's "Query" roll
+    // mode asks inside the sheet window, which the bar may keep hidden).
+    // Resolves with the chosen answer, or null for Escape / clicking away.
+    let asking = null;
+    function ask(question, answers) {
+      if (asking) asking(null);
+      return new Promise((resolve) => {
+        const box = el('div', 'ask');
+        box.setAttribute('role', 'dialog');
+        box.appendChild(el('div', 'q', question));
+        const opts = el('div', 'opts');
+        const finish = (v) => {
+          if (asking !== finish) return;
+          asking = null;
+          box.remove();
+          document.removeEventListener('keydown', onKey, true);
+          document.removeEventListener('pointerdown', onAway, true);
+          resolve(v);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); finish(null); } };
+        const onAway = (e) => { if (!e.composedPath().includes(box)) finish(null); };
+        for (const a of answers) {
+          const b = el('button', 'ctl', a);
+          b.type = 'button';
+          b.addEventListener('click', () => finish(a));
+          opts.appendChild(b);
+        }
+        box.appendChild(opts);
+        wrap.appendChild(box);
+        const s = strip.getBoundingClientRect();
+        box.style.top = Math.round(Math.min(s.bottom + 6, innerHeight - 70)) + 'px';
+        box.style.left = Math.round(Math.max(4, Math.min(s.left, innerWidth - 300))) + 'px';
+        asking = finish;
+        document.addEventListener('keydown', onKey, true);
+        document.addEventListener('pointerdown', onAway, true);
+        const first = opts.querySelector('button:nth-child(2)') || opts.querySelector('button');
+        if (first) first.focus();
+      });
+    }
+
     // Alt+Shift+C: bring the bar back beside the toolbar if it ever goes missing.
     document.addEventListener('keydown', (e) => {
       if (!(e.altKey && e.shiftKey && (e.key === 'C' || e.key === 'c' || e.code === 'KeyC'))) return;
@@ -659,6 +703,7 @@ input.txt { width: 100%; margin: 2px 0 4px; }
         render();
       },
       toast,
+      ask,
       place,
     };
   };

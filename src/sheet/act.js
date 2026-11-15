@@ -192,6 +192,19 @@
     if (!C.scopes(doc)) return { ok: false, gone: true, msg: 'Sheet not loaded.' };
     const wide = await sheetWide(doc, op, arg);
     if (wide) return wide;
+    if (opts.rollAs) {
+      // The person answered the "Query" question in the bar: roll this once in
+      // that mode, so the sheet doesn't ask in its (possibly hidden) window.
+      const set = await sheetWide(doc, 'mode', opts.rollAs);
+      if (!set || !set.ok) return { ok: false, msg: 'Could not set the roll mode to ' + opts.rollAs + '.' };
+      await wait(250);
+      try {
+        return await perform(doc, ref, op, arg, { ...opts, rollAs: null });
+      } finally {
+        await wait(600);
+        if (opts.rollBack) await sheetWide(doc, 'mode', opts.rollBack);
+      }
+    }
     const found = findRow(doc, ref);
     if (!found) return { ok: false, msg: 'Could not find "' + (parseRef(ref)?.name || ref) + '" on the sheet.' };
     const row = found.el;

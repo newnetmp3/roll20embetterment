@@ -38,6 +38,18 @@
       if (LOCAL_OPS.has(act.op)) return localAction(act);
       if (!active) return { ok: false, msg: 'Choose a character first.' };
       const id = active;
+      // The sheet's "Query" roll mode asks Advantage / Normal / Disadvantage in
+      // the sheet window, which may be hidden: ask here, and the sheet rolls
+      // that way this once (see act.js).
+      const mode = snaps.get(id) && snaps.get(id).mode;
+      if (D20_OPS.has(act.op) && mode && /^query$/i.test(mode.value)) {
+        const pick = await ui.ask('Roll with…', ['Advantage', 'Normal', 'Disadvantage']);
+        if (!pick) return { ok: false, msg: 'Roll cancelled.' };
+        const normal = mode.options.find((o) => /auto|normal/i.test(o)) || mode.options.find((o) => !/advantage|query/i.test(o));
+        const as = pick === 'Normal' ? normal : mode.options.find((o) => o.toLowerCase() === pick.toLowerCase());
+        if (!as) return { ok: false, msg: 'The sheet has no "' + pick + '" roll mode.' };
+        act = { ...act, rollAs: as, rollBack: mode.value };
+      }
       const res = await C.sheets.invoke(id, act, prefs);
       return res && res.ok ? afterAction(id, act, res) : res;
     },
@@ -265,6 +277,8 @@
   const speedMode = new Map(); // charId -> 'walk' | 'fly' | ...
   const ECON_NAMES = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction' };
   const LOCAL_OPS = new Set(['move-dash', 'move-difficult', 'move-mode', 'turn-reset', 'econ', 'conc-start', 'conc-end', 'chat-roll']);
+  // Actions that roll a d20 (the roll mode applies to them).
+  const D20_OPS = new Set(['hit', 'check', 'save', 'roll', 'use']);
 
   let lastTurn = null;
   document.addEventListener('r20c-movement', guard('movement', (e) => {
