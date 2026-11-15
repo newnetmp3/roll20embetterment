@@ -77,7 +77,7 @@
       const info = {
         companion: (G.browser && browser.runtime && browser.runtime.getManifest().version) || 'dev',
         userAgent: navigator.userAgent,
-        active, live: !!(active && C.sheets.isLive(active)), open: C.sheets.isOpen(active),
+        active, live: !!(active && C.sheets.isLive(active)), open: C.sheets.isOpen(active), popout: !!(active && C.sheets.isPopout(active)),
         dialogs: document.querySelectorAll('.characterdialog[data-characterid]').length,
         sheetFrames: document.querySelectorAll('iframe[name^="iframe_"]').length,
         classic: active ? C.sheets.classicInfo(active) : null,

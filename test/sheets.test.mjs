@@ -65,8 +65,57 @@ function roll20() {
   ctx.G = ctx;
   for (const f of ['src/shared/wire.js', 'src/editor/sheets.js']) vm.runInContext(readFileSync(root + f, 'utf8'), ctx, { filename: f });
   const close = () => { const d = doc.querySelector('.characterdialog'); if (d) d.remove(); };
-  return { C: ctx.R20C, clicks: () => clicks, close, doc, answers, silence: (n) => { silent = n; } };
+  // A sheet popped out into its own window, which the game page opened: its
+  // frame isn't in the page, so it can only be recognised through the window.
+  function popOut() {
+    const popWin = { opener: win, closed: false };
+    popWin.top = popWin;
+    const frameWin = {
+      top: popWin, closed: false,
+      postMessage: (data) => {
+        const msg = JSON.parse(String(data).slice(String(data).indexOf(':v5:') + 4));
+        if (msg.type === 'hello') sendPop({ type: 'snapshot', snap: { name: 'Nier' } });
+        if (msg.type === 'invoke') { answers.push(msg.id); setTimeout(() => sendPop({ type: 'result', id: msg.id, ok: true, msg: 'Rolled from the pop-out.' }), 50); }
+      },
+    };
+    const sendPop = (m) => listeners.forEach((fn) => fn({ origin: ORIGIN, source: frameWin, data: 'r20-companion:v5:' + JSON.stringify({ ...m, charId: 'C1' }) }));
+    sendPop({ type: 'ready' });
+    return { closeWindow: () => { popWin.closed = true; frameWin.closed = true; } };
+  }
+  const deliver = (source, m) => listeners.forEach((fn) => fn({ origin: ORIGIN, source, data: 'r20-companion:v5:' + JSON.stringify({ ...m, charId: 'C1' }) }));
+  return { C: ctx.R20C, clicks: () => clicks, close, doc, answers, silence: (n) => { silent = n; }, popOut, deliver };
 }
+
+test('sheets: a popped-out sheet is used for actions while its window is open', async () => {
+  const r = roll20();
+  const snaps = [];
+  r.C.sheets.on('snapshot', (id, snap) => snaps.push([id, snap.name]));
+  const pop = r.popOut();
+  await wait(20);
+  assert.equal(r.C.sheets.isLive('C1'), true);
+  assert.equal(r.C.sheets.isOpen('C1'), true);
+  assert.deepEqual(snaps, [['C1', 'Nier']], 'asked the new pop-out for what it shows');
+  const res = await r.C.sheets.invoke('C1', { ref: 'x', op: 'hit' }, { autoHide: true });
+  assert.equal(res.ok, true);
+  assert.equal(res.msg, 'Rolled from the pop-out.');
+  assert.equal(r.clicks(), 0, 'no Journal click while the sheet is popped out');
+  pop.closeWindow();
+  assert.equal(r.C.sheets.isLive('C1'), false, 'gone once its window closes');
+  const again = await r.C.sheets.invoke('C1', { ref: 'x', op: 'hit' }, { autoHide: true });
+  assert.equal(again.ok, true);
+  assert.equal(r.clicks(), 1, 'reopened in the page from the Journal');
+});
+
+test('sheets: a sheet frame in some other window is ignored', async () => {
+  const r = roll20();
+  const stranger = { top: { opener: null, closed: false }, postMessage() {} };
+  stranger.top.top = stranger.top;
+  r.C.sheets.on('snapshot', () => assert.fail('took a snapshot from a stranger'));
+  // A sheet frame in a window this page didn't open.
+  r.deliver(stranger, { type: 'ready' });
+  r.deliver(stranger, { type: 'snapshot', snap: { name: 'Nier' } });
+  assert.equal(r.C.sheets.isLive('C1'), false);
+});
 
 test('sheets: an action and the background reload opening together click the Journal once', async () => {
   const r = roll20();

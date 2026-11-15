@@ -27,10 +27,18 @@
     if (event.origin !== SHEET_ORIGIN) return;
     const msg = C.wire.decode(event.data);
     if (!msg || typeof msg.charId !== 'string') return;
-    // Only frames inside a real character dialog, named for that character.
+    // Only frames inside a real character dialog, named for that character,
+    // or a sheet popped out into a window this page opened.
     const iframe = iframeFor(event.source);
-    if (!iframe || iframe.name !== 'iframe_' + msg.charId) return;
-    frames.set(msg.charId, { win: event.source, iframe });
+    let popout = null;
+    if (!iframe) {
+      popout = popoutOf(event.source, msg.charId);
+      if (!popout) return;
+    } else if (iframe.name !== 'iframe_' + msg.charId) return;
+    const known = frames.get(msg.charId);
+    frames.set(msg.charId, { win: event.source, iframe, popout });
+    // A popped-out sheet we hadn't heard from: ask for what it shows.
+    if (popout && (!known || known.win !== event.source) && msg.type === 'ready') post(msg.charId, { type: 'hello' });
     if (msg.type === 'snapshot' && msg.snap) emit('snapshot', msg.charId, msg.snap);
     else if (msg.type === 'ready') emit('ready', msg.charId);
     else if (msg.type === 'description') emit('description', msg.charId, msg.info);
@@ -40,8 +48,32 @@
     }
   });
 
+  // The window a popped-out sheet frame lives in, if this page opened it.
+  // Same-origin pop-outs are checked for a frame named for the character.
+  function popoutOf(win, charId) {
+    try {
+      const top = win.top;
+      if (!top || top === window || top.opener !== window) return null;
+      let doc = null;
+      try { doc = top.document; } catch { doc = null; } // a cross-origin pop-out can't be looked into
+      if (doc) {
+        const f = [...doc.querySelectorAll('iframe')].find((x) => x.contentWindow === win);
+        if (f && f.name !== 'iframe_' + charId) return null;
+      }
+      return top;
+    } catch { return null; }
+  }
+
   function live(id) {
     const f = frames.get(id);
+    if (f && f.popout) {
+      // Popped out: alive while its window is open.
+      let open = false;
+      try { open = !f.popout.closed && !f.win.closed; } catch { open = false; }
+      if (open) return f;
+      frames.delete(id);
+      return null;
+    }
     if (f && !dialogFor(id)) { frames.delete(id); return null; } // window closed
     if (f && f.classic) {
       if (f.iframe.isConnected && C.classic.docOf(f.iframe)) return f;
@@ -271,7 +303,10 @@
   }
 
   // Report sheet windows opening and closing.
-  const openIds = () => [...new Set([...document.querySelectorAll('.characterdialog[data-characterid]')].filter(shown).map((d) => d.getAttribute('data-characterid')))];
+  const openIds = () => [...new Set([
+    ...[...document.querySelectorAll('.characterdialog[data-characterid]')].filter(shown).map((d) => d.getAttribute('data-characterid')),
+    ...[...frames.keys()].filter((id) => frames.get(id).popout && live(id)), // popped-out sheets
+  ])];
   let lastDialogs = '';
   setInterval(() => {
     watchRaised();
@@ -301,7 +336,8 @@
     isKept: (id) => kept.has(id),
     isOwned: (id) => owned.has(id),
     isLive: (id) => !!live(id),
-    isOpen: (id) => !!dialogFor(id),
+    isPopout: (id) => !!(frames.get(id) && frames.get(id).popout && live(id)),
+    isOpen: (id) => !!dialogFor(id) || !!(frames.get(id) && frames.get(id).popout && live(id)),
     describe: (id) => post(id, { type: 'describe' }),
     refresh: (id) => { const f = live(id); if (f && f.classic) readClassic(id, f, true); else post(id, { type: 'hello' }); },
     classicInfo: (id) => { const f = live(id); return f && f.classic ? C.classic.describe(f.doc) : null; },

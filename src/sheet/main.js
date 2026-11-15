@@ -9,7 +9,15 @@
   if (!m || window.parent === window) return;
   const charId = m[1];
 
-  const send = (msg) => window.parent.postMessage(C.wire.encode({ ...msg, charId }), EDITOR);
+  // A sheet popped out into its own window sits in a window that Roll20's game
+  // page opened, not in the game page itself: talk to that game page too.
+  const opener = (() => {
+    try { const o = window.top.opener; return o && o !== window.parent ? o : null; } catch { return null; }
+  })();
+  const send = (msg) => {
+    const data = C.wire.encode({ ...msg, charId });
+    for (const w of [window.parent, opener]) if (w) try { w.postMessage(data, EDITOR); } catch { /* window gone */ }
+  };
 
   let last = '';
   let timer = null;
@@ -33,7 +41,7 @@
   });
 
   window.addEventListener('message', async (event) => {
-    if (event.origin !== EDITOR || event.source !== window.parent) return;
+    if (event.origin !== EDITOR || (event.source !== window.parent && event.source !== opener)) return;
     const msg = C.wire.decode(event.data);
     if (!msg || msg.charId !== charId) return;
     if (msg.type === 'hello') { send({ type: 'ready' }); publish(true); return; }
@@ -61,4 +69,7 @@
 
   send({ type: 'ready' });
   schedule();
+  // A popped-out sheet: the game page can't ask it to introduce itself (it
+  // doesn't know the window), so say hello now and then in case it reloaded.
+  if (opener) setInterval(() => { if (!opener.closed) send({ type: 'ready' }); }, 10000);
 })(globalThis);
