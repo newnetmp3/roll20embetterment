@@ -78,6 +78,17 @@ test('a roll mode the sheet lacks stops the roll', async () => {
   assert.deepEqual(presses, []);
 });
 
+test('casting a spell from the bar rolls it: attack first, else damage, else its card', async () => {
+  const { C, document, presses } = sheet();
+  const ray = await C.perform(document, 'spell:0:Scorching Ray', 'cast');
+  const missile = await C.perform(document, 'spell:0:Magic Missile', 'cast');
+  const thoughts = await C.perform(document, 'spell:0:Detect Thoughts', 'cast');
+  assert.deepEqual(presses, ['+7 Attack', '3d4+3', 'Detect Thoughts chat']);
+  assert.match(ray.msg, /attack rolled/);
+  assert.match(missile.msg, /damage rolled/);
+  assert.match(thoughts.msg, /posted to chat/);
+});
+
 test('unknown rows fail without pressing anything', async () => {
   const { C, document, presses } = sheet();
   const r = await C.perform(document, 'attack:0:Greatsword', 'hit');

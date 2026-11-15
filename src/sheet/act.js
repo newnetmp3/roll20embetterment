@@ -219,6 +219,16 @@
         return press(b) ? { ok: true, msg: heal ? 'Healing rolled.' : 'Damage rolled.' } : { ok: false, msg: 'No damage button.' };
       }
       case 'chat': return press(chatButton(row, k)) ? { ok: true, msg: 'Posted to chat.' } : { ok: false, msg: 'No chat button.' };
+      case 'cast': {
+        // A spell's own roll: its attack (or save DC card, whose chat card has
+        // the damage button), else its first damage/healing roll, else its
+        // description. The hit/DC slot is empty for spells without one.
+        const hit = q(row, '.spell-item__hit-dc button');
+        if (press(hit)) return { ok: true, msg: /dc/i.test(hit.textContent || '') ? 'Cast (save DC posted).' : 'Cast (attack rolled).' };
+        const dmg = row.querySelector('.spell-item__damage button');
+        if (press(dmg)) return { ok: true, msg: dmg.closest('.poly-button--healing') ? 'Cast (healing rolled).' : 'Cast (damage rolled).' };
+        return press(chatButton(row, k)) ? { ok: true, msg: 'Cast (posted to chat).' } : { ok: false, msg: 'Nothing to cast with on this row.' };
+      }
       case 'roll': return press(rollButton(row)) ? { ok: true, msg: 'Rolled.' } : { ok: false, msg: 'Nothing to roll.' };
       case 'use': return use(doc, found, opts.spend !== false);
       case 'res': return adjustResource(row, Number(arg?.i) || 0, Number(arg?.delta) || 0);

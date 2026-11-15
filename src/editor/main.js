@@ -278,7 +278,7 @@
   const ECON_NAMES = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction' };
   const LOCAL_OPS = new Set(['move-dash', 'move-difficult', 'move-mode', 'turn-reset', 'econ', 'conc-start', 'conc-end', 'chat-roll']);
   // Actions that roll a d20 (the roll mode applies to them).
-  const D20_OPS = new Set(['hit', 'check', 'save', 'roll', 'use']);
+  const D20_OPS = new Set(['hit', 'check', 'save', 'roll', 'use', 'cast']);
 
   let lastTurn = null;
   document.addEventListener('r20c-movement', guard('movement', (e) => {

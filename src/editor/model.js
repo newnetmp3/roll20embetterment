@@ -219,7 +219,9 @@
         key: s.ref, label: s.name,
         hint: [s.tags.join(''), s.prepared === false ? 'unprepared' : ''].filter(Boolean).join(' '),
         desc: [s.time, s.range].filter(Boolean).join(' · '), info: s.info || '',
-        run: withEcon({ ref: s.ref, op: 'chat', say: 'Cast ' + s.name }, econ, conc),
+        // Clicking the spell casts it: its attack or save, else its damage or
+        // healing, else its description (see act.js 'cast').
+        run: withEcon({ ref: s.ref, op: 'cast', say: 'Cast ' + s.name }, econ, conc),
         controls,
       };
     }));

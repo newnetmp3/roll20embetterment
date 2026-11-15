@@ -410,6 +410,7 @@
         try { attack = card && typeof card.getAssociatedRolls === 'function' ? card.getAssociatedRolls('attack').pop() || null : null; } catch { attack = null; }
         return rolled(await rollDamageLikeCard(a, { attack, card }));
       }
+      case 'cast':
       case 'chat':
         if (item.type === 'spell') return rolled(await item.use(), 'Cast.');
         await item.displayCard();

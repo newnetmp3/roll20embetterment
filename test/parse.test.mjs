@@ -24,7 +24,7 @@ test('PC sheet: reads the desktop layout only, across all tabs', () => {
   assert.equal(s.attacks[0].dmg[0].type, 'piercing');
   assert.equal(s.attacks[1].range, '20/60 ft.');
   // Hidden tabs (display:none) are still read.
-  assert.deepEqual(s.spells.map((x) => [x.name, x.level, x.prepared]), [['Magic Missile', '1ST', true]]);
+  assert.deepEqual(s.spells.map((x) => [x.name, x.level, x.prepared]), [['Magic Missile', '1ST', true], ['Scorching Ray', '2ND', true], ['Detect Thoughts', '2ND', true]]);
   assert.deepEqual(s.checks.map((c) => [c.name, c.bonus]), [['Stealth', '+5'], ["Thieves' Tools", '']]);
 });
 
