@@ -18,6 +18,9 @@
 .dim{stroke:#ffd27a;stroke-width:1;fill:none}
 .dimt{fill:#ffd27a;font-size:12px}
 .hd{fill:#e8f1ff;font-size:12px;font-weight:bold}
+.panel,.rivet,.band,.grit,.gonly{display:none}
+.tag{fill:#e9b44c;stroke:#0f2a49}.ttag{stroke:none}.tagt{fill:#0f2a49}.ttl{fill:#e8f1ff}
+.rail{fill:#2c5f99;stroke:#e8f1ff;stroke-width:1;vector-effect:non-scaling-stroke}
 </style>
 <marker id="arr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffd27a"/></marker>
 
@@ -32,12 +35,18 @@
   <path class="line" d="M4.55 11.32 L4.55 11.93"/>
   <path class="dash" d="M4.55 9.05 L4.55 11.32"/>
   <path class="dash" d="M2.7 8.9 L2.7 11.3 M3.8 9.25 L3.8 11.4 M5.1 9.5 L5.1 11.1"/>
-  <rect x="6.4" y="9.25" width="0.13" height="2.35" fill="#2c5f99" stroke="#e8f1ff" stroke-width="1" vector-effect="non-scaling-stroke"/>
+  <path class="panel" d="M0 2.5 L0.6 2.5 M0 7.0 L1.75 7.0 M0 9.3 L2.45 9.3 M0 11.0 L2.2 11.0 M0 13.0 L1.5 13.0 M0 14.8 L1.36 14.8 M0 16.3 L1.28 16.3"/>
+  <path class="panel" d="M0.3 2.5 L0.3 7.0 M1.05 5.2 L1.2 9.3 M2.0 8.6 L2.0 12.4 M3.0 9.05 L3.0 11.95 M3.55 9.25 L3.55 11.82 M5.2 9.2 L5.2 11.2 M5.8 9.45 L5.8 11.05"/>
+  <path class="panel" d="M2.4 9.6 L6.4 10.55 M2.3 10.9 L6.4 10.4 M1.6 14.7 L3.3 17.3 M1.15 16.2 L3.32 17.35"/>
+  <path class="rivet" d="M0.04 2.56 L0.56 2.56 M0.04 7.06 L1.7 7.06 M0.04 9.36 L2.4 9.36 M0.04 11.06 L2.15 11.06 M0.04 13.06 L1.45 13.06 M0.04 14.86 L1.33 14.86"/>
+  <path class="rivet" d="M2.06 8.7 L2.06 12.3 M3.06 9.1 L3.06 11.9 M5.26 9.3 L5.26 11.15 M2.5 8.42 L4.28 9.06 M4.4 8.98 L6.35 9.78 M2.3 12.52 L6.35 11.38"/>
+  <rect class="rail" x="6.4" y="9.25" width="0.13" height="2.35"/>
   <path class="line" d="M0.55 7.2 L0.75 13.0 L0.85 16.9"/>
   <path class="line" d="M0.4 13.6 L1.38 13.6"/>
   <path class="fin" d="M1.08 12.55 L1.98 15.15 L2.12 16.35 L1.0 16.7 Z"/>
   <path class="line" d="M1.55 15.7 L2.06 15.55"/>
   <rect class="fin" x="0.12" y="17.55" width="0.86" height="0.76" rx="0.05"/>
+  <rect class="noz gonly" x="0.12" y="17.55" width="0.86" height="0.76" rx="0.05" stroke="#101215" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
   <path class="line" d="M0.33 17.6 V18.28 M0.55 17.6 V18.28 M0.77 17.6 V18.28"/>
 </g>
 <path id="sil" d="M0 0 C0.2 0.25 0.38 0.8 0.48 1.4 L0.58 2.4 L0.64 3.1 C0.85 3.9 1.15 5.0 1.55 6.2 C1.85 7.0 2.1 7.7 2.4 8.3 L4.3 8.98 L4.32 8.86 L6.4 9.72 L6.4 11.45 L2.05 12.6 L1.5 13.0 L1.38 14.5 L1.3 16.0 L1.18 17.1 L1.02 17.65 L0 17.65 L0 0 Z"/>
@@ -46,22 +55,36 @@
 <g class="layer" data-name="Background"><rect width="800" height="1200" fill="#163a63"/></g>
 <g class="layer" data-name="Grid (1 m)"><rect width="800" height="1200" fill="url(#grid)"/></g>
 <g class="layer" data-name="Title">
-<text x="24" y="40" fill="#e8f1ff" font-size="20" font-weight="bold">BOEING F/A-18E SUPER HORNET — FULL LOADOUT</text>
+<text class="ttl" x="24" y="40" font-size="20" font-weight="bold">BOEING F/A-18E SUPER HORNET — FULL LOADOUT</text>
 <text x="24" y="60" class="sm">Single-seat variant · plan view (top-down) · 11 stations loaded · stores beneath the airframe shown as hidden lines</text></g>
 <g transform="translate(400 110) scale(40)">
 <g class="layer" data-name="Stores (visible)"><g>
-<path class="st" transform="translate(-6.643 8.633)" d="M0 0 C0.035 0.045 0.064 0.165 0.064 0.300 L0.064 3.000 L-0.064 3.000 L-0.064 0.300 C-0.064 0.165 -0.035 0.045 0 0 ZM0.0635 2.72 L0.2 2.93 L0.2 3.0 L0.0635 3.0 Z M-0.0635 2.72 L-0.2 2.93 L-0.2 3.0 L-0.0635 3.0 Z"/>
-<path class="st" transform="translate(-5.1 8.532)" d="M0 0 C0.049 0.068 0.089 0.248 0.089 0.450 L0.089 3.635 L-0.089 3.635 L-0.089 0.450 C-0.089 0.248 -0.049 0.068 0 0 ZM0.089 1.45 L0.241 1.7874999999999999 L0.241 1.9 L0.089 1.9 Z M-0.089 1.45 L-0.241 1.7874999999999999 L-0.241 1.9 L-0.089 1.9 ZM0.09 3.2 L0.27 3.5300000000000002 L0.27 3.64 L0.09 3.64 Z M-0.09 3.2 L-0.27 3.5300000000000002 L-0.27 3.64 L-0.09 3.64 Z"/>
-<path class="st" transform="translate(-3.8 8.432)" d="M0 0 C0.126 0.105 0.229 0.385 0.229 0.700 L0.229 3.859 L-0.229 3.859 L-0.229 0.700 C-0.229 0.385 -0.126 0.105 0 0 ZM0.229 3.27 L0.3175 3.7125 L0.3175 3.86 L0.229 3.86 Z M-0.229 3.27 L-0.3175 3.7125 L-0.3175 3.86 L-0.229 3.86 Z M0.23 1.2 L0.3 1.25 L0.3 2.3 L0.23 2.35 Z M-0.23 1.2 L-0.3 1.25 L-0.3 2.3 L-0.23 2.35 Z"/>
-<path class="st" transform="translate(-2.7 6.725)" d="M0 0 C0.223 0.24 0.405 0.88 0.405 1.6 L0.405 4.3 C0.405 4.95 0.2 5.44 0.06 5.46 L-0.06 5.46 C-0.2 5.44 -0.405 4.95 -0.405 4.3 L-0.405 1.6 C-0.405 0.88 -0.223 0.24 0 0 Z"/>
-<path class="st2" transform="translate(-1.05 7.328)" d="M0 0 C0.091 0.037 0.165 0.138 0.165 0.250 L0.165 1.809 L-0.165 1.809 L-0.165 0.250 C-0.165 0.138 -0.091 0.037 0 0 Z"/>
+<path class="st st-aim9" transform="translate(-6.643 8.633)" d="M0 0 C0.035 0.045 0.064 0.165 0.064 0.300 L0.064 3.000 L-0.064 3.000 L-0.064 0.300 C-0.064 0.165 -0.035 0.045 0 0 ZM0.0635 2.72 L0.2 2.93 L0.2 3.0 L0.0635 3.0 Z M-0.0635 2.72 L-0.2 2.93 L-0.2 3.0 L-0.0635 3.0 Z"/>
+<rect class="band b-y" x="-6.707" y="9.183" width="0.127" height="0.070"/>
+<rect class="band b-b" x="-6.707" y="9.883" width="0.127" height="0.070"/>
+<path class="st st-aim120" transform="translate(-5.1 8.532)" d="M0 0 C0.049 0.068 0.089 0.248 0.089 0.450 L0.089 3.635 L-0.089 3.635 L-0.089 0.450 C-0.089 0.248 -0.049 0.068 0 0 ZM0.089 1.45 L0.241 1.7874999999999999 L0.241 1.9 L0.089 1.9 Z M-0.089 1.45 L-0.241 1.7874999999999999 L-0.241 1.9 L-0.089 1.9 ZM0.09 3.2 L0.27 3.5300000000000002 L0.27 3.64 L0.09 3.64 Z M-0.09 3.2 L-0.27 3.5300000000000002 L-0.27 3.64 L-0.09 3.64 Z"/>
+<rect class="band b-y" x="-5.189" y="9.232" width="0.178" height="0.080"/>
+<rect class="band b-b" x="-5.189" y="10.532" width="0.178" height="0.080"/>
+<path class="st st-jdam" transform="translate(-3.8 8.432)" d="M0 0 C0.126 0.105 0.229 0.385 0.229 0.700 L0.229 3.859 L-0.229 3.859 L-0.229 0.700 C-0.229 0.385 -0.126 0.105 0 0 ZM0.229 3.27 L0.3175 3.7125 L0.3175 3.86 L0.229 3.86 Z M-0.229 3.27 L-0.3175 3.7125 L-0.3175 3.86 L-0.229 3.86 Z M0.23 1.2 L0.3 1.25 L0.3 2.3 L0.23 2.35 Z M-0.23 1.2 L-0.3 1.25 L-0.3 2.3 L-0.23 2.35 Z"/>
+<rect class="band b-y" x="-4.029" y="8.882" width="0.458" height="0.100"/>
+<rect class="band b-k" x="-4.029" y="11.332" width="0.458" height="0.960"/>
+<path class="st st-tank" transform="translate(-2.7 6.725)" d="M0 0 C0.223 0.24 0.405 0.88 0.405 1.6 L0.405 4.3 C0.405 4.95 0.2 5.44 0.06 5.46 L-0.06 5.46 C-0.2 5.44 -0.405 4.95 -0.405 4.3 L-0.405 1.6 C-0.405 0.88 -0.223 0.24 0 0 Z"/>
+<path class="st st-atflir" transform="translate(-1.05 7.328)" d="M0 0 C0.091 0.037 0.165 0.138 0.165 0.250 L0.165 1.809 L-0.165 1.809 L-0.165 0.250 C-0.165 0.138 -0.091 0.037 0 0 Z"/>
 <circle cx="-1.05" cy="7.498" r="0.11" fill="#3a6ea8" stroke="#0f2a49" stroke-width="1" vector-effect="non-scaling-stroke"/>
-<path class="st" transform="translate(0.0 7.428)" d="M0 0 C0.223 0.24 0.405 0.88 0.405 1.6 L0.405 4.3 C0.405 4.95 0.2 5.44 0.06 5.46 L-0.06 5.46 C-0.2 5.44 -0.405 4.95 -0.405 4.3 L-0.405 1.6 C-0.405 0.88 -0.223 0.24 0 0 Z"/>
-<path class="st" transform="translate(1.05 8.231)" d="M0 0 C0.049 0.068 0.089 0.248 0.089 0.450 L0.089 3.635 L-0.089 3.635 L-0.089 0.450 C-0.089 0.248 -0.049 0.068 0 0 ZM0.089 1.45 L0.241 1.7874999999999999 L0.241 1.9 L0.089 1.9 Z M-0.089 1.45 L-0.241 1.7874999999999999 L-0.241 1.9 L-0.089 1.9 ZM0.09 3.2 L0.27 3.5300000000000002 L0.27 3.64 L0.09 3.64 Z M-0.09 3.2 L-0.27 3.5300000000000002 L-0.27 3.64 L-0.09 3.64 Z"/>
-<path class="st" transform="translate(2.7 6.725)" d="M0 0 C0.223 0.24 0.405 0.88 0.405 1.6 L0.405 4.3 C0.405 4.95 0.2 5.44 0.06 5.46 L-0.06 5.46 C-0.2 5.44 -0.405 4.95 -0.405 4.3 L-0.405 1.6 C-0.405 0.88 -0.223 0.24 0 0 Z"/>
-<path class="st" transform="translate(3.8 8.432)" d="M0 0 C0.126 0.105 0.229 0.385 0.229 0.700 L0.229 3.859 L-0.229 3.859 L-0.229 0.700 C-0.229 0.385 -0.126 0.105 0 0 ZM0.229 3.27 L0.3175 3.7125 L0.3175 3.86 L0.229 3.86 Z M-0.229 3.27 L-0.3175 3.7125 L-0.3175 3.86 L-0.229 3.86 Z M0.23 1.2 L0.3 1.25 L0.3 2.3 L0.23 2.35 Z M-0.23 1.2 L-0.3 1.25 L-0.3 2.3 L-0.23 2.35 Z"/>
-<path class="st" transform="translate(5.1 8.532)" d="M0 0 C0.049 0.068 0.089 0.248 0.089 0.450 L0.089 3.635 L-0.089 3.635 L-0.089 0.450 C-0.089 0.248 -0.049 0.068 0 0 ZM0.089 1.45 L0.241 1.7874999999999999 L0.241 1.9 L0.089 1.9 Z M-0.089 1.45 L-0.241 1.7874999999999999 L-0.241 1.9 L-0.089 1.9 ZM0.09 3.2 L0.27 3.5300000000000002 L0.27 3.64 L0.09 3.64 Z M-0.09 3.2 L-0.27 3.5300000000000002 L-0.27 3.64 L-0.09 3.64 Z"/>
-<path class="st" transform="translate(6.643 8.633)" d="M0 0 C0.035 0.045 0.064 0.165 0.064 0.300 L0.064 3.000 L-0.064 3.000 L-0.064 0.300 C-0.064 0.165 -0.035 0.045 0 0 ZM0.0635 2.72 L0.2 2.93 L0.2 3.0 L0.0635 3.0 Z M-0.0635 2.72 L-0.2 2.93 L-0.2 3.0 L-0.0635 3.0 Z"/>
+<path class="st st-tank" transform="translate(0.0 7.428)" d="M0 0 C0.223 0.24 0.405 0.88 0.405 1.6 L0.405 4.3 C0.405 4.95 0.2 5.44 0.06 5.46 L-0.06 5.46 C-0.2 5.44 -0.405 4.95 -0.405 4.3 L-0.405 1.6 C-0.405 0.88 -0.223 0.24 0 0 Z"/>
+<path class="st st-aim120" transform="translate(1.05 8.231)" d="M0 0 C0.049 0.068 0.089 0.248 0.089 0.450 L0.089 3.635 L-0.089 3.635 L-0.089 0.450 C-0.089 0.248 -0.049 0.068 0 0 ZM0.089 1.45 L0.241 1.7874999999999999 L0.241 1.9 L0.089 1.9 Z M-0.089 1.45 L-0.241 1.7874999999999999 L-0.241 1.9 L-0.089 1.9 ZM0.09 3.2 L0.27 3.5300000000000002 L0.27 3.64 L0.09 3.64 Z M-0.09 3.2 L-0.27 3.5300000000000002 L-0.27 3.64 L-0.09 3.64 Z"/>
+<rect class="band b-y" x="0.961" y="8.931" width="0.178" height="0.080"/>
+<rect class="band b-b" x="0.961" y="10.231" width="0.178" height="0.080"/>
+<path class="st st-tank" transform="translate(2.7 6.725)" d="M0 0 C0.223 0.24 0.405 0.88 0.405 1.6 L0.405 4.3 C0.405 4.95 0.2 5.44 0.06 5.46 L-0.06 5.46 C-0.2 5.44 -0.405 4.95 -0.405 4.3 L-0.405 1.6 C-0.405 0.88 -0.223 0.24 0 0 Z"/>
+<path class="st st-jdam" transform="translate(3.8 8.432)" d="M0 0 C0.126 0.105 0.229 0.385 0.229 0.700 L0.229 3.859 L-0.229 3.859 L-0.229 0.700 C-0.229 0.385 -0.126 0.105 0 0 ZM0.229 3.27 L0.3175 3.7125 L0.3175 3.86 L0.229 3.86 Z M-0.229 3.27 L-0.3175 3.7125 L-0.3175 3.86 L-0.229 3.86 Z M0.23 1.2 L0.3 1.25 L0.3 2.3 L0.23 2.35 Z M-0.23 1.2 L-0.3 1.25 L-0.3 2.3 L-0.23 2.35 Z"/>
+<rect class="band b-y" x="3.571" y="8.882" width="0.458" height="0.100"/>
+<rect class="band b-k" x="3.571" y="11.332" width="0.458" height="0.960"/>
+<path class="st st-aim120" transform="translate(5.1 8.532)" d="M0 0 C0.049 0.068 0.089 0.248 0.089 0.450 L0.089 3.635 L-0.089 3.635 L-0.089 0.450 C-0.089 0.248 -0.049 0.068 0 0 ZM0.089 1.45 L0.241 1.7874999999999999 L0.241 1.9 L0.089 1.9 Z M-0.089 1.45 L-0.241 1.7874999999999999 L-0.241 1.9 L-0.089 1.9 ZM0.09 3.2 L0.27 3.5300000000000002 L0.27 3.64 L0.09 3.64 Z M-0.09 3.2 L-0.27 3.5300000000000002 L-0.27 3.64 L-0.09 3.64 Z"/>
+<rect class="band b-y" x="5.011" y="9.232" width="0.178" height="0.080"/>
+<rect class="band b-b" x="5.011" y="10.532" width="0.178" height="0.080"/>
+<path class="st st-aim9" transform="translate(6.643 8.633)" d="M0 0 C0.035 0.045 0.064 0.165 0.064 0.300 L0.064 3.000 L-0.064 3.000 L-0.064 0.300 C-0.064 0.165 -0.035 0.045 0 0 ZM0.0635 2.72 L0.2 2.93 L0.2 3.0 L0.0635 3.0 Z M-0.0635 2.72 L-0.2 2.93 L-0.2 3.0 L-0.0635 3.0 Z"/>
+<rect class="band b-y" x="6.579" y="9.183" width="0.127" height="0.070"/>
+<rect class="band b-b" x="6.579" y="9.883" width="0.127" height="0.070"/>
 </g></g>
 <g class="layer" data-name="Airframe"><g transform="scale(1 1.00379)"><use xlink:href="#half"/><use xlink:href="#half" transform="scale(-1 1)"/></g></g>
 <g class="layer" data-name="Stores (hidden lines)"><g clip-path="url(#airframe)">
@@ -81,21 +104,21 @@
 <path class="line" d="M-0.3 5.0 C-0.32 6.0 -0.34 6.8 -0.36 7.4 M0.3 5.0 C0.32 6.0 0.34 6.8 0.36 7.4"/>
 <path class="glass" d="M0 2.55 C0.3 2.65 0.44 3.1 0.46 3.7 L0.46 4.4 C0.44 4.85 0.3 5.15 0 5.25 C-0.3 5.15 -0.44 4.85 -0.46 4.4 L-0.46 3.7 C-0.44 3.1 -0.3 2.65 0 2.55 Z"/>
 <path class="line" d="M-0.42 3.2 L0.42 3.2"/>
-<rect x="-0.17" y="3.6" width="0.34" height="0.6" rx="0.08" fill="#163a63" opacity="0.7"/></g>
+<rect x="-0.17" y="3.6" width="0.34" height="0.6" rx="0.08" class="seat" fill="#163a63" opacity="0.7"/></g>
 <g class="layer" data-name="Centreline"><path class="dash" d="M0 -0.8 V18.9" opacity="0.6"/></g>
 </g>
 <g class="layer" data-name="Station numbers">
-<circle cx="134.3" cy="598.1" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="134.3" y="602.1" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">1</text>
-<circle cx="196.0" cy="619.7" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="196.0" y="623.7" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">2</text>
-<circle cx="248.0" cy="624.5" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="248.0" y="628.5" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">3</text>
-<circle cx="292.0" cy="619.4" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="292.0" y="623.4" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">4</text>
-<circle cx="358.0" cy="385.1" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="358.0" y="389.1" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">5</text>
-<circle cx="400.0" cy="388.0" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="400.0" y="392.0" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">6</text>
-<circle cx="442.0" cy="421.2" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="442.0" y="425.2" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">7</text>
-<circle cx="508.0" cy="619.4" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="508.0" y="623.4" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">8</text>
-<circle cx="552.0" cy="624.5" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="552.0" y="628.5" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">9</text>
-<circle cx="604.0" cy="619.7" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="604.0" y="623.7" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">10</text>
-<circle cx="665.7" cy="598.1" r="9" fill="#e9b44c" stroke="#0f2a49"/><text x="665.7" y="602.1" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">11</text>
+<circle class="tag" cx="134.3" cy="598.1" r="9"/><text x="134.3" y="602.1" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">1</text>
+<circle class="tag" cx="196.0" cy="619.7" r="9"/><text x="196.0" y="623.7" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">2</text>
+<circle class="tag" cx="248.0" cy="624.5" r="9"/><text x="248.0" y="628.5" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">3</text>
+<circle class="tag" cx="292.0" cy="619.4" r="9"/><text x="292.0" y="623.4" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">4</text>
+<circle class="tag" cx="358.0" cy="385.1" r="9"/><text x="358.0" y="389.1" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">5</text>
+<circle class="tag" cx="400.0" cy="388.0" r="9"/><text x="400.0" y="392.0" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">6</text>
+<circle class="tag" cx="442.0" cy="421.2" r="9"/><text x="442.0" y="425.2" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">7</text>
+<circle class="tag" cx="508.0" cy="619.4" r="9"/><text x="508.0" y="623.4" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">8</text>
+<circle class="tag" cx="552.0" cy="624.5" r="9"/><text x="552.0" y="628.5" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">9</text>
+<circle class="tag" cx="604.0" cy="619.7" r="9"/><text x="604.0" y="623.7" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">10</text>
+<circle class="tag" cx="665.7" cy="598.1" r="9"/><text x="665.7" y="602.1" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">11</text>
 </g>
 <g class="layer" data-name="Dimensions">
 <path class="dim" d="M60 110 V845.2" marker-start="url(#arr)" marker-end="url(#arr)"/>
@@ -107,17 +130,17 @@
 </g>
 <g class="layer" data-name="Loadout table">
 <text class="hd" x="24" y="947.1776">STATION LOADOUT (representative multirole configuration)</text>
-<circle cx="33" cy="967.1776" r="8" fill="#e9b44c"/><text x="33" y="971.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">1</text><text class="sm" x="48" y="971.1776">L wingtip</text><text class="lbl" x="134" y="971.1776">AIM-9X Sidewinder</text>
-<circle cx="33" cy="987.1776" r="8" fill="#e9b44c"/><text x="33" y="991.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">2</text><text class="sm" x="48" y="991.1776">L outboard</text><text class="lbl" x="134" y="991.1776">AIM-120C AMRAAM</text>
-<circle cx="33" cy="1007.1776" r="8" fill="#e9b44c"/><text x="33" y="1011.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">3</text><text class="sm" x="48" y="1011.1776">L midboard</text><text class="lbl" x="134" y="1011.1776">GBU-31 JDAM (2,000 lb)</text>
-<circle cx="33" cy="1027.1776" r="8" fill="#e9b44c"/><text x="33" y="1031.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">4</text><text class="sm" x="48" y="1031.1776">L inboard</text><text class="lbl" x="134" y="1031.1776">480 gal external tank</text>
-<circle cx="33" cy="1047.1776" r="8" fill="#e9b44c"/><text x="33" y="1051.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">5</text><text class="sm" x="48" y="1051.1776">L nacelle</text><text class="lbl" x="134" y="1051.1776">AN/ASQ-228 ATFLIR pod</text>
-<circle cx="33" cy="1067.1776" r="8" fill="#e9b44c"/><text x="33" y="1071.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">6</text><text class="sm" x="48" y="1071.1776">Centreline</text><text class="lbl" x="134" y="1071.1776">480 gal external tank</text>
-<circle cx="429" cy="967.1776" r="8" fill="#e9b44c"/><text x="429" y="971.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">7</text><text class="sm" x="444" y="971.1776">R nacelle</text><text class="lbl" x="530" y="971.1776">AIM-120C AMRAAM</text>
-<circle cx="429" cy="987.1776" r="8" fill="#e9b44c"/><text x="429" y="991.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">8</text><text class="sm" x="444" y="991.1776">R inboard</text><text class="lbl" x="530" y="991.1776">480 gal external tank</text>
-<circle cx="429" cy="1007.1776" r="8" fill="#e9b44c"/><text x="429" y="1011.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">9</text><text class="sm" x="444" y="1011.1776">R midboard</text><text class="lbl" x="530" y="1011.1776">GBU-31 JDAM (2,000 lb)</text>
-<circle cx="429" cy="1027.1776" r="8" fill="#e9b44c"/><text x="429" y="1031.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">10</text><text class="sm" x="444" y="1031.1776">R outboard</text><text class="lbl" x="530" y="1031.1776">AIM-120C AMRAAM</text>
-<circle cx="429" cy="1047.1776" r="8" fill="#e9b44c"/><text x="429" y="1051.1776" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f2a49">11</text><text class="sm" x="444" y="1051.1776">R wingtip</text><text class="lbl" x="530" y="1051.1776">AIM-9X Sidewinder</text>
+<circle class="tag ttag" cx="33" cy="967.1776" r="8"/><text x="33" y="971.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">1</text><text class="sm" x="48" y="971.1776">L wingtip</text><text class="lbl" x="134" y="971.1776">AIM-9X Sidewinder</text>
+<circle class="tag ttag" cx="33" cy="987.1776" r="8"/><text x="33" y="991.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">2</text><text class="sm" x="48" y="991.1776">L outboard</text><text class="lbl" x="134" y="991.1776">AIM-120C AMRAAM</text>
+<circle class="tag ttag" cx="33" cy="1007.1776" r="8"/><text x="33" y="1011.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">3</text><text class="sm" x="48" y="1011.1776">L midboard</text><text class="lbl" x="134" y="1011.1776">GBU-31 JDAM (2,000 lb)</text>
+<circle class="tag ttag" cx="33" cy="1027.1776" r="8"/><text x="33" y="1031.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">4</text><text class="sm" x="48" y="1031.1776">L inboard</text><text class="lbl" x="134" y="1031.1776">480 gal external tank</text>
+<circle class="tag ttag" cx="33" cy="1047.1776" r="8"/><text x="33" y="1051.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">5</text><text class="sm" x="48" y="1051.1776">L nacelle</text><text class="lbl" x="134" y="1051.1776">AN/ASQ-228 ATFLIR pod</text>
+<circle class="tag ttag" cx="33" cy="1067.1776" r="8"/><text x="33" y="1071.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">6</text><text class="sm" x="48" y="1071.1776">Centreline</text><text class="lbl" x="134" y="1071.1776">480 gal external tank</text>
+<circle class="tag ttag" cx="429" cy="967.1776" r="8"/><text x="429" y="971.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">7</text><text class="sm" x="444" y="971.1776">R nacelle</text><text class="lbl" x="530" y="971.1776">AIM-120C AMRAAM</text>
+<circle class="tag ttag" cx="429" cy="987.1776" r="8"/><text x="429" y="991.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">8</text><text class="sm" x="444" y="991.1776">R inboard</text><text class="lbl" x="530" y="991.1776">480 gal external tank</text>
+<circle class="tag ttag" cx="429" cy="1007.1776" r="8"/><text x="429" y="1011.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">9</text><text class="sm" x="444" y="1011.1776">R midboard</text><text class="lbl" x="530" y="1011.1776">GBU-31 JDAM (2,000 lb)</text>
+<circle class="tag ttag" cx="429" cy="1027.1776" r="8"/><text x="429" y="1031.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">10</text><text class="sm" x="444" y="1031.1776">R outboard</text><text class="lbl" x="530" y="1031.1776">AIM-120C AMRAAM</text>
+<circle class="tag ttag" cx="429" cy="1047.1776" r="8"/><text x="429" y="1051.1776" text-anchor="middle" font-size="10" font-weight="bold" class="tagt">11</text><text class="sm" x="444" y="1051.1776">R wingtip</text><text class="lbl" x="530" y="1051.1776">AIM-9X Sidewinder</text>
 <text class="sm" x="420" y="1071.1776">Totals: 2× AIM-9X · 3× AIM-120 · 2× GBU-31 · 3× tanks · ATFLIR</text>
 </g>
 <g class="layer" data-name="Sources">

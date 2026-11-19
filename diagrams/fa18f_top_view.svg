@@ -18,6 +18,9 @@
 .dim{stroke:#ffd27a;stroke-width:1;fill:none}
 .dimt{fill:#ffd27a;font-size:12px}
 .hd{fill:#e8f1ff;font-size:12px;font-weight:bold}
+.panel,.rivet,.band,.grit,.gonly{display:none}
+.tag{fill:#e9b44c;stroke:#0f2a49}.ttag{stroke:none}.tagt{fill:#0f2a49}.ttl{fill:#e8f1ff}
+.rail{fill:#2c5f99;stroke:#e8f1ff;stroke-width:1;vector-effect:non-scaling-stroke}
 </style>
 <marker id="arr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffd27a"/></marker>
 
@@ -32,12 +35,18 @@
   <path class="line" d="M4.55 11.32 L4.55 11.93"/>
   <path class="dash" d="M4.55 9.05 L4.55 11.32"/>
   <path class="dash" d="M2.7 8.9 L2.7 11.3 M3.8 9.25 L3.8 11.4 M5.1 9.5 L5.1 11.1"/>
-  <rect x="6.4" y="9.25" width="0.13" height="2.35" fill="#2c5f99" stroke="#e8f1ff" stroke-width="1" vector-effect="non-scaling-stroke"/>
+  <path class="panel" d="M0 2.5 L0.6 2.5 M0 7.0 L1.75 7.0 M0 9.3 L2.45 9.3 M0 11.0 L2.2 11.0 M0 13.0 L1.5 13.0 M0 14.8 L1.36 14.8 M0 16.3 L1.28 16.3"/>
+  <path class="panel" d="M0.3 2.5 L0.3 7.0 M1.05 5.2 L1.2 9.3 M2.0 8.6 L2.0 12.4 M3.0 9.05 L3.0 11.95 M3.55 9.25 L3.55 11.82 M5.2 9.2 L5.2 11.2 M5.8 9.45 L5.8 11.05"/>
+  <path class="panel" d="M2.4 9.6 L6.4 10.55 M2.3 10.9 L6.4 10.4 M1.6 14.7 L3.3 17.3 M1.15 16.2 L3.32 17.35"/>
+  <path class="rivet" d="M0.04 2.56 L0.56 2.56 M0.04 7.06 L1.7 7.06 M0.04 9.36 L2.4 9.36 M0.04 11.06 L2.15 11.06 M0.04 13.06 L1.45 13.06 M0.04 14.86 L1.33 14.86"/>
+  <path class="rivet" d="M2.06 8.7 L2.06 12.3 M3.06 9.1 L3.06 11.9 M5.26 9.3 L5.26 11.15 M2.5 8.42 L4.28 9.06 M4.4 8.98 L6.35 9.78 M2.3 12.52 L6.35 11.38"/>
+  <rect class="rail" x="6.4" y="9.25" width="0.13" height="2.35"/>
   <path class="line" d="M0.55 7.2 L0.75 13.0 L0.85 16.9"/>
   <path class="line" d="M0.4 13.6 L1.38 13.6"/>
   <path class="fin" d="M1.08 12.55 L1.98 15.15 L2.12 16.35 L1.0 16.7 Z"/>
   <path class="line" d="M1.55 15.7 L2.06 15.55"/>
   <rect class="fin" x="0.12" y="17.55" width="0.86" height="0.76" rx="0.05"/>
+  <rect class="noz gonly" x="0.12" y="17.55" width="0.86" height="0.76" rx="0.05" stroke="#101215" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
   <path class="line" d="M0.33 17.6 V18.28 M0.55 17.6 V18.28 M0.77 17.6 V18.28"/>
 </g>
 <path id="sil" d="M0 0 C0.2 0.25 0.38 0.8 0.48 1.4 L0.58 2.4 L0.64 3.1 C0.85 3.9 1.15 5.0 1.55 6.2 C1.85 7.0 2.1 7.7 2.4 8.3 L4.3 8.98 L4.32 8.86 L6.4 9.72 L6.4 11.45 L2.05 12.6 L1.5 13.0 L1.38 14.5 L1.3 16.0 L1.18 17.1 L1.02 17.65 L0 17.65 L0 0 Z"/>
@@ -46,15 +55,15 @@
 <g class="layer" data-name="Background"><rect width="800" height="1020" fill="#163a63"/></g>
 <g class="layer" data-name="Grid (1 m)"><rect width="800" height="1020" fill="url(#grid)"/></g>
 <g class="layer" data-name="Title">
-<text x="24" y="40" fill="#e8f1ff" font-size="20" font-weight="bold">BOEING F/A-18F SUPER HORNET</text>
+<text class="ttl" x="24" y="40" font-size="20" font-weight="bold">BOEING F/A-18F SUPER HORNET</text>
 <text x="24" y="60" class="sm">Two-seat variant · plan view (top-down) · grid = 1 m</text></g>
 <g transform="translate(400 110) scale(40)">
 <g class="layer" data-name="Airframe"><g transform="scale(1 1.00379)"><use xlink:href="#half"/><use xlink:href="#half" transform="scale(-1 1)"/></g></g>
 <g class="layer" data-name="Canopy">
 <path class="glass" d="M0 2.55 C0.3 2.65 0.44 3.1 0.46 3.7 L0.46 5.6 C0.44 6.1 0.3 6.35 0 6.45 C-0.3 6.35 -0.44 6.1 -0.46 5.6 L-0.46 3.7 C-0.44 3.1 -0.3 2.65 0 2.55 Z"/>
 <path class="line" d="M-0.42 3.2 L0.42 3.2 M-0.46 4.75 L0.46 4.75"/>
-<rect x="-0.17" y="3.5" width="0.34" height="0.6" rx="0.08" fill="#163a63" opacity="0.7"/>
-<rect x="-0.17" y="5.1" width="0.34" height="0.6" rx="0.08" fill="#163a63" opacity="0.7"/></g>
+<rect x="-0.17" y="3.5" width="0.34" height="0.6" rx="0.08" class="seat" fill="#163a63" opacity="0.7"/>
+<rect x="-0.17" y="5.1" width="0.34" height="0.6" rx="0.08" class="seat" fill="#163a63" opacity="0.7"/></g>
 <g class="layer" data-name="Centreline"><path class="dash" d="M0 -0.8 V18.9" opacity="0.6"/></g>
 </g>
 <g class="layer" data-name="Part labels">

@@ -1,0 +1,2 @@
+# gritty PSDs are 75-88 MB (texture does not compress); regenerate with diagrams/tools
+diagrams/export/*_gritty.psd
