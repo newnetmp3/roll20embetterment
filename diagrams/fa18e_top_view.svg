@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 1020" width="800" height="1020" font-family="Helvetica, Arial, sans-serif">
+<title>F/A-18E Super Hornet — top view</title>
+<defs>
+<pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse" x="0" y="30"><path d="M40 0H0V40" fill="none" stroke="#2c5a8f" stroke-width="0.6"/></pattern>
+<style>
+.skin{fill:#1d4a7d;stroke:none}
+.out{fill:none;stroke:#e8f1ff;stroke-width:1.8;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.line{fill:none;stroke:#cfe0f7;stroke-width:.9;vector-effect:non-scaling-stroke}
+.dash{fill:none;stroke:#9fc0e8;stroke-width:.9;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
+.glass{fill:#5f93c9;fill-opacity:.55;stroke:#e8f1ff;stroke-width:1.4;vector-effect:non-scaling-stroke}
+.fin{fill:#255790;stroke:#e8f1ff;stroke-width:1.4;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.st{fill:#b9cde4;stroke:#0f2a49;stroke-width:1;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.st2{fill:#e9b44c;stroke:#0f2a49;stroke-width:1;vector-effect:non-scaling-stroke}
+.hid{fill:none;stroke:#e9b44c;stroke-width:1;stroke-dasharray:4 3;vector-effect:non-scaling-stroke}
+.lbl{fill:#e8f1ff;font-size:12px}
+.sm{fill:#9fc0e8;font-size:11px}
+.ldr{stroke:#e8f1ff;stroke-width:.8;fill:none}
+.dim{stroke:#ffd27a;stroke-width:1;fill:none}
+.dimt{fill:#ffd27a;font-size:12px}
+.hd{fill:#e8f1ff;font-size:12px;font-weight:bold}
+</style>
+<marker id="arr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffd27a"/></marker>
+
+<g id="half">
+  <path class="skin" d="M1.15 15.0 L3.32 16.85 L3.32 17.85 L1.15 17.6 Z"/><path class="out" d="M1.15 15.0 L3.32 16.85 L3.32 17.85 L1.15 17.6"/>
+  <path class="skin" d="M0 0 C0.2 0.25 0.38 0.8 0.48 1.4 L0.58 2.4 L0.64 3.1 C0.85 3.9 1.15 5.0 1.55 6.2 C1.85 7.0 2.1 7.7 2.4 8.3 L4.3 8.98 L4.32 8.86 L6.4 9.72 L6.4 11.45 L2.05 12.6 L1.5 13.0 L1.38 14.5 L1.3 16.0 L1.18 17.1 L1.02 17.65 L0 17.65 Z"/><path class="out" d="M0 0 C0.2 0.25 0.38 0.8 0.48 1.4 L0.58 2.4 L0.64 3.1 C0.85 3.9 1.15 5.0 1.55 6.2 C1.85 7.0 2.1 7.7 2.4 8.3 L4.3 8.98 L4.32 8.86 L6.4 9.72 L6.4 11.45 L2.05 12.6 L1.5 13.0 L1.38 14.5 L1.3 16.0 L1.18 17.1 L1.02 17.65"/>
+  <path class="line" d="M0 1.75 Q0.3 1.72 0.52 1.8"/>
+  <path class="line" d="M0.64 3.1 C0.7 5 0.85 7 1.15 8.6 L1.5 13.0"/>
+  <path class="dash" d="M0.95 5.9 L1.55 6.15 L1.55 7.3 L1.05 7.3"/>
+  <path class="line" d="M2.4 8.75 L4.3 9.42 M4.32 9.3 L6.4 10.1"/>
+  <path class="line" d="M2.2 11.95 L6.4 10.85"/>
+  <path class="line" d="M4.55 11.32 L4.55 11.93"/>
+  <path class="dash" d="M4.55 9.05 L4.55 11.32"/>
+  <path class="dash" d="M2.7 8.9 L2.7 11.3 M3.8 9.25 L3.8 11.4 M5.1 9.5 L5.1 11.1"/>
+  <rect x="6.4" y="9.25" width="0.13" height="2.35" fill="#2c5f99" stroke="#e8f1ff" stroke-width="1" vector-effect="non-scaling-stroke"/>
+  <path class="line" d="M0.55 7.2 L0.75 13.0 L0.85 16.9"/>
+  <path class="line" d="M0.4 13.6 L1.38 13.6"/>
+  <path class="fin" d="M1.08 12.55 L1.98 15.15 L2.12 16.35 L1.0 16.7 Z"/>
+  <path class="line" d="M1.55 15.7 L2.06 15.55"/>
+  <rect class="fin" x="0.12" y="17.55" width="0.86" height="0.76" rx="0.05"/>
+  <path class="line" d="M0.33 17.6 V18.28 M0.55 17.6 V18.28 M0.77 17.6 V18.28"/>
+</g>
+<path id="sil" d="M0 0 C0.2 0.25 0.38 0.8 0.48 1.4 L0.58 2.4 L0.64 3.1 C0.85 3.9 1.15 5.0 1.55 6.2 C1.85 7.0 2.1 7.7 2.4 8.3 L4.3 8.98 L4.32 8.86 L6.4 9.72 L6.4 11.45 L2.05 12.6 L1.5 13.0 L1.38 14.5 L1.3 16.0 L1.18 17.1 L1.02 17.65 L0 17.65 L0 0 Z"/>
+<clipPath id="airframe" clipPathUnits="userSpaceOnUse"><path d="M 0.0000 0.0000 C 0.2000 0.2509 0.3800 0.8030 0.4800 1.4053 L 0.5800 2.4091 L 0.6400 3.1118 C 0.8500 3.9148 1.1500 5.0190 1.5500 6.2235 C 1.8500 7.0265 2.1000 7.7292 2.4000 8.3315 L 4.3000 9.0141 L 4.3200 8.8936 L 6.4000 9.7569 L 6.4000 11.4934 L 2.0500 12.6478 L 1.5000 13.0493 L 1.3800 14.5550 L 1.3000 16.0607 L 1.1800 17.1649 L 1.0200 17.7169 L 0.0000 17.7169 L 0.0000 0.0000 Z"/><path d="M -0.0000 0.0000 C -0.2000 0.2509 -0.3800 0.8030 -0.4800 1.4053 L -0.5800 2.4091 L -0.6400 3.1118 C -0.8500 3.9148 -1.1500 5.0190 -1.5500 6.2235 C -1.8500 7.0265 -2.1000 7.7292 -2.4000 8.3315 L -4.3000 9.0141 L -4.3200 8.8936 L -6.4000 9.7569 L -6.4000 11.4934 L -2.0500 12.6478 L -1.5000 13.0493 L -1.3800 14.5550 L -1.3000 16.0607 L -1.1800 17.1649 L -1.0200 17.7169 L -0.0000 17.7169 L -0.0000 0.0000 Z"/></clipPath>
+</defs>
+<g class="layer" data-name="Background"><rect width="800" height="1020" fill="#163a63"/></g>
+<g class="layer" data-name="Grid (1 m)"><rect width="800" height="1020" fill="url(#grid)"/></g>
+<g class="layer" data-name="Title">
+<text x="24" y="40" fill="#e8f1ff" font-size="20" font-weight="bold">BOEING F/A-18E SUPER HORNET</text>
+<text x="24" y="60" class="sm">Single-seat variant · plan view (top-down) · grid = 1 m</text></g>
+<g transform="translate(400 110) scale(40)">
+<g class="layer" data-name="Airframe"><g transform="scale(1 1.00379)"><use xlink:href="#half"/><use xlink:href="#half" transform="scale(-1 1)"/></g></g>
+<g class="layer" data-name="Canopy">
+<path class="line" d="M-0.3 5.0 C-0.32 6.0 -0.34 6.8 -0.36 7.4 M0.3 5.0 C0.32 6.0 0.34 6.8 0.36 7.4"/>
+<path class="glass" d="M0 2.55 C0.3 2.65 0.44 3.1 0.46 3.7 L0.46 4.4 C0.44 4.85 0.3 5.15 0 5.25 C-0.3 5.15 -0.44 4.85 -0.46 4.4 L-0.46 3.7 C-0.44 3.1 -0.3 2.65 0 2.55 Z"/>
+<path class="line" d="M-0.42 3.2 L0.42 3.2"/>
+<rect x="-0.17" y="3.6" width="0.34" height="0.6" rx="0.08" fill="#163a63" opacity="0.7"/></g>
+<g class="layer" data-name="Centreline"><path class="dash" d="M0 -0.8 V18.9" opacity="0.6"/></g>
+</g>
+<g class="layer" data-name="Part labels">
+<path class="ldr" d="M405 180 L560 160"/><text class="lbl" x="564" y="164">Radome</text>
+<path class="ldr" d="M418 240 L560 220"/><text class="lbl" x="564" y="224">Single-seat cockpit</text>
+<path class="ldr" d="M455 350 L560 280"/><text class="lbl" x="564" y="284">Leading-edge extension (LERX)</text>
+<path class="ldr" d="M460 372 L560 330"/><text class="lbl" x="564" y="334">Intake (under LERX)</text>
+<path class="ldr" d="M580 472 L668 440"/><text class="lbl" x="672" y="444">Leading-edge flap</text>
+<path class="ldr" d="M662 560 L690 575"/><text class="lbl" x="694" y="579">Wingtip rail</text>
+<path class="ldr" d="M570 515 L690 540"/><text class="lbl" x="694" y="544">Aileron</text>
+<path class="ldr" d="M582 490 L690 490"/><text class="lbl" x="694" y="494">Wing fold</text>
+<path class="ldr" d="M520 582 L640 610"/><text class="lbl" x="644" y="614">Trailing-edge flap</text>
+<path class="ldr" d="M508 500 L560 410"/><text class="lbl" x="564" y="414">Pylons (hidden)</text>
+<path class="ldr" d="M478 720 L600 690"/><text class="lbl" x="604" y="694">Canted vertical tail</text>
+<path class="ldr" d="M500 798 L600 760"/><text class="lbl" x="604" y="764">All-moving stabilator</text>
+<path class="ldr" d="M425 835 L600 820"/><text class="lbl" x="604" y="824">F414 engine nozzles (×2)</text>
+</g>
+<g class="layer" data-name="Dimensions">
+<path class="dim" d="M60 110 V845.2" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<path class="dim" d="M52 110 H390 M52 845.2 H380" stroke-dasharray="2 4" opacity="0.6"/>
+<text class="dimt" transform="translate(52 478) rotate(-90)" text-anchor="middle">Length 60.3 ft (18.38 m)</text>
+<path class="dim" d="M126.3 895 H673.7" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<path class="dim" d="M126.3 530 V903 M673.7 530 V903" stroke-dasharray="2 4" opacity="0.6"/>
+<text class="dimt" x="400" y="915" text-anchor="middle">Span 44.9 ft (13.69 m) incl. wingtip AIM-9X</text>
+</g>
+<g class="layer" data-name="Sources">
+<text class="sm" x="24" y="968" font-size="10">Sources: overall length and span from the US Navy F/A-18E/F fact file (60.3 ft, 44.9 ft incl. wingtip missiles).</text>
+<text class="sm" x="24" y="982" font-size="10">Stores: USAF fact sheets (AIM-120 143.9 x 7 in; GBU-31 152.7 in, 25 in fin span), Raytheon (AIM-9X 3.02 m x 5 in; ATFLIR 72 x 13 in),</text>
+<text class="sm" x="24" y="996" font-size="10">DTIC report via NavWeaps (480 gal tank 215 x 31.9 in). Overall envelope and stores are to these figures; interior planform detail is approximate.</text>
+</g>
+<g class="layer" data-name="Scale bar">
+<g transform="translate(616 930)"><rect width="40" height="6" fill="#e8f1ff"/><rect x="40" width="40" height="6" fill="none" stroke="#e8f1ff"/><rect x="80" width="40" height="6" fill="#e8f1ff"/><rect x="120" width="40" height="6" fill="none" stroke="#e8f1ff"/><text class="sm" y="20">0</text><text class="sm" x="148" y="20">4 m</text></g></g>
+</svg>

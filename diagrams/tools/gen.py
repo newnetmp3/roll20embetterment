@@ -110,13 +110,14 @@ def stores_svg(cls, clip=None):
 def px(x, y):
     return CX + S * x, NY + S * y
 
-def build(loaded):
+def build(loaded, two_seat=True):
+    V = 'F' if two_seat else 'E'
     W = 800
     H = 1200 if loaded else 1020
     p = []
     p.append(f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
              f'viewBox="0 0 {W} {H}" width="{W}" height="{H}" font-family="Helvetica, Arial, sans-serif">')
-    p.append(f'<title>F/A-18F Super Hornet — top view{" with full loadout" if loaded else ""}</title>')
+    p.append(f'<title>F/A-18{V} Super Hornet — top view{" with full loadout" if loaded else ""}</title>')
     p.append('<defs>')
     p.append('<pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse" x="0" y="30">'
              '<path d="M40 0H0V40" fill="none" stroke="#2c5a8f" stroke-width="0.6"/></pattern>')
@@ -143,9 +144,10 @@ def build(loaded):
     p.append(f'<g class="layer" data-name="Background"><rect width="{W}" height="{H}" fill="#163a63"/></g>')
     p.append(f'<g class="layer" data-name="Grid (1 m)"><rect width="{W}" height="{H}" fill="url(#grid)"/></g>')
 
-    title = "BOEING F/A-18F SUPER HORNET" + (" — FULL LOADOUT" if loaded else "")
-    sub = ("Two-seat variant · plan view (top-down) · 11 stations loaded · stores beneath the airframe shown as hidden lines"
-           if loaded else "Two-seat variant · plan view (top-down) · grid = 1 m")
+    title = f"BOEING F/A-18{V} SUPER HORNET" + (" — FULL LOADOUT" if loaded else "")
+    seats = "Two-seat variant" if two_seat else "Single-seat variant"
+    sub = (f"{seats} · plan view (top-down) · 11 stations loaded · stores beneath the airframe shown as hidden lines"
+           if loaded else f"{seats} · plan view (top-down) · grid = 1 m")
     p.append('<g class="layer" data-name="Title">')
     p.append(f'<text x="24" y="40" fill="#e8f1ff" font-size="20" font-weight="bold">{title}</text>')
     p.append(f'<text x="24" y="60" class="sm">{sub}</text></g>')
@@ -157,11 +159,19 @@ def build(loaded):
     if loaded:
         p.append('<g class="layer" data-name="Stores (hidden lines)">' + stores_svg("hid", clip="airframe") + '</g>')
     p.append('<g class="layer" data-name="Canopy">')
-    p.append('<path class="glass" d="M0 2.55 C0.3 2.65 0.44 3.1 0.46 3.7 L0.46 5.6 C0.44 6.1 0.3 6.35 0 6.45 '
-             'C-0.3 6.35 -0.44 6.1 -0.46 5.6 L-0.46 3.7 C-0.44 3.1 -0.3 2.65 0 2.55 Z"/>')
-    p.append('<path class="line" d="M-0.42 3.2 L0.42 3.2 M-0.46 4.75 L0.46 4.75"/>')
-    p.append('<rect x="-0.17" y="3.5" width="0.34" height="0.6" rx="0.08" fill="#163a63" opacity="0.7"/>')
-    p.append('<rect x="-0.17" y="5.1" width="0.34" height="0.6" rx="0.08" fill="#163a63" opacity="0.7"/></g>')
+    if two_seat:
+        p.append('<path class="glass" d="M0 2.55 C0.3 2.65 0.44 3.1 0.46 3.7 L0.46 5.6 C0.44 6.1 0.3 6.35 0 6.45 '
+                 'C-0.3 6.35 -0.44 6.1 -0.46 5.6 L-0.46 3.7 C-0.44 3.1 -0.3 2.65 0 2.55 Z"/>')
+        p.append('<path class="line" d="M-0.42 3.2 L0.42 3.2 M-0.46 4.75 L0.46 4.75"/>')
+        p.append('<rect x="-0.17" y="3.5" width="0.34" height="0.6" rx="0.08" fill="#163a63" opacity="0.7"/>')
+        p.append('<rect x="-0.17" y="5.1" width="0.34" height="0.6" rx="0.08" fill="#163a63" opacity="0.7"/></g>')
+    else:
+        # single-seat: shorter bubble canopy, dorsal spine continues aft of it
+        p.append('<path class="line" d="M-0.3 5.0 C-0.32 6.0 -0.34 6.8 -0.36 7.4 M0.3 5.0 C0.32 6.0 0.34 6.8 0.36 7.4"/>')
+        p.append('<path class="glass" d="M0 2.55 C0.3 2.65 0.44 3.1 0.46 3.7 L0.46 4.4 C0.44 4.85 0.3 5.15 0 5.25 '
+                 'C-0.3 5.15 -0.44 4.85 -0.46 4.4 L-0.46 3.7 C-0.44 3.1 -0.3 2.65 0 2.55 Z"/>')
+        p.append('<path class="line" d="M-0.42 3.2 L0.42 3.2"/>')
+        p.append('<rect x="-0.17" y="3.6" width="0.34" height="0.6" rx="0.08" fill="#163a63" opacity="0.7"/></g>')
     p.append('<g class="layer" data-name="Centreline"><path class="dash" d="M0 -0.8 V18.9" opacity="0.6"/></g>')
     p.append('</g>')
 
@@ -183,7 +193,7 @@ def build(loaded):
     else:
         labels = [
             ((405,180),(560,160),"Radome"),
-            ((418,270),(560,220),"Tandem cockpit (pilot / WSO)"),
+            ((418,270) if two_seat else (418,240),(560,220),"Tandem cockpit (pilot / WSO)" if two_seat else "Single-seat cockpit"),
             ((455,350),(560,280),"Leading-edge extension (LERX)"),
             ((460,372),(560,330),"Intake (under LERX)"),
             ((580,472),(668,440),"Leading-edge flap"),
@@ -252,6 +262,7 @@ def build(loaded):
     return "\n".join(p)
 
 os.makedirs(OUT, exist_ok=True)
-open(os.path.join(OUT, "fa18f_top_view.svg"), "w").write(build(False))
-open(os.path.join(OUT, "fa18f_top_view_loaded.svg"), "w").write(build(True))
+for two, v in ((True, "f"), (False, "e")):
+    open(os.path.join(OUT, f"fa18{v}_top_view.svg"), "w").write(build(False, two))
+    open(os.path.join(OUT, f"fa18{v}_top_view_loaded.svg"), "w").write(build(True, two))
 print("ok")
